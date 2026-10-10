@@ -20,6 +20,7 @@ class Zone:
     rewards: Dict[str, Tuple[int, int]]         # resource -> (lo, hi)
     xp: int = 20
     description: str = ""
+    gold_chance: float = 0.0                    # gold is rare: chance of +1 gold on a successful hunt
 
 
 ZONES: "Registry[Zone]" = Registry("zone")
@@ -30,17 +31,17 @@ def register_zone(z: Zone) -> Zone:
 
 
 for _z in [
-    Zone("meadow", "Sunny Meadow", 3, 15, {"gel": (10, 25), "food": (1, 3)}, 15,
-         "Gentle hills, fat bugs."),
-    Zone("grove", "Mushroom Grove", 5, 28, {"gel": (15, 35), "food": (2, 5), "essence": (0, 3)}, 30,
-         "Glowing fungi. Something giggles."),
-    Zone("crust", "The Crust Road", 8, 45, {"gel": (30, 60), "food": (1, 4), "essence": (2, 8)}, 60,
-         "Dry Tide territory. Bring snacks."),
+    Zone("meadow", "Sunny Meadow", 3, 15, {"silver": (1, 3), "food": (1, 3)}, 15,
+         "Gentle hills, fat bugs.", 0.01),
+    Zone("grove", "Mushroom Grove", 5, 28, {"silver": (2, 5), "food": (2, 5), "essence": (0, 3)}, 30,
+         "Glowing fungi. Something giggles.", 0.03),
+    Zone("crust", "The Crust Road", 8, 45, {"silver": (4, 9), "food": (1, 4), "essence": (2, 8)}, 60,
+         "Dry Tide territory. Bring snacks.", 0.08),
 ]:
     register_zone(_z)
 
-STANCE_LOOT = {"attack": {"gel": 1.25}, "explore": {"essence": 1.5}, "heal": {"gel": 0.8, "food": 0.8,
-                                                                            "essence": 0.8}}
+STANCE_LOOT = {"attack": {"silver": 1.25}, "explore": {"essence": 1.5},
+               "heal": {"silver": 0.8, "food": 0.8, "essence": 0.8}}
 STANCE_INJURY = {"attack": 1.3, "explore": 1.0, "defend": 0.5, "heal": 0.8}
 
 
@@ -55,6 +56,8 @@ class HuntSystem:
             raise InvalidAction(f"{slime.name} is {slime.state}, not available.")
         if slime.grounded:
             raise InvalidAction(f"{slime.name} is grounded after a brawl. Mediate first.")
+        if slime.hp < slime.max_hp * config.MIN_HUNT_HP:
+            raise InvalidAction(f"{slime.name} is too wounded to hunt - rest first.")
         if slime.needs.get("energy") < 20:
             raise InvalidAction(f"{slime.name} is too tired to hunt.")
         slime.state = "hunting"
@@ -83,6 +86,13 @@ class HuntSystem:
         win_p = max(0.1, min(0.97, 0.35 + 0.4 * ratio))
         ok = self.rng.random() < win_p
         stance = s.behavior
+        # injury first: a hunt can kill, and the dead bring nothing home
+        injury = zone.danger * (0.5 if ok else 1.2) * STANCE_INJURY.get(stance, 1.0) / 10
+        s.hp -= max(1, int(injury * self.rng.uniform(0.5, 1.5)))
+        if s.hp <= 0:
+            s.death_cause = f"killed hunting in {zone.name}"
+            events.append(f"☠ {s.name} never returned from {zone.name}...")
+            return
         gains: Dict[str, int] = {}
         for res, (lo, hi) in zone.rewards.items():
             amt = self.rng.randint(lo, hi) * factor
@@ -90,15 +100,18 @@ class HuntSystem:
             amt *= config.RARITY_LOOT_MULT[s.rarity]
             if not ok:
                 amt *= 0.3
+            amt = int(amt + self.rng.random())          # stochastic rounding keeps small hauls fair
             if amt >= 1:
-                gains[res] = int(amt)
+                gains[res] = amt
+        gold_p = zone.gold_chance * (1.5 if stance == "explore" else 1.0) * factor
+        if ok and self.rng.random() < gold_p:
+            gains["gold"] = 1
         self.wallet.add_many(gains)
-        injury = zone.danger * (0.5 if ok else 1.2) * STANCE_INJURY.get(stance, 1.0) / 10
-        s.hp = max(1, s.hp - int(injury * self.rng.uniform(0.5, 1.5)))
         s.needs.add("esteem", 12 if ok else -8)
         xp = int(zone.xp * (1.0 if ok else 0.4) * factor)
         lv = add_xp(s, xp)
         loot = ", ".join(f"{v} {k}" for k, v in gains.items()) or "nothing"
         verb = "returned early" if early else ("returned victorious" if ok else "limped back")
-        events.append(f"🏞 {s.name} {verb} from {zone.name}: {loot}, +{xp} XP.")
+        events.append(f"🏞 {s.name} {verb} from {zone.name}: {loot}, +{xp} XP."
+                      + (" ✨ GOLD!" if "gold" in gains else ""))
         events.extend(lv)

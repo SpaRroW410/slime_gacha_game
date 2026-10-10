@@ -60,11 +60,14 @@ class HuntAssignment:
 
 class Slime:
     def __init__(self, id: int, name: str, archetype: str, rarity: str,
-                 variance: Optional[Dict[str, float]] = None, traits: Optional[List[str]] = None):
+                 variance: Optional[Dict[str, float]] = None, traits: Optional[List[str]] = None,
+                 stars: int = 1):
         self.id = id
         self.name = name
         self.archetype = archetype
         self.rarity = rarity
+        self.stars = stars             # 1..5, rolled at birth (see GachaSystem.roll_stars)
+        self.death_cause = ""          # set by engines when hp drops to 0; Game reaps the slime
         self.variance = variance or {k: 1.0 for k in STAT_KEYS}
         self.traits = traits or []
         self.level = 1
@@ -91,7 +94,7 @@ class Slime:
 
     def max_stats(self) -> Dict[str, float]:
         a = self.arch
-        mult = config.RARITY_STAT_MULT[self.rarity] * config.STAGE_STAT_MULT[
+        mult = config.RARITY_STAT_MULT[self.rarity] * config.STAR_STAT_MULT[self.stars - 1] * config.STAGE_STAT_MULT[
             min(self.stage, len(config.STAGE_STAT_MULT) - 1)]
         return {k: round((a.base_stats[k] + a.growth[k] * (self.level - 1))
                          * mult * self.variance.get(k, 1.0), 1) for k in STAT_KEYS}
@@ -126,16 +129,23 @@ class Slime:
         s = self.max_stats()
         return (s["hp"] / 4 + s["atk"] + s["mag"] + s["defense"] + s["spd"] / 2) * self.power_multiplier()
 
+    @property
+    def alive(self) -> bool:
+        return self.hp > 0
+
+    def star_str(self) -> str:
+        return "★" * self.stars + "☆" * (config.MAX_STARS - self.stars)
+
     def summary(self) -> str:
         dom = self.needs.dominant()
         return (f"#{self.id:<3} {self.arch.emoji} {self.name:<10} {self.title():<18} "
-                f"{config.RARITY_COLOR[self.rarity]:<3} {self.rarity:<9} Lv{self.level:<2} "
+                f"[{config.RARITY_TAG[self.rarity]}]{self.star_str()} Lv{self.level:<2} "
                 f"HP {self.hp}/{self.max_hp} [{self.behavior}] {self.state}"
                 f"{' (wants: ' + dom + ')' if dom else ''}")
 
     # ---- persistence -----------------------------------------------------
     def to_dict(self):
-        return dict(id=self.id, name=self.name, archetype=self.archetype, rarity=self.rarity,
+        return dict(id=self.id, name=self.name, archetype=self.archetype, rarity=self.rarity, stars=self.stars,
                     variance=self.variance, traits=self.traits, level=self.level, xp=self.xp,
                     total_xp=self.total_xp, stage=self.stage, behavior=self.behavior,
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
@@ -144,7 +154,8 @@ class Slime:
 
     @classmethod
     def from_dict(cls, d) -> "Slime":
-        s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"))
+        s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
+                d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
                   "merged", "grounded"):
             if k in d:

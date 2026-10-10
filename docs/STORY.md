@@ -22,6 +22,13 @@ The **Dry Tide** is spreading: a creeping drought that turns slimes to dust-crus
 fed, rested, and *emotionally functional* colony can push it back to the **Heart of the Hollow**,
 where the Mother sleeps.
 
+## The Memorial Pond
+
+Slimes are not immortal. A slime that starves, wanders into the Crust Road too wounded, or falls in battle
+dissolves back into the Mother Gloop; the Keeper marks them in the **Memorial Pond**, and the colony grieves
+(friends most of all). Silver coins are plentiful glints of old gloop; **gold** is a rare, warm shard of the Mother's
+heart — dungeons almost never give it up, and the Parched King hoards it.
+
 ## Themes (and how they map to mechanics)
 
 | Theme | Mechanic |
@@ -29,6 +36,7 @@ where the Mother sleeps.
 | Hunger, rest, belonging | Maslow-style needs engine; unmet needs lower mood and combat output |
 | Slimes are *people* | Personalities, grudges, and conflicts you mediate |
 | Merging is bittersweet | A merged slime shares memories (XP) with its heir — the donor is gone |
+| Loss matters | Permadeath, graveyard, grief that lowers belonging |
 | Growth through community | Evolution stages require both levels and Essence gathered by the colony |
 
 ## Cast (starter slimes)

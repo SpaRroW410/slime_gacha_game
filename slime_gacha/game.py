@@ -14,13 +14,14 @@ from .errors import InvalidAction
 from .gacha import GachaSystem
 from .growth import evolve, evolve_cost, merge, merge_gain
 from .hunt import HuntSystem, ZONES
+from .party import Party, PartyManager
 from .registry import load_plugins
 from .resources import ResourceManager
 from .slime import Slime
 
 
 class Game:
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = None, party_size: int = config.PARTY_SIZE):
         load_plugins()
         self.seed = seed
         self.rng = random.Random(seed)
@@ -32,6 +33,8 @@ class Game:
         self.conflicts = ConflictEngine(self.rng)
         self.hunts = HuntSystem(self.wallet, self.rng)
         self.battles = BattleSystem(self.rng, self.wallet)
+        self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
+        self.graveyard: List[dict] = []                # slimes that died, newest last
         self.journal: List[str] = []
 
     # ---- lookup --------------------------------------------------------------
@@ -45,8 +48,19 @@ class Game:
         return list(self.roster.values())
 
     # ---- gacha -----------------------------------------------------------------
-    def pull(self, n: int = 1) -> List[Slime]:
-        new = self.gacha.pull(n)
+    @property
+    def day(self) -> int:
+        return self.tick_count // config.DAY_TICKS
+
+    def free_pull_available(self) -> bool:
+        return self.gacha.free_available(self.day)
+
+    def hours_to_free_pull(self) -> int:
+        return 0 if self.free_pull_available() else (self.day + 1) * config.DAY_TICKS - self.tick_count
+
+    def pull(self, n: int = 1, pay: str = "silver") -> List[Slime]:
+        """pay = 'free' (1 per game day) | 'silver' | 'gold' (10 each; gold boosts rare odds)."""
+        new = self.gacha.pull(n, pay, self.day)
         for s in new:
             self.roster[s.id] = s
         return new
@@ -57,14 +71,33 @@ class Game:
         events: List[str] = []
         for _ in range(n):
             self.tick_count += 1
-            sl = self.slimes()
-            self.needs.tick(sl, events)
-            self.hunts.tick(sl, events)
-            self._healer_aura(sl, events)
-            self.conflicts.tick(sl, events)
+            self.needs.tick(self.slimes(), events)
+            self._reap(events)
+            self.hunts.tick(self.slimes(), events)
+            self._reap(events)
+            self._healer_aura(self.slimes(), events)
+            self.conflicts.tick(self.slimes(), events)
+            self._reap(events)
         self.journal.extend(events)
         self.journal = self.journal[-200:]
         return events
+
+    # ---- death -----------------------------------------------------------------------
+    def _reap(self, events: List[str]) -> List[Slime]:
+        """Remove every slime with hp <= 0 from the roster, bury them, and let the colony grieve."""
+        dead = [s for s in self.slimes() if s.hp <= 0]
+        for s in dead:
+            cause = s.death_cause or "unknown causes"
+            self.graveyard.append(dict(id=s.id, name=s.name, archetype=s.archetype, rarity=s.rarity,
+                                       stars=s.stars, level=s.level, tick=self.tick_count, cause=cause))
+            del self.roster[s.id]
+            self.parties.remove(s.id)
+            friends = {i for f in self.conflicts.friends if s.id in f for i in f if i != s.id}
+            self.conflicts.forget(s.id)
+            for o in self.slimes():                      # grief: friends hurt more
+                o.needs.add("belonging", -25 if o.id in friends else -8)
+            events.append(f"🪦 {s.name} the {s.title()} (Lv{s.level}) has died: {cause}.")
+        return dead
 
     def _healer_aura(self, slimes, events) -> None:
         """Idle slimes on the 'heal' stance who know a heal patch up the most wounded idle friend."""
@@ -136,6 +169,7 @@ class Game:
         log = merge(t, d)
         del self.roster[d.id]
         self.conflicts.forget(d.id)
+        self.parties.remove(d.id)
         return log
 
     def merge_preview(self, target_id: int, donor_id: int) -> int:
@@ -159,24 +193,79 @@ class Game:
             return f"{a.name} and {b.name} make up. They're friends now (fewer future quarrels)."
         return f"{a.name} and {b.name} won't hear it. Try again or offer a snack."
 
+    # ---- parties -----------------------------------------------------------------
+    def create_party(self, name: str = "") -> Party:
+        return self.parties.create(name)
+
+    def party_add(self, pid: int, sid: int) -> str:
+        self.slime(sid)
+        self.parties.add(pid, sid)
+        p = self.parties.get(pid)
+        return f"{self.slime(sid).name} joins {p.name} ({len(p.members)}/{self.parties.size})."
+
+    def party_remove(self, sid: int) -> str:
+        self.parties.remove(sid)
+        return f"{self.slime(sid).name} leaves their party."
+
+    def party_disband(self, pid: int) -> None:
+        self.parties.disband(pid)
+
+    def party_autofill(self, pid: int) -> int:
+        """Fill the party with the strongest free (unassigned, living) slimes. Returns number added."""
+        p = self.parties.get(pid)
+        free = sorted((s for s in self.slimes() if not self.parties.party_of(s.id)),
+                      key=lambda s: -s.power_rating())
+        added = 0
+        for s in free:
+            if len(p.members) >= self.parties.size:
+                break
+            self.parties.add(pid, s.id)
+            added += 1
+        return added
+
+    def party_members(self, pid: int) -> List[Slime]:
+        return [self.slime(i) for i in self.parties.get(pid).members]
+
+    def party_hunt(self, pid: int, zone: str) -> List[str]:
+        """Send every member of a full party hunting (each hunts individually)."""
+        self._require_full(pid)
+        out = []
+        for s in self.party_members(pid):
+            try:
+                out.append(self.hunt(s.id, zone))
+            except InvalidAction as e:
+                out.append(f"✋ {e}")
+        return out
+
+    def _require_full(self, pid: int) -> None:
+        p = self.parties.get(pid)
+        if len(p.members) != self.parties.size:
+            raise InvalidAction(f"'{p.name}' has {len(p.members)}/{self.parties.size} members - "
+                                f"parties must be full.")
+
     # ---- battle -----------------------------------------------------------------
-    def battle(self, party_ids: List[int], tier: int = 1) -> BattleReport:
-        if not party_ids or len(party_ids) > config.MAX_PARTY:
-            raise InvalidAction(f"Pick 1-{config.MAX_PARTY} slimes.")
-        if len(set(party_ids)) != len(party_ids):
-            raise InvalidAction("Duplicate slime in party.")
-        party = [self.slime(i) for i in party_ids]
+    def battle(self, pid: int, tier: int = 1) -> BattleReport:
+        """A full party fights a wave of tier-N enemies (one foe per party slot; tier 4 = boss).
+        Fallen slimes are gone for good."""
+        self._require_full(pid)
+        party = self.party_members(pid)
         for s in party:
             if s.state != "idle":
                 raise InvalidAction(f"{s.name} is {s.state}.")
             if s.grounded:
                 raise InvalidAction(f"{s.name} is grounded after a brawl.")
-        enemies = self.battles.generate_enemies(tier, min(3, len(party) + 1))
-        return self.battles.run(party, enemies)
+        enemies = self.battles.generate_enemies(tier, self.parties.size)
+        report = self.battles.run(party, enemies)
+        events: List[str] = []
+        self._reap(events)
+        report.log.extend(events)
+        self.journal.extend(events)
+        return report
 
     # ---- persistence -----------------------------------------------------------
     def to_dict(self) -> dict:
         return dict(version=config.SAVE_VERSION, seed=self.seed, tick=self.tick_count,
+                    parties=self.parties.to_dict(), graveyard=self.graveyard,
                     wallet=self.wallet.to_dict(), gacha=self.gacha.to_dict(),
                     slimes=[s.to_dict() for s in self.slimes()],
                     conflicts=[c.to_dict() for c in self.conflicts.conflicts],
@@ -198,9 +287,12 @@ class Game:
     def from_dict(cls, d: dict) -> "Game":
         from .ai import Conflict
         from .archetypes import ARCHETYPES
-        g = cls(d.get("seed"))
+        g = cls(d.get("seed"), d.get("parties", {}).get("size", config.PARTY_SIZE))
         g.tick_count = d.get("tick", 0)
-        g.wallet = ResourceManager(d.get("wallet"))
+        wallet = dict(d.get("wallet") or {})
+        if "gel" in wallet:                                  # v1 save: gel became silver
+            wallet["silver"] = wallet.get("silver", 0) + wallet.pop("gel")
+        g.wallet = ResourceManager(wallet)
         # re-point systems at the new wallet
         for sysobj in (g.gacha, g.needs, g.hunts, g.battles):
             sysobj.wallet = g.wallet
@@ -211,6 +303,8 @@ class Game:
                 continue
             s = Slime.from_dict(sd)
             g.roster[s.id] = s
+        g.parties.load(d.get("parties", {}), set(g.roster))
+        g.graveyard = d.get("graveyard", [])
         g.conflicts.conflicts = [Conflict(**c) for c in d.get("conflicts", [])
                                  if c["a"] in g.roster and c["b"] in g.roster]
         g.conflicts._next = d.get("conflict_next", 1)

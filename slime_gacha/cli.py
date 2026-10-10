@@ -18,11 +18,10 @@ BANNER = r"""
 """
 
 MENU = """
- [1] Roster          [2] Pull x1 (100 gel)   [3] Pull x10 (900 gel)
- [4] Slime details   [5] Feed / Sleep / Pet  [6] Set stance
- [7] Send to hunt    [8] Wait (advance time) [9] Battle
- [m] Merge slimes    [e] Evolve              [c] Conflicts / mediate
- [a] Toggle auto-care [j] Journal            [s] Save    [q] Quit
+ [1] Roster           [2] Slime details      [3] Pull (free / silver / gold)
+ [4] Care (feed/sleep/pet)   [5] Set stance  [6] Hunt (one slime or a party)
+ [7] Wait (time)      [8] Parties            [9] Battle (full party)
+ [m] Merge  [e] Evolve  [c] Conflicts  [a] Auto-care  [j] Journal  [x] Graveyard  [s] Save  [q] Quit
 """
 
 
@@ -49,13 +48,16 @@ def show_roster(g: Game) -> None:
 
 
 def show_status(g: Game) -> None:
-    print(f"\n⏰ Hour {g.tick_count} | {g.wallet} | slimes: {len(g.roster)} | "
-          f"auto-care: {'on' if g.needs.auto_care else 'off'} | conflicts: {len(g.conflicts.conflicts)}")
+    free = "READY" if g.free_pull_available() else f"in {g.hours_to_free_pull()}h"
+    print(f"\n⏰ Day {g.day} (hour {g.tick_count}) | {g.wallet} | slimes: {len(g.roster)} "
+          f"(🪦 {len(g.graveyard)}) | parties: {len(g.parties.parties)} (size {g.parties.size}) | "
+          f"free pull: {free} | auto-care: {'on' if g.needs.auto_care else 'off'} | "
+          f"conflicts: {len(g.conflicts.conflicts)}")
 
 
 def show_slime(s) -> None:
     st = s.max_stats()
-    print(f"\n{s.arch.emoji} {s.name} - {s.title()} ({s.rarity}) Lv{s.level}/{s.level_cap}  "
+    print(f"\n{s.arch.emoji} {s.name} - {s.title()} ({s.rarity}, {s.star_str()}) Lv{s.level}/{s.level_cap}  "
           f"XP {s.xp}/{config.xp_to_next(s.level)}  stage {s.stage}  merged x{s.merged}")
     print(f"  HP {s.hp}/{s.max_hp}  ATK {st['atk']}  DEF {st['defense']}  MAG {st['mag']}  SPD {st['spd']}")
     print(f"  traits: {', '.join(s.traits)}  | stance: {s.behavior}  | state: {s.state}"
@@ -77,8 +79,24 @@ def show_slime(s) -> None:
 
 def show_pulls(new) -> None:
     for s in new:
-        print(f"  {config.RARITY_COLOR[s.rarity]:<3} {s.rarity.upper():<9} {s.arch.emoji} {s.name} "
+        print(f"  [{config.RARITY_TAG[s.rarity]}] {s.rarity.upper():<9} {s.star_str()} {s.arch.emoji} {s.name} "
               f"the {s.arch.name}  (traits: {', '.join(s.traits)})")
+
+
+def show_parties(g: Game) -> None:
+    if not g.parties.parties:
+        print("  (no parties - create one from the Parties menu)")
+    for p in g.parties.parties.values():
+        names = ", ".join(g.slime(i).name for i in p.members) or "empty"
+        print(f"  Party #{p.id} '{p.name}' [{len(p.members)}/{g.parties.size}]: {names}")
+
+
+def show_graveyard(g: Game) -> None:
+    if not g.graveyard:
+        print("  The Memorial Pond is still. Nobody has fallen yet.")
+    for d in g.graveyard:
+        print(f"  🪦 {d['name']} the {d['archetype'].title()} ({d['rarity']}, {'★' * d['stars']}) Lv{d['level']} "
+              f"- hour {d['tick']}: {d['cause']}")
 
 
 def show_events(ev: List[str]) -> None:
@@ -95,42 +113,72 @@ def pick_zone() -> str:
     return zs[_int("zone #: ") - 1].key
 
 
+def party_menu(g: Game) -> None:
+    show_parties(g)
+    act = _ask("[n]ew party / [a]dd slime / [r]emove slime / [f]ill with best free / [d]isband: ").lower()[:1]
+    if act == "n":
+        p = g.create_party(_ask("name (optional): "))
+        print(f"  Created party #{p.id} '{p.name}' - needs {g.parties.size} slimes.")
+    elif act == "a":
+        show_roster(g)
+        print("  " + g.party_add(_int("party #: "), _int("slime id: ")))
+    elif act == "r":
+        print("  " + g.party_remove(_int("slime id: ")))
+    elif act == "f":
+        pid = _int("party #: ")
+        print(f"  Added {g.party_autofill(pid)} slime(s).")
+    elif act == "d":
+        g.party_disband(_int("party #: "))
+        print("  Party disbanded.")
+
+
 def handle(g: Game, choice: str) -> bool:
     """Returns False to quit."""
     if choice == "1":
         show_roster(g)
-    elif choice in ("2", "3"):
-        show_pulls(g.pull(1 if choice == "2" else 10))
-    elif choice == "4":
+    elif choice == "2":
         show_roster(g)
         show_slime(g.slime(_int("slime id: ")))
-    elif choice == "5":
+    elif choice == "3":
+        pay = _ask("pay with [f]ree daily / [s]ilver / [g]old: ").lower()[:1]
+        pay = {"f": "free", "s": "silver", "g": "gold"}.get(pay)
+        if not pay:
+            raise GameError("Choose f, s or g.")
+        n = 1 if pay == "free" else _int(f"how many (10 {pay} each)? ")
+        show_pulls(g.pull(n, pay))
+    elif choice == "4":
         show_roster(g)
         sid = _int("slime id: ")
         act = _ask("[f]eed (1 food) / [s]leep / [w]ake / [p]et: ").lower()
         print("  " + {"f": g.feed, "s": g.sleep, "w": g.wake, "p": g.pet}.get(act, lambda _: "Unknown action.")(sid))
-    elif choice == "6":
+    elif choice == "5":
         show_roster(g)
         sid = _int("slime id: ")
         print("  " + g.set_behavior(sid, _ask(f"stance ({'/'.join(BEHAVIORS)}): ").lower()))
-    elif choice == "7":
-        show_roster(g)
-        sid = _int("slime id (0 = recall everyone): ")
-        if sid == 0:
+    elif choice == "6":
+        who = _ask("hunt with a [s]lime, a [p]arty, or [r]ecall everyone: ").lower()[:1]
+        if who == "r":
             for s in g.slimes():
                 g.recall(s.id)
             print("  Everyone is back.")
+        elif who == "p":
+            show_parties(g)
+            pid = _int("party #: ")
+            print("\n".join("  " + x for x in g.party_hunt(pid, pick_zone())))
         else:
+            show_roster(g)
+            sid = _int("slime id: ")
             print("  " + g.hunt(sid, pick_zone()))
+    elif choice == "7":
+        n = _int("hours to wait (1-72): ")
+        show_events(g.tick(max(1, min(72, n))))
     elif choice == "8":
-        n = _int("hours to wait (1-48): ")
-        show_events(g.tick(max(1, min(48, n))))
+        party_menu(g)
     elif choice == "9":
-        show_roster(g)
-        ids = [int(x) for x in _ask(f"party ids (up to {config.MAX_PARTY}, space-separated): ").split()]
+        show_parties(g)
+        pid = _int("party # to send: ")
         tier = _int("tier 1-3 (4 = boss): ")
-        report = g.battle(ids, tier)
-        print("\n".join(report.log))
+        print("\n".join(g.battle(pid, tier).log))
     elif choice == "m":
         show_roster(g)
         t, d = _int("TARGET id (keeps): "), _int("DONOR id (consumed!): ")
@@ -155,6 +203,8 @@ def handle(g: Game, choice: str) -> bool:
     elif choice == "a":
         g.needs.auto_care = not g.needs.auto_care
         print(f"  auto-care {'ON' if g.needs.auto_care else 'OFF'}")
+    elif choice == "x":
+        show_graveyard(g)
     elif choice == "j":
         print("\n".join("  " + x for x in g.journal[-20:]) or "  (empty)")
     elif choice == "q":
@@ -162,13 +212,14 @@ def handle(g: Game, choice: str) -> bool:
     return True
 
 
-def run_interactive(seed, save_path: str) -> None:
+def run_interactive(seed, save_path: str, party_size: int = config.PARTY_SIZE) -> None:
     print(BANNER)
     if os.path.exists(save_path) and _ask(f"Load {save_path}? (y/n): ").lower() == "y":
         g = Game.load(save_path)
     else:
-        g = Game(seed)
-        print("Welcome, Keeper. The Last Gacha Well hums. You have 1000 gel - make a wish!")
+        g = Game(seed, party_size)
+        print("Welcome, Keeper. The Last Gacha Well hums. Claim your free daily pull (menu 3 -> f)!\n"
+              "Beware: slimes that starve, hunt badly or fall in battle are gone for good.")
     while True:
         show_status(g)
         print(MENU)
@@ -190,46 +241,59 @@ def run_interactive(seed, save_path: str) -> None:
 
 
 def run_demo(seed: int) -> None:
-    """Non-interactive tour: pull, care, hunt, conflict, battle, merge, evolve."""
+    """Non-interactive tour: free pull, gacha, parties, hunting, conflict, battle, death, merge."""
     g = Game(seed)
     print(BANNER)
-    print("== 1. GACHA: ten-pull ==")
-    show_pulls(g.pull(10))
+    print("== 1. GACHA: daily free pull, then a 10x silver pull, then 1 gold pull ==")
+    show_pulls(g.pull(1, "free"))
+    try:
+        g.pull(1, "free")
+    except GameError as e:
+        print(f"  ✋ {e}")
+    show_pulls(g.pull(10, "silver"))
+    show_pulls(g.pull(1, "gold"))
     show_status(g)
 
-    print("\n== 2. NEEDS & SLEEP: wait 12 hours (auto-care on) ==")
-    show_events(g.tick(12)[:15])
+    print("\n== 2. PARTIES: two fixed-size parties of 5 ==")
+    for name in ("Vanguard", "Reserve"):
+        p = g.create_party(name)
+        g.party_autofill(p.id)
+    show_parties(g)
+
+    print("\n== 3. NEEDS & SLEEP: wait 12 hours (auto-care on) ==")
+    show_events([e for e in g.tick(12) if "Conflict" not in e][:8])
     show_slime(g.slimes()[0])
 
-    print("\n== 3. AUTO-HUNT: send three slimes to the Meadow, wait 4h ==")
-    for s in g.slimes()[:3]:
-        try:
-            print("  " + g.hunt(s.id, "meadow"))
-        except GameError as e:
-            print("  ✋ " + str(e))
+    print("\n== 4. AUTO-HUNT: the Reserve party hunts the Meadow ==")
+    print("\n".join("  " + x for x in g.party_hunt(2, "meadow")))
     show_events(g.tick(4))
     show_status(g)
 
-    print("\n== 4. CONFLICT: let the colony simmer for 24h ==")
+    print("\n== 5. CONFLICT: let the colony simmer for 24h ==")
     ev = g.tick(24)
-    show_events([e for e in ev if "Conflict" in e or "quarrel" in e or "brawl" in e or "make up" in e][:10])
+    show_events([e for e in ev if "Conflict" in e or "brawl" in e or "died" in e][:8])
     for c in list(g.conflicts.conflicts)[:2]:
         print("  " + g.mediate(c.id, "talk"))
 
-    print("\n== 5. BATTLE: best three slimes vs tier-1 foes ==")
-    g.wallet.add("food", 20)
-    for s in g.slimes():          # top everyone up so the demo is healthy
+    print("\n== 6. BATTLE: the Vanguard fights tier-1 foes (casualties are permanent) ==")
+    g.wallet.add("food", 30)
+    for s in g.slimes():          # top everyone up so the demo starts healthy
         s.state, s.hunt, s.grounded = "idle", None, False
         s.hp, s.needs.v["energy"], s.needs.v["food"] = s.max_hp, 100, 100
-    best = sorted(g.slimes(), key=lambda s: -s.power_rating())[:3]
-    print("\n".join(g.battle([s.id for s in best], 1).log))
+    rep = g.battle(1, 1)
+    print("\n".join(rep.log[-14:]))
 
-    print("\n== 6. MERGE: weakest slime into strongest ==")
+    print("\n== 7. MERGE: weakest into strongest ==")
     ordered = sorted(g.slimes(), key=lambda s: s.power_rating())
     weak, strong = ordered[0], ordered[-1]
     print(f"  merging {weak.name} into {strong.name} (preview +{g.merge_preview(strong.id, weak.id)} XP)")
     print("\n".join("  " + x for x in g.merge(strong.id, weak.id)))
 
-    print("\n== 7. FINAL ROSTER ==")
+    print("\n== 8. NEGLECT: the food runs out and nobody is fed for 6 days... ==")
+    g.wallet.spend("food", g.wallet.get("food"))
+    show_events([e for e in g.tick(144) if "died" in e][:10])
+
+    print("\n== 9. MEMORIAL POND ==")
+    show_graveyard(g)
     show_roster(g)
     show_status(g)

@@ -27,6 +27,8 @@ class Enemy:
     abilities: List[str]
     xp: int
     loot: Dict[str, tuple]       # resource -> (lo, hi)
+    gold_chance: float = 0.0     # gold is rare: chance per kill to drop `gold_amount` gold
+    gold_amount: int = 1
 
 
 ENEMIES: "Registry[Enemy]" = Registry("enemy")
@@ -41,14 +43,14 @@ def _e(hp, atk, d, mag, spd):
 
 
 for _en in [
-    Enemy("dust_bunny", "Dust Bunny", "🐇", 1, _e(22, 6, 2, 0, 5), ["splat"], 12, {"gel": (5, 12)}),
-    Enemy("crust_beetle", "Crust Beetle", "🪲", 1, _e(30, 7, 5, 0, 3), ["splat", "smash"], 15, {"gel": (6, 14), "food": (0, 2)}),
-    Enemy("parched_wisp", "Parched Wisp", "👻", 2, _e(32, 2, 3, 10, 6), ["spark", "curse"], 28, {"gel": (10, 22), "essence": (0, 3)}),
-    Enemy("hollow_knight", "Hollow Knight", "🛡️", 2, _e(60, 11, 8, 0, 5), ["splat", "smash"], 35, {"gel": (12, 26)}),
-    Enemy("thorn_sprite", "Thorn Sprite", "🧚", 2, _e(30, 10, 3, 2, 10), ["stab", "venom_dart"], 30, {"gel": (10, 20), "food": (1, 3)}),
-    Enemy("dry_brute", "Dry Tide Brute", "🗿", 3, _e(130, 17, 10, 0, 5), ["smash", "rampage"], 80, {"gel": (30, 55), "essence": (2, 6)}),
-    Enemy("crown_wraith", "Crown Wraith", "👑", 3, _e(95, 4, 6, 18, 7), ["arcane_surge", "siphon"], 90, {"gel": (30, 55), "essence": (3, 8)}),
-    Enemy("parched_king", "The Parched King", "🏜️", 4, _e(380, 22, 12, 20, 6), ["smash", "rampage", "arcane_surge", "curse"], 400, {"gel": (150, 250), "essence": (20, 40)}),
+    Enemy("dust_bunny", "Dust Bunny", "🐇", 1, _e(22, 6, 2, 0, 5), ["splat"], 12, {"silver": (0, 2)}, 0.01),
+    Enemy("crust_beetle", "Crust Beetle", "🪲", 1, _e(30, 7, 5, 0, 3), ["splat", "smash"], 15, {"silver": (1, 2), "food": (0, 2)}, 0.01),
+    Enemy("parched_wisp", "Parched Wisp", "👻", 2, _e(32, 2, 3, 10, 6), ["spark", "curse"], 28, {"silver": (1, 3), "essence": (0, 3)}, 0.03),
+    Enemy("hollow_knight", "Hollow Knight", "🛡️", 2, _e(60, 11, 8, 0, 5), ["splat", "smash"], 35, {"silver": (2, 4)}, 0.03),
+    Enemy("thorn_sprite", "Thorn Sprite", "🧚", 2, _e(30, 10, 3, 2, 10), ["stab", "venom_dart"], 30, {"silver": (1, 3), "food": (1, 3)}, 0.03),
+    Enemy("dry_brute", "Dry Tide Brute", "🗿", 3, _e(130, 17, 10, 0, 5), ["smash", "rampage"], 80, {"silver": (3, 6), "essence": (2, 6)}, 0.08),
+    Enemy("crown_wraith", "Crown Wraith", "👑", 3, _e(95, 4, 6, 18, 7), ["arcane_surge", "siphon"], 90, {"silver": (3, 6), "essence": (3, 8)}, 0.08),
+    Enemy("parched_king", "The Parched King", "🏜️", 4, _e(700, 22, 12, 20, 6), ["smash", "rampage", "arcane_surge", "curse"], 400, {"silver": (30, 50), "essence": (20, 40)}, 1.0, 5),
 ]:
     register_enemy(_en)
 
@@ -90,6 +92,7 @@ class BattleReport:
     rounds: int
     xp: int = 0
     loot: Dict[str, int] = field(default_factory=dict)
+    deaths: List[str] = field(default_factory=list)
 
     @property
     def victory(self) -> bool:
@@ -252,12 +255,19 @@ class BattleSystem:
     # -- aftermath: write HP back, grant XP and loot ---------------------------
     def _finish(self, party, mine, enemies, report: BattleReport) -> None:
         win = report.winner == "party"
+        survivors = []
         for s, c in zip(party, mine):
-            s.hp = max(1, int(c.hp))
+            s.hp = max(0, int(c.hp))
+            if not c.alive:                       # permadeath: Game._reap removes them
+                s.death_cause = "fell in battle"
+                report.deaths.append(s.name)
+                continue
+            s.hp = max(1, s.hp)
             s.needs.add("energy", -10)
             s.needs.add("esteem", 10 if win else -6)
-            if not c.alive:
-                s.needs.add("safety", -20)
+            survivors.append(s)
+        for name in report.deaths:
+            report.log.append(f"☠ {name} has fallen and will not rise again.")
         if win:
             report.xp = sum(e.xp for e in enemies)
             for e in enemies:
@@ -265,13 +275,14 @@ class BattleSystem:
                     n = self.rng.randint(lo, hi)
                     if n:
                         report.loot[res] = report.loot.get(res, 0) + n
+                if self.rng.random() < e.gold_chance:        # gold is rare
+                    report.loot["gold"] = report.loot.get("gold", 0) + e.gold_amount
             if self.wallet:
                 self.wallet.add_many(report.loot)
-            share = max(1, report.xp // max(1, len(party)))
-            for s, c in zip(party, mine):
-                gain = share if c.alive else share // 2
+            share = max(1, report.xp // max(1, len(survivors)))
+            for s in survivors:
                 s.wins += 1
-                report.log.extend(add_xp(s, gain))
+                report.log.extend(add_xp(s, share))
             report.log.append(f"Rewards: +{report.xp} XP total, loot: "
                               + (", ".join(f"{v} {k}" for k, v in report.loot.items()) or "none"))
 

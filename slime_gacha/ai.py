@@ -41,6 +41,7 @@ class NeedsEngine:
         self.auto_care = True
 
     def tick(self, slimes: List, events: List[str]) -> None:
+        slimes = [s for s in slimes if s.alive]
         idle = [s for s in slimes if s.state == "idle"]
         for s in slimes:
             self._decay(s)
@@ -71,8 +72,10 @@ class NeedsEngine:
     def _starve(self, s, events) -> None:
         if s.needs.get("food") <= 0 or s.needs.get("energy") <= 0:
             loss = max(1, int(s.max_hp * config.STARVE_HP_LOSS))
-            s.hp = max(1, s.hp - loss)      # prototype: slimes never die from neglect
-            if s.hp == 1:
+            s.hp -= loss                     # neglect is lethal; Game reaps hp <= 0
+            if s.hp <= 0:
+                s.death_cause = "starvation" if s.needs.get("food") <= 0 else "exhaustion"
+            elif s.hp <= s.max_hp * 0.3 < s.hp + loss:       # only warn when crossing the line
                 events.append(f"{s.name} is wobbling dangerously (neglect)!")
 
     def _safety(self, s) -> None:
@@ -134,11 +137,11 @@ class ConflictEngine:
         for s in (a, b):
             p += sum(TRAITS.get(t, {}).get("conflict", 0) for t in s.traits)
             if s.needs.get("food") < config.NEED_THRESHOLD:
-                p += 0.006
+                p += 0.003
             if s.needs.get("energy") < config.NEED_THRESHOLD:
-                p += 0.004
+                p += 0.002
         if b.archetype in get_archetype(a.archetype).rivals or a.archetype in get_archetype(b.archetype).rivals:
-            p += 0.01
+            p += 0.004
         if frozenset((a.id, b.id)) in self.friends:
             p *= 0.3
         return max(0.0, p)
@@ -170,21 +173,25 @@ class ConflictEngine:
                 else:
                     self._brawl(c, by_id, events)
         # new conflicts
-        awake = [s for s in slimes if s.state != "sleeping"]
+        awake = [s for s in slimes if s.state != "sleeping" and s.alive]
+        busy = {i for c in self.conflicts for i in (c.a, c.b)}      # one quarrel at a time per slime
         for i, a in enumerate(awake):
             for b in awake[i + 1:]:
-                if self.open_between(a.id, b.id):
+                if a.id in busy or b.id in busy:
                     continue
                 if self.rng.random() < self.chance(a, b):
                     c = Conflict(self._next, a.id, b.id, 1, 0, self.reason(a, b))
                     self._next += 1
                     self.conflicts.append(c)
+                    busy.update((a.id, b.id))
                     events.append(f"⚡ Conflict #{c.id}: {a.name} and {b.name} are fighting over {c.reason}!")
 
     def _brawl(self, c, by_id, events) -> None:
         for sid in (c.a, c.b):
             s = by_id[sid]
-            s.hp = max(1, s.hp - int(s.max_hp * config.BRAWL_HP_LOSS))
+            s.hp -= max(1, int(s.max_hp * config.BRAWL_HP_LOSS))
+            if s.hp <= 0:
+                s.death_cause = f"died in a brawl with {by_id[c.b if sid == c.a else c.a].name}"
             s.needs.add("esteem", -10)
             s.grounded = True
             if s.state == "hunting":     # a brawl cuts a hunt short

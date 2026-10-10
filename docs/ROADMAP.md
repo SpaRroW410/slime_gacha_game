@@ -50,14 +50,29 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Unit tests
 - [x] Seeded determinism
 
+## M7 — v0.2 rules update
+- [x] Permadeath (starvation, hunts, brawls, battle) + graveyard / Memorial Pond
+- [x] Colony grief on death
+- [x] Rarity rates 90 / 9 / 0.9 / 0.09
+- [x] 1–5★ rating, exponential falloff, steeper for higher rarity
+- [x] Silver and gold currencies (10 per pull, either)
+- [x] Gold boosts rare odds (×5 weights)
+- [x] Gold rare in dungeons (hunt zones, enemies; boss guaranteed)
+- [x] One free pull per game day
+- [x] Fixed-size parties (multiple of 5), multiple parties, party hunt/battle
+- [x] Save v2 with migration from v1
+- [x] Tests for all of the above
+
 ## Future (post-prototype)
+- [ ] Real-clock daily free pull (wall-time) as an option
+- [ ] Resurrection items / Necromancer "revive" ability
+- [ ] Star-up by merging duplicates
+- [ ] Formations and front/back rows
 - [ ] Offline progress by wall-clock time
 - [ ] More classes: Bard, Paladin, Alchemist, Druid (via registry)
 - [ ] Equipment / items
-- [ ] Larger parties (5v5), formations
 - [ ] Campaign chapters from `STORY.md`
 - [ ] Slime relationships tree (best friends, rivals, couples → "budding" new slimes)
-- [ ] Permanent-death hardcore mode
 - [ ] Simple GUI (pygame/Tkinter) or ASCII animations
 - [ ] Balance pass with simulation harness
 - [ ] Localisation

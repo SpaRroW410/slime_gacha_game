@@ -12,6 +12,7 @@ Inspired by the *Pick Me Up! Unlimited Gacha* comics — except your heroes are 
 python3 main.py              # interactive menu
 python3 main.py --demo       # scripted non-interactive tour of every system
 python3 main.py --seed 42    # deterministic RNG (great for testing)
+python3 main.py --party-size 10   # party size must be a multiple of 5 (default 5)
 python3 -m unittest discover -s tests -v
 ```
 
@@ -22,7 +23,10 @@ No dependencies, no network. Saves go to `savegame.json` next to `main.py`
 
 | Area | What you get |
 |------|--------------|
-| Gacha | Common / Rare / Epic / Legendary pulls, pity counter, single & ×10 pulls |
+| Gacha | Rarity 90 / 9 / 0.9 / 0.09 %, plus a **1–5 ★ rating** (exponential falloff, steeper at higher rarity). **1 free pull per game day**; otherwise 10 🥈 silver **or** 10 🥇 gold per pull — gold multiplies rare+ odds ×5 |
+| Economy | Silver (common), Gold (rare — only dropped rarely by dungeons/battles, guaranteed from the boss), Food, Essence |
+| Parties | Fixed-size parties (multiple of 5; default 5), as many parties as you like, one slime per party. Only full parties battle; parties can hunt together |
+| Permadeath | Slimes **die** — starvation/exhaustion, failed hunts, brawls, battle. Dead slimes go to the Memorial Pond (graveyard); friends grieve |
 | Classes | Barbarian, Mage, Medic, Rogue, Ranger, Necromancer — **data-driven & plugin-style** |
 | Needs AI | Maslow-style needs: Energy → Food → Safety → Belonging → Esteem, plus mood & personality |
 | Conflict | Slimes quarrel (hungry/grumpy/rival temperaments); you mediate or let it simmer |
@@ -30,9 +34,8 @@ No dependencies, no network. Saves go to `savegame.json` next to `main.py`
 | Behaviours | Per-slime stance: attack / heal / defend / explore (changes battle & hunt behaviour) |
 | Growth | XP, levels, evolution stages, abilities unlocked by level |
 | Merge | Fuse a slime into another; target gains a % of the fodder's XP (and bonus for same class) |
-| Battle | Turn-based auto-combat (3v3 style) with abilities, status effects, loot |
-| Economy | Gel (gacha currency), Food, Essence (upgrades/evolution) |
-| Persistence | JSON save/load, fully offline |
+| Battle | Turn-based auto-combat, party vs a wave of foes (one per party slot), abilities, status effects, loot |
+| Persistence | JSON save/load (v1 saves migrate), fully offline |
 
 ## Repository layout
 
@@ -46,8 +49,9 @@ slime_gacha/
   slime.py               Slime, Stats, Needs, Personality
   ai.py                  NeedsEngine (Maslow) + ConflictEngine + Behavior stances
   growth.py              levelling, evolution, merging
-  resources.py           ResourceManager (wallet)
-  gacha.py               GachaSystem
+  party.py               PartyManager (fixed-size parties)
+  resources.py           ResourceManager (wallet: silver/gold/food/essence)
+  gacha.py               GachaSystem (rarity, stars, free daily pull)
   hunt.py                HuntSystem (auto-hunt zones)
   battle.py              BattleSystem (turn-based auto-combat)
   game.py                Game façade: state, ticking, save/load

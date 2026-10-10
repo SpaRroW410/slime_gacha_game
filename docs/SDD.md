@@ -1,5 +1,7 @@
 # Software Design Document — Slime Gacha (prototype v0.1)
 
+> **v0.2 changes**: permadeath, rarity 90/9/0.9/0.09, 1–5★ ratings, silver/gold currencies, free daily pull, fixed-size parties (see §5.1, 5.9, 5.10).
+
 ## 1. Goals & non-goals
 
 **Goals**: an offline, single-process, text-UI prototype proving the loop
@@ -69,10 +71,15 @@ through a dispatch table, so a new *kind* = one handler function; a new *ability
 ## 5. Systems
 
 ### 5.1 GachaSystem (`gacha.py`)
-- Rates: common 60 / rare 28 / epic 9 / legendary 3 (config).
-- **Pity**: epic guaranteed within 10 pulls; legendary within 50 (counters persisted, reset on hit).
-- `pull(n)` spends Gel via `ResourceManager`, returns new `Slime`s. Raises `NotEnoughResources`.
-- Stats = archetype base × rarity multiplier (1.0 / 1.25 / 1.6 / 2.2) × variance.
+- **Rarity** weights (config): common 90 / rare 9 / epic 0.9 / legendary 0.09 (normalised by `random.choices`).
+- **Stars** 1–5: `P(star=k) ∝ exp(−λ·(k−1))`, with λ per rarity `{common .7, rare 1.0, epic 1.3, legendary 1.6}`.
+  Each step down the ladder costs a constant factor (exponential), and higher rarities fall off faster, so
+  a 5★ common ≈ 3 % while a 5★ legendary ≈ 0.13 %. Stars multiply stats `[1.0, 1.1, 1.25, 1.45, 1.7]`.
+- **Payment**: `pull(n, pay)` with `pay ∈ {free, silver, gold}`. Silver/gold cost 10 each per pull.
+  **Gold** multiplies the rare/epic/legendary weights by `GOLD_RARITY_BOOST` (5×).
+- **Free daily pull**: one per game day (`day = tick // 24`); `last_free_day` is persisted.
+- **Pity** is optional and **off by default** (`PITY_* = 0`) so the published rates are honest.
+- Stats = archetype base × rarity mult × star mult × stage mult × variance.
 
 ### 5.2 Needs / Maslow AI (`ai.py`)
 Hierarchy (lowest tier first): **Energy → Food → Safety → Belonging → Esteem**.
@@ -111,13 +118,13 @@ Player changes it with `Game.set_behavior(id, stance)`.
 `Zone(key, name, duration, danger, rewards{resource:(lo,hi)}, xp)` from a registry.
 `start(slime, zone)` sets state `hunting`; `tick()` decrements; on completion rolls success from
 `slime power vs zone danger`, grants resources scaled by archetype `hunt_bonus`, stance and rarity,
-grants XP, applies damage. Exhausted slimes return early with half loot.
+grants XP, applies damage (**can kill**). Exhausted slimes return early with half loot. Each zone has a small `gold_chance` (1–8 %, ×1.5 for explorers). Slimes below 30 % HP cannot be sent out.
 
 ### 5.6 BattleSystem (`battle.py`)
 Turn-based auto-combat. `Combatant` wraps a slime snapshot or an `Enemy`. Order by speed each round.
 Per turn: status ticks (poison/guard expiry) → AI picks ability by stance → resolve via kind handler.
 Damage: `max(1, (power × stat) − 0.5 × defense) × rng(0.9, 1.1) × power_multiplier`, crit 8 % ×1.5.
-Ends when a side is empty or round cap (30). Winners get XP + loot; HP written back to slimes.
+Ends when a side is empty or round cap (30). Slimes at 0 HP are **dead** (removed by `Game._reap`). Survivors share XP and loot; enemies drop gold with a per-enemy chance (boss: guaranteed 5).
 Returns a `BattleReport` (log lines, winner, rewards) — UI only prints it.
 
 ### 5.7 Growth (`growth.py`)
@@ -128,8 +135,21 @@ Returns a `BattleReport` (log lines, winner, rewards) — UI only prints it.
 - Abilities unlock at levels listed in the archetype.
 
 ### 5.8 ResourceManager (`resources.py`)
-Wallet of `gel` (gacha currency), `food`, `essence`. `add/spend/can_afford`, atomic `spend_many`.
+Wallet of `silver` (common currency), `gold` (rare currency), `food`, `essence`. `add/spend/can_afford`, atomic `spend_many`.
 New resources = new key in config; no code change.
+
+### 5.9 Parties (`party.py`)
+`PartyManager(size)`; `size` must be a positive multiple of 5 (validated; chosen per game, saved).
+Any number of parties; a slime is in at most one. `Game.battle(pid, tier)` and `party_hunt` require a **full**
+party; the enemy wave has one foe per party slot. Dead/merged members are removed automatically, which makes
+the party incomplete until refilled (`party_autofill` picks the strongest free slimes).
+
+### 5.10 Death (permadeath)
+Engines never delete slimes; they set `hp <= 0` and `death_cause`. `Game._reap` runs after each tick phase and
+after each battle: it moves the slime to `graveyard` (name, class, rarity, stars, level, hour, cause), removes it
+from roster/parties/conflicts, and lowers every other slime's belonging (−8, or −25 for friends).
+Causes: starvation / exhaustion (HP drains 5 %/tick at zero food or energy), killed hunting, brawl (8 % HP per
+brawl round), fell in battle. Safety valves: auto-care, the 30 % HP hunt gate, and mediation.
 
 ## 6. Extensibility recipes
 | Want | Do |
@@ -143,7 +163,7 @@ New resources = new key in config; no code change.
 Plugins: any module placed in `slime_gacha/plugins/` is auto-imported at start (optional dir).
 
 ## 7. Persistence
-`Game.save(path)` → JSON `{version, tick, rng_state?, wallet, gacha_pity, slimes[], conflicts[], friendships, next_id}`.
+`Game.save(path)` → JSON `{version 2, tick, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. v1 saves load (gel→silver).
 Versioned for forward migration. Unknown archetype keys on load are skipped with a warning (mod removal safe).
 
 ## 8. Error handling
@@ -155,5 +175,4 @@ Domain errors derive from `GameError` (`NotEnoughResources`, `InvalidAction`). T
 hunt rewards, battle determinism, save/load round-trip, registry extension (adds a Bard in a test).
 
 ## 10. Open questions
-Economy balance, offline progress while app closed (timestamps vs ticks), slime death permanence,
-party size > 3, equipment.
+Economy balance, offline progress while app closed (real-clock "day" for the free pull vs game day), revival items / necromancer resurrection, equipment, formations.
