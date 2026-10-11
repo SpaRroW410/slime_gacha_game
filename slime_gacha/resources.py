@@ -41,4 +41,4 @@ class ResourceManager:
 
     def __str__(self) -> str:
         icons = {"white_gel": "⚪", "purple_gel": "🟣", "food": "🍖", "essence": "✨"}
-        return "  ".join(f"{icons.get(k, k)} {k}: {v}" for k, v in self._r.items())
+        return "  ".join(f"{icons.get(k, k)} {k.replace('_', ' ')}: {v}" for k, v in self._r.items())
