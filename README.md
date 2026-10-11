@@ -23,8 +23,10 @@ No dependencies, no network. Saves go to `savegame.json` next to `main.py`
 
 | Area | What you get |
 |------|--------------|
-| Gacha | Rarity 90 / 9 / 0.9 / 0.09 %, plus a **1–5 ★ rating** (exponential falloff, steeper at higher rarity). **1 free pull per game day**; otherwise 10 🥈 silver **or** 10 🥇 gold per pull — gold multiplies rare+ odds ×5 |
-| Economy | Silver (common), Gold (rare — only dropped rarely by dungeons/battles, guaranteed from the boss), Food, Essence |
+| Gacha | Rarity 90 / 9 / 0.9 / 0.09 %, plus a **1–5 ★ rating** (exponential falloff, steeper at higher rarity). **1 free pull per game day**; otherwise 10 ⚪ white gel **or** 10 🟣 purple gel per pull — purple gel multiplies rare+ odds ×5 |
+| Economy | ⚪ **White gel** (common) and 🟣 **Purple gel** (rare: small drop chance in hunts/dungeons, bosses are the best source), Food, Essence |
+| Main dungeon | **The Hollow Descent** — floor after floor, deliberately rough (enemy stats +15 % compounding per floor), permadeath, boss every 5 floors, first-clear purple-gel bounty. A fresh party loses slimes on floor 1 |
+| Grinding dungeon | **The Gloop Pit** — safe, repeatable XP farm tuned to your party's level (depth 1–5). Nobody dies (knock-outs), every survivor gets XP, little loot, no purple gel. `auto-rest` lets you queue dozens of runs |
 | Parties | Fixed-size parties (multiple of 5; default 5), as many parties as you like, one slime per party. Only full parties battle; parties can hunt together |
 | Permadeath | Slimes **die** — starvation/exhaustion, failed hunts, brawls, battle. Dead slimes go to the Memorial Pond (graveyard); friends grieve |
 | Classes | Barbarian, Mage, Medic, Rogue, Ranger, Necromancer — **data-driven & plugin-style** |
@@ -50,9 +52,10 @@ slime_gacha/
   ai.py                  NeedsEngine (Maslow) + ConflictEngine + Behavior stances
   growth.py              levelling, evolution, merging
   party.py               PartyManager (fixed-size parties)
-  resources.py           ResourceManager (wallet: silver/gold/food/essence)
+  resources.py           ResourceManager (wallet: white_gel/purple_gel/food/essence)
   gacha.py               GachaSystem (rarity, stars, free daily pull)
   hunt.py                HuntSystem (auto-hunt zones)
+  dungeon.py             wave generators for the Hollow Descent and the Gloop Pit
   battle.py              BattleSystem (turn-based auto-combat)
   game.py                Game façade: state, ticking, save/load
   cli.py                 text UI

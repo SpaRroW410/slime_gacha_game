@@ -26,8 +26,15 @@ where the Mother sleeps.
 
 Slimes are not immortal. A slime that starves, wanders into the Crust Road too wounded, or falls in battle
 dissolves back into the Mother Gloop; the Keeper marks them in the **Memorial Pond**, and the colony grieves
-(friends most of all). Silver coins are plentiful glints of old gloop; **gold** is a rare, warm shard of the Mother's
+(friends most of all). **White gel** is the plentiful, everyday ooze of the Mother; **purple gel** is a rare, warm shard of her
 heart — dungeons almost never give it up, and the Parched King hoards it.
+
+## The Two Dungeons
+
+- **The Gloop Pit** — an old training hollow where the Mother's echoes spar with fresh droplets. Slimes who
+  lose are merely "squished flat" and bounce back. The place to grow strong, slowly and boringly.
+- **The Hollow Descent** — the Hollow Kings' shaft, a staircase into the Dry Tide. Every five floors a guardian
+  waits (the **Hollow Warden**, later the **Parched King** himself). It does not forgive.
 
 ## Themes (and how they map to mechanics)
 

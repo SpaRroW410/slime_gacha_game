@@ -27,8 +27,8 @@ class Enemy:
     abilities: List[str]
     xp: int
     loot: Dict[str, tuple]       # resource -> (lo, hi)
-    gold_chance: float = 0.0     # gold is rare: chance per kill to drop `gold_amount` gold
-    gold_amount: int = 1
+    purple_chance: float = 0.0     # purple gel is rare: chance per kill to drop `purple_amount`
+    purple_amount: int = 1
 
 
 ENEMIES: "Registry[Enemy]" = Registry("enemy")
@@ -43,16 +43,20 @@ def _e(hp, atk, d, mag, spd):
 
 
 for _en in [
-    Enemy("dust_bunny", "Dust Bunny", "🐇", 1, _e(22, 6, 2, 0, 5), ["splat"], 12, {"silver": (0, 2)}, 0.01),
-    Enemy("crust_beetle", "Crust Beetle", "🪲", 1, _e(30, 7, 5, 0, 3), ["splat", "smash"], 15, {"silver": (1, 2), "food": (0, 2)}, 0.01),
-    Enemy("parched_wisp", "Parched Wisp", "👻", 2, _e(32, 2, 3, 10, 6), ["spark", "curse"], 28, {"silver": (1, 3), "essence": (0, 3)}, 0.03),
-    Enemy("hollow_knight", "Hollow Knight", "🛡️", 2, _e(60, 11, 8, 0, 5), ["splat", "smash"], 35, {"silver": (2, 4)}, 0.03),
-    Enemy("thorn_sprite", "Thorn Sprite", "🧚", 2, _e(30, 10, 3, 2, 10), ["stab", "venom_dart"], 30, {"silver": (1, 3), "food": (1, 3)}, 0.03),
-    Enemy("dry_brute", "Dry Tide Brute", "🗿", 3, _e(130, 17, 10, 0, 5), ["smash", "rampage"], 80, {"silver": (3, 6), "essence": (2, 6)}, 0.08),
-    Enemy("crown_wraith", "Crown Wraith", "👑", 3, _e(95, 4, 6, 18, 7), ["arcane_surge", "siphon"], 90, {"silver": (3, 6), "essence": (3, 8)}, 0.08),
-    Enemy("parched_king", "The Parched King", "🏜️", 4, _e(700, 22, 12, 20, 6), ["smash", "rampage", "arcane_surge", "curse"], 400, {"silver": (30, 50), "essence": (20, 40)}, 1.0, 5),
+    Enemy("dust_bunny", "Dust Bunny", "🐇", 1, _e(22, 6, 2, 0, 5), ["splat"], 12, {"white_gel": (0, 2)}, 0.01),
+    Enemy("crust_beetle", "Crust Beetle", "🪲", 1, _e(30, 7, 5, 0, 3), ["splat", "smash"], 15, {"white_gel": (1, 2), "food": (0, 2)}, 0.01),
+    Enemy("parched_wisp", "Parched Wisp", "👻", 2, _e(32, 2, 3, 10, 6), ["spark", "curse"], 28, {"white_gel": (1, 3), "essence": (0, 3)}, 0.03),
+    Enemy("hollow_knight", "Hollow Knight", "🛡️", 2, _e(60, 11, 8, 0, 5), ["splat", "smash"], 35, {"white_gel": (2, 4)}, 0.03),
+    Enemy("thorn_sprite", "Thorn Sprite", "🧚", 2, _e(30, 10, 3, 2, 10), ["stab", "venom_dart"], 30, {"white_gel": (1, 3), "food": (1, 3)}, 0.03),
+    Enemy("dry_brute", "Dry Tide Brute", "🗿", 3, _e(130, 17, 10, 0, 5), ["smash", "rampage"], 80, {"white_gel": (3, 6), "essence": (2, 6)}, 0.08),
+    Enemy("crown_wraith", "Crown Wraith", "👑", 3, _e(95, 4, 6, 18, 7), ["arcane_surge", "siphon"], 90, {"white_gel": (3, 6), "essence": (3, 8)}, 0.08),
+    Enemy("parched_king", "The Parched King", "🏜️", 4, _e(700, 22, 12, 20, 6), ["smash", "rampage", "arcane_surge", "curse"], 400, {"white_gel": (30, 50), "essence": (20, 40)}, 0.35, 1),
 ]:
     register_enemy(_en)
+
+# Mid-boss of the main dungeon (tier 5 = never picked by generate_enemies, only by dungeon.py)
+register_enemy(Enemy("hollow_warden", "The Hollow Warden", "🗝️", 5, _e(260, 16, 9, 8, 6),
+                     ["smash", "rampage", "war_cry"], 150, {"white_gel": (12, 20), "essence": (6, 12)}, 0.35, 1))
 
 
 # ---- combatants -----------------------------------------------------------------
@@ -93,6 +97,7 @@ class BattleReport:
     xp: int = 0
     loot: Dict[str, int] = field(default_factory=dict)
     deaths: List[str] = field(default_factory=list)
+    knocked_out: List[str] = field(default_factory=list)
 
     @property
     def victory(self) -> bool:
@@ -125,8 +130,11 @@ class BattleSystem:
                          "attack", 1.0, e)
 
     # -- main loop -----------------------------------------------------------
-    def run(self, party, enemies: List[Enemy]) -> BattleReport:
-        """party: list of Slime (HP and XP are written back). enemies: list of Enemy templates."""
+    def run(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
+            xp_mult: float = 1.0) -> BattleReport:
+        """party: list of Slime (HP and XP are written back). enemies: list of Enemy templates.
+        permadeath=False knocks slimes out at 1 HP instead of killing them (training dungeons).
+        split_xp=False gives every survivor the full wave XP instead of an equal share."""
         totals: Dict[str, int] = {}
         for e in enemies:
             totals[e.key] = totals.get(e.key, 0) + 1
@@ -164,7 +172,7 @@ class BattleSystem:
             winner = None
         report = BattleReport(log, winner, rounds)
         log.append({"party": "🏆 Victory!", "foes": "💀 Defeat...", None: "🤝 Draw - everybody is too tired."}[winner])
-        self._finish(party, mine, enemies, report)
+        self._finish(party, mine, enemies, report, permadeath, split_xp, xp_mult)
         return report
 
     @staticmethod
@@ -253,15 +261,18 @@ class BattleSystem:
         return [min(real, key=lambda c: c.hp)]
 
     # -- aftermath: write HP back, grant XP and loot ---------------------------
-    def _finish(self, party, mine, enemies, report: BattleReport) -> None:
+    def _finish(self, party, mine, enemies, report: BattleReport, permadeath: bool = True,
+                split_xp: bool = True, xp_mult: float = 1.0) -> None:
         win = report.winner == "party"
         survivors = []
         for s, c in zip(party, mine):
             s.hp = max(0, int(c.hp))
-            if not c.alive:                       # permadeath: Game._reap removes them
+            if not c.alive and permadeath:        # Game._reap removes them
                 s.death_cause = "fell in battle"
                 report.deaths.append(s.name)
                 continue
+            if not c.alive:                       # training: knocked out, not killed
+                report.knocked_out.append(s.name)
             s.hp = max(1, s.hp)
             s.needs.add("energy", -10)
             s.needs.add("esteem", 10 if win else -6)
@@ -269,17 +280,17 @@ class BattleSystem:
         for name in report.deaths:
             report.log.append(f"☠ {name} has fallen and will not rise again.")
         if win:
-            report.xp = sum(e.xp for e in enemies)
+            report.xp = int(sum(e.xp for e in enemies) * xp_mult)
             for e in enemies:
                 for res, (lo, hi) in e.loot.items():
                     n = self.rng.randint(lo, hi)
                     if n:
                         report.loot[res] = report.loot.get(res, 0) + n
-                if self.rng.random() < e.gold_chance:        # gold is rare
-                    report.loot["gold"] = report.loot.get("gold", 0) + e.gold_amount
+                if self.rng.random() < e.purple_chance:        # purple gel is rare
+                    report.loot["purple_gel"] = report.loot.get("purple_gel", 0) + e.purple_amount
             if self.wallet:
                 self.wallet.add_many(report.loot)
-            share = max(1, report.xp // max(1, len(survivors)))
+            share = max(1, report.xp // max(1, len(survivors))) if split_xp else report.xp
             for s in survivors:
                 s.wins += 1
                 report.log.extend(add_xp(s, share))

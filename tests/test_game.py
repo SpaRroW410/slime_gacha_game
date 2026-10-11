@@ -7,7 +7,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from slime_gacha import config
+from slime_gacha import config, dungeon
 from slime_gacha.abilities import Ability, register_ability
 from slime_gacha.archetypes import ARCHETYPES, Archetype, register_archetype
 from slime_gacha.battle import BattleSystem, Enemy
@@ -20,8 +20,8 @@ from slime_gacha.resources import ResourceManager
 
 def fresh(seed=1, n=0):
     g = Game(seed)
-    g.wallet.add("silver", 100000)
-    g.wallet.add("gold", 100000)
+    g.wallet.add("white_gel", 100000)
+    g.wallet.add("purple_gel", 100000)
     if n:
         g.pull(n)
     return g
@@ -41,10 +41,10 @@ def full_party(g, tier_archetype="barbarian", rarity="legendary", xp=2000, name=
 
 class TestResources(unittest.TestCase):
     def test_atomic_spend(self):
-        w = ResourceManager({"silver": 10, "food": 1})
+        w = ResourceManager({"white_gel": 10, "food": 1})
         with self.assertRaises(NotEnoughResources):
-            w.spend_many({"silver": 5, "food": 2})
-        self.assertEqual(w.get("silver"), 10)       # nothing changed
+            w.spend_many({"white_gel": 5, "food": 2})
+        self.assertEqual(w.get("white_gel"), 10)       # nothing changed
 
 
 class TestGacha(unittest.TestCase):
@@ -64,11 +64,11 @@ class TestGacha(unittest.TestCase):
         self.assertTrue(1400 < counts["rare"] < 2200)
         self.assertLess(counts["legendary"], 40)
 
-    def test_gold_boosts_rare_odds(self):
+    def test_purple_gel_boosts_rare_odds(self):
         g = fresh(2)
-        silver = sum(g.gacha.roll_rarity(False) != "common" for _ in range(6000))
-        gold = sum(g.gacha.roll_rarity(True) != "common" for _ in range(6000))
-        self.assertGreater(gold, silver * 2.5)
+        white = sum(g.gacha.roll_rarity(False) != "common" for _ in range(6000))
+        purple = sum(g.gacha.roll_rarity(True) != "common" for _ in range(6000))
+        self.assertGreater(purple, white * 2.5)
 
     def test_star_probabilities_exponential_and_steeper_for_rank(self):
         pc = GachaSystem.star_probabilities("common")
@@ -89,16 +89,16 @@ class TestGacha(unittest.TestCase):
         a.variance = b.variance = {k: 1.0 for k in a.variance}
         self.assertGreater(b.max_stats()["mag"], a.max_stats()["mag"] * 1.6)
 
-    def test_cost_is_ten_of_silver_or_gold(self):
+    def test_cost_is_ten_of_white_or_purple_gel(self):
         g = Game(1)
-        s0, g0 = g.wallet.get("silver"), g.wallet.get("gold")
-        g.pull(1, "silver")
-        g.pull(1, "gold")
-        self.assertEqual(g.wallet.get("silver"), s0 - 10)
-        self.assertEqual(g.wallet.get("gold"), g0 - 10)
-        g.wallet.spend("silver", g.wallet.get("silver"))
+        s0, g0 = g.wallet.get("white_gel"), g.wallet.get("purple_gel")
+        g.pull(1, "white_gel")
+        g.pull(1, "purple_gel")
+        self.assertEqual(g.wallet.get("white_gel"), s0 - 10)
+        self.assertEqual(g.wallet.get("purple_gel"), g0 - 10)
+        g.wallet.spend("white_gel", g.wallet.get("white_gel"))
         with self.assertRaises(NotEnoughResources):
-            g.pull(1, "silver")
+            g.pull(1, "white_gel")
 
     def test_one_free_pull_per_day(self):
         g = Game(1)
@@ -192,12 +192,12 @@ class TestHunt(unittest.TestCase):
         g = fresh(4, 1)
         s = g.slimes()[0]
         g.needs.auto_care = False
-        before = g.wallet.get("silver") + g.wallet.get("food")
+        before = g.wallet.get("white_gel") + g.wallet.get("food")
         g.hunt(s.id, "meadow")
         self.assertEqual(s.state, "hunting")
         g.tick(3)
         self.assertEqual(s.state, "idle")
-        self.assertGreater(g.wallet.get("silver") + g.wallet.get("food"), before)
+        self.assertGreater(g.wallet.get("white_gel") + g.wallet.get("food"), before)
         self.assertGreater(s.total_xp, 0)
 
     def test_cannot_hunt_when_exhausted(self):
@@ -300,10 +300,10 @@ class TestBattle(unittest.TestCase):
     def test_victory_pays_loot_and_xp(self):
         g = fresh(2)
         pid = full_party(g)
-        silver = g.wallet.get("silver")
+        white = g.wallet.get("white_gel")
         rep = g.battle(pid, 1)
         self.assertTrue(rep.victory)
-        self.assertGreaterEqual(g.wallet.get("silver"), silver)
+        self.assertGreaterEqual(g.wallet.get("white_gel"), white)
         self.assertGreater(rep.xp, 0)
 
     def test_necromancer_summons(self):
@@ -312,16 +312,160 @@ class TestBattle(unittest.TestCase):
         rep = g.battle(pid, 1)
         self.assertTrue(any("Bone Pal" in l for l in rep.log))
 
-    def test_gold_is_rare_in_dungeons(self):
+    def test_purple_gel_is_rare_in_dungeons(self):
         g = fresh(5)
-        gold = 0
+        purple = 0
         for _ in range(300):
             e = g.battles.generate_enemies(1, 5)
-            gold += sum(1 for x in e if g.rng.random() < x.gold_chance)
-        self.assertLess(gold / (300 * 5), 0.03)
-        # boss always drops gold
+            purple += sum(1 for x in e if g.rng.random() < x.purple_chance)
+        self.assertLess(purple / (300 * 5), 0.03)
+        # bosses drop purple gel far more often than ordinary enemies
         from slime_gacha.battle import ENEMIES
-        self.assertEqual(ENEMIES.get("parched_king").gold_chance, 1.0)
+        self.assertGreaterEqual(ENEMIES.get("parched_king").purple_chance, 0.3)
+        self.assertGreaterEqual(ENEMIES.get("hollow_warden").purple_chance, 0.3)
+
+
+class TestMainDungeon(unittest.TestCase):
+    def test_fresh_party_finds_floor_one_rough(self):
+        bad = 0
+        for seed in range(1, 9):
+            g = fresh(seed)
+            pid = full_party(g, "mage", "common", 0)
+            for s in g.party_members(pid):
+                s.stars = 1
+            rep = g.descend(pid)
+            bad += bool(rep.deaths) or not rep.victory
+        self.assertGreaterEqual(bad, 4)
+
+    def test_floor_gating_and_progress(self):
+        g = fresh(1)
+        pid = full_party(g, xp=10 ** 6)
+        for s in g.party_members(pid):
+            s.stage = 2
+            add_xp(s, 10 ** 7)
+            s.hp = s.max_hp
+        with self.assertRaises(InvalidAction):
+            g.descend(pid, 3)                     # cannot skip ahead
+        rep = g.descend(pid)
+        self.assertTrue(rep.victory)
+        self.assertEqual(g.main_floor, 1)
+        self.assertTrue(any("floor 1" in l for l in rep.log))
+
+    def test_boss_first_clear_bounty_only_once(self):
+        g = fresh(2)
+        g.main_floor = 4
+        pid = full_party(g)
+        for s in g.party_members(pid):
+            s.stage = 2
+            add_xp(s, 10 ** 7)
+            s.hp = s.max_hp
+            s.stars = 5
+        before = g.wallet.get("purple_gel")
+        rep = g.descend(pid)
+        self.assertTrue(rep.victory, rep.log[-6:])
+        self.assertEqual(g.main_floor, 5)
+        self.assertGreaterEqual(g.wallet.get("purple_gel") - before, config.MAIN_BOSS_FIRST_CLEAR_PURPLE)
+        for s in g.party_members(pid):
+            s.hp, s.state = s.max_hp, "idle"
+            s.needs.v["energy"] = 100
+        before = g.wallet.get("purple_gel")
+        g.descend(pid, 5)                         # replay: no guaranteed bounty
+        self.assertLess(g.wallet.get("purple_gel") - before, config.MAIN_BOSS_FIRST_CLEAR_PURPLE)
+
+    def test_wave_structure_and_scaling(self):
+        rng = random.Random(1)
+        w5 = dungeon.main_wave(5, 5, rng)
+        self.assertEqual(w5[0].key, "hollow_warden")
+        self.assertEqual(len(w5), 3)
+        self.assertEqual(dungeon.main_wave(10, 5, rng)[0].key, "parched_king")
+        self.assertEqual(len(dungeon.main_wave(3, 5, rng)), 5)
+        self.assertEqual(len(dungeon.main_wave(3, 10, rng)), 10)
+        hp = lambda f: max(e.stats["hp"] for e in dungeon.main_wave(f, 5, random.Random(2)) if e.tier == 1)
+        self.assertGreater(hp(4), hp(1) * 1.4)
+
+    def test_purple_gel_rare_but_present_deeper(self):
+        rng = random.Random(3)
+        shallow = sum(e.purple_chance for e in dungeon.main_wave(1, 5, rng)) / 5
+        deep = sum(e.purple_chance for e in dungeon.main_wave(12, 5, rng)) / 5
+        self.assertLess(shallow, 0.03)
+        self.assertGreater(deep, shallow)
+        self.assertLessEqual(deep, config.MAIN_PURPLE_CAP)
+
+    def test_main_floor_persists(self):
+        g = fresh(1)
+        g.main_floor = 7
+        self.assertEqual(Game.from_dict(g.to_dict()).main_floor, 7)
+
+
+class TestGrindDungeon(unittest.TestCase):
+    def _party(self, seed=1):
+        g = fresh(seed, 10)
+        pid = g.create_party("G").id
+        g.party_autofill(pid)
+        g.conflicts.conflicts.clear()
+        return g, pid
+
+    def test_nobody_dies_even_when_crushed(self):
+        g, pid = self._party()
+        for s in g.party_members(pid):
+            s.hp = 1
+            s.max_stats = (lambda f: (lambda: {**f(), "atk": 1.0, "mag": 0.0, "defense": 0.0, "hp": 40.0}))(s.max_stats)
+        res = g.grind(pid, 5, 1)
+        self.assertEqual(g.graveyard, [])
+        self.assertEqual(len(g.parties.get(pid).members), 5)
+        self.assertTrue(all(s.hp >= 1 for s in g.slimes()))
+
+    def test_grind_levels_up_everyone_fully(self):
+        g, pid = self._party(2)
+        before = [s.total_xp for s in g.party_members(pid)]
+        res = g.grind(pid, 3, 3, auto_rest=True)
+        self.assertTrue(res.runs)
+        gains = [s.total_xp - b for s, b in zip(g.party_members(pid), before)]
+        self.assertTrue(all(x > 0 for x in gains))
+        self.assertEqual(len(set(gains)), 1)              # same full XP for every survivor
+        self.assertTrue(all(r.victory for r in res.runs))
+
+    def test_grind_scales_with_party_level_and_depth(self):
+        rng = random.Random(1)
+        lo = dungeon.grind_wave(3, 1, 5, rng)
+        hi = dungeon.grind_wave(3, 5, 5, rng)
+        self.assertLess(sum(e.stats["hp"] for e in lo), sum(e.stats["hp"] for e in hi))
+        self.assertLess(sum(e.xp for e in lo), sum(e.xp for e in hi))
+        strong = dungeon.grind_wave(25, 3, 5, rng)
+        self.assertTrue(all(e.tier == 3 for e in strong))
+        self.assertEqual(dungeon.grind_level(10, 1), 8)
+
+    def test_grind_gives_no_purple_gel(self):
+        rng = random.Random(1)
+        for depth in range(1, 6):
+            self.assertTrue(all(e.purple_chance == 0 for e in dungeon.grind_wave(10, depth, 5, rng)))
+
+    def test_grind_is_a_real_grind(self):
+        """Getting a fresh party to the stage-0 cap takes dozens of runs, not a handful."""
+        g, pid = self._party(3)
+        g.wallet.add("food", 5000)                        # a long grind needs snacks
+        runs = 0
+        while runs < 200 and not all(s.level >= s.level_cap for s in g.party_members(pid)):
+            g.conflicts.conflicts.clear()
+            for s in g.slimes():
+                s.grounded = False
+            runs += len(g.grind(pid, 4, 5, auto_rest=True).runs)
+        self.assertGreaterEqual(runs, 30)
+        self.assertEqual(g.graveyard, [])
+
+    def test_stops_when_capped_and_validates_depth(self):
+        g, pid = self._party()
+        with self.assertRaises(InvalidAction):
+            g.grind(pid, 6, 1)
+        for s in g.party_members(pid):
+            add_xp(s, 10 ** 7)
+        res = g.grind(pid, 3, 5)
+        self.assertIn("level cap", res.stop_reason)
+
+    def test_party_rest_sleeps_idle_members(self):
+        g, pid = self._party()
+        g.party_rest(pid)
+        self.assertTrue(all(s.state == "sleeping" for s in g.party_members(pid)))
 
 
 class TestDeath(unittest.TestCase):
@@ -417,11 +561,11 @@ class TestExtensibility(unittest.TestCase):
 
 
 class TestPersistence(unittest.TestCase):
-    def test_v1_save_migrates_gel_to_silver(self):
+    def test_old_saves_migrate_currency_names(self):
         d = Game(1).to_dict()
         d["wallet"] = {"gel": 77, "food": 3, "essence": 0}
         h = Game.from_dict(d)
-        self.assertEqual(h.wallet.get("silver"), 77)
+        self.assertEqual(h.wallet.get("white_gel"), 77)
 
     def test_roundtrip(self):
         g = fresh(6, 5)

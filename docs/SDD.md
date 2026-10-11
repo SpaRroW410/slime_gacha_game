@@ -1,6 +1,7 @@
 # Software Design Document — Slime Gacha (prototype v0.1)
 
-> **v0.2 changes**: permadeath, rarity 90/9/0.9/0.09, 1–5★ ratings, silver/gold currencies, free daily pull, fixed-size parties (see §5.1, 5.9, 5.10).
+> **v0.2 changes**: permadeath, rarity 90/9/0.9/0.09, 1–5★ ratings, white/purple gel currencies, free daily pull, fixed-size parties (§5.1, 5.9, 5.10).
+> **v0.3 changes**: main + grinding dungeons (§5.11), currency naming (white/purple gel).
 
 ## 1. Goals & non-goals
 
@@ -75,8 +76,8 @@ through a dispatch table, so a new *kind* = one handler function; a new *ability
 - **Stars** 1–5: `P(star=k) ∝ exp(−λ·(k−1))`, with λ per rarity `{common .7, rare 1.0, epic 1.3, legendary 1.6}`.
   Each step down the ladder costs a constant factor (exponential), and higher rarities fall off faster, so
   a 5★ common ≈ 3 % while a 5★ legendary ≈ 0.13 %. Stars multiply stats `[1.0, 1.1, 1.25, 1.45, 1.7]`.
-- **Payment**: `pull(n, pay)` with `pay ∈ {free, silver, gold}`. Silver/gold cost 10 each per pull.
-  **Gold** multiplies the rare/epic/legendary weights by `GOLD_RARITY_BOOST` (5×).
+- **Payment**: `pull(n, pay)` with `pay ∈ {free, white_gel, purple_gel}`. White/purple gel cost 10 each per pull.
+  **Purple gel** multiplies the rare/epic/legendary weights by `PURPLE_RARITY_BOOST` (5×).
 - **Free daily pull**: one per game day (`day = tick // 24`); `last_free_day` is persisted.
 - **Pity** is optional and **off by default** (`PITY_* = 0`) so the published rates are honest.
 - Stats = archetype base × rarity mult × star mult × stage mult × variance.
@@ -107,7 +108,7 @@ escalates; at severity 3 they **brawl** (both lose HP, refuse hunts until mediat
 
 | Stance | Battle AI | Hunt effect |
 |--------|-----------|-------------|
-| attack | max-damage ability, focus lowest-HP foe | +loot (gel), +injury |
+| attack | max-damage ability, focus lowest-HP foe | +loot (white gel), +injury |
 | heal | heals ally < 60 % HP if able, else attack | party recovers HP, −yield |
 | defend | guards when ally low/self low, else attack | −injury |
 | explore | random targets, +crit; scouts | +chance of rare finds (essence) |
@@ -118,13 +119,13 @@ Player changes it with `Game.set_behavior(id, stance)`.
 `Zone(key, name, duration, danger, rewards{resource:(lo,hi)}, xp)` from a registry.
 `start(slime, zone)` sets state `hunting`; `tick()` decrements; on completion rolls success from
 `slime power vs zone danger`, grants resources scaled by archetype `hunt_bonus`, stance and rarity,
-grants XP, applies damage (**can kill**). Exhausted slimes return early with half loot. Each zone has a small `gold_chance` (1–8 %, ×1.5 for explorers). Slimes below 30 % HP cannot be sent out.
+grants XP, applies damage (**can kill**). Exhausted slimes return early with half loot. Each zone has a small `purple_chance` (1–8 %, ×1.5 for explorers). Slimes below 30 % HP cannot be sent out.
 
 ### 5.6 BattleSystem (`battle.py`)
 Turn-based auto-combat. `Combatant` wraps a slime snapshot or an `Enemy`. Order by speed each round.
 Per turn: status ticks (poison/guard expiry) → AI picks ability by stance → resolve via kind handler.
 Damage: `max(1, (power × stat) − 0.5 × defense) × rng(0.9, 1.1) × power_multiplier`, crit 8 % ×1.5.
-Ends when a side is empty or round cap (30). Slimes at 0 HP are **dead** (removed by `Game._reap`). Survivors share XP and loot; enemies drop gold with a per-enemy chance (boss: guaranteed 5).
+Ends when a side is empty or round cap (30). Slimes at 0 HP are **dead** (removed by `Game._reap`). Survivors share XP and loot; enemies drop purple gel with a per-enemy chance (bosses 35 %).
 Returns a `BattleReport` (log lines, winner, rewards) — UI only prints it.
 
 ### 5.7 Growth (`growth.py`)
@@ -135,7 +136,7 @@ Returns a `BattleReport` (log lines, winner, rewards) — UI only prints it.
 - Abilities unlock at levels listed in the archetype.
 
 ### 5.8 ResourceManager (`resources.py`)
-Wallet of `silver` (common currency), `gold` (rare currency), `food`, `essence`. `add/spend/can_afford`, atomic `spend_many`.
+Wallet of `white_gel` (common currency), `purple_gel` (rare currency), `food`, `essence`. `add/spend/can_afford`, atomic `spend_many`.
 New resources = new key in config; no code change.
 
 ### 5.9 Parties (`party.py`)
@@ -151,6 +152,21 @@ from roster/parties/conflicts, and lowers every other slime's belonging (−8, o
 Causes: starvation / exhaustion (HP drains 5 %/tick at zero food or energy), killed hunting, brawl (8 % HP per
 brawl round), fell in battle. Safety valves: auto-care, the 30 % HP hunt gate, and mediation.
 
+### 5.11 Dungeons (`dungeon.py`, `Game.descend`, `Game.grind`)
+Dungeons only *generate waves* (lists of scaled `Enemy` copies via `scale_enemy`); the fight is `BattleSystem.run`.
+
+| | **The Hollow Descent** (main) | **The Gloop Pit** (grinding) |
+|---|---|---|
+| Purpose | progression, bosses, purple gel, essence | levelling up |
+| Difficulty | floor *f*: stats ×1.15^(f−1) on tier pool 1/2/3 (floors 1–4 / 5–8 / 9+), loot +25 %/floor | depth 1–5 = enemy level (party avg −2 … +2); stats +12 %/level above the tier base |
+| Death | **permadeath** | none: knocked-out slimes drop to 1 HP |
+| XP | split among survivors | every survivor gets 35 % of the wave's XP (full, not split) |
+| Loot | white gel, food, essence; purple chance ×1.15^(f−1) (cap 50 %) | 50 % loot, **no purple gel** |
+| Bosses | every 5th floor: Hollow Warden (f5), Parched King (f10+, +25 %/cycle) with escorts; first clear pays 3 purple gel | – |
+| Time | 3 h per floor attempt | 2 h per run |
+| Extra | floors unlock in order; replay allowed (no bounty) | `runs=N`, `auto_rest` sleeps the party until healed (85 % HP) between runs; stops on defeat, level cap, brawl-grounding, or missing members |
+Time passing means hunger: long grinds need Food, or slimes starve.
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|
@@ -158,12 +174,13 @@ brawl round), fell in battle. Safety valves: auto-care, the 30 % HP hunt gate, a
 | New ability | `register_ability(Ability(...))` and reference its key from an archetype |
 | New ability kind | add handler in `battle.KIND_HANDLERS` |
 | New zone / enemy | `register_zone(...)`, `register_enemy(...)` |
+| New dungeon | write a `*_wave(...)` function in `dungeon.py` + a `Game` method that calls `BattleSystem.run(permadeath=..., split_xp=...)` |
 | New trait | add to `ai.TRAITS` dict (decay/conflict modifiers) |
 | New resource | add to `config.RESOURCES` |
 Plugins: any module placed in `slime_gacha/plugins/` is auto-imported at start (optional dir).
 
 ## 7. Persistence
-`Game.save(path)` → JSON `{version 2, tick, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. v1 saves load (gel→silver).
+`Game.save(path)` → JSON `{version 3, tick, main_floor, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. older saves load (gel/silver→white_gel, gold→purple_gel).
 Versioned for forward migration. Unknown archetype keys on load are skipped with a warning (mod removal safe).
 
 ## 8. Error handling

@@ -55,15 +55,29 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Colony grief on death
 - [x] Rarity rates 90 / 9 / 0.9 / 0.09
 - [x] 1–5★ rating, exponential falloff, steeper for higher rarity
-- [x] Silver and gold currencies (10 per pull, either)
-- [x] Gold boosts rare odds (×5 weights)
-- [x] Gold rare in dungeons (hunt zones, enemies; boss guaranteed)
+- [x] Two gel currencies: white and purple (10 per pull, either)
+- [x] Purple gel boosts rare odds (×5 weights)
+- [x] Purple gel rare in hunts/dungeons (bosses best)
 - [x] One free pull per game day
 - [x] Fixed-size parties (multiple of 5), multiple parties, party hunt/battle
 - [x] Save v2 with migration from v1
 - [x] Tests for all of the above
 
+## M8 — Dungeons
+- [x] Rename currencies back to gel: white gel (common) / purple gel (rare)
+- [x] Main dungeon "The Hollow Descent": endless floors, compounding difficulty, permadeath
+- [x] Boss every 5 floors (Hollow Warden, then Parched King cycles) + first-clear purple-gel bounty
+- [x] Floors cost game time; you can replay cleared floors
+- [x] Grinding dungeon "The Gloop Pit": 5 depths scaled to party level, no permadeath, full XP per survivor
+- [x] Multi-run grinding with optional auto-rest
+- [x] Party rest command
+- [x] Save v3 (`main_floor`), migration of old currency names
+- [x] Tests for both dungeons
+
 ## Future (post-prototype)
+- [ ] Named dungeon registry (add dungeons as data)
+- [ ] Floor modifiers (poison fog, darkness) and shops between floors
+- [ ] Retreat / checkpoint mid-descent
 - [ ] Real-clock daily free pull (wall-time) as an option
 - [ ] Resurrection items / Necromancer "revive" ability
 - [ ] Star-up by merging duplicates

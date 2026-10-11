@@ -56,7 +56,7 @@ def _s(hp, atk, defense, mag, spd):
 register_archetype(Archetype(
     "barbarian", "Barbarian", "🪓", _s(40, 9, 5, 1, 4), _s(6, 2, 1, 0.3, 0.5),
     {1: "splat", 3: "smash", 6: "war_cry", 10: "rampage"}, "attack",
-    likes=("meat", "shouting"), hunt_bonus={"silver": 1.3}, rivals=("mage",),
+    likes=("meat", "shouting"), hunt_bonus={"white_gel": 1.3}, rivals=("mage",),
     evolve_abilities={1: "blorp_blast"}))
 
 register_archetype(Archetype(
@@ -72,7 +72,7 @@ register_archetype(Archetype(
 register_archetype(Archetype(
     "rogue", "Rogue", "🗡️", _s(26, 8, 3, 2, 9), _s(3.5, 1.9, 0.6, 0.3, 1.0),
     {1: "stab", 3: "venom_dart", 6: "backstab"}, "explore",
-    likes=("borrowing", "shadows"), hunt_bonus={"silver": 1.4}, rivals=("ranger",)))
+    likes=("borrowing", "shadows"), hunt_bonus={"white_gel": 1.4}, rivals=("ranger",)))
 
 register_archetype(Archetype(
     "ranger", "Ranger", "🏹", _s(28, 8, 3, 2, 7), _s(4, 1.8, 0.7, 0.3, 0.8),

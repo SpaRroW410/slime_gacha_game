@@ -1,7 +1,7 @@
-"""GachaSystem: rarity + star rolls, daily free pull, silver/gold payment. Offline, RNG injected.
+"""GachaSystem: rarity + star rolls, daily free pull, white/purple gel payment. Offline, RNG injected.
 
-Rarity weights come from config.RARITY_RATES (90 / 9 / 0.9 / 0.09 %). Paying with GOLD multiplies the
-non-common weights by config.GOLD_RARITY_BOOST. Stars (1-5) follow an exponential falloff whose steepness
+Rarity weights come from config.RARITY_RATES (90 / 9 / 0.9 / 0.09 %). Paying with PURPLE gel multiplies the
+non-common weights by config.PURPLE_RARITY_BOOST. Stars (1-5) follow an exponential falloff whose steepness
 grows with rarity (config.STAR_DECAY), so a 5-star legendary is astronomically rare.
 """
 import math
@@ -17,7 +17,7 @@ from .slime import Slime
 
 _SYL_A = ["blo", "gloo", "sqi", "wob", "plu", "jel", "mo", "slu", "bi", "zi", "fli", "gur", "pi", "dro"]
 _SYL_B = ["p", "b", "mp", "z", "x", "bo", "ggle", "ssy", "nk", "rp", "ppy", "ndle", "bble", "t"]
-PAY_METHODS = ("free", "silver", "gold")
+PAY_METHODS = ("free", "white_gel", "purple_gel")
 
 
 class GachaSystem:
@@ -32,8 +32,8 @@ class GachaSystem:
 
     # ---- probabilities (pure functions, handy for tests/UI) --------------------
     @staticmethod
-    def rarity_weights(gold: bool = False) -> dict:
-        return {r: config.RARITY_RATES[r] * (config.GOLD_RARITY_BOOST if gold and r != "common" else 1.0)
+    def rarity_weights(purple: bool = False) -> dict:
+        return {r: config.RARITY_RATES[r] * (config.PURPLE_RARITY_BOOST if purple and r != "common" else 1.0)
                 for r in config.RARITIES}
 
     @staticmethod
@@ -44,14 +44,14 @@ class GachaSystem:
         return [x / total for x in w]
 
     # ---- rolls ---------------------------------------------------------------
-    def roll_rarity(self, gold: bool = False) -> str:
+    def roll_rarity(self, purple: bool = False) -> str:
         # optional pity (disabled by default, see config)
         if config.PITY_LEGENDARY and self.since_legendary + 1 >= config.PITY_LEGENDARY:
             return "legendary"
         if config.PITY_EPIC and self.since_epic + 1 >= config.PITY_EPIC:
             return self.rng.choices(["epic", "legendary"],
                                     [config.RARITY_RATES["epic"], config.RARITY_RATES["legendary"]])[0]
-        w = self.rarity_weights(gold)
+        w = self.rarity_weights(purple)
         return self.rng.choices(config.RARITIES, [w[r] for r in config.RARITIES])[0]
 
     def roll_stars(self, rarity: str) -> int:
@@ -79,8 +79,8 @@ class GachaSystem:
         return day > self.last_free_day
 
     # ---- public --------------------------------------------------------------
-    def pull(self, n: int = 1, pay: str = "silver", day: int = 0) -> List[Slime]:
-        """pay: 'free' (once per game day, n must be 1), 'silver' or 'gold' (PULL_COST each)."""
+    def pull(self, n: int = 1, pay: str = "white_gel", day: int = 0) -> List[Slime]:
+        """pay: 'free' (once per game day, n must be 1), 'white_gel' or 'purple_gel' (PULL_COST each)."""
         if pay not in PAY_METHODS:
             raise InvalidAction(f"Pay with one of: {', '.join(PAY_METHODS)}.")
         if n < 1:
@@ -95,7 +95,7 @@ class GachaSystem:
             self.wallet.spend(pay, config.PULL_COST * n)
         out = []
         for _ in range(n):
-            r = self.roll_rarity(gold=(pay == "gold"))
+            r = self.roll_rarity(purple=(pay == "purple_gel"))
             self.total_pulls += 1
             self.since_epic = 0 if r in ("epic", "legendary") else self.since_epic + 1
             self.since_legendary = 0 if r == "legendary" else self.since_legendary + 1

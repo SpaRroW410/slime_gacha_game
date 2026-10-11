@@ -4,12 +4,14 @@ One `tick()` = one game hour. Everything time-based (needs, hunts, conflicts) ad
 """
 import json
 import random
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
+from . import dungeon
 from .errors import InvalidAction
 from .gacha import GachaSystem
 from .growth import evolve, evolve_cost, merge, merge_gain
@@ -18,6 +20,13 @@ from .party import Party, PartyManager
 from .registry import load_plugins
 from .resources import ResourceManager
 from .slime import Slime
+
+
+@dataclass
+class GrindResult:
+    runs: List[BattleReport] = field(default_factory=list)
+    summary: List[str] = field(default_factory=list)      # one line per run + level-ups
+    stop_reason: str = ""
 
 
 class Game:
@@ -34,6 +43,7 @@ class Game:
         self.hunts = HuntSystem(self.wallet, self.rng)
         self.battles = BattleSystem(self.rng, self.wallet)
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
+        self.main_floor = 0                            # deepest main-dungeon floor cleared
         self.graveyard: List[dict] = []                # slimes that died, newest last
         self.journal: List[str] = []
 
@@ -58,8 +68,8 @@ class Game:
     def hours_to_free_pull(self) -> int:
         return 0 if self.free_pull_available() else (self.day + 1) * config.DAY_TICKS - self.tick_count
 
-    def pull(self, n: int = 1, pay: str = "silver") -> List[Slime]:
-        """pay = 'free' (1 per game day) | 'silver' | 'gold' (10 each; gold boosts rare odds)."""
+    def pull(self, n: int = 1, pay: str = "white_gel") -> List[Slime]:
+        """pay = 'free' (1 per game day) | 'white_gel' | 'purple_gel' (10 each; purple boosts rare odds)."""
         new = self.gacha.pull(n, pay, self.day)
         for s in new:
             self.roster[s.id] = s
@@ -248,23 +258,143 @@ class Game:
         """A full party fights a wave of tier-N enemies (one foe per party slot; tier 4 = boss).
         Fallen slimes are gone for good."""
         self._require_full(pid)
+        party = self._ready_party(pid)
+        enemies = self.battles.generate_enemies(tier, self.parties.size)
+        return self._fight(party, enemies, 0)
+
+    def _ready_party(self, pid: int) -> List[Slime]:
+        self._require_full(pid)
         party = self.party_members(pid)
         for s in party:
             if s.state != "idle":
                 raise InvalidAction(f"{s.name} is {s.state}.")
             if s.grounded:
                 raise InvalidAction(f"{s.name} is grounded after a brawl.")
-        enemies = self.battles.generate_enemies(tier, self.parties.size)
-        report = self.battles.run(party, enemies)
+        return party
+
+    def _fight(self, party, enemies, hours: int, **opts) -> BattleReport:
+        """Run a battle, bury the fallen, then let `hours` pass (the colony keeps living)."""
+        report = self.battles.run(party, enemies, **opts)
         events: List[str] = []
         self._reap(events)
+        if hours:
+            events.extend(self.tick(hours))
         report.log.extend(events)
         self.journal.extend(events)
         return report
 
+    # ---- main dungeon: The Hollow Descent (rough, permadeath) ---------------------------
+    def descend(self, pid: int, floor: Optional[int] = None) -> BattleReport:
+        """Fight a floor of the main dungeon (default: the next uncleared one; you may replay cleared floors).
+        Every 5th floor is a boss. Slimes that fall are gone forever. Purple gel is rare; bosses pay best."""
+        floor = floor or self.main_floor + 1
+        if not 1 <= floor <= self.main_floor + 1:
+            raise InvalidAction(f"You can enter floors 1-{self.main_floor + 1}.")
+        party = self._ready_party(pid)
+        enemies = dungeon.main_wave(floor, self.parties.size, self.rng)
+        report = self._fight_main(party, enemies, floor)
+        return report
+
+    def _fight_main(self, party, enemies, floor) -> BattleReport:
+        first_clear = floor > self.main_floor
+        report = self.battles.run(party, enemies)
+        report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}"
+                             f"{' (BOSS)' if dungeon.is_boss_floor(floor) else ''}")
+        events: List[str] = []
+        if report.victory and first_clear:
+            self.main_floor = floor
+            events.append(f"🔓 Floor {floor} cleared for the first time!")
+            if dungeon.is_boss_floor(floor):
+                self.wallet.add("purple_gel", config.MAIN_BOSS_FIRST_CLEAR_PURPLE)
+                report.loot["purple_gel"] = report.loot.get("purple_gel", 0) + config.MAIN_BOSS_FIRST_CLEAR_PURPLE
+                events.append(f"🟣 Boss bounty: +{config.MAIN_BOSS_FIRST_CLEAR_PURPLE} purple gel!")
+        self._reap(events)
+        events.extend(self.tick(config.MAIN_FLOOR_TICKS))
+        report.log.extend(events)
+        self.journal.extend(events)
+        return report
+
+    # ---- grinding dungeon: The Gloop Pit (safe XP farm) ---------------------------------
+    def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = False) -> GrindResult:
+        """Repeat Pit fights. Enemy level = party average level + (depth - 3). Nobody dies (knock-outs
+        drop to 1 HP); every survivor gets the full wave XP. Stops early if hurt, tired, defeated or capped,
+        unless auto_rest is on, in which case the party sleeps (time passes!) until healed."""
+        if not 1 <= depth <= config.GRIND_DEPTHS:
+            raise InvalidAction(f"Depth must be 1-{config.GRIND_DEPTHS}.")
+        res = GrindResult()
+        for n in range(1, max(1, runs) + 1):
+            if auto_rest:
+                members = self.party_members(pid)
+                if any(s.state == "sleeping" or s.hp < s.max_hp * config.GRIND_MIN_HP for s in members):
+                    hours = self._rest_party_until_healed(pid)
+                    res.summary.append(f"   (rested {hours}h)")
+            try:
+                party = self._ready_party(pid)
+            except InvalidAction as e:
+                if n == 1:
+                    raise
+                res.stop_reason = f"party not ready ({e})"
+                break
+            if all(s.level >= s.level_cap for s in party):
+                res.stop_reason = "everyone is at their level cap - time to evolve!"
+                break
+            if n > 1 and any(s.hp < s.max_hp * config.GRIND_MIN_HP for s in party):
+                res.stop_reason = "someone is too hurt - rest the party"
+                break
+            avg = sum(s.level for s in party) / len(party)
+            enemies = dungeon.grind_wave(avg, depth, self.parties.size, self.rng)
+            rep = self.battles.run(party, enemies, permadeath=False, split_xp=False,
+                                   xp_mult=config.GRIND_XP_MULT)
+            rep.log.insert(0, f"🕳 The Gloop Pit - depth {depth} (enemy lvl ~{dungeon.grind_level(avg, depth)})")
+            events = self.tick(config.GRIND_TICKS)
+            rep.log.extend(events)
+            res.runs.append(rep)
+            tag = "Victory" if rep.victory else "Defeat" if rep.winner == "foes" else "Draw"
+            line = f"Run {n}: {tag} in {rep.rounds} rounds"
+            if rep.victory:
+                line += f", +{rep.xp} XP each"
+            if rep.knocked_out:
+                line += f", KO: {', '.join(rep.knocked_out)}"
+            res.summary.append(line)
+            res.summary.extend("   " + l.strip() for l in rep.log if "reached level" in l or "learned" in l)
+            res.summary.extend("   " + e for e in events if "died" in e)
+            self.journal.extend(events)
+            if not rep.victory:
+                res.stop_reason = "the party lost - try a lower depth"
+                break
+        else:
+            res.stop_reason = "finished all requested runs"
+        return res
+
+    def _rest_party_until_healed(self, pid: int, max_hours: int = 24) -> int:
+        """Sleep the party until everyone is at 85% HP (or max_hours pass). Returns hours spent."""
+        hours = 0
+        while hours < max_hours:
+            members = self.party_members(pid)
+            if all(s.hp >= s.max_hp * 0.85 and s.state == "idle" for s in members):
+                break                                   # healed AND awake
+            for s in members:
+                if s.state == "idle" and s.hp < s.max_hp * 0.85:
+                    s.state = "sleeping"
+            self.tick(1)
+            hours += 1
+            if len(self.parties.get(pid).members) < self.parties.size:
+                break                                   # someone died while resting
+        return hours
+
+    def party_rest(self, pid: int) -> str:
+        """Put every idle member of a party to sleep (they heal and recover energy)."""
+        n = 0
+        for s in self.party_members(pid):
+            if s.state == "idle":
+                s.state = "sleeping"
+                n += 1
+        return f"{n} slime(s) curl up for a rest."
+
     # ---- persistence -----------------------------------------------------------
     def to_dict(self) -> dict:
         return dict(version=config.SAVE_VERSION, seed=self.seed, tick=self.tick_count,
+                    main_floor=self.main_floor,
                     parties=self.parties.to_dict(), graveyard=self.graveyard,
                     wallet=self.wallet.to_dict(), gacha=self.gacha.to_dict(),
                     slimes=[s.to_dict() for s in self.slimes()],
@@ -289,9 +419,11 @@ class Game:
         from .archetypes import ARCHETYPES
         g = cls(d.get("seed"), d.get("parties", {}).get("size", config.PARTY_SIZE))
         g.tick_count = d.get("tick", 0)
+        g.main_floor = d.get("main_floor", 0)
         wallet = dict(d.get("wallet") or {})
-        if "gel" in wallet:                                  # v1 save: gel became silver
-            wallet["silver"] = wallet.get("silver", 0) + wallet.pop("gel")
+        for old, new in (("gel", "white_gel"), ("silver", "white_gel"), ("gold", "purple_gel")):
+            if old in wallet:                                # v1/v2 saves: migrate old currency names
+                wallet[new] = wallet.get(new, 0) + wallet.pop(old)
         g.wallet = ResourceManager(wallet)
         # re-point systems at the new wallet
         for sysobj in (g.gacha, g.needs, g.hunts, g.battles):

@@ -18,9 +18,9 @@ BANNER = r"""
 """
 
 MENU = """
- [1] Roster           [2] Slime details      [3] Pull (free / silver / gold)
+ [1] Roster           [2] Slime details      [3] Pull (free / white / purple)
  [4] Care (feed/sleep/pet)   [5] Set stance  [6] Hunt (one slime or a party)
- [7] Wait (time)      [8] Parties            [9] Battle (full party)
+ [7] Wait (time)      [8] Parties            [9] Dungeons / battles
  [m] Merge  [e] Evolve  [c] Conflicts  [a] Auto-care  [j] Journal  [x] Graveyard  [s] Save  [q] Quit
 """
 
@@ -51,7 +51,7 @@ def show_status(g: Game) -> None:
     free = "READY" if g.free_pull_available() else f"in {g.hours_to_free_pull()}h"
     print(f"\n⏰ Day {g.day} (hour {g.tick_count}) | {g.wallet} | slimes: {len(g.roster)} "
           f"(🪦 {len(g.graveyard)}) | parties: {len(g.parties.parties)} (size {g.parties.size}) | "
-          f"free pull: {free} | auto-care: {'on' if g.needs.auto_care else 'off'} | "
+          f"main dungeon: floor {g.main_floor} cleared | free pull: {free} | auto-care: {'on' if g.needs.auto_care else 'off'} | "
           f"conflicts: {len(g.conflicts.conflicts)}")
 
 
@@ -113,9 +113,30 @@ def pick_zone() -> str:
     return zs[_int("zone #: ") - 1].key
 
 
+def dungeon_menu(g: Game) -> None:
+    print("  [1] The Gloop Pit  - safe grinding dungeon: nobody dies, great XP, little loot")
+    print(f"  [2] The Hollow Descent - ROUGH main dungeon (next: floor {g.main_floor + 1}), permadeath, "
+          f"boss every {config.MAIN_BOSS_EVERY} floors, rare purple gel")
+    print("  [3] Skirmish - a single quick fight vs a tier 1-4 wave (permadeath)")
+    mode = _ask("dungeon: ")
+    pid = _int("party # to send: ")
+    if mode == "1":
+        depth = _int(f"depth 1-{config.GRIND_DEPTHS} (3 = your level): ")
+        runs = _int("number of runs: ")
+        rest = _ask("auto-rest between runs when hurt? (y/n): ").lower() == "y"
+        res = g.grind(pid, depth, runs, rest)
+        print("\n".join("  " + x for x in res.summary))
+        print(f"  Stopped: {res.stop_reason}")
+    elif mode == "2":
+        fl = _ask(f"floor (Enter = {g.main_floor + 1}): ")
+        print("\n".join(g.descend(pid, int(fl) if fl else None).log))
+    elif mode == "3":
+        print("\n".join(g.battle(pid, _int("tier 1-3 (4 = boss): ")).log))
+
+
 def party_menu(g: Game) -> None:
     show_parties(g)
-    act = _ask("[n]ew party / [a]dd slime / [r]emove slime / [f]ill with best free / [d]isband: ").lower()[:1]
+    act = _ask("[n]ew / [a]dd slime / [r]emove slime / [f]ill with best free / [d]isband / [z] rest party: ").lower()[:1]
     if act == "n":
         p = g.create_party(_ask("name (optional): "))
         print(f"  Created party #{p.id} '{p.name}' - needs {g.parties.size} slimes.")
@@ -130,6 +151,8 @@ def party_menu(g: Game) -> None:
     elif act == "d":
         g.party_disband(_int("party #: "))
         print("  Party disbanded.")
+    elif act == "z":
+        print("  " + g.party_rest(_int("party #: ")))
 
 
 def handle(g: Game, choice: str) -> bool:
@@ -140,10 +163,10 @@ def handle(g: Game, choice: str) -> bool:
         show_roster(g)
         show_slime(g.slime(_int("slime id: ")))
     elif choice == "3":
-        pay = _ask("pay with [f]ree daily / [s]ilver / [g]old: ").lower()[:1]
-        pay = {"f": "free", "s": "silver", "g": "gold"}.get(pay)
+        pay = _ask("pay with [f]ree daily / [w]hite gel / [p]urple gel: ").lower()[:1]
+        pay = {"f": "free", "w": "white_gel", "p": "purple_gel"}.get(pay)
         if not pay:
-            raise GameError("Choose f, s or g.")
+            raise GameError("Choose f, w or p.")
         n = 1 if pay == "free" else _int(f"how many (10 {pay} each)? ")
         show_pulls(g.pull(n, pay))
     elif choice == "4":
@@ -176,9 +199,7 @@ def handle(g: Game, choice: str) -> bool:
         party_menu(g)
     elif choice == "9":
         show_parties(g)
-        pid = _int("party # to send: ")
-        tier = _int("tier 1-3 (4 = boss): ")
-        print("\n".join(g.battle(pid, tier).log))
+        dungeon_menu(g)
     elif choice == "m":
         show_roster(g)
         t, d = _int("TARGET id (keeps): "), _int("DONOR id (consumed!): ")
@@ -244,14 +265,14 @@ def run_demo(seed: int) -> None:
     """Non-interactive tour: free pull, gacha, parties, hunting, conflict, battle, death, merge."""
     g = Game(seed)
     print(BANNER)
-    print("== 1. GACHA: daily free pull, then a 10x silver pull, then 1 gold pull ==")
+    print("== 1. GACHA: daily free pull, then a 10x white-gel pull, then 1 purple-gel pull ==")
     show_pulls(g.pull(1, "free"))
     try:
         g.pull(1, "free")
     except GameError as e:
         print(f"  ✋ {e}")
-    show_pulls(g.pull(10, "silver"))
-    show_pulls(g.pull(1, "gold"))
+    show_pulls(g.pull(10, "white_gel"))
+    show_pulls(g.pull(1, "purple_gel"))
     show_status(g)
 
     print("\n== 2. PARTIES: two fixed-size parties of 5 ==")
@@ -275,12 +296,21 @@ def run_demo(seed: int) -> None:
     for c in list(g.conflicts.conflicts)[:2]:
         print("  " + g.mediate(c.id, "talk"))
 
-    print("\n== 6. BATTLE: the Vanguard fights tier-1 foes (casualties are permanent) ==")
+    print("\n== 6. GRINDING DUNGEON: the Vanguard farms the Gloop Pit (nobody can die here) ==")
+    g.conflicts.conflicts.clear()   # keep the demo grind uninterrupted by brawls
     g.wallet.add("food", 30)
     for s in g.slimes():          # top everyone up so the demo starts healthy
         s.state, s.hunt, s.grounded = "idle", None, False
         s.hp, s.needs.v["energy"], s.needs.v["food"] = s.max_hp, 100, 100
-    rep = g.battle(1, 1)
+    res = g.grind(1, 3, 6, auto_rest=True)
+    print("\n".join("  " + x for x in res.summary[:14]))
+    print(f"  Stopped: {res.stop_reason}")
+
+    print("\n== 6b. MAIN DUNGEON: the Hollow Descent, floor 1 (rough! casualties are permanent) ==")
+    for s in g.slimes():
+        s.state, s.hunt, s.grounded = "idle", None, False
+        s.hp, s.needs.v["energy"], s.needs.v["food"] = s.max_hp, 100, 100
+    rep = g.descend(1)
     print("\n".join(rep.log[-14:]))
 
     print("\n== 7. MERGE: weakest into strongest ==")

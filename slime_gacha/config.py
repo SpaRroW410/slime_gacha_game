@@ -16,11 +16,11 @@ PITY_LEGENDARY = 0
 VARIANCE = 0.10         # +/- per-slime stat roll
 
 # ---- Economy --------------------------------------------------------------
-# silver = common currency, gold = rare currency (boosts rare pulls). Both buy pulls 1:1.
-RESOURCES = ["silver", "gold", "food", "essence"]       # add a name here to add a resource
-STARTING_WALLET = {"silver": 100, "gold": 10, "food": 15, "essence": 0}
-PULL_COST = 10          # of silver OR gold per single pull
-GOLD_RARITY_BOOST = 5.0 # multiplies rare/epic/legendary weights when paying with gold
+# WHITE gel = common currency, PURPLE gel = rare currency (boosts rare pulls). Both buy pulls 1:1.
+RESOURCES = ["white_gel", "purple_gel", "food", "essence"]       # add a name here to add a resource
+STARTING_WALLET = {"white_gel": 100, "purple_gel": 10, "food": 15, "essence": 0}
+PULL_COST = 10          # of white OR purple gel per single pull
+PURPLE_RARITY_BOOST = 5.0 # multiplies rare/epic/legendary weights when paying with purple gel
 DAY_TICKS = 24          # one game day; one free pull per day
 FOOD_NUTRITION = 50     # food need restored per Food item
 MEDIATE_SNACK_COST = 2
@@ -66,8 +66,26 @@ ROUND_CAP = 30
 PARTY_SIZE = 5           # fixed party size: must be a multiple of 5 (5, 10, 15 ...)
 GUARD_REDUCTION = 0.5
 
+# ---- Dungeons -----------------------------------------------------------------
+# Main dungeon ("The Hollow Descent"): floor after floor, brutal, permadeath, rare purple gel.
+MAIN_BOSS_EVERY = 5
+MAIN_STAT_STEP = 0.15           # enemy stats +15% per floor (compounding on tier pools)
+MAIN_LOOT_STEP = 0.25           # loot ranges +25% per floor
+MAIN_PURPLE_STEP = 0.15         # purple-gel drop chance +15% (relative) per floor, capped
+MAIN_PURPLE_CAP = 0.5
+MAIN_BOSS_FIRST_CLEAR_PURPLE = 3
+MAIN_FLOOR_TICKS = 3            # hours that pass per floor attempt
+# Grinding dungeon ("The Gloop Pit"): safe, repeatable XP farm tuned to your party's level.
+GRIND_DEPTHS = 5                # depth 1..5 = enemies (party avg level - 2) .. (+2)
+GRIND_STAT_STEP = 0.12          # enemy stats +12% per level above the tier's base level
+GRIND_TIER_BASE_LEVEL = {1: 1, 2: 8, 3: 18}
+GRIND_XP_MULT = 0.35            # every survivor gets this share of the FULL wave XP (not split)
+GRIND_LOOT_MULT = 0.5           # little loot, no purple gel
+GRIND_TICKS = 2
+GRIND_MIN_HP = 0.4              # auto-grind stops when anyone drops below this HP fraction
+
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 2
+SAVE_VERSION = 3
 DEFAULT_SAVE = "savegame.json"
