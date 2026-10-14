@@ -1,1 +1,116 @@
-# slime_gacha_game
+# 🟢 Slime Gacha — *Pick Me Up, Little Goo!*
+
+An **offline, text-based gacha + auto-hunt + battle prototype** in pure Python 3 (standard library only).
+Inspired by the *Pick Me Up! Unlimited Gacha* comics — except your heroes are **slimes**.
+
+> Collect slimes. Feed them, let them sleep, mediate their squabbles, send them hunting,
+> merge the spares into your favourites, and carry them into battle.
+
+## Quick start
+
+```bash
+python3 main.py              # interactive menu
+python3 main.py --demo       # scripted non-interactive tour of every system
+python3 main.py --seed 42    # deterministic RNG (great for testing)
+python3 main.py --party-size 10   # party size must be a multiple of 5 (default 5)
+python3 -m unittest discover -s tests -v
+```
+
+No dependencies, no network. Saves go to `savegame.json` next to `main.py`
+(override with `--save PATH`).
+
+## Features
+
+| Area | What you get |
+|------|--------------|
+| Gacha | Rarity 90 / 9 / 0.9 / 0.09 %, plus a **1–5 ★ rating** (exponential falloff, steeper at higher rarity). **1 free pull per game day**; otherwise 10 ⚪ white gel **or** 10 🟣 purple gel per pull — purple gel multiplies rare+ odds ×5 |
+| Economy | ⚪ **White gel** (common) and 🟣 **Purple gel** (rare: small drop chance in hunts/dungeons, bosses are the best source), Food, Essence |
+| Main dungeon | **The Hollow Descent** — delved in *segments* of 5 floors ending in a boss. **Once a party enters it cannot leave until the boss falls or the whole party is dead.** Deliberately rough (enemy stats +15 % compounding per floor), permanent death, camping inside is risky (ambushes), first-clear purple-gel bounty |
+| Scouting | An **exploration party** can scout the next segment for 2–24 hours (no turning back, ambushes can kill). **Knowledge grows with time spent inside** and reveals more per floor: counts → enemy types/elements → boss → abilities/HP/purple odds → weaknesses. Floors are fixed by the dungeon seed so intel is true; fully scouted = +10 % power |
+| Grinding dungeon | **The Gloop Pit** — a *committed* XP-farming session of N runs at depth 1–5 (no leaving until done or the whole party is knocked out; the party camps when hurt). Nobody dies, but a **downed slime loses XP and morale and drops its equipment** — survivors may carry it back (chance from **party synergy**), else it is left in the Pit until a later victory digs it up |
+| Equipment | Weapon / armor / charm, any class. Bought at the 🛠️ **Armory** (tier gated by its level) or found in dungeons. In dungeons a fallen slime's gear is lost unless a survivor recovers it |
+| Sacrifice stress | Every merge adds stress (−1 per day). It amplifies the morale cost of the next sacrifice and drags the whole colony's morale target down — merging too much breaks the colony |
+| Sparring (fighting style) | Training is **not** for XP and not for the Gloop Pit: slimes **duel each other** in the ⚔️ Blade Yard, 🏹 Archery Range or 🔮 Mana Pool to develop a *style* (Swordsmanship, Marksmanship, Spellcraft) with permanent combat perks. Non-lethal: the loser is left at **1 HP** |
+| Rest Area | Heals wounded slimes back to **full** (30 → 100 %/hour by level). Auto-care sends the wounded there. Starving slimes can't heal |
+| Buildings | Five upgradable buildings (incl. 🛠️ Armory): 🛏️ Rest Area (capacity, healing), 🥋 Training Grounds (style ceiling + XP), 📚 Library (study speed, spell slots, research odds, Restricted Section for tier-3 spells), 🏕️ Barracks (morale, bonds, party synergy) |
+| Compatibility & bonds | Every pair has a **compatibility** score (traits, class chemistry, shared / fusable elements, friendship, sparring/battle history, open quarrels). It shapes quarrel odds, merge XP (±25 %) and **party synergy** (±10 % power) |
+| Morale | Per-slime "fight readiness": wins and rests raise it, defeats, brawls and deaths of friends lower it. Scales power ×0.85–1.15; a broken slime may freeze in battle |
+| Council | Keep-or-sacrifice advisor: ranks the roster (KEEP / FLEX / SACRIFICE?), shows how loved each slime is, and suggests the best merges (the donor is consumed, friends grieve) |
+| Elements | 🔥 Fire, 💧 Water, 🪨 Earth, 🌪️ Wind and their **fusions**: Fire+Wind = ⚡Lightning, Lightning+Fire = 🔆Plasma, Fire+Earth = 🌋Lava, Ice, Steam, Mud, Sand … (13 elements; add recipes in data). Wheel: Water > Fire > Wind > Earth > Water |
+| Elemental mastery | Unlocks at **3★, for any class** (barbarians can cast too — they channel through attack). Mastery cap 4/6/8 and 2/3/4 element slots at 3/4/5★ (mages get +1 slot and study faster) |
+| Library | Study elements, buy tier-1 spells, learn up to 4 spells per slime |
+| Spell lab | **Fuse two learned spells** of different elements into a brand-new, nameable spell. Costs essence, takes hours, can fizzle and backfire. Discovered spells join the Library for everyone |
+| Parties | Fixed-size parties (multiple of 5; default 5), as many parties as you like, one slime per party. Only full parties battle; parties can hunt together |
+| Permadeath | Slimes **die** — starvation/exhaustion, failed hunts, brawls, battle. Dead slimes go to the Memorial Pond (graveyard); friends grieve |
+| Classes | Barbarian, Mage, Medic, Rogue, Ranger, Necromancer — **data-driven & plugin-style** |
+| Needs AI | Maslow-style needs: Energy → Food → Safety → Belonging → Esteem, plus mood & personality |
+| Conflict | Slimes quarrel (hungry/grumpy/rival temperaments); you mediate or let it simmer |
+| Auto-hunt | Assign slimes to hunt zones; they return with resources over game "ticks" |
+| Behaviours | Per-slime stance: attack / heal / defend / explore (changes battle & hunt behaviour) |
+| Growth | XP, levels, evolution stages, abilities unlocked by level |
+| Merge | Fuse a slime into another; target gains a % of the fodder's XP (and bonus for same class) |
+| Battle | Turn-based auto-combat, party vs a wave of foes (one per party slot), abilities, status effects, loot |
+| Persistence | JSON save/load (v1 saves migrate), fully offline |
+
+## Repository layout
+
+```
+main.py                  entry point (CLI args)
+slime_gacha/
+  config.py              tunable constants: rarities, rates, needs, growth curves
+  registry.py            tiny plugin registry (archetypes, abilities)
+  abilities.py           Ability objects + built-in abilities
+  archetypes.py          Archetype definitions for the 6 starting classes
+  slime.py               Slime, Stats, Needs, Personality
+  ai.py                  NeedsEngine (Maslow) + ConflictEngine + Behavior stances
+  growth.py              levelling, evolution, merging
+  party.py               PartyManager (fixed-size parties)
+  resources.py           ResourceManager (wallet: white_gel/purple_gel/food/essence)
+  gacha.py               GachaSystem (rarity, stars, free daily pull)
+  hunt.py                HuntSystem (auto-hunt zones)
+  dungeon.py             wave generators for the Hollow Descent and the Gloop Pit
+  elements.py            elements, fusion recipes, wheel, mastery rules
+  spells.py              elemental spells + spell fusion
+  academy.py             library, study / research tasks
+  sparring.py            fighting styles, arenas, sparring rules
+  buildings.py           upgradable buildings + rest-area healing
+  equipment.py           gear, inventory
+  social.py              bonds, compatibility, synergy, morale, council advice
+  battle.py              BattleSystem (turn-based auto-combat)
+  game.py                Game façade: state, ticking, save/load
+  cli.py                 text UI
+docs/
+  SDD.md                 software design document
+  ROADMAP.md             milestones + checklist
+  STORY.md               lore & narrative hooks
+tests/                   unittest suite
+```
+
+## Adding a new slime class (the 30-second version)
+
+```python
+# slime_gacha/archetypes.py  (or any module imported at startup)
+from .registry import register_archetype
+from .archetypes import Archetype
+
+register_archetype(Archetype(
+    key="bard", name="Bard", emoji="🎵",
+    base_stats=dict(hp=18, atk=5, defense=4, mag=8, spd=7),
+    growth=dict(hp=3, atk=1, defense=1, mag=2, spd=1),
+    abilities={1: "inspire", 5: "lullaby"},   # level -> ability key
+    default_behavior="heal",
+    likes=("music",), hunt_bonus={"essence": 1.3},
+))
+```
+
+The gacha pool, UI, hunting and battle all discover it automatically. See `docs/SDD.md` §6.
+
+## Documentation
+
+- [`docs/STORY.md`](docs/STORY.md) – the world of Gloop Hollow
+- [`docs/SDD.md`](docs/SDD.md) – architecture & design decisions
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) – milestones and checklist
+
+## License
+
+Prototype – choose a license before distributing.

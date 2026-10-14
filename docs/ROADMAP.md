@@ -1,0 +1,137 @@
+# Roadmap & Checklist
+
+Legend: `[x]` done · `[ ]` todo
+
+## M0 — Foundations (docs & scaffolding)
+- [x] README
+- [x] Story / lore (`STORY.md`)
+- [x] Software design document (`SDD.md`)
+- [x] Roadmap (this file)
+- [x] Package skeleton, registry, config
+
+## M1 — Core model
+- [x] Slime, Stats, Needs, Personality
+- [x] Archetype registry + 6 starting classes
+- [x] Ability registry + built-in abilities
+- [x] ResourceManager
+- [x] JSON save / load
+
+## M2 — Gacha
+- [x] Rarity tiers + rates
+- [x] Pity system (epic 10 / legendary 50)
+- [x] Single and ×10 pulls
+- [x] Rarity/class stat scaling with per-slime variance
+
+## M3 — Living slimes (AI)
+- [x] Maslow needs engine (energy, food, safety, belonging, esteem)
+- [x] Sleep cycle (auto-sleep / wake / manual)
+- [x] Feeding (auto & manual)
+- [x] Mood → power multiplier
+- [x] Personality traits
+- [x] Internal conflicts + mediation
+- [x] Behaviour stances (attack / heal / defend / explore)
+
+## M4 — Activities
+- [x] Auto-hunt zones and timed hunts
+- [x] Hunt rewards (gel / food / essence) + XP
+- [x] Turn-based battle system with abilities, statuses, summons
+- [x] Enemy registry + difficulty tiers
+- [x] Battle loot & XP
+
+## M5 — Growth
+- [x] XP / levels
+- [x] Ability unlocks by level
+- [x] Evolution stages (Essence cost)
+- [x] Merge with % XP transfer
+
+## M6 — Interface & quality
+- [x] Text menu UI
+- [x] `--demo` scripted tour
+- [x] Unit tests
+- [x] Seeded determinism
+
+## M7 — v0.2 rules update
+- [x] Permadeath (starvation, hunts, brawls, battle) + graveyard / Memorial Pond
+- [x] Colony grief on death
+- [x] Rarity rates 90 / 9 / 0.9 / 0.09
+- [x] 1–5★ rating, exponential falloff, steeper for higher rarity
+- [x] Two gel currencies: white and purple (10 per pull, either)
+- [x] Purple gel boosts rare odds (×5 weights)
+- [x] Purple gel rare in hunts/dungeons (bosses best)
+- [x] One free pull per game day
+- [x] Fixed-size parties (multiple of 5), multiple parties, party hunt/battle
+- [x] Save v2 with migration from v1
+- [x] Tests for all of the above
+
+## M8 — Dungeons
+- [x] Rename currencies back to gel: white gel (common) / purple gel (rare)
+- [x] Main dungeon "The Hollow Descent": endless floors, compounding difficulty, permadeath
+- [x] Boss every 5 floors (Hollow Warden, then Parched King cycles) + first-clear purple-gel bounty
+- [x] Floors cost game time; you can replay cleared floors
+- [x] Grinding dungeon "The Gloop Pit": 5 depths scaled to party level, no permadeath, full XP per survivor
+- [x] Multi-run grinding with optional auto-rest
+- [x] Party rest command
+- [x] Save v3 (`main_floor`), migration of old currency names
+- [x] Tests for both dungeons
+
+## M9 — Academy, elements & spell fusion
+- [x] ~~Solo training grounds~~ (replaced in M10 by sparring)
+- [x] Four basic elements + 13-element fusion tree (data-driven recipes)
+- [x] Elemental wheel in battle (weakness / resist)
+- [x] Elemental mastery from 3★, any class; slots + caps by stars; mage perks
+- [x] Library: study elements, tier-1 spells, learn / forget, 4-spell limit
+- [x] Spell lab: fuse two spells into a new (nameable) spell; success odds, costs, backfire
+- [x] Discovered spells shared via the Library
+- [x] Casting builds mastery; non-mage imbuing (attack-scaled spells)
+- [x] Save v4 (custom spells, mastery, training)
+- [x] Tests (32 new)
+
+## M10 — Sparring, rest, buildings, bonds
+- [x] Training reworked: sparring duels develop a fighting style (no XP, separate from the Gloop Pit)
+- [x] Non-lethal duels: the loser drops to 1 HP
+- [x] Three arenas and styles: Swordsmanship / Marksmanship / Spellcraft with combat perks
+- [x] Rest Area: heals to full, capacity + speed by level, auto-admit for the wounded
+- [x] Upgradable buildings: Rest Area, Training Grounds, Library, Barracks
+- [x] Library levels: spell slots, study speed, research odds, Restricted Section (tier 3)
+- [x] Bonds between slimes (sparring, battles, mediation, quarrels)
+- [x] Compatibility score + party synergy (±10 % power)
+- [x] Morale / fight readiness (power ×0.85–1.15, freezing when broken)
+- [x] Council: keep-or-sacrifice ranking + merge suggestions with colony-morale cost
+- [x] Merge changes: compatibility swings XP, bonds inherited, colony mourns
+- [x] Save v5 and ~40 new tests
+
+## M11 — Commitment, intel & consequences
+- [x] Merging/sacrificing lowers morale (target, bystanders, friends) with compounding **sacrifice stress**
+- [x] Hollow Descent in 5-floor segments: **no exit** until the boss falls or the whole party dies
+- [x] Permanent death in the Descent; short-handed parties continue; in-dungeon camping with ambushes
+- [x] Exploration party scouting: knowledge grows with time in the dungeon (diminishing returns)
+- [x] Staged intel (counts → types → boss → abilities → weaknesses), deterministic floors, intel power bonus
+- [x] Gloop Pit as a committed session (all runs or whole party down); auto-camping
+- [x] Pit defeat: XP loss, morale loss, gear dropped; synergy-based recovery; Pit lost-and-found
+- [x] Equipment (weapon / armor / charm), Armory building, gear drops
+- [x] Save v6 and 32 new tests
+
+## Future (post-prototype)
+- [ ] Construction time for upgrades; more buildings (Pantry, Hatchery)
+- [ ] Rivalries and mentorships as explicit relationships; couples -> new slimes
+- [ ] Enemy resistances beyond one element; elemental dungeon floors
+- [ ] Spell mutation / evolving fused spells with mastery
+- [ ] Hybrid class abilities (e.g. Barbarian fire-axe imbue as a status)
+- [ ] Named dungeon registry (add dungeons as data)
+- [ ] Gear crafting / enchanting, set bonuses
+- [ ] Several delves at once (one party per dungeon) with rescue parties
+- [ ] Floor modifiers (poison fog, darkness) and shops between floors
+- [ ] Retreat / checkpoint mid-descent
+- [ ] Real-clock daily free pull (wall-time) as an option
+- [ ] Resurrection items / Necromancer "revive" ability
+- [ ] Star-up by merging duplicates
+- [ ] Formations and front/back rows
+- [ ] Offline progress by wall-clock time
+- [ ] More classes: Bard, Paladin, Alchemist, Druid (via registry)
+- [ ] Equipment / items
+- [ ] Campaign chapters from `STORY.md`
+- [ ] Slime relationships tree (best friends, rivals, couples → "budding" new slimes)
+- [ ] Simple GUI (pygame/Tkinter) or ASCII animations
+- [ ] Balance pass with simulation harness
+- [ ] Localisation
+- [ ] Mod loader (`plugins/`) with docs
