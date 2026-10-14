@@ -46,8 +46,10 @@ No dependencies, no network. Saves go to `savegame.json` next to `main.py`
 |------|--------------|
 | Gacha | Rarity 90 / 9 / 0.9 / 0.09 %, plus a **1–5 ★ rating** (exponential falloff, steeper at higher rarity). **1 free pull per game day**; otherwise 10 ⚪ white gel **or** 10 🟣 purple gel per pull — purple gel multiplies rare+ odds ×5 |
 | Economy | ⚪ **White gel** (common) and 🟣 **Purple gel** (rare: small drop chance in hunts/dungeons, bosses are the best source), Food, Essence |
-| Main dungeon | **The Hollow Descent** — delved in *segments* of 5 floors ending in a boss. **Once a party enters it cannot leave until the boss falls or the whole party is dead.** Deliberately rough (enemy stats +15 % compounding per floor), permanent death, camping inside is risky (ambushes), first-clear purple-gel bounty |
-| Scouting | An **exploration party** can scout the next segment for 2–24 hours (no turning back, ambushes can kill). **Knowledge grows with time spent inside** and reveals more per floor: counts → enemy types/elements → boss → abilities/HP/purple odds → weaknesses. Floors are fixed by the dungeon seed so intel is true; fully scouted = +10 % power |
+| Main dungeon | **The Hollow Descent** — rough, permanent death. Walk the floors **in order** and **leave only after a boss floor** (every 5), so there is time to train and study between segments. **Progress is per slime**: to enter floor *f* every member must have cleared floor *f−1*, so nobody can be carried and a rookie drags a veteran party back to floor 1. Other parties may walk the same floors again. Boss bounty is paid once per boss floor |
+| Scouting | An **exploration party** scouts any 1–10 floors (not only multiples of 5). It must reach **100% knowledge of every targeted floor within its hour budget or the whole party is lost** (a half-finished note survives). Time needed grows with depth, hides a 0.85–1.2× factor (an estimate is never exact), and supplies are paid up front. Scouts must have cleared the floors above. Knowledge reveals more per floor: counts → types → boss → abilities → weaknesses; a fully known floor gives +10 % power |
+| Specialization | Cross-training makes **hybrid classes**: a swordslime who trains in magic becomes a **Battlemage** (also Spellknight, Arcane Archer, Hexshot, Swashbuckler, Battle Medic, Death Knight, Shadowcaster …). Style level 3 in a discipline outside your class + level 5, then specialize: stat shift, signature ability, affinity in both disciplines. Permanent |
+| Outlook | What a slime *does* shapes how it thinks: sparring → Duelist, Pit → Grinder, dungeon → Delver, scouting → Pathfinder, hunting → Forager, studying → Scholar. Each gives a small perk and the slime asks for that activity when it needs esteem (first draft) |
 | Grinding dungeon | **The Gloop Pit** — a *committed* XP-farming session of N runs at depth 1–5 (no leaving until done or the whole party is knocked out; the party camps when hurt). Nobody dies, but a **downed slime loses XP and morale and drops its equipment** — survivors may carry it back (chance from **party synergy**), else it is left in the Pit until a later victory digs it up |
 | Equipment | Weapon / armor / charm, any class. Bought at the 🛠️ **Armory** (tier gated by its level) or found in dungeons. In dungeons a fallen slime's gear is lost unless a survivor recovers it |
 | Sacrifice stress | Every merge adds stress (−1 per day). It amplifies the morale cost of the next sacrifice and drags the whole colony's morale target down — merging too much breaks the colony |
@@ -96,6 +98,8 @@ slime_gacha/
   sparring.py            fighting styles, arenas, sparring rules
   buildings.py           upgradable buildings + rest-area healing
   equipment.py           gear, inventory
+  specialization.py      hybrid classes from cross-training
+  outlook.py             experience-driven mindset (Duelist, Grinder, Delver ...)
   social.py              bonds, compatibility, synergy, morale, council advice
   battle.py              BattleSystem (turn-based auto-combat)
   game.py                Game façade: state, ticking, save/load

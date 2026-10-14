@@ -80,7 +80,7 @@ def check_ready(slime) -> None:
 
 def style_xp_for(slime, discipline: str, won: Optional[bool], grounds_mult: float, dummy: bool = False) -> float:
     xp = config.SPAR_STYLE_XP * grounds_mult
-    if get_archetype(slime.archetype).discipline == discipline:
+    if get_archetype(slime.archetype).discipline == discipline or slime.spec_disc == discipline:
         xp *= config.STYLE_AFFINITY_MULT
     if won:
         xp *= config.SPAR_WINNER_MULT

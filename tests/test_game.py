@@ -357,7 +357,7 @@ class TestMainDungeon(unittest.TestCase):
             with self.assertRaises(InvalidAction):
                 act()
 
-    def test_boss_clear_frees_party_and_pays_bounty_once(self):
+    def test_boss_is_a_checkpoint_not_a_forced_exit(self):
         g = fresh(2)
         pid = full_party(g)
         for s in g.party_members(pid):
@@ -365,15 +365,15 @@ class TestMainDungeon(unittest.TestCase):
             add_xp(s, 10 ** 7)
             s.hp = s.max_hp
             s.stars = 5
-        before = g.wallet.get("purple_gel")
         for _ in range(5):
             rep = g.descend(pid)
             self.assertTrue(rep.victory, rep.log[-6:])
-        self.assertNotIn(pid, g.delves)           # free again
-        self.assertEqual((g.main_floor, g.best_floor), (5, 5))
-        self.assertGreaterEqual(g.wallet.get("purple_gel") - before, config.MAIN_BOSS_FIRST_CLEAR_PURPLE)
-        self.assertTrue(all(s.in_dungeon == "" for s in g.party_members(pid)))
-        self.assertEqual(g.current_segment, 1)    # the next entrance is floor 6
+        self.assertIn(pid, g.delves)              # still inside: the party may leave or push on
+        self.assertTrue(g.can_leave(pid))
+        self.assertEqual(g.best_floor, 5)
+        self.assertEqual(g.bounties, {5})
+        g.leave_dungeon(pid)
+        self.assertEqual(g.entry_options(pid), [1, 6])
 
     def test_wave_structure_and_scaling(self):
         rng = random.Random(1)
@@ -394,10 +394,14 @@ class TestMainDungeon(unittest.TestCase):
         self.assertGreater(deep, shallow)
         self.assertLessEqual(deep, config.MAIN_PURPLE_CAP)
 
-    def test_main_floor_persists(self):
+    def test_progress_and_bounties_persist(self):
         g = fresh(1)
-        g.main_floor = 7
-        self.assertEqual(Game.from_dict(g.to_dict()).main_floor, 7)
+        s = g.gacha.make_slime("common", "barbarian")
+        g.roster[s.id] = s
+        s.progress = 7
+        g.best_floor, g.bounties = 7, {5}
+        h = Game.from_dict(g.to_dict())
+        self.assertEqual((h.slime(s.id).progress, h.best_floor, h.bounties), (7, 7, {5}))
 
 
 class TestGrindDungeon(unittest.TestCase):

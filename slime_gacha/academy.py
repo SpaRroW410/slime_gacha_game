@@ -8,7 +8,7 @@ Library level (buildings.py) adds spell slots, study speed, research odds and th
 import random
 from typing import Dict, List, Optional, Set
 
-from . import config, elements, spells
+from . import config, elements, outlook, spells
 from .abilities import ABILITIES, Ability, get_ability
 from .buildings import BuildingManager
 from .errors import InvalidAction
@@ -114,7 +114,9 @@ class AcademySystem:
     def _finish_study(self, s, events) -> None:
         e = s.task["element"]
         gain = config.STUDY_XP * self.buildings.study_mult() * \
-            (config.MAGE_STUDY_MULT if s.archetype == "mage" else 1.0)
+            (config.MAGE_STUDY_MULT if s.archetype == "mage" else 1.0) * \
+            (config.OUTLOOK_SCHOLAR_STUDY if outlook.has(s, "study") else 1.0)
+        outlook.bump(s, "study")
         before = elements.basic_level(s, e)
         top = config.MASTERY_XP[max(0, elements.mastery_cap(s) - 1)]
         s.mastery_xp[e] = min(top, s.mastery_xp.get(e, 0) + gain)
@@ -150,7 +152,8 @@ class AcademySystem:
                                 f"({', '.join(sorted(el.components))}); {slime.name} has {have}.")
         ms = slime.max_stats()
         chance = 0.5 + 0.06 * (have - need) + 0.002 * max(ms["mag"], config.IMBUE_ATK_FACTOR * ms["atk"]) + \
-            (0.1 if slime.archetype == "mage" else 0.0) + self.buildings.research_bonus()
+            (0.1 if slime.archetype == "mage" else 0.0) + self.buildings.research_bonus() + \
+            (config.OUTLOOK_SCHOLAR_RESEARCH if outlook.has(slime, "study") else 0.0)
         chance = max(0.25, min(0.95, chance))
         return a, b, el, dict(config.RESEARCH_COST[el.tier]), config.RESEARCH_TICKS[el.tier], chance
 
@@ -185,6 +188,7 @@ class AcademySystem:
             s.mastery_xp[c] = min(config.MASTERY_XP[max(0, elements.mastery_cap(s) - 1)],
                                   s.mastery_xp.get(c, 0) + 10)
         s.needs.add("esteem", 15)
+        outlook.bump(s, "study", 2)
         msg = f"✨ {s.name} {'invented' if fresh else 'recreated'} {el.emoji}{spell.name}! "
         if key not in s.spells and len(s.spells) < self.library.spell_slots():
             s.spells.append(key)

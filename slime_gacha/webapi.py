@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import config, dungeon, elements, equipment, sparring, spells
+from . import config, dungeon, elements, equipment, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -48,7 +48,31 @@ def slime_view(g: Game, s) -> dict:
         gear=dict(s.gear), task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
         party=(party.id if party else None), can_evolve=can_evolve(s),
         evolve_cost=(evolve_cost(s) if can_evolve(s) else None), discipline=a.discipline,
+        progress=s.progress, exp=dict(s.exp), outlook=_outlook_view(s),
+        spec=(dict(key=s.spec, name=specialization.SPECS[s.spec].name, emoji=specialization.SPECS[s.spec].emoji,
+                   disc=s.spec_disc) if s.spec in specialization.SPECS else None),
+        spec_options=[dict(discipline=r["discipline"], style=r["style"], name=r["spec"].name, emoji=r["spec"].emoji,
+                           ability=get_ability(r["spec"].ability).name, ok=r["ok"], reason=r["reason"],
+                           level=r["level"], desc=r["spec"].description) for r in specialization.options(s)],
     )
+
+
+def _spec_table() -> list:
+    rows = []
+    for (a, b), key in specialization.BY_PAIR.items():
+        sp = specialization.SPECS[key]
+        rows.append(dict(kind="discipline", primary=a, secondary=b, name=sp.name, emoji=sp.emoji,
+                         ability=get_ability(sp.ability).name, desc=sp.description))
+    for (a, b), key in specialization.BY_CLASS.items():
+        sp = specialization.SPECS[key]
+        rows.append(dict(kind="class", primary=a, secondary=b, name=sp.name, emoji=sp.emoji,
+                         ability=get_ability(sp.ability).name, desc=sp.description))
+    return rows
+
+
+def _outlook_view(s):
+    o = outlook.outlook_of(s)
+    return dict(key=o.key, name=o.name, emoji=o.emoji, perk=o.perk, wish=o.wish) if o else None
 
 
 def ability_view(a) -> dict:
@@ -60,8 +84,10 @@ def snapshot(g: Game) -> dict:
     slimes = [slime_view(g, s) for s in g.slimes()]
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
                     synergy=round(g.party_synergy(p.id) - 1, 4) if len(p.members) > 1 else 0.0,
-                    in_delve=p.id in g.delves) for p in g.parties.parties.values()]
-    seg = g.current_segment
+                    in_delve=p.id in g.delves,
+                    entry=(g.entry_options(p.id) if p.members else [1]),
+                    min_progress=min((g.slime(i).progress for i in p.members), default=0))
+               for p in g.parties.parties.values()]
     return dict(
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
@@ -72,13 +98,14 @@ def snapshot(g: Game) -> dict:
                    for c in g.conflicts.conflicts],
         graveyard=list(g.graveyard)[-50:], journal=list(g.journal)[-60:],
         dungeon=dict(
-            main_floor=g.main_floor, best_floor=g.best_floor, segment=seg, boss_every=config.MAIN_BOSS_EVERY,
-            knowledge=g._knowledge(seg), intel=g.intel_report(),
+            best_floor=g.best_floor, boss_every=config.MAIN_BOSS_EVERY, floors=g.intel_report(),
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
-                                   boss_floor=dungeon.segment_floors(dungeon.segment_of(d["floor"]))[-1],
+                                   boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
+                                   knowledge=g._knowledge(d["floor"]),
                                    members=[m.id for m in g._members_in("main", pid)])
                     for pid, d in g.delves.items()},
             grind_depths=config.GRIND_DEPTHS, scout_hours=[config.SCOUT_MIN_HOURS, config.SCOUT_MAX_HOURS],
+            scout_max_floors=config.SCOUT_MAX_FLOORS, scout_food=config.SCOUT_FOOD_PER_HOUR,
         ),
         stress=round(g.sacrifice_stress, 2),
         gear=dict(shop=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier,
@@ -105,6 +132,8 @@ def snapshot(g: Game) -> dict:
         rates=dict(rarity=config.RARITY_RATES, purple_boost=config.PURPLE_RARITY_BOOST,
                    pull_cost=config.PULL_COST),
         mercy=dict(spar_cost=config.SPAR_COST, train_ticks=config.SPAR_TICKS),
+        spec=dict(cost=config.SPEC_COST, style=config.SPEC_MIN_STYLE, level=config.SPEC_MIN_LEVEL, table=_spec_table()),
+        outlooks=[dict(key=o.key, name=o.name, emoji=o.emoji, perk=o.perk) for o in outlook.OUTLOOKS.values()],
         max_stress_amp=config.SACRIFICE_STRESS_AMP,
     )
 
@@ -347,7 +376,23 @@ def _council(g, a):
 
 @command("enter_dungeon")
 def _enter(g, a):
-    return _msg(g.enter_dungeon(_i(a, "pid")))
+    start = a.get("start")
+    return _msg(g.enter_dungeon(_i(a, "pid"), int(start) if start not in (None, "") else None))
+
+
+@command("leave_dungeon")
+def _leave(g, a):
+    return _msg(g.leave_dungeon(_i(a, "pid")))
+
+
+@command("specialize")
+def _specialize(g, a):
+    return _msg(g.specialize(_i(a, "id"), a.get("discipline", "")))
+
+
+@command("scout_plan")
+def _scout_plan(g, a):
+    return [], g.scout_plan(_i(a, "pid"), _i(a, "first"), _i(a, "last"))
 
 
 @command("delve_next")
@@ -371,8 +416,9 @@ def _descend(g, a):
 
 @command("scout")
 def _scout(g, a):
-    r = g.scout(_i(a, "pid"), _i(a, "hours", 8))
-    return r.log, dict(before=r.before, after=r.after, survivors=r.survivors)
+    r = g.scout(_i(a, "pid"), _i(a, "first"), _i(a, "last", _i(a, "first")), _i(a, "hours", 8))
+    return r.log, dict(before=r.before, after=r.after, survivors=r.survivors, complete=r.complete,
+                       required=r.required)
 
 
 @command("grind")

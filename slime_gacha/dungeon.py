@@ -98,46 +98,59 @@ def _counts(enemies: List[Enemy]) -> str:
     return ", ".join(f"{n}x {name}" if n > 1 else name for name, n in out.items())
 
 
-def intel_view(seed: int, seg: int, knowledge: float, party_size: int) -> List[dict]:
-    """What the colony knows about a segment: more knowledge reveals more about each floor.
+def intel_lines(seed: int, floor: int, knowledge: float, party_size: int) -> List[str]:
+    """What is known about one floor. More knowledge reveals more:
         >=20 enemy count & tier | >=40 enemy types & elements | >=60 boss identity |
         >=80 abilities, total HP, purple-gel odds | 100 weaknesses and loot outlook."""
     from . import elements
     lvl = intel_level(knowledge)
-    rows = []
-    for f in segment_floors(seg):
-        enemies = floor_plan(seed, f, party_size)
-        lines = []
-        boss = is_boss_floor(f)
-        if lvl >= 1:
-            mobs = [e for e in enemies if e.key not in ("hollow_warden", "parched_king")] or enemies
-            lines.append(f"{len(enemies)} foes, tier {max(e.tier for e in mobs)}" +
-                         (" - a guardian waits" if boss else ""))
-        else:
-            lines.append("unknown")
-        if lvl >= 2:
-            lines.append("foes: " + _counts([e for e in enemies if e.tier < 4 and e.key != "hollow_warden"
-                                             and e.key != "parched_king"] or enemies))
-            els = sorted({e.element for e in enemies if e.element})
-            lines.append("elements: " + (", ".join(elements.get(x).emoji + elements.get(x).name for x in els) or "none"))
-        if lvl >= 3 and boss:
-            b = enemies[0]
-            lines.append(f"BOSS: {b.emoji}{b.name} ({elements.get(b.element).name if b.element else 'neutral'})")
-        if lvl >= 4:
-            abil = sorted({a for e in enemies for a in e.abilities})
-            lines.append("abilities: " + ", ".join(abil))
-            lines.append(f"total HP ~{int(sum(e.stats['hp'] for e in enemies))}, "
-                         f"purple gel chance ~{max(e.purple_chance for e in enemies):.0%} per foe")
-        if lvl >= 5:
-            weak = {}
-            for e in enemies:
-                if e.element:
-                    for a, d in elements.BEATS.items():
-                        if d == e.element:
-                            weak[a] = weak.get(a, 0) + 1
-            best = max(weak, key=weak.get) if weak else None
-            lines.append("weakness: " + (f"{elements.get(best).emoji}{elements.get(best).name} spells" if best
-                                         else "none") +
-                         f"; loot ~{sum(hi for e in enemies for (_, hi) in e.loot.values())} gel/essence max")
-        rows.append(dict(floor=f, boss=boss, lines=lines))
-    return rows
+    if lvl < 1:
+        return ["unknown"]
+    enemies = floor_plan(seed, floor, party_size)
+    boss = is_boss_floor(floor)
+    mobs = [e for e in enemies if e.key not in ("hollow_warden", "parched_king")] or enemies
+    lines = [f"{len(enemies)} foes, tier {max(e.tier for e in mobs)}" + (" - a guardian waits" if boss else "")]
+    if lvl >= 2:
+        lines.append("foes: " + _counts(mobs))
+        els = sorted({e.element for e in enemies if e.element})
+        lines.append("elements: " + (", ".join(elements.get(x).emoji + elements.get(x).name for x in els) or "none"))
+    if lvl >= 3 and boss:
+        b = enemies[0]
+        lines.append(f"BOSS: {b.emoji}{b.name} ({elements.get(b.element).name if b.element else 'neutral'})")
+    if lvl >= 4:
+        lines.append("abilities: " + ", ".join(sorted({a for e in enemies for a in e.abilities})))
+        lines.append(f"total HP ~{int(sum(e.stats['hp'] for e in enemies))}, "
+                     f"purple gel chance ~{max(e.purple_chance for e in enemies):.0%} per foe")
+    if lvl >= 5:
+        weak: dict = {}
+        for e in enemies:
+            if e.element:
+                for a, d in elements.BEATS.items():
+                    if d == e.element:
+                        weak[a] = weak.get(a, 0) + 1
+        best = max(weak, key=weak.get) if weak else None
+        lines.append("weakness: " + (f"{elements.get(best).emoji}{elements.get(best).name} spells" if best else "none")
+                     + f"; loot ~{sum(hi for e in enemies for (_, hi) in e.loot.values())} gel/essence max")
+    return lines
+
+
+def intel_view(seed: int, floors, knowledge: dict, party_size: int) -> List[dict]:
+    """Rows for a range of floors; `knowledge` maps floor -> 0..100."""
+    return [dict(floor=f, boss=is_boss_floor(f), knowledge=round(knowledge.get(f, 0.0), 1),
+                 lines=intel_lines(seed, f, knowledge.get(f, 0.0), party_size)) for f in floors]
+
+
+# ---- scouting: how long does a floor take to explore completely? ------------------------------
+def floor_hours(seed: int, floor: int, skill: float = 1.0):
+    """(nominal hours, actual hours) to scout one floor to 100%. The actual figure hides a seeded 0.85-1.20x
+    factor, so an estimate is never exact - budget a margin or the party is lost."""
+    nominal = config.SCOUT_HOURS_PER_FLOOR * (1 + config.SCOUT_DEPTH_GROWTH * (floor - 1)) / skill
+    factor = random.Random(seed * 104729 + floor * 13).uniform(*config.SCOUT_VARIANCE)
+    return nominal, nominal * factor
+
+
+def scout_estimate(seed: int, first: int, last: int, skill: float = 1.0) -> dict:
+    nominal = sum(floor_hours(seed, f, skill)[0] for f in range(first, last + 1))
+    lo, hi = config.SCOUT_VARIANCE
+    return dict(nominal=round(nominal, 1), low=round(nominal * lo, 1), high=round(nominal * hi, 1),
+                safe=int(nominal * hi) + 1)

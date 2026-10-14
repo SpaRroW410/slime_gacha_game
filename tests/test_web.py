@@ -119,10 +119,14 @@ class TestCommands(unittest.TestCase):
         s = session()
         s.call("party_create", {"name": "V"})
         s.call("party_fill", {"pid": 1})
-        r = s.call("scout", {"pid": 1, "hours": 6})
+        plan = s.call("scout_plan", {"pid": 1, "first": 1, "last": 2})
+        self.assertTrue(plan["ok"])
+        self.assertGreater(plan["result"]["safe"], 0)
+        r = s.call("scout", {"pid": 1, "first": 1, "last": 2, "hours": plan["result"]["safe"]})
         self.assertTrue(r["ok"], r["error"])
-        self.assertGreaterEqual(r["state"]["dungeon"]["knowledge"], 0)
-        self.assertFalse(s.call("scout", {"pid": 1, "hours": 1})["ok"])          # min 2h
+        self.assertIn("complete", r["result"])
+        self.assertFalse(s.call("scout", {"pid": 1, "first": 1, "last": 2, "hours": 1})["ok"])   # below the minimum
+        self.assertFalse(s.call("scout", {"pid": 1, "first": 5, "last": 5, "hours": 8})["ok"])   # floors not walked
         for sl in s.game.slimes():
             sl.hp, sl.state, sl.grounded = sl.max_hp, "idle", False
         g = s.call("grind", {"pid": 1, "depth": 2, "runs": 2})
@@ -133,6 +137,8 @@ class TestCommands(unittest.TestCase):
         e = s.call("enter_dungeon", {"pid": 1})
         self.assertTrue(e["ok"], e["error"])
         self.assertIn("1", e["state"]["dungeon"]["delves"])
+        self.assertTrue(e["state"]["dungeon"]["delves"]["1"]["can_leave"])          # still at the entrance
+        self.assertFalse(s.call("enter_dungeon", {"pid": 1, "start": 6})["ok"])
         self.assertTrue(e["state"]["parties"][0]["in_delve"])
         self.assertFalse(s.call("rest", {"id": s.game.slimes()[0].id})["ok"])      # locked in
         n = s.call("delve_next", {"pid": 1})
@@ -140,6 +146,8 @@ class TestCommands(unittest.TestCase):
         self.assertTrue(n["result"]["battle"][0]["log"])
         c = s.call("delve_camp", {"pid": 1, "hours": 2})
         self.assertTrue(c["ok"] or "not inside" in c["error"])
+        if "1" in c["state"]["dungeon"]["delves"]:
+            self.assertFalse(s.call("leave_dungeon", {"pid": 1})["ok"])               # mid-segment: no way out
 
     def test_academy_town_council_commands(self):
         s = session()
@@ -168,14 +176,18 @@ class TestCommands(unittest.TestCase):
         self.assertGreater(m["state"]["stress"], 0)
 
     def test_every_command_is_registered_and_snapshot_has_ui_data(self):
-        for cmd in ("pull", "hunt", "spar", "scout", "grind", "enter_dungeon", "delve_next", "delve_camp",
+        for cmd in ("pull", "hunt", "spar", "scout", "scout_plan", "leave_dungeon", "specialize", "grind",
+                    "enter_dungeon", "delve_next", "delve_camp",
                     "study", "learn", "research", "upgrade", "buy_gear", "equip", "merge", "council", "mediate"):
             self.assertIn(cmd, HANDLERS)
         st = session()._ok([], {})["state"]
         for key in ("wallet", "slimes", "parties", "buildings", "dungeon", "gear", "zones", "disciplines",
-                    "elements", "library", "free_pull", "stress", "rates", "stances"):
+                    "elements", "library", "free_pull", "stress", "rates", "stances", "spec", "outlooks"):
             self.assertIn(key, st)
-        self.assertEqual(len(st["dungeon"]["intel"]), 5)
+        self.assertEqual(len(st["dungeon"]["floors"]), 10)
+        self.assertIn("spec_options", st["slimes"][0])
+        self.assertIn("outlook", st["slimes"][0])
+        self.assertIn("progress", st["slimes"][0])
 
 
 class TestServer(unittest.TestCase):

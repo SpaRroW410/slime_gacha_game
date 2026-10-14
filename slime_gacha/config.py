@@ -179,8 +179,42 @@ GEAR_RECOVERY_MIN, GEAR_RECOVERY_MAX = 0.10, 0.95
 PIT_LOST_RECOVER = 0.15         # a later Pit victory may find one item left behind earlier
 GEAR_DROP_PIT, GEAR_DROP_MAIN = 0.15, 0.30
 
+# ---- Per-slime dungeon progress, exits, scouting by floor ---------------------------------
+# Every slime tracks the deepest floor it has CLEARED (`progress`). To enter floor f every member needs
+# progress >= f - 1 (you cannot be carried past floors you have not walked). A delve may be left only at a
+# checkpoint (just after a boss floor: 5, 10, 15 ...), so training and the academy happen between segments.
+# Other parties can walk the same floors again at any time.
+# Scouting is per floor range: the exploration party must reach 100% knowledge of every floor it targets
+# before its supplies run out - otherwise the whole party is lost (a half-finished note survives).
+SCOUT_HOURS_PER_FLOOR = 3.0     # nominal hours to fully scout floor 1 (grows with depth, shrinks with skill)
+SCOUT_DEPTH_GROWTH = 0.12       # +12% hours per floor of depth
+SCOUT_VARIANCE = (0.85, 1.20)   # hidden per-floor factor: the estimate is never exact
+SCOUT_MAX_FLOORS = 10
+SCOUT_FOOD_PER_HOUR = 1.0      # supplies are paid up front for the whole hour budget (unused food is not refunded)
+SCOUT_NOTE_FRACTION = 0.5       # a lost party leaves half of what it had learned
+SCOUT_HOUR_AMBUSH_DEPTH = 0.04  # ambush chance grows 4% (relative) per floor of depth
+BOUNTY_BOSS_FLOORS_ONCE = True  # purple-gel boss bounty is paid once per boss floor, for the colony
+
+# ---- Specialization (hybrid classes) and outlook ----------------------------------------------
+SPEC_MIN_STYLE = 3             # style level in the second discipline
+SPEC_MIN_LEVEL = 5
+SPEC_COST = {"white_gel": 100, "essence": 25}
+SPEC_STAT_RATIO = 0.5          # the new stat gets this share of the source stat
+OUTLOOK_MIN = 5                # experiences before a slime develops an outlook
+OUTLOOK_LEAD = 1.2             # the favourite activity must lead the runner-up by this factor
+OUTLOOK_DUELIST_STYLE = 1.10   # style xp
+OUTLOOK_GRINDER_XP = 0.10      # extra Pit xp share
+OUTLOOK_GRINDER_LOSS = 0.7     # KO xp loss factor
+OUTLOOK_GRINDER_MORALE = 0.6   # KO morale loss factor
+OUTLOOK_DELVER_POWER = 0.05    # party power inside the Descent, scaled by the share of Delvers
+OUTLOOK_PATHFINDER_SKILL = 0.1 # scouting skill per Pathfinder
+OUTLOOK_FORAGER_LOOT = 1.10
+OUTLOOK_SCHOLAR_STUDY = 1.10
+OUTLOOK_SCHOLAR_RESEARCH = 0.05
+OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
+
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 6
+SAVE_VERSION = 7
 DEFAULT_SAVE = "savegame.json"

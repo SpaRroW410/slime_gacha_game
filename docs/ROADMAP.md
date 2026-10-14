@@ -120,7 +120,21 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Static Pyodide build (`tools/build_web.py`): same Python in the page, offline-capable
 - [x] API / server tests (12) and browser smoke tests (Playwright, local)
 
+## M13 — Rules revision: progress, checkpoints, scouting, classes
+- [x] Leave the Descent only after a boss floor (checkpoints every 5); may also push on
+- [x] Per-slime dungeon progress; a party's entry floor is limited by its least-travelled member
+- [x] Several parties can be inside at once and re-walk the same floors; boss bounty once per boss floor
+- [x] Scouting by floor range (1–10 floors): 100 % or the whole party is lost; hidden time variance; up-front supplies
+- [x] Per-floor knowledge (scouting, or having walked the floor) and staged intel
+- [x] Specialization: hybrid classes from cross-training (Battlemage and 8 more)
+- [x] Outlook: experience shapes the slime (Duelist, Grinder, Delver, Pathfinder, Forager, Scholar)
+- [x] Save v7 with migration from v6; web UI + CLI updated
+- [x] 29 new tests
+
 ## Future (post-prototype)
+- [ ] Reach floor 50 (the milestone before the art & sound pass)
+- [ ] More spec paths (three-way hybrids, evolution of specs), outlook-driven behaviours (slimes ask for jobs)
+- [ ] Rescue parties for scouts that are overdue
 - [ ] Construction time for upgrades; more buildings (Pantry, Hatchery)
 - [ ] Rivalries and mentorships as explicit relationships; couples -> new slimes
 - [ ] Enemy resistances beyond one element; elemental dungeon floors

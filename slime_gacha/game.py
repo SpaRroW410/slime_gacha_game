@@ -12,14 +12,14 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import buildings as bld, dungeon, elements, equipment, sparring, spells
+from . import buildings as bld, dungeon, elements, equipment, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
-from .abilities import ABILITIES
+from .abilities import ABILITIES, get_ability
 from .errors import GameError, InvalidAction
 from .gacha import GachaSystem
-from .growth import evolve, evolve_cost, lose_xp, merge, merge_gain
+from .growth import add_xp, evolve, evolve_cost, lose_xp, merge, merge_gain
 from .hunt import HuntSystem, ZONES
 from .party import Party, PartyManager
 from .registry import load_plugins
@@ -35,10 +35,13 @@ class SparResult:
 
 @dataclass
 class ScoutResult:
-    segment: int = 0
+    first: int = 1
+    last: int = 1
+    hours: int = 0
+    required: float = 0.0          # true hours the floors needed (revealed afterwards)
+    complete: bool = False
     before: float = 0.0
     after: float = 0.0
-    hours: int = 0
     survivors: int = 0
     log: List[str] = field(default_factory=list)
 
@@ -71,10 +74,10 @@ class Game:
         self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
         self.conflicts.hook = self._social_hook
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
-        self.main_floor = 0                            # last cleared BOSS floor = checkpoint of the Descent
-        self.best_floor = 0                            # deepest floor ever cleared
+        self.best_floor = 0                            # deepest floor ever cleared by anyone
+        self.bounties: set = set()                     # boss floors whose purple-gel bounty is already paid
         self.delves: Dict[int, dict] = {}              # party id -> active delve {floor, start, hours}
-        self.intel: Dict[int, float] = {}              # segment index -> knowledge 0-100 (from scouting)
+        self.intel: Dict[int, float] = {}              # floor -> knowledge 0-100 (scouting / having walked it)
         self.dungeon_seed = (random.Random((seed or 0) ^ 0x5EED).randrange(2 ** 31) if seed is not None
                              else random.SystemRandom().randrange(2 ** 31))
         self.inventory = equipment.Inventory()
@@ -253,6 +256,9 @@ class Game:
         def reward(s, won, dummy=False):
             before = sparring.style_level(s, d.key)
             xp = sparring.style_xp_for(s, d.key, won, mult, dummy)
+            if outlook.has(s, "spar"):
+                xp *= config.OUTLOOK_DUELIST_STYLE
+            outlook.bump(s, "spar")
             after = sparring.gain_style_xp(s, d.key, xp, cap)
             self.social.shift_morale(s, 2 + (2 if won else 0))
             note = f"+{xp:.0f} {d.style} xp"
@@ -642,49 +648,85 @@ class Game:
         for s in party:
             s.in_dungeon = ""
 
-    def _knowledge(self, seg: int) -> float:
-        return self.intel.get(seg, 0.0)
+    def _knowledge(self, floor: int) -> float:
+        return self.intel.get(floor, 0.0)
 
-    def _add_knowledge(self, seg: int, amount: float) -> None:
-        self.intel[seg] = round(min(100.0, self.intel.get(seg, 0.0) + amount), 2)
+    def floor_horizon(self) -> int:
+        """How many floors the colony lists: a little beyond the deepest cleared, in whole segments."""
+        h = max(10, self.best_floor + 6)
+        return -(-h // config.MAIN_BOSS_EVERY) * config.MAIN_BOSS_EVERY
 
-    # ---- main dungeon: The Hollow Descent (rough, permadeath, no way out) ----------------------
-    @property
-    def current_segment(self) -> int:
-        return dungeon.segment_of(self.main_floor + 1)
+    def intel_report(self, first: int = 1, last: Optional[int] = None) -> List[dict]:
+        last = last or self.floor_horizon()
+        return dungeon.intel_view(self.dungeon_seed, range(first, last + 1), self.intel, self.parties.size)
 
-    def intel_report(self, seg: Optional[int] = None) -> List[dict]:
-        seg = self.current_segment if seg is None else seg
-        return dungeon.intel_view(self.dungeon_seed, seg, self._knowledge(seg), self.parties.size)
+    # ---- main dungeon: The Hollow Descent --------------------------------------------------------
+    # Rules: floors are walked in order and every slime must have CLEARED the floor above to enter a floor
+    # (per-slime `progress`). A party can only LEAVE at a checkpoint (the boss floors 5, 10, 15 ...), so
+    # training and the academy happen between segments. Any number of parties can walk the same floors again.
+    def entry_options(self, pid: int) -> List[int]:
+        """Floors a party may start from: 1, or the floor after any checkpoint every member has cleared."""
+        members = self.party_members(pid)
+        low = min((s.progress for s in members), default=0)
+        return [1] + [c + 1 for c in range(config.MAIN_BOSS_EVERY, low + 1, config.MAIN_BOSS_EVERY)]
 
-    def enter_dungeon(self, pid: int) -> str:
-        """Enter the next segment of the Hollow Descent (5 floors ending in a boss). THERE IS NO WAY OUT until
-        the boss is beaten or the whole party is dead. Members cannot do anything else meanwhile."""
+    def enter_dungeon(self, pid: int, start: Optional[int] = None) -> str:
+        """Enter the Hollow Descent at `start` (default: as deep as every member's progress allows).
+        Inside, you may only leave at a checkpoint (after a boss floor)."""
         if pid in self.delves:
             raise InvalidAction("That party is already inside the dungeon.")
         party = self._ready_party(pid)
-        first = self.main_floor + 1
+        options = self.entry_options(pid)
+        start = options[-1] if start is None else int(start)
+        if start not in options:
+            laggard = min(party, key=lambda s: s.progress)
+            raise InvalidAction(f"The party can start at floor {', '.join(map(str, options))}. {laggard.name} has only "
+                                f"cleared floor {laggard.progress}; every member must have walked the floors above.")
         self._set_flag(party, "main")
-        self.delves[pid] = dict(floor=first, start=first, hours=0)
-        seg = dungeon.segment_of(first)
-        return (f"🕳 {self.parties.get(pid).name} enters the Hollow Descent at floor {first} "
-                f"(segment {seg + 1}, knowledge {self._knowledge(seg):.0f}%). The way out is the boss on floor "
-                f"{dungeon.segment_floors(seg)[-1]} - or death.")
+        self.delves[pid] = dict(floor=start, start=start, hours=0)
+        nxt = self._checkpoint_after(start)
+        return (f"🕳 {self.parties.get(pid).name} enters the Hollow Descent at floor {start} "
+                f"(knowledge {self._knowledge(start):.0f}%). The next exit is after the boss on floor {nxt}.")
+
+    @staticmethod
+    def _checkpoint_after(floor: int) -> int:
+        """The boss floor that ends the segment containing `floor`."""
+        return -(-floor // config.MAIN_BOSS_EVERY) * config.MAIN_BOSS_EVERY
+
+    def can_leave(self, pid: int) -> bool:
+        d = self.delves.get(pid)
+        return bool(d) and (d["floor"] - 1) % config.MAIN_BOSS_EVERY == 0
+
+    def leave_dungeon(self, pid: int) -> str:
+        """Climb out. Only possible at a checkpoint: right after a boss floor (or before the first fight)."""
+        d = self.delves.get(pid)
+        if not d:
+            raise InvalidAction("That party is not inside the dungeon.")
+        if not self.can_leave(pid):
+            raise InvalidAction(f"There is no way out until the boss of floor {self._checkpoint_after(d['floor'])} "
+                                f"falls - or the whole party does.")
+        party = self._members_in("main", pid)
+        self._clear_flag(party)
+        del self.delves[pid]
+        for s in party:
+            self.social.shift_morale(s, 2)
+        return f"{self.parties.get(pid).name} climbs out of the Hollow Descent after {d['hours']}h."
 
     def delve_status(self, pid: int) -> dict:
         d = self.delves.get(pid)
         if not d:
             raise InvalidAction("That party is not inside the dungeon.")
-        seg = dungeon.segment_of(d["floor"])
-        return dict(floor=d["floor"], start=d["start"], boss_floor=dungeon.segment_floors(seg)[-1],
-                    hours=d["hours"], knowledge=self._knowledge(seg), members=self._members_in("main", pid))
+        return dict(floor=d["floor"], start=d["start"], boss_floor=self._checkpoint_after(d["floor"]),
+                    hours=d["hours"], knowledge=self._knowledge(d["floor"]), can_leave=self.can_leave(pid),
+                    members=self._members_in("main", pid))
 
     def descend(self, pid: int, floor: Optional[int] = None) -> BattleReport:
         """Convenience: enter the dungeon if needed, then fight the party's current floor."""
-        if floor is not None and floor != (self.delves.get(pid, {}).get("floor") or self.main_floor + 1):
-            raise InvalidAction("Floors must be taken in order, and you cannot skip or leave.")
-        if pid not in self.delves:
-            self.enter_dungeon(pid)
+        d = self.delves.get(pid)
+        if floor is not None and floor != (d["floor"] if d else None) and (d or floor not in self.entry_options(pid)):
+            raise InvalidAction("Floors are taken in order; you cannot skip ahead.")
+        if not d:
+            self.enter_dungeon(pid, floor)
         return self.delve_next(pid)
 
     def delve_next(self, pid: int) -> BattleReport:
@@ -696,10 +738,11 @@ class Game:
             if s.state == "sleeping":
                 s.state = "idle"                      # woken by the next fight
         floor = d["floor"]
-        seg = dungeon.segment_of(floor)
-        k = self._knowledge(seg)
+        k = self._knowledge(floor)
         enemies = dungeon.floor_plan(self.dungeon_seed, floor, self.parties.size)
-        report = self._run_battle(party, enemies, intel=1 + config.INTEL_POWER_BONUS * k / 100)
+        delver_share = sum(outlook.has(s, "delve") for s in party) / max(1, len(party))
+        report = self._run_battle(party, enemies, intel=(1 + config.INTEL_POWER_BONUS * k / 100)
+                                  * (1 + config.OUTLOOK_DELVER_POWER * delver_share))
         boss = dungeon.is_boss_floor(floor)
         report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}{' (BOSS)' if boss else ''} "
                              f"[knowledge {k:.0f}%]")
@@ -709,20 +752,23 @@ class Game:
         self._drop_gear([s for s in party if s.hp <= 0], survivors, party, "Hollow Descent", events)
         if report.victory:
             self.best_floor = max(self.best_floor, floor)
+            self.intel[floor] = 100.0                       # having walked it, the colony knows the floor
+            for s in survivors:
+                s.progress = max(s.progress, floor)         # they have now visited this floor
+                outlook.bump(s, "delve")
             self._gear_drop(1 + (floor - 1) // config.MAIN_BOSS_EVERY, config.GEAR_DROP_MAIN, events, boss)
+            d["floor"] = floor + 1
             if boss:
-                first_clear = floor > self.main_floor
-                self.main_floor = max(self.main_floor, floor)
-                events.append(f"🔓 Boss of floor {floor} defeated - the Descent lets the party out!")
-                if first_clear:
+                events.append(f"🔓 The boss of floor {floor} is down. This is a checkpoint: the party may climb out "
+                              f"or push on to floor {floor + 1}.")
+                if floor not in self.bounties:
+                    self.bounties.add(floor)
                     self.wallet.add("purple_gel", config.MAIN_BOSS_FIRST_CLEAR_PURPLE)
                     report.loot["purple_gel"] = report.loot.get("purple_gel", 0) + config.MAIN_BOSS_FIRST_CLEAR_PURPLE
-                    events.append(f"🟣 Boss bounty: +{config.MAIN_BOSS_FIRST_CLEAR_PURPLE} purple gel!")
-                self._clear_flag(survivors)
-                del self.delves[pid]
+                    events.append(f"🟣 First boss bounty for floor {floor}: +{config.MAIN_BOSS_FIRST_CLEAR_PURPLE} purple gel!")
             else:
-                d["floor"] = floor + 1
-                events.append(f"➡ Floor {floor} cleared. The party must go on: floor {floor + 1}.")
+                events.append(f"➡ Floor {floor} cleared. The party must go on: floor {floor + 1} "
+                              f"(exit after the boss on floor {self._checkpoint_after(floor + 1)}).")
         elif report.winner == "foes":
             events.append("☠ The whole party has fallen in the Hollow Descent.")
             self.delves.pop(pid, None)
@@ -730,7 +776,6 @@ class Game:
         events.extend(self.tick(config.MAIN_FLOOR_TICKS))
         if pid in self.delves:
             self.delves[pid]["hours"] += config.MAIN_FLOOR_TICKS
-            self._add_knowledge(seg, config.DELVE_PASSIVE_INTEL * config.MAIN_FLOOR_TICKS)
             if not self._members_in("main", pid):          # everyone starved / died in the meantime
                 self.delves.pop(pid, None)
         report.log.extend(events)
@@ -743,7 +788,6 @@ class Game:
         if not d:
             raise InvalidAction("That party is not inside the dungeon.")
         hours = max(1, min(config.CAMP_HEAL_HOURS_MAX, int(hours)))
-        seg = dungeon.segment_of(d["floor"])
         out: List[str] = []
         for _ in range(hours):
             party = self._members_in("main", pid)
@@ -755,11 +799,10 @@ class Game:
             events = self.tick(1)
             out.extend(e for e in events if "died" in e or "starv" in e)
             d["hours"] += 1
-            self._add_knowledge(seg, config.DELVE_PASSIVE_INTEL)
             party = self._members_in("main", pid)
             if not party:
                 break
-            p = config.CAMP_AMBUSH_BASE * (1 + 0.1 * d["floor"]) * (1 - 0.6 * self._knowledge(seg) / 100)
+            p = config.CAMP_AMBUSH_BASE * (1 + 0.1 * d["floor"]) * (1 - 0.6 * self._knowledge(d["floor"]) / 100)
             if self.rng.random() < p:
                 v = self.rng.choice(party)
                 dmg = max(1, int(v.max_hp * self.rng.uniform(*config.CAMP_AMBUSH_DAMAGE) * (1 + 0.05 * d["floor"])))
@@ -783,38 +826,73 @@ class Game:
         for s in party:
             self.social.shift_morale(s, delta)
 
-    # ---- scouting: an exploration party gathers knowledge about the next segment ------------------
-    def scout(self, pid: int, hours: int = 8) -> "ScoutResult":
-        """Send a (full) party into the next dungeon segment for `hours`. Knowledge gained grows with time spent
-        in the dungeon (diminishing returns). Once inside they cannot come back early; ambushes can kill scouts
-        (permanent). If the whole party dies, nothing is learned."""
+    # ---- scouting: an exploration party must finish what it starts ------------------------------------
+    @staticmethod
+    def scout_skill(party) -> float:
+        return min(2.0, 0.8 + 0.1 * sum(s.behavior == "explore" for s in party)
+                   + 0.15 * sum(s.archetype in ("rogue", "ranger") for s in party)
+                   + config.OUTLOOK_PATHFINDER_SKILL * sum(outlook.has(s, "scout") for s in party))
+
+    def scout_plan(self, pid: int, first: int, last: int) -> dict:
+        """Estimated hours to scout floors first..last to 100% (the true figure hides a 0.85-1.2x factor)."""
+        party = self.party_members(pid)
+        skill = self.scout_skill(party) if party else 1.0
+        est = dungeon.scout_estimate(self.dungeon_seed, first, last, skill)
+        est.update(skill=round(skill, 2), floors=last - first + 1,
+                   food=int(math.ceil(est["safe"] * config.SCOUT_FOOD_PER_HOUR)))
+        return est
+
+    def scout(self, pid: int, first: int, last: int, hours: int) -> "ScoutResult":
+        """Send a full party to scout floors first..last. Scouts must reach 100% knowledge of EVERY targeted floor
+        within `hours`; if they run out of time the whole party is lost (it leaves a half-finished note behind).
+        They finish and return as soon as they are done. Supplies (food per hour of the budget) are paid up front.
+        Every member must have cleared the floor above `first`. Ambushes can kill scouts (permanent)."""
+        if not 1 <= first <= last or last - first + 1 > config.SCOUT_MAX_FLOORS:
+            raise InvalidAction(f"Scout 1-{config.SCOUT_MAX_FLOORS} consecutive floors (e.g. floors 3-5).")
+        hours = int(hours)
         if not config.SCOUT_MIN_HOURS <= hours <= config.SCOUT_MAX_HOURS:
-            raise InvalidAction(f"Scouting takes {config.SCOUT_MIN_HOURS}-{config.SCOUT_MAX_HOURS} hours.")
+            raise InvalidAction(f"The budget is {config.SCOUT_MIN_HOURS}-{config.SCOUT_MAX_HOURS} hours.")
         party = self._ready_party(pid)
-        seg = self.current_segment
-        before = self._knowledge(seg)
-        res = ScoutResult(segment=seg, before=before, after=before, hours=hours)
+        laggard = min(party, key=lambda s: s.progress)
+        if laggard.progress < first - 1:
+            raise InvalidAction(f"{laggard.name} has only cleared floor {laggard.progress}; scouts must have walked "
+                                f"the floors above floor {first}.")
+        self.wallet.spend("food", int(math.ceil(hours * config.SCOUT_FOOD_PER_HOUR)))
+        skill = self.scout_skill(party)
+        floors = list(range(first, last + 1))
+        need = [dungeon.floor_hours(self.dungeon_seed, f, skill)[1] for f in floors]
+        total = sum(need)
+        before = sum(self._knowledge(f) for f in floors) / len(floors)
+        res = ScoutResult(first=first, last=last, hours=hours, required=round(total, 1), before=before, after=before)
+        res.log.append(f"🔭 Scouting floors {first}-{last} with a budget of {hours}h (skill x{skill:.2f}): the party must "
+                       f"finish everything or it is lost.")
         self._set_flag(party, "scout")
-        skill = min(2.0, 0.8 + 0.1 * sum(s.behavior == "explore" for s in party)
-                    + 0.15 * sum(s.archetype in ("rogue", "ranger") for s in party))
-        danger = 1 + 0.3 * seg
+        elapsed = 0
         for h in range(hours):
             members = self._members_in("scout", pid)
-            if not members:
+            if not members or elapsed >= total:
                 break
             events = self.tick(1)
+            elapsed += 1
             res.log.extend("   " + e for e in events if "died" in e)
             members = self._members_in("scout", pid)
             if not members:
                 break
+            cum, now = 0.0, last                       # which floor are they exploring this hour?
+            for f, hrs in zip(floors, need):
+                cum += hrs
+                if elapsed <= cum:
+                    now = f
+                    break
+            danger = 1 + 0.06 * now
             strength = sum(s.power_rating() for s in members) / len(members) / (25 * danger)
             p = min(0.6, config.SCOUT_AMBUSH_BASE * danger / max(0.5, strength)
-                    * (1 - 0.7 * self._knowledge(seg) / 100))
+                    * (1 - 0.7 * self._knowledge(now) / 100))
             if self.rng.random() < p:
                 v = self.rng.choice(members)
                 dmg = max(1, int(v.max_hp * self.rng.uniform(0.15, 0.40) * danger))
                 v.hp -= dmg
-                res.log.append(f"   hour {h + 1}: ambushed! {v.name} takes {dmg} damage.")
+                res.log.append(f"   hour {elapsed}: ambushed on floor {now}! {v.name} takes {dmg} damage.")
                 if v.hp <= 0:
                     v.death_cause = "killed while scouting the Hollow Descent"
                     self._drop_gear([v], [s for s in members if s is not v and s.hp > 0], members,
@@ -822,19 +900,46 @@ class Game:
                     self._reap(res.log)
         survivors = self._members_in("scout", pid)
         res.survivors = len(survivors)
-        if survivors:
-            k = 100 - (100 - before) * math.exp(-config.SCOUT_RATE * skill * hours)
-            self.intel[seg] = round(k, 2)
-            res.after = self.intel[seg]
-            self._clear_flag(survivors)
+        res.complete = bool(survivors) and elapsed >= total
+        if res.complete:
+            for f in floors:
+                self.intel[f] = 100.0
             for s in survivors:
+                outlook.bump(s, "scout")
                 self.social.shift_morale(s, 3)
+            self._clear_flag(survivors)
+            res.log.append(f"✅ Floors {first}-{last} fully explored in {elapsed}h. The party returns with everything.")
         else:
-            res.log.append("☠ The whole exploration party never came back. Nothing was learned.")
-        res.log.insert(0, f"🔭 Scouting segment {seg + 1} for {hours}h (skill x{skill:.2f}): knowledge "
-                          f"{before:.0f}% -> {res.after:.0f}%")
+            cum = 0.0                                  # what they had learned becomes a half-finished note
+            for f, hrs in zip(floors, need):
+                frac = max(0.0, min(1.0, (elapsed - cum) / hrs))
+                cum += hrs
+                self.intel[f] = max(self.intel.get(f, 0.0), round(100 * frac * config.SCOUT_NOTE_FRACTION, 1))
+            if survivors:                              # out of time and supplies: nobody comes back
+                for s in survivors:
+                    s.hp, s.death_cause = 0, f"lost scouting floors {first}-{last} (needed ~{total:.0f}h)"
+                self._drop_gear(survivors, [], survivors, "Hollow Descent", res.log)
+                self._reap(res.log)
+            res.log.append(f"☠ The exploration party never came back. Their half-finished note survives "
+                           f"(they needed ~{total:.0f}h, they had {hours}h).")
+        res.after = sum(self._knowledge(f) for f in floors) / len(floors)
         self.journal.extend(res.log)
         return res
+
+    # ---- specialization ---------------------------------------------------------------------------------
+    def specialize(self, sid: int, discipline: str) -> str:
+        """Turn cross-training into a hybrid class (swordslime + magic style = Battlemage ...). Permanent."""
+        s = self.slime(sid)
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
+        spec = specialization.check(s, discipline)
+        self.wallet.spend_many(config.SPEC_COST)
+        s.spec, s.spec_disc = spec.key, discipline
+        s.hp = min(s.max_hp, s.hp + 5)
+        s.needs.add("esteem", 25)
+        self.social.shift_morale(s, 10)
+        return (f"{spec.emoji} {s.name} the {s.arch.name} has become a {spec.name}! New ability: "
+                f"{get_ability(spec.ability).name}. {spec.description}")
 
     # ---- grinding dungeon: The Gloop Pit (committed session of N runs) -----------------------------
     def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True) -> GrindResult:
@@ -876,9 +981,16 @@ class Game:
                 downed = list(rep.fallen)
                 standing = [s for s in members if s not in downed]
                 for s in downed:
-                    lost = lose_xp(s, config.GRIND_DEATH_XP_LOSS)
-                    self.social.shift_morale(s, config.GRIND_DEATH_MORALE)
-                    events.append(f"💫 {s.name} was knocked out: -{lost} xp, morale {config.GRIND_DEATH_MORALE}.")
+                    grinder = outlook.has(s, "pit")
+                    lost = lose_xp(s, config.GRIND_DEATH_XP_LOSS * (config.OUTLOOK_GRINDER_LOSS if grinder else 1))
+                    mloss = config.GRIND_DEATH_MORALE * (config.OUTLOOK_GRINDER_MORALE if grinder else 1)
+                    self.social.shift_morale(s, mloss)
+                    events.append(f"💫 {s.name} was knocked out: -{lost} xp, morale {mloss:+.0f}.")
+                for s in members:                               # everyone who went in gains Pit experience
+                    outlook.bump(s, "pit")
+                for s in standing:
+                    if rep.victory and outlook.has(s, "pit"):
+                        add_xp(s, int(rep.xp * config.OUTLOOK_GRINDER_XP))
                 self._drop_gear(downed, standing, members, "Gloop Pit", events)
                 if rep.victory:
                     self._gear_drop(1 if depth <= 3 else 2, config.GEAR_DROP_PIT, events)
@@ -945,7 +1057,7 @@ class Game:
     # ---- persistence -----------------------------------------------------------
     def to_dict(self) -> dict:
         return dict(version=config.SAVE_VERSION, seed=self.seed, tick=self.tick_count,
-                    main_floor=self.main_floor, custom_spells=spells.custom_records(),
+                    bounties=sorted(self.bounties), custom_spells=spells.custom_records(),
                     buildings=self.buildings.to_dict(), best_floor=self.best_floor,
                     delves={str(k): v for k, v in self.delves.items()},
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
@@ -977,7 +1089,8 @@ class Game:
         from .archetypes import ARCHETYPES
         g = cls(d.get("seed"), d.get("parties", {}).get("size", config.PARTY_SIZE))
         g.tick_count = d.get("tick", 0)
-        g.main_floor = d.get("main_floor", 0)
+        g.bounties = set(d.get("bounties", range(config.MAIN_BOSS_EVERY, d.get("main_floor", 0) + 1,
+                                               config.MAIN_BOSS_EVERY)))
         wallet = dict(d.get("wallet") or {})
         for old, new in (("gel", "white_gel"), ("silver", "white_gel"), ("gold", "purple_gel")):
             if old in wallet:                                # v1/v2 saves: migrate old currency names
@@ -990,6 +1103,9 @@ class Game:
         g.buildings.load(d.get("buildings"))
         g.best_floor = d.get("best_floor", 0)
         g.intel = {int(k): v for k, v in d.get("intel", {}).items()}
+        if d.get("version", 0) < 7:                          # v6 knew intel per 5-floor segment, progress globally
+            seg_intel = g.intel
+            g.intel = {f: v for seg, v in seg_intel.items() for f in dungeon.segment_floors(seg)}
         g.dungeon_seed = d.get("dungeon_seed", g.dungeon_seed)
         g.inventory.load(d.get("inventory"))
         g.pit_lost = [k for k in d.get("pit_lost", []) if k in equipment.GEAR]
@@ -1002,6 +1118,8 @@ class Game:
                 continue
             s = Slime.from_dict(sd)
             s.spells = [k for k in s.spells if k in ABILITIES]      # drop spells from removed mods
+            if d.get("version", 0) < 7:
+                s.progress = max(s.progress, d.get("main_floor", 0))
             g.roster[s.id] = s
         g.parties.load(d.get("parties", {}), set(g.roster))
         g.graveyard = d.get("graveyard", [])
