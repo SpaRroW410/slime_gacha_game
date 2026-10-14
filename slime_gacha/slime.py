@@ -74,6 +74,12 @@ class Slime:
         self.xp = 0                    # xp toward next level
         self.total_xp = 0              # lifetime xp (used by merging)
         self.stage = 0
+        # --- training / elemental mastery (see academy.py, elements.py, spells.py)
+        self.training: Dict[str, float] = {}      # permanent flat stat bonuses from the training grounds
+        self.attuned: List[str] = []              # basic elements this slime has attuned to
+        self.mastery_xp: Dict[str, float] = {}    # per basic element
+        self.spells: List[str] = []               # learned spell keys (max config.MAX_SPELLS)
+        self.task: Optional[dict] = None          # active training / study / research assignment
         self.behavior = self.arch.default_behavior
         self.state = "idle"            # idle | sleeping | hunting
         self.hunt: Optional[HuntAssignment] = None
@@ -97,7 +103,8 @@ class Slime:
         mult = config.RARITY_STAT_MULT[self.rarity] * config.STAR_STAT_MULT[self.stars - 1] * config.STAGE_STAT_MULT[
             min(self.stage, len(config.STAGE_STAT_MULT) - 1)]
         return {k: round((a.base_stats[k] + a.growth[k] * (self.level - 1))
-                         * mult * self.variance.get(k, 1.0), 1) for k in STAT_KEYS}
+                         * mult * self.variance.get(k, 1.0) + self.training.get(k, 0.0), 1)
+                for k in STAT_KEYS}
 
     @property
     def max_hp(self) -> int:
@@ -120,7 +127,7 @@ class Slime:
         a = self.arch
         keys = [k for lvl, k in sorted(a.abilities.items()) if lvl <= self.level]
         keys += [k for st, k in sorted(a.evolve_abilities.items()) if st <= self.stage]
-        return keys
+        return keys + [k for k in self.spells if k not in keys]
 
     def title(self) -> str:
         return f"{STAGE_TITLES[min(self.stage, len(STAGE_TITLES) - 1)]}{self.arch.name}"
@@ -128,6 +135,11 @@ class Slime:
     def power_rating(self) -> float:
         s = self.max_stats()
         return (s["hp"] / 4 + s["atk"] + s["mag"] + s["defense"] + s["spd"] / 2) * self.power_multiplier()
+
+    @property
+    def busy(self) -> bool:
+        """Away from the colony on a task (hunting or at the training grounds / library)."""
+        return self.state in ("hunting", "training")
 
     @property
     def alive(self) -> bool:
@@ -150,14 +162,16 @@ class Slime:
                     total_xp=self.total_xp, stage=self.stage, behavior=self.behavior,
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
-                    merged=self.merged, grounded=self.grounded)
+                    merged=self.merged, grounded=self.grounded, training=self.training,
+                    attuned=self.attuned, mastery_xp=self.mastery_xp, spells=self.spells,
+                    task=self.task)
 
     @classmethod
     def from_dict(cls, d) -> "Slime":
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded"):
+                  "merged", "grounded", "training", "attuned", "mastery_xp", "spells", "task"):
             if k in d:
                 setattr(s, k, d[k])
         s.needs = Needs(d.get("needs"))

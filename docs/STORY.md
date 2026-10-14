@@ -29,6 +29,14 @@ dissolves back into the Mother Gloop; the Keeper marks them in the **Memorial Po
 (friends most of all). **White gel** is the plentiful, everyday ooze of the Mother; **purple gel** is a rare, warm shard of her
 heart — dungeons almost never give it up, and the Parched King hoards it.
 
+## The Academy
+
+Behind the Well stands the **Academy of Plip**: a Blade Yard, an Archery Range, and the glowing Mana Pool. Beneath it
+lies the **Library of Moist Pages**, where the Mother's memories of the four elements — Fire, Water, Earth and Wind —
+are filed. Only droplets with at least three stars of the Mother's memory can *read* them, but any class may: a
+barbarian who mixes Fire and Wind into **Lightning** is just a very loud mage. The Library keeps every new spell
+a slime invents, so the colony's magic grows with its mistakes.
+
 ## The Two Dungeons
 
 - **The Gloop Pit** — an old training hollow where the Mother's echoes spar with fresh droplets. Slimes who

@@ -11,8 +11,10 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import dungeon
-from .errors import InvalidAction
+from . import dungeon, elements, spells
+from .academy import DISCIPLINES, AcademySystem, Library
+from .abilities import ABILITIES
+from .errors import GameError, InvalidAction
 from .gacha import GachaSystem
 from .growth import evolve, evolve_cost, merge, merge_gain
 from .hunt import HuntSystem, ZONES
@@ -42,6 +44,8 @@ class Game:
         self.conflicts = ConflictEngine(self.rng)
         self.hunts = HuntSystem(self.wallet, self.rng)
         self.battles = BattleSystem(self.rng, self.wallet)
+        self.library = Library(self.wallet)
+        self.academy = AcademySystem(self.wallet, self.rng, self.library)
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
         self.main_floor = 0                            # deepest main-dungeon floor cleared
         self.graveyard: List[dict] = []                # slimes that died, newest last
@@ -84,6 +88,8 @@ class Game:
             self.needs.tick(self.slimes(), events)
             self._reap(events)
             self.hunts.tick(self.slimes(), events)
+            self._reap(events)
+            self.academy.tick(self.slimes(), events)
             self._reap(events)
             self._healer_aura(self.slimes(), events)
             self.conflicts.tick(self.slimes(), events)
@@ -134,8 +140,8 @@ class Game:
 
     def sleep(self, sid: int) -> str:
         s = self.slime(sid)
-        if s.state == "hunting":
-            raise InvalidAction(f"{s.name} is out hunting.")
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away ({s.state}).")
         s.state = "sleeping"
         return f"{s.name} dozes off."
 
@@ -168,7 +174,47 @@ class Game:
     def recall(self, sid: int) -> str:
         s = self.slime(sid)
         self.hunts.recall(s)
+        self.academy.cancel(s)
         return f"{s.name} was called back."
+
+    # ---- training grounds & library --------------------------------------------------
+    def train(self, sid: int, discipline: str) -> str:
+        """Send a slime to the Blade Yard (sword), Archery Range or Mana Pool (magic). Permanent stat gains;
+        training your class's own discipline is 1.5x as effective."""
+        return self.academy.start_training(self.slime(sid), discipline)
+
+    def train_party(self, pid: int, discipline: str) -> List[str]:
+        self._require_full(pid)
+        out = []
+        for s in self.party_members(pid):
+            try:
+                out.append(self.academy.start_training(s, discipline))
+            except GameError as e:
+                out.append(f"✋ {e}")
+        return out
+
+    def study(self, sid: int, element: str) -> str:
+        """Attune to / study a basic element at the Library (3-star+ slimes of ANY class)."""
+        return self.academy.start_study(self.slime(sid), element)
+
+    def learn_spell(self, sid: int, spell_key: str) -> str:
+        return self.library.learn(self.slime(sid), spell_key)
+
+    def forget_spell(self, sid: int, spell_key: str) -> str:
+        return self.library.forget(self.slime(sid), spell_key)
+
+    def research(self, sid: int, spell_a: str, spell_b: str, name: Optional[str] = None) -> str:
+        """Fuse two learned spells of different elements into a new one (fire + wind = lightning...)."""
+        return self.academy.start_research(self.slime(sid), spell_a, spell_b, name)
+
+    def research_preview(self, sid: int, spell_a: str, spell_b: str) -> dict:
+        a, b, el, cost, ticks, chance = self.academy.plan_research(self.slime(sid), spell_a, spell_b)
+        return dict(element=el, cost=cost, hours=ticks, chance=chance, a=a, b=b)
+
+    def cancel_task(self, sid: int) -> str:
+        s = self.slime(sid)
+        self.academy.cancel(s)
+        return f"{s.name} leaves early."
 
     # ---- growth -----------------------------------------------------------------
     def evolve(self, sid: int) -> List[str]:
@@ -394,7 +440,8 @@ class Game:
     # ---- persistence -----------------------------------------------------------
     def to_dict(self) -> dict:
         return dict(version=config.SAVE_VERSION, seed=self.seed, tick=self.tick_count,
-                    main_floor=self.main_floor,
+                    main_floor=self.main_floor, custom_spells=spells.custom_records(),
+                    discovered=sorted(self.library.discovered),
                     parties=self.parties.to_dict(), graveyard=self.graveyard,
                     wallet=self.wallet.to_dict(), gacha=self.gacha.to_dict(),
                     slimes=[s.to_dict() for s in self.slimes()],
@@ -426,14 +473,17 @@ class Game:
                 wallet[new] = wallet.get(new, 0) + wallet.pop(old)
         g.wallet = ResourceManager(wallet)
         # re-point systems at the new wallet
-        for sysobj in (g.gacha, g.needs, g.hunts, g.battles):
+        for sysobj in (g.gacha, g.needs, g.hunts, g.battles, g.academy, g.library):
             sysobj.wallet = g.wallet
         g.gacha.load(d.get("gacha", {}))
+        spells.load_custom(d.get("custom_spells", []))
+        g.library.discovered = {k for k in d.get("discovered", []) if k in ABILITIES}
         for sd in d.get("slimes", []):
             if sd["archetype"] not in ARCHETYPES:          # plugin removed: skip safely
                 print(f"warning: skipping slime {sd['name']} (unknown class {sd['archetype']})")
                 continue
             s = Slime.from_dict(sd)
+            s.spells = [k for k in s.spells if k in ABILITIES]      # drop spells from removed mods
             g.roster[s.id] = s
         g.parties.load(d.get("parties", {}), set(g.roster))
         g.graveyard = d.get("graveyard", [])

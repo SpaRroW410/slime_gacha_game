@@ -74,7 +74,23 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Save v3 (`main_floor`), migration of old currency names
 - [x] Tests for both dungeons
 
+## M9 — Academy, elements & spell fusion
+- [x] Training grounds: sword / archery / magic (permanent, capped, affinity bonus)
+- [x] Four basic elements + 13-element fusion tree (data-driven recipes)
+- [x] Elemental wheel in battle (weakness / resist)
+- [x] Elemental mastery from 3★, any class; slots + caps by stars; mage perks
+- [x] Library: study elements, tier-1 spells, learn / forget, 4-spell limit
+- [x] Spell lab: fuse two spells into a new (nameable) spell; success odds, costs, backfire
+- [x] Discovered spells shared via the Library
+- [x] Casting builds mastery; non-mage imbuing (attack-scaled spells)
+- [x] Save v4 (custom spells, mastery, training)
+- [x] Tests (32 new)
+
 ## Future (post-prototype)
+- [ ] Upgradable facilities (training ground levels, library wings)
+- [ ] Enemy resistances beyond one element; elemental dungeon floors
+- [ ] Spell mutation / evolving fused spells with mastery
+- [ ] Hybrid class abilities (e.g. Barbarian fire-axe imbue as a status)
 - [ ] Named dungeon registry (add dungeons as data)
 - [ ] Floor modifiers (poison fog, darkness) and shops between floors
 - [ ] Retreat / checkpoint mid-descent

@@ -2,7 +2,9 @@
 import os
 from typing import List
 
-from . import config
+from . import config, elements
+from .abilities import ABILITIES, get_ability
+from .academy import DISCIPLINES
 from .archetypes import BEHAVIORS
 from .errors import GameError
 from .game import Game
@@ -21,6 +23,7 @@ MENU = """
  [1] Roster           [2] Slime details      [3] Pull (free / white / purple)
  [4] Care (feed/sleep/pet)   [5] Set stance  [6] Hunt (one slime or a party)
  [7] Wait (time)      [8] Parties            [9] Dungeons / battles
+ [t] Training grounds   [l] Library & spell lab (elements, fusion)
  [m] Merge  [e] Evolve  [c] Conflicts  [a] Auto-care  [j] Journal  [x] Graveyard  [s] Save  [q] Quit
 """
 
@@ -74,7 +77,97 @@ def show_slime(s) -> None:
         wish = {"energy": "needs sleep", "food": "is hungry", "safety": "feels unsafe (hurt)",
                 "belonging": "feels lonely - pet or pair it", "esteem": "wants to prove itself - hunt or battle!"}
         print(f"  ➜ {s.name} {wish[dom]}.")
-    print(f"  abilities: {', '.join(s.known_abilities())}")
+    print(f"  abilities: {', '.join(get_ability(k).name for k in s.known_abilities())}")
+    show_elements(s)
+
+
+def show_elements(s) -> None:
+    if s.training:
+        print("  trained: " + ", ".join(f"+{v} {k}" for k, v in s.training.items()))
+    if not elements.can_master(s):
+        print(f"  elements: locked (needs {config.MASTERY_MIN_STARS}★+, any class)")
+        return
+    parts = []
+    for b in s.attuned:
+        el = elements.get(b)
+        parts.append(f"{el.emoji}{el.name} L{elements.basic_level(s, b)}/{elements.mastery_cap(s)}")
+    print(f"  elements [{len(s.attuned)}/{elements.slot_count(s)} slots]: " + (", ".join(parts) or "none yet"))
+    if s.spells:
+        print("  spells: " + ", ".join(f"{elements.get(get_ability(k).element).emoji}{get_ability(k).name}"
+                                      for k in s.spells))
+
+
+def show_catalog(g: Game) -> None:
+    for a in g.library.catalog():
+        el = elements.get(a.element)
+        cost = ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in config.SPELL_LEARN_COST[a.tier].items())
+        tgt = a.target.replace("_", " ")
+        print(f"  {el.emoji} {a.name:<18} T{a.tier} {a.kind:<6} pow {a.power} cd {a.cooldown} -> {tgt}"
+              f"  needs mastery {config.SPELL_TIER_MASTERY[a.tier]} | {cost}   [{a.key}]")
+
+
+def show_recipes() -> None:
+    for pair, res in elements.RECIPES.items():
+        a, b = sorted(pair)
+        r = elements.get(res)
+        print(f"  {elements.get(a).emoji}{elements.get(a).name} + {elements.get(b).emoji}{elements.get(b).name}"
+              f" = {r.emoji}{r.name} (tier {r.tier}; needs mastery {config.SPELL_TIER_MASTERY[r.tier]})")
+    print("  Wheel: Water > Fire > Wind > Earth > Water (x1.5 damage, x0.7 the other way)")
+
+
+def training_menu(g: Game) -> None:
+    for i, d in enumerate(DISCIPLINES.all(), 1):
+        print(f"  [{i}] {d.emoji} {d.name} ({d.key}) trains {', '.join(d.weights)} - {d.description}")
+    print(f"  Cost {config.TRAIN_COST} per session, {config.TRAIN_TICKS}h. Your class's own discipline is "
+          f"x{config.TRAIN_AFFINITY_MULT} as effective. Gains are permanent but capped by level.")
+    d = DISCIPLINES.all()[_int("discipline #: ") - 1].key
+    who = _ask("train a [s]lime or a whole [p]arty: ").lower()[:1]
+    if who == "p":
+        show_parties(g)
+        print("\n".join("  " + x for x in g.train_party(_int("party #: "), d)))
+    else:
+        show_roster(g)
+        print("  " + g.train(_int("slime id: "), d))
+
+
+def _pick_spell(s, prompt: str) -> str:
+    for i, k in enumerate(s.spells, 1):
+        print(f"    [{i}] {get_ability(k).name}")
+    return s.spells[_int(prompt) - 1]
+
+
+def library_menu(g: Game) -> None:
+    print("  [1] Spell catalogue   [2] Study an element   [3] Learn a spell   [4] Forget a spell\n"
+          "  [5] SPELL LAB: fuse two spells into a new element   [6] Element recipes   [7] Elemental sheet")
+    c = _ask("library: ")
+    if c == "1":
+        show_catalog(g)
+    elif c == "6":
+        show_recipes()
+    elif c in ("2", "3", "4", "5", "7"):
+        show_roster(g)
+        s = g.slime(_int("slime id: "))
+        if c == "2":
+            print("  basics: " + ", ".join(elements.BASICS))
+            print("  " + g.study(s.id, _ask("element: ").lower()))
+        elif c == "3":
+            show_catalog(g)
+            print("  " + g.learn_spell(s.id, _ask("spell key: ")))
+        elif c == "4":
+            print("  " + g.forget_spell(s.id, _pick_spell(s, "forget #: ")))
+        elif c == "5":
+            if len(s.spells) < 2:
+                raise GameError(f"{s.name} needs two learned elemental spells to experiment.")
+            a, b = _pick_spell(s, "first spell #: "), _pick_spell(s, "second spell #: ")
+            pv = g.research_preview(s.id, a, b)
+            cost = ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in pv["cost"].items())
+            el = pv["element"]
+            print(f"  {pv['a'].name} + {pv['b'].name} => {el.emoji}{el.name} (tier {el.tier}) | cost {cost} | "
+                  f"{pv['hours']}h | success {int(pv['chance'] * 100)}% (failure hurts)")
+            if _ask("  start the experiment? (y/n): ").lower() == "y":
+                print("  " + g.research(s.id, a, b, _ask("  name your spell (Enter = auto): ") or None))
+        else:
+            show_slime(s)
 
 
 def show_pulls(new) -> None:
@@ -224,6 +317,10 @@ def handle(g: Game, choice: str) -> bool:
     elif choice == "a":
         g.needs.auto_care = not g.needs.auto_care
         print(f"  auto-care {'ON' if g.needs.auto_care else 'OFF'}")
+    elif choice == "t":
+        training_menu(g)
+    elif choice == "l":
+        library_menu(g)
     elif choice == "x":
         show_graveyard(g)
     elif choice == "j":
@@ -289,6 +386,31 @@ def run_demo(seed: int) -> None:
     print("\n".join("  " + x for x in g.party_hunt(2, "meadow")))
     show_events(g.tick(4))
     show_status(g)
+
+    print("\n== 4b. TRAINING GROUNDS & LIBRARY (the demo hires a 3-star scholar: ANY class can master elements) ==")
+    sch = g.gacha.make_slime("rare", "barbarian", stars=3)
+    g.roster[sch.id] = sch
+    g.wallet.add("white_gel", 400)
+    g.wallet.add("essence", 60)
+    print("  " + g.train(sch.id, "sword"))
+    show_events([e for e in g.tick(4) if "Blade" in e])
+    for el in ("fire", "wind"):
+        print("  " + g.study(sch.id, el))
+        show_events([e for e in g.tick(4) if "studied" in e])
+        sch.mastery_xp[el] = 130            # (demo shortcut: a few more study sessions)
+        sch.needs.v["energy"] = 100
+    print("  " + g.learn_spell(sch.id, "ember"))
+    print("  " + g.learn_spell(sch.id, "gust"))
+    pv = g.research_preview(sch.id, "ember", "gust")
+    print(f"  Fusing Ember + Gust => {pv['element'].emoji}{pv['element'].name}, {int(pv['chance'] * 100)}% chance")
+    for attempt in range(3):
+        sch.hp, sch.needs.v["energy"] = sch.max_hp, 100
+        print("  " + g.research(sch.id, "ember", "gust", "Thunder Spear"))
+        done = [e for e in g.tick(6) if "experiment" in e or "invented" in e or "recreated" in e]
+        show_events(done)
+        if any("invented" in e or "recreated" in e for e in done):
+            break
+    show_slime(sch)
 
     print("\n== 5. CONFLICT: let the colony simmer for 24h ==")
     ev = g.tick(24)

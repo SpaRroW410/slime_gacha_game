@@ -27,6 +27,11 @@ No dependencies, no network. Saves go to `savegame.json` next to `main.py`
 | Economy | ⚪ **White gel** (common) and 🟣 **Purple gel** (rare: small drop chance in hunts/dungeons, bosses are the best source), Food, Essence |
 | Main dungeon | **The Hollow Descent** — floor after floor, deliberately rough (enemy stats +15 % compounding per floor), permadeath, boss every 5 floors, first-clear purple-gel bounty. A fresh party loses slimes on floor 1 |
 | Grinding dungeon | **The Gloop Pit** — safe, repeatable XP farm tuned to your party's level (depth 1–5). Nobody dies (knock-outs), every survivor gets XP, little loot, no purple gel. `auto-rest` lets you queue dozens of runs |
+| Training grounds | ⚔️ **Blade Yard** (sword: atk/def), 🏹 **Archery Range** (atk/spd), 🔮 **Mana Pool** (mag/hp). Permanent stat gains, ×1.5 for your own class's discipline, diminishing returns capped by level |
+| Elements | 🔥 Fire, 💧 Water, 🪨 Earth, 🌪️ Wind and their **fusions**: Fire+Wind = ⚡Lightning, Lightning+Fire = 🔆Plasma, Fire+Earth = 🌋Lava, Ice, Steam, Mud, Sand … (13 elements; add recipes in data). Wheel: Water > Fire > Wind > Earth > Water |
+| Elemental mastery | Unlocks at **3★, for any class** (barbarians can cast too — they channel through attack). Mastery cap 4/6/8 and 2/3/4 element slots at 3/4/5★ (mages get +1 slot and study faster) |
+| Library | Study elements, buy tier-1 spells, learn up to 4 spells per slime |
+| Spell lab | **Fuse two learned spells** of different elements into a brand-new, nameable spell. Costs essence, takes hours, can fizzle and backfire. Discovered spells join the Library for everyone |
 | Parties | Fixed-size parties (multiple of 5; default 5), as many parties as you like, one slime per party. Only full parties battle; parties can hunt together |
 | Permadeath | Slimes **die** — starvation/exhaustion, failed hunts, brawls, battle. Dead slimes go to the Memorial Pond (graveyard); friends grieve |
 | Classes | Barbarian, Mage, Medic, Rogue, Ranger, Necromancer — **data-driven & plugin-style** |
@@ -56,6 +61,9 @@ slime_gacha/
   gacha.py               GachaSystem (rarity, stars, free daily pull)
   hunt.py                HuntSystem (auto-hunt zones)
   dungeon.py             wave generators for the Hollow Descent and the Gloop Pit
+  elements.py            elements, fusion recipes, wheel, mastery rules
+  spells.py              elemental spells + spell fusion
+  academy.py             training grounds, library, study/research tasks
   battle.py              BattleSystem (turn-based auto-combat)
   game.py                Game façade: state, ticking, save/load
   cli.py                 text UI

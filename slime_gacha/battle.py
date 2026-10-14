@@ -5,11 +5,12 @@ stance -> KIND_HANDLERS resolve it -> BattleReport (log + rewards). The UI only 
 Add a new ability *kind* by writing a handler and adding it to KIND_HANDLERS.
 """
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable, Dict, List, Optional
 
 from . import config
 from .abilities import Ability, get_ability
+from . import elements
 from .archetypes import STAT_KEYS
 from .growth import add_xp
 from .registry import Registry
@@ -29,6 +30,7 @@ class Enemy:
     loot: Dict[str, tuple]       # resource -> (lo, hi)
     purple_chance: float = 0.0     # purple gel is rare: chance per kill to drop `purple_amount`
     purple_amount: int = 1
+    element: str = ""            # defensive element: weak to what beats it, resists what it beats
 
 
 ENEMIES: "Registry[Enemy]" = Registry("enemy")
@@ -54,9 +56,15 @@ for _en in [
 ]:
     register_enemy(_en)
 
+_ELEMENT_OF = {"dust_bunny": "wind", "crust_beetle": "earth", "parched_wisp": "fire", "hollow_knight": "earth",
+               "thorn_sprite": "wind", "dry_brute": "fire", "crown_wraith": "water", "parched_king": "fire"}
+for _k, _el in _ELEMENT_OF.items():
+    ENEMIES.register(replace(ENEMIES.get(_k), element=_el), _k)
+
 # Mid-boss of the main dungeon (tier 5 = never picked by generate_enemies, only by dungeon.py)
 register_enemy(Enemy("hollow_warden", "The Hollow Warden", "🗝️", 5, _e(260, 16, 9, 8, 6),
-                     ["smash", "rampage", "war_cry"], 150, {"white_gel": (12, 20), "essence": (6, 12)}, 0.35, 1))
+                     ["smash", "rampage", "war_cry"], 150, {"white_gel": (12, 20), "essence": (6, 12)}, 0.35, 1,
+                     "earth"))
 
 
 # ---- combatants -----------------------------------------------------------------
@@ -75,6 +83,9 @@ class Combatant:
     cooldowns: Dict[str, int] = field(default_factory=dict)
     guard: int = 0
     poison: tuple = (0, 0)          # (turns, dmg per turn)
+    mastery: Dict[str, int] = field(default_factory=dict)   # basic element -> mastery level (slimes)
+    element: str = ""               # enemy's own element
+    casts: Dict[str, int] = field(default_factory=dict)     # elemental casts this battle (mastery xp)
 
     @property
     def alive(self) -> bool:
@@ -122,12 +133,13 @@ class BattleSystem:
     @staticmethod
     def from_slime(s) -> Combatant:
         return Combatant(s.name, s.arch.emoji, "party", dict(s.max_stats()), float(s.hp),
-                         s.known_abilities(), s.behavior, s.power_multiplier(), s)
+                         s.known_abilities(), s.behavior, s.power_multiplier(), s,
+                      mastery={b: elements.basic_level(s, b) for b in s.attuned})
 
     @staticmethod
     def from_enemy(e: Enemy) -> Combatant:
         return Combatant(e.name, e.emoji, "foes", dict(e.stats), float(e.stats["hp"]), list(e.abilities),
-                         "attack", 1.0, e)
+                         "attack", 1.0, e, element=e.element)
 
     # -- main loop -----------------------------------------------------------
     def run(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
@@ -199,6 +211,8 @@ class BattleSystem:
         if not targets:
             return
         KIND_HANDLERS[ability.kind](self, actor, ability, targets, everyone, log)
+        if ability.element:
+            actor.casts[ability.element] = actor.casts.get(ability.element, 0) + 1
         if ability.cooldown:
             actor.cooldowns[ability.key] = ability.cooldown
         if actor.guard > 0 and ability.kind != "guard":
@@ -233,7 +247,9 @@ class BattleSystem:
             def score(a):
                 n = len(foes) if a.target == "all_enemies" else 1
                 bonus = 1.2 if a.kind == "poison" and not any(f.poison[0] for f in foes) else 1.0
-                return a.power * n * bonus
+                weakest = min(foes, key=lambda f: f.hp)
+                return (a.power * n * bonus * elements.effectiveness(a.element, weakest.element)
+                        * _mastery_mult(actor, a))
             return max(offense, key=score)
         return get_ability("splat")      # everyone can bonk
 
@@ -274,6 +290,11 @@ class BattleSystem:
             if not c.alive:                       # training: knocked out, not killed
                 report.knocked_out.append(s.name)
             s.hp = max(1, s.hp)
+            for el, n in c.casts.items():                      # casting builds elemental mastery
+                for b in elements.components(el):
+                    if b in s.attuned and elements.mastery_cap(s):
+                        top = config.MASTERY_XP[elements.mastery_cap(s) - 1]
+                        s.mastery_xp[b] = min(top, s.mastery_xp.get(b, 0) + n * config.MASTERY_PER_CAST_XP)
             s.needs.add("energy", -10)
             s.needs.add("esteem", 10 if win else -6)
             survivors.append(s)
@@ -299,28 +320,47 @@ class BattleSystem:
 
 
 # ---- ability kind handlers -------------------------------------------------------
-def _damage_value(bs: BattleSystem, actor, ability, target) -> int:
-    raw = ability.power * actor.stat(ability.stat) - 0.5 * target.stat("defense")
-    raw = max(1.0, raw) * bs.rng.uniform(0.9, 1.1)
+def _mastery_mult(actor, ability) -> float:
+    """Spells grow with the caster's mastery of the spell's element (weakest component)."""
+    if not ability.element:
+        return 1.0
+    return 1 + config.MASTERY_SPELL_BONUS * elements.effective_mastery(actor.mastery, ability.element)
+
+
+def _cast_stat(actor, ability) -> float:
+    """Elemental spells scale with magic - or, for non-mages, with raw attack (imbuing)."""
+    if ability.element and ability.stat == "mag":
+        return max(actor.stat("mag"), config.IMBUE_ATK_FACTOR * actor.stat("atk"))
+    return actor.stat(ability.stat)
+
+
+def _damage_value(bs: BattleSystem, actor, ability, target):
+    raw = ability.power * _cast_stat(actor, ability) * _mastery_mult(actor, ability) - 0.5 * target.stat("defense")
+    eff = elements.effectiveness(ability.element, target.element)
+    raw = max(1.0, raw) * bs.rng.uniform(0.9, 1.1) * eff
     crit = bs.rng.random() < config.CRIT_CHANCE + (0.1 if actor.behavior == "explore" else 0)
     if crit:
         raw *= config.CRIT_MULT
     if target.guard > 0:
         raw *= config.GUARD_REDUCTION
-    return max(1, int(raw)), crit
+    return max(1, int(raw)), crit, eff
+
+
+def _eff_tag(eff: float) -> str:
+    return " (WEAK!)" if eff > 1 else " (resisted)" if eff < 1 else ""
 
 
 def _h_damage(bs, actor, ab, targets, everyone, log):
     for t in targets:
-        dmg, crit = _damage_value(bs, actor, ab, t)
+        dmg, crit, eff = _damage_value(bs, actor, ab, t)
         t.hp -= dmg
-        log.append(f"  {actor.emoji}{actor.name} uses {ab.name} on {t.name}: {dmg} dmg{' (CRIT!)' if crit else ''}"
+        log.append(f"  {actor.emoji}{actor.name} uses {ab.name} on {t.name}: {dmg} dmg{' (CRIT!)' if crit else ''}{_eff_tag(eff)}"
                    f" [{max(0, int(t.hp))}/{int(t.max_hp)}]")
 
 
 def _h_drain(bs, actor, ab, targets, everyone, log):
     for t in targets:
-        dmg, _ = _damage_value(bs, actor, ab, t)
+        dmg, _, _ = _damage_value(bs, actor, ab, t)
         t.hp -= dmg
         heal = max(1, dmg // 2)
         actor.hp = min(actor.max_hp, actor.hp + heal)
@@ -329,7 +369,8 @@ def _h_drain(bs, actor, ab, targets, everyone, log):
 
 def _h_heal(bs, actor, ab, targets, everyone, log):
     for t in targets:
-        amt = max(1, int(ab.power * actor.stat(ab.stat) * 1.5 * bs.rng.uniform(0.95, 1.05)))
+        amt = max(1, int(ab.power * _cast_stat(actor, ab) * 1.5 * bs.rng.uniform(0.95, 1.05)
+                         * _mastery_mult(actor, ab)))
         before = t.hp
         t.hp = min(t.max_hp, t.hp + amt)
         log.append(f"  💚 {actor.name} uses {ab.name} on {t.name}: +{int(t.hp - before)} HP")
@@ -343,7 +384,7 @@ def _h_guard(bs, actor, ab, targets, everyone, log):
 
 def _h_poison(bs, actor, ab, targets, everyone, log):
     for t in targets:
-        per = max(1, int(ab.power * actor.stat(ab.stat)))
+        per = max(1, int(ab.power * _cast_stat(actor, ab) * _mastery_mult(actor, ab)))
         t.poison = (ab.duration, per)
         log.append(f"  🧪 {actor.name} uses {ab.name} on {t.name}: poisoned ({per}/turn for {ab.duration}).")
 

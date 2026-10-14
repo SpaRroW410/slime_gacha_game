@@ -84,8 +84,38 @@ GRIND_LOOT_MULT = 0.5           # little loot, no purple gel
 GRIND_TICKS = 2
 GRIND_MIN_HP = 0.4              # auto-grind stops when anyone drops below this HP fraction
 
+# ---- Training grounds, library, elemental mastery -----------------------------------
+TRAIN_COST = {"white_gel": 2}
+TRAIN_TICKS = 4
+TRAIN_GAIN = 1.0                # base stat points per session (before weights/diminishing returns)
+TRAIN_AFFINITY_MULT = 1.5       # training the discipline that matches your class
+TRAIN_CAP_BASE = 2.0            # max trained bonus per stat = BASE + PER_LEVEL * level
+TRAIN_CAP_PER_LEVEL = 0.6
+TRAIN_DECAY_MULT = {"energy": 1.6, "food": 1.3}
+TASK_MIN_ENERGY = 25
+MASTERY_MIN_STARS = 3           # elemental mastery unlocks at 3 stars, for ANY class
+MASTERY_XP = [20, 60, 120, 200, 320, 480, 700, 1000]     # cumulative xp for mastery level 1..8
+MASTERY_PER_CAST_XP = 1
+MASTERY_SPELL_BONUS = 0.06      # +6% spell power per effective mastery level
+MAGE_SLOT_BONUS = 1             # mages can attune one extra element
+MAGE_STUDY_MULT = 1.5
+STUDY_COST = {"white_gel": 3}
+STUDY_TICKS = 4
+STUDY_XP = 30
+MAX_SPELLS = 4                  # learned spells per slime (class abilities are separate)
+SPELL_TIER_MASTERY = {1: 1, 2: 3, 3: 5}                  # effective mastery needed per spell/element tier
+SPELL_LEARN_COST = {1: {"white_gel": 20}, 2: {"white_gel": 50, "essence": 10},
+                    3: {"white_gel": 100, "essence": 30, "purple_gel": 1}}
+RESEARCH_COST = {2: {"white_gel": 20, "essence": 15}, 3: {"white_gel": 40, "essence": 40, "purple_gel": 2}}
+RESEARCH_TICKS = {2: 6, 3: 10}
+RESEARCH_MIN_HP = 0.5
+RESEARCH_BACKFIRE = 0.35        # fraction of max HP lost when an experiment fizzles
+IMBUE_ATK_FACTOR = 0.85         # non-mages channel elements through brute force: max(mag, 0.85 * atk)
+ELEMENT_ADVANTAGE = 1.5
+ELEMENT_DISADVANTAGE = 0.7
+
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 3
+SAVE_VERSION = 4
 DEFAULT_SAVE = "savegame.json"

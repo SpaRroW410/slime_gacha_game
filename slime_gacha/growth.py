@@ -39,8 +39,8 @@ def evolve_cost(slime) -> int:
 
 
 def evolve(slime, wallet: ResourceManager) -> List[str]:
-    if slime.state == "hunting":
-        raise InvalidAction(f"{slime.name} is out hunting.")
+    if slime.busy:
+        raise InvalidAction(f"{slime.name} is away ({slime.state}).")
     if not can_evolve(slime):
         raise InvalidAction(f"{slime.name} must reach the level cap ({slime.level_cap}) "
                             f"and have a further stage to evolve.")
@@ -69,8 +69,8 @@ def merge(target, donor) -> List[str]:
     if target is donor:
         raise InvalidAction("A slime can't merge with itself.")
     for s in (target, donor):
-        if s.state == "hunting":
-            raise InvalidAction(f"{s.name} is out hunting.")
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away ({s.state}).")
     gain = merge_gain(target, donor)
     target.merged += 1
     log = [f"🫧 {donor.name} melts into {target.name}, who absorbs {gain} XP "

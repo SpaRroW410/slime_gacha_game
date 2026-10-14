@@ -60,6 +60,8 @@ class NeedsEngine:
             r = rate * trait_mult(s, need)
             if s.state == "hunting":
                 r *= config.HUNT_DECAY_MULT.get(need, 1.0)
+            elif s.state == "training":
+                r *= config.TRAIN_DECAY_MULT.get(need, 1.0)
             if s.state == "sleeping":
                 r = 0.0 if need == "energy" else r * 0.4
             n.add(need, -r)
@@ -194,8 +196,8 @@ class ConflictEngine:
                 s.death_cause = f"died in a brawl with {by_id[c.b if sid == c.a else c.a].name}"
             s.needs.add("esteem", -10)
             s.grounded = True
-            if s.state == "hunting":     # a brawl cuts a hunt short
-                s.state, s.hunt = "idle", None
+            if s.busy:                   # a brawl cuts a hunt / lesson short
+                s.state, s.hunt, s.task = "idle", None, None
         events.append(f"💥 {by_id[c.a].name} and {by_id[c.b].name} brawl! Both are grounded until mediated.")
 
     # -- player action -----------------------------------------------------

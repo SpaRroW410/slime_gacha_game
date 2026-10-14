@@ -1,6 +1,7 @@
 # Software Design Document — Slime Gacha (prototype v0.1)
 
 > **v0.2 changes**: permadeath, rarity 90/9/0.9/0.09, 1–5★ ratings, white/purple gel currencies, free daily pull, fixed-size parties (§5.1, 5.9, 5.10).
+> **v0.4 changes**: training grounds, library, elements, elemental mastery, spell fusion (§5.12).
 > **v0.3 changes**: main + grinding dungeons (§5.11), currency naming (white/purple gel).
 
 ## 1. Goals & non-goals
@@ -167,6 +168,36 @@ Dungeons only *generate waves* (lists of scaled `Enemy` copies via `scale_enemy`
 | Extra | floors unlock in order; replay allowed (no bounty) | `runs=N`, `auto_rest` sleeps the party until healed (85 % HP) between runs; stops on defeat, level cap, brawl-grounding, or missing members |
 Time passing means hunger: long grinds need Food, or slimes starve.
 
+### 5.12 Training, elements, library & spell lab (`academy.py`, `elements.py`, `spells.py`)
+**Tasks.** Training, studying and researching are timed *tasks*: the slime's state becomes `training`
+with `slime.task = {kind, ticks_left, ...}`; `AcademySystem.tick` resolves it. Busy slimes can't hunt,
+fight, merge or sleep (`Slime.busy`); a brawl or `recall` cancels the task.
+
+**Training grounds.** `Discipline(key, name, weights)` registry: sword (atk .. def), archery (atk, spd), magic
+(mag, hp×3). A session costs 2 white gel + 4 h. Gain = `1.0 × weight × (1.5 if class discipline) ×
+(1 − bonus/cap)`; cap per stat = `2 + 0.6·level` (hp ×3). Bonuses are flat, permanent and added in
+`Slime.max_stats()`. Archetypes declare `discipline`.
+
+**Elements.** Four basics; `RECIPES` maps an unordered pair to a result element (tier 2 = two basics,
+tier 3 = a compound + anything). Every element has `components` (basics). Effectiveness uses the wheel
+`water > fire > wind > earth > water` on components (×1.5 / ×0.7, mixed = ×1).
+
+**Mastery** (slime fields `attuned`, `mastery_xp`): requires **≥ 3★, any class**. Cap = 2·(stars−1);
+attunement slots = stars−1 (+1 mage). Levels from cumulative XP `[20, 60, 120, 200, 320, 480, 700, 1000]`.
+Study session = 30 XP (×1.5 mage); casting in battle adds 1 XP per cast. Effective mastery of a compound
+element is the **weakest component**. Spell power ×(1 + 0.06 × effective mastery). Non-mages scale elemental
+spells with `max(mag, 0.85·atk)`.
+
+**Library.** Catalogue = tier-1 spells (data) + `discovered` fusions. Learning needs attunement, mastery
+≥ 1/3/5 by tier, and a fee; slimes hold max 4 learned spells.
+
+**Spell lab (research).** Pick two learned elemental spells whose elements have a recipe. Needs attunement to
+all components, mastery ≥ 3 (tier 2) or 5 (tier 3), HP ≥ 50 %, and a fee (15/40 essence, tier 3 also purple
+gel). Takes 6/10 h; success chance `0.5 + 0.06·(mastery − need) + 0.002·cast stat (+0.1 mage)` clamped 25–95 %.
+Success registers a new `Ability` (power = avg × 1.15/1.3, cooldown +1, kind by a mix table, AoE if either parent
+is) and adds it to the Library; failure backfires for 35 % max HP but never kills. Fused spells are persisted
+in the save (`custom_spells`, `discovered`) and re-registered on load.
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|
@@ -174,13 +205,16 @@ Time passing means hunger: long grinds need Food, or slimes starve.
 | New ability | `register_ability(Ability(...))` and reference its key from an archetype |
 | New ability kind | add handler in `battle.KIND_HANDLERS` |
 | New zone / enemy | `register_zone(...)`, `register_enemy(...)` |
+| New discipline | `register_discipline(Discipline(...))`; set `Archetype.discipline` |
+| New element / recipe | `register_recipe(a, b, result, name, emoji)` in `elements.py` |
+| New library spell | `register_ability(Ability(..., element="fire", tier=1))` - tier 1 spells go on sale automatically |
 | New dungeon | write a `*_wave(...)` function in `dungeon.py` + a `Game` method that calls `BattleSystem.run(permadeath=..., split_xp=...)` |
 | New trait | add to `ai.TRAITS` dict (decay/conflict modifiers) |
 | New resource | add to `config.RESOURCES` |
 Plugins: any module placed in `slime_gacha/plugins/` is auto-imported at start (optional dir).
 
 ## 7. Persistence
-`Game.save(path)` → JSON `{version 3, tick, main_floor, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. older saves load (gel/silver→white_gel, gold→purple_gel).
+`Game.save(path)` → JSON `{version 4, tick, main_floor, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. older saves load (gel/silver→white_gel, gold→purple_gel).
 Versioned for forward migration. Unknown archetype keys on load are skipped with a warning (mod removal safe).
 
 ## 8. Error handling
