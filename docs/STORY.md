@@ -47,6 +47,15 @@ a slime invents, so the colony's magic grows with its mistakes.
 - **The Hollow Descent** — the Hollow Kings' shaft, a staircase into the Dry Tide. Every five floors a guardian
   waits (the **Hollow Warden**, later the **Parched King** himself). It does not forgive.
 
+## The Rules of the Deep
+
+Nobody leaves the **Hollow Descent** by choice: the shaft only opens again behind a fallen guardian — or behind a party that
+no longer exists. Before anyone goes in, **explorers** are sent down to feel the dark; the longer they stay, the more of it
+they understand (and the more of them may not return). In the **Gloop Pit** the Mother's echoes are gentler: a slime that goes
+flat loses a little of what it learned and drops its gear on the sticky floor, and its friends — if they love each other
+enough — fish it out before the Pit swallows it. Every time the Keeper gives a droplet to another, the colony remembers,
+and a colony that remembers too much stops singing.
+
 ## Themes (and how they map to mechanics)
 
 | Theme | Mechanic |
@@ -56,6 +65,8 @@ a slime invents, so the colony's magic grows with its mistakes.
 | Merging is bittersweet | A merged slime shares memories (XP) with its heir — the donor is gone |
 | Loss matters | Permadeath, graveyard, grief that lowers belonging |
 | Fighting style, not grind | Sparring duels develop a style; the Pit is for XP |
+| No retreat | Delves are commitments; scouting turns time into knowledge |
+| Friends carry each other | Gear recovery depends on party synergy |
 | Who is worth keeping? | Compatibility, bonds, morale and the Council's advice |
 | Growth through community | Evolution stages require both levels and Essence gathered by the colony |
 

@@ -25,11 +25,14 @@ No dependencies, no network. Saves go to `savegame.json` next to `main.py`
 |------|--------------|
 | Gacha | Rarity 90 / 9 / 0.9 / 0.09 %, plus a **1–5 ★ rating** (exponential falloff, steeper at higher rarity). **1 free pull per game day**; otherwise 10 ⚪ white gel **or** 10 🟣 purple gel per pull — purple gel multiplies rare+ odds ×5 |
 | Economy | ⚪ **White gel** (common) and 🟣 **Purple gel** (rare: small drop chance in hunts/dungeons, bosses are the best source), Food, Essence |
-| Main dungeon | **The Hollow Descent** — floor after floor, deliberately rough (enemy stats +15 % compounding per floor), permadeath, boss every 5 floors, first-clear purple-gel bounty. A fresh party loses slimes on floor 1 |
-| Grinding dungeon | **The Gloop Pit** — safe, repeatable XP farm tuned to your party's level (depth 1–5). Nobody dies (knock-outs), every survivor gets XP, little loot, no purple gel. `auto-rest` lets you queue dozens of runs |
+| Main dungeon | **The Hollow Descent** — delved in *segments* of 5 floors ending in a boss. **Once a party enters it cannot leave until the boss falls or the whole party is dead.** Deliberately rough (enemy stats +15 % compounding per floor), permanent death, camping inside is risky (ambushes), first-clear purple-gel bounty |
+| Scouting | An **exploration party** can scout the next segment for 2–24 hours (no turning back, ambushes can kill). **Knowledge grows with time spent inside** and reveals more per floor: counts → enemy types/elements → boss → abilities/HP/purple odds → weaknesses. Floors are fixed by the dungeon seed so intel is true; fully scouted = +10 % power |
+| Grinding dungeon | **The Gloop Pit** — a *committed* XP-farming session of N runs at depth 1–5 (no leaving until done or the whole party is knocked out; the party camps when hurt). Nobody dies, but a **downed slime loses XP and morale and drops its equipment** — survivors may carry it back (chance from **party synergy**), else it is left in the Pit until a later victory digs it up |
+| Equipment | Weapon / armor / charm, any class. Bought at the 🛠️ **Armory** (tier gated by its level) or found in dungeons. In dungeons a fallen slime's gear is lost unless a survivor recovers it |
+| Sacrifice stress | Every merge adds stress (−1 per day). It amplifies the morale cost of the next sacrifice and drags the whole colony's morale target down — merging too much breaks the colony |
 | Sparring (fighting style) | Training is **not** for XP and not for the Gloop Pit: slimes **duel each other** in the ⚔️ Blade Yard, 🏹 Archery Range or 🔮 Mana Pool to develop a *style* (Swordsmanship, Marksmanship, Spellcraft) with permanent combat perks. Non-lethal: the loser is left at **1 HP** |
 | Rest Area | Heals wounded slimes back to **full** (30 → 100 %/hour by level). Auto-care sends the wounded there. Starving slimes can't heal |
-| Buildings | Four upgradable buildings: 🛏️ Rest Area (capacity, healing), 🥋 Training Grounds (style ceiling + XP), 📚 Library (study speed, spell slots, research odds, Restricted Section for tier-3 spells), 🏕️ Barracks (morale, bonds, party synergy) |
+| Buildings | Five upgradable buildings (incl. 🛠️ Armory): 🛏️ Rest Area (capacity, healing), 🥋 Training Grounds (style ceiling + XP), 📚 Library (study speed, spell slots, research odds, Restricted Section for tier-3 spells), 🏕️ Barracks (morale, bonds, party synergy) |
 | Compatibility & bonds | Every pair has a **compatibility** score (traits, class chemistry, shared / fusable elements, friendship, sparring/battle history, open quarrels). It shapes quarrel odds, merge XP (±25 %) and **party synergy** (±10 % power) |
 | Morale | Per-slime "fight readiness": wins and rests raise it, defeats, brawls and deaths of friends lower it. Scales power ×0.85–1.15; a broken slime may freeze in battle |
 | Council | Keep-or-sacrifice advisor: ranks the roster (KEEP / FLEX / SACRIFICE?), shows how loved each slime is, and suggests the best merges (the donor is consumed, friends grieve) |
@@ -71,6 +74,7 @@ slime_gacha/
   academy.py             library, study / research tasks
   sparring.py            fighting styles, arenas, sparring rules
   buildings.py           upgradable buildings + rest-area healing
+  equipment.py           gear, inventory
   social.py              bonds, compatibility, synergy, morale, council advice
   battle.py              BattleSystem (turn-based auto-combat)
   game.py                Game façade: state, ticking, save/load

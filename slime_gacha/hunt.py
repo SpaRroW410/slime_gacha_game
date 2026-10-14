@@ -52,8 +52,8 @@ class HuntSystem:
 
     def start(self, slime, zone_key: str) -> None:
         zone = ZONES.get(zone_key)
-        if slime.state != "idle":
-            raise InvalidAction(f"{slime.name} is {slime.state}, not available.")
+        if slime.state != "idle" or slime.in_dungeon:
+            raise InvalidAction(f"{slime.name} is {slime.in_dungeon and 'inside a dungeon' or slime.state}, not available.")
         if slime.grounded:
             raise InvalidAction(f"{slime.name} is grounded after a brawl. Mediate first.")
         if slime.hp < slime.max_hp * config.MIN_HUNT_HP:

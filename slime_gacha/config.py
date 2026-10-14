@@ -124,7 +124,13 @@ COMPAT_FUSION_PARTNERS = 12
 BOND_MIN, BOND_MAX = -40.0, 60.0
 MERGE_COMPAT_SWING = 0.25       # merge xp x(1 +/- 25%) depending on compatibility
 MERGE_BOND_INHERIT = 0.5        # the target inherits half of the donor's bonds
-MERGE_MORALE_OTHERS, MERGE_MORALE_FRIENDS = -5, -25
+MERGE_MORALE_OTHERS, MERGE_MORALE_FRIENDS, MERGE_MORALE_TARGET = -8, -30, -10
+# Sacrifice stress: every merge adds 1 stress (decays 1 per day). Stress amplifies the morale hit of the next
+# sacrifice and drags down everyone's morale target, so a colony that keeps sacrificing falls apart.
+SACRIFICE_STRESS_DECAY_TICKS = 24
+SACRIFICE_STRESS_AMP = 0.6
+SACRIFICE_TARGET_PENALTY = 6
+SACRIFICE_TARGET_PENALTY_MAX = 30
 # Rest Area: heals fast; capacity and speed depend on its level (see buildings.py)
 REST_ENERGY_GAIN = 10
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
@@ -151,8 +157,30 @@ IMBUE_ATK_FACTOR = 0.85         # non-mages channel elements through brute force
 ELEMENT_ADVANTAGE = 1.5
 ELEMENT_DISADVANTAGE = 0.7
 
+# ---- Delves, scouting, gear --------------------------------------------------------------
+# The Hollow Descent is delved in SEGMENTS of 5 floors ending in a boss (the checkpoint). Once a party enters,
+# it cannot leave until the segment's boss is beaten or the whole party is dead. The Gloop Pit is a committed
+# session of N runs: also no leaving until finished or the whole party is knocked out.
+CAMP_HEAL_HOURS_MAX = 24
+CAMP_AMBUSH_BASE = 0.10         # per hour of camping inside the Descent (scaled by floor, cut by intel)
+CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
+SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 24
+SCOUT_RATE = 0.10               # knowledge: k' = 100 - (100 - k) * exp(-RATE * skill * hours)
+SCOUT_AMBUSH_BASE = 0.12        # per hour in the segment, vs party strength, cut by what is already known
+DELVE_PASSIVE_INTEL = 1.5       # % knowledge gained per hour spent inside the dungeon
+INTEL_POWER_BONUS = 0.10        # fully scouted segment: +10% power and safer camps
+INTEL_LEVELS = [20, 40, 60, 80, 100]
+# Grinding-dungeon defeat: lose xp and morale, drop equipment (survivors may bring it back)
+GRIND_DEATH_XP_LOSS = 0.4       # fraction of the xp needed for the next level
+GRIND_DEATH_MORALE = -25
+GEAR_RECOVERY_BASE = 0.5
+GEAR_RECOVERY_SYNERGY_SLOPE = 5.0       # chance = 0.5 + 5 * (party synergy - 1) (+ friendship with the fallen)
+GEAR_RECOVERY_MIN, GEAR_RECOVERY_MAX = 0.10, 0.95
+PIT_LOST_RECOVER = 0.15         # a later Pit victory may find one item left behind earlier
+GEAR_DROP_PIT, GEAR_DROP_MAIN = 0.15, 0.30
+
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 5
+SAVE_VERSION = 6
 DEFAULT_SAVE = "savegame.json"

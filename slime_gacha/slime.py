@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from . import config
 from .abilities import get_ability
 from .archetypes import STAT_KEYS, Archetype, get_archetype
+from .equipment import gear_bonus
 
 STAGE_TITLES = ["", "Greater ", "Prime "]
 
@@ -75,6 +76,8 @@ class Slime:
         self.total_xp = 0              # lifetime xp (used by merging)
         self.stage = 0
         # --- fighting style / elemental mastery (see sparring.py, elements.py, spells.py)
+        self.gear: Dict[str, str] = {}            # slot -> gear key (see equipment.py)
+        self.in_dungeon: str = ""                 # "main" / "grind" / "scout" while committed to a dungeon
         self.style_xp: Dict[str, float] = {}      # fighting-style xp per discipline (see sparring.py)
         self.morale: float = config.MORALE_START  # fight readiness 0-100 (see social.py)
         self.attuned: List[str] = []              # basic elements this slime has attuned to
@@ -101,10 +104,11 @@ class Slime:
 
     def max_stats(self) -> Dict[str, float]:
         a = self.arch
+        bonus = gear_bonus(self.gear)
         mult = config.RARITY_STAT_MULT[self.rarity] * config.STAR_STAT_MULT[self.stars - 1] * config.STAGE_STAT_MULT[
             min(self.stage, len(config.STAGE_STAT_MULT) - 1)]
         return {k: round((a.base_stats[k] + a.growth[k] * (self.level - 1))
-                         * mult * self.variance.get(k, 1.0) , 1)
+                         * mult * self.variance.get(k, 1.0) + bonus.get(k, 0.0), 1)
                 for k in STAT_KEYS}
 
     @property
@@ -140,7 +144,7 @@ class Slime:
     @property
     def busy(self) -> bool:
         """Away from the colony on a task (hunting or at the training grounds / library)."""
-        return self.state in ("hunting", "studying")
+        return self.state in ("hunting", "studying") or bool(self.in_dungeon)
 
     @property
     def alive(self) -> bool:
@@ -154,6 +158,7 @@ class Slime:
         return (f"#{self.id:<3} {self.arch.emoji} {self.name:<10} {self.title():<18} "
                 f"[{config.RARITY_TAG[self.rarity]}]{self.star_str()} Lv{self.level:<2} "
                 f"HP {self.hp}/{self.max_hp} [{self.behavior}] {self.state}"
+                f"{' @' + self.in_dungeon if self.in_dungeon else ''}"
                 f"{' (wants: ' + dom + ')' if dom else ''}")
 
     # ---- persistence -----------------------------------------------------
@@ -164,6 +169,7 @@ class Slime:
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
                     merged=self.merged, grounded=self.grounded, style_xp=self.style_xp, morale=self.morale,
+                    gear=self.gear, in_dungeon=self.in_dungeon,
                     attuned=self.attuned, mastery_xp=self.mastery_xp, spells=self.spells,
                     task=self.task)
 
@@ -172,7 +178,7 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "style_xp", "morale", "attuned", "mastery_xp", "spells", "task"):
+                  "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "attuned", "mastery_xp", "spells", "task"):
             if k in d:
                 setattr(s, k, d[k])
         s.needs = Needs(d.get("needs"))

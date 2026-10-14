@@ -57,6 +57,9 @@ register_building(Building("library", "Library", "📚", 5,
 register_building(Building("barracks", "Barracks", "🏕️", 5,
                            "Bunks, songs and a very shared fridge: morale, bonds and party synergy.", _costs(90, 10)))
 
+register_building(Building("armory", "Armory", "🛠️", 5,
+                           "Forges gear. Higher levels stock better equipment tiers.", _costs(70, 10)))
+
 REST_HEAL = [0.30, 0.45, 0.60, 0.80, 1.00]       # fraction of max HP healed per hour, by level
 
 
@@ -90,6 +93,7 @@ class BuildingManager:
             "library": lambda: (f"study x{self.study_mult(lv):.2f}, research +{int(self.research_bonus(lv) * 100)}%, "
                                 f"{config.MAX_SPELLS + self.extra_spell_slots(lv)} spell slots"
                                 f"{', Restricted Section open' if self.tier3_open(lv) else ''}"),
+            "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",
             "barracks": lambda: (f"morale +{self.morale_target_bonus(lv)}, drift {self.morale_drift(lv):.2f}/h, "
                                  f"bonds x{self.bond_mult(lv):.2f}, synergy x{self.synergy_mult(lv):.2f}"),
         }.get(key, lambda: BUILDINGS.get(key).description)()
@@ -133,6 +137,10 @@ class BuildingManager:
 
     def synergy_mult(self, lv: int = None) -> float:
         return 1 + 0.2 * ((lv or self.level("barracks")) - 1)
+
+    # ---- Armory ----------------------------------------------------------------------------
+    def gear_tier(self, lv: int = None) -> int:
+        return min(3, 1 + ((lv or self.level("armory")) - 1) // 2)
 
     # ---- persistence ---------------------------------------------------------------------
     def to_dict(self) -> Dict[str, int]:

@@ -122,6 +122,7 @@ class BattleReport:
     deaths: List[str] = field(default_factory=list)
     knocked_out: List[str] = field(default_factory=list)
     winner_slime: object = None            # duels only
+    fallen: List[object] = field(default_factory=list)   # slimes at 0 HP after the fight (dead or knocked out)
 
     @property
     def victory(self) -> bool:
@@ -326,12 +327,16 @@ class BattleSystem:
         survivors = []
         for s, c in zip(party, mine):
             s.hp = max(0, int(c.hp))
+            if not c.alive:
+                report.fallen.append(s)
             if not c.alive and permadeath:        # Game._reap removes them
                 s.death_cause = "fell in battle"
                 report.deaths.append(s.name)
                 continue
-            if not c.alive:                       # training: knocked out, not killed
+            if not c.alive:                       # Pit: knocked out, not killed (Game applies the penalties)
                 report.knocked_out.append(s.name)
+                s.hp = 1
+                continue
             s.hp = max(1, s.hp)
             for el, n in c.casts.items():                      # casting builds elemental mastery
                 for b in elements.components(el):

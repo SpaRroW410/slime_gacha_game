@@ -68,8 +68,8 @@ def gain_style_xp(slime, discipline: str, amount: float, cap_level: int) -> int:
 
 
 def check_ready(slime) -> None:
-    if slime.state != "idle":
-        raise InvalidAction(f"{slime.name} is {slime.state}, not available.")
+    if slime.state != "idle" or slime.in_dungeon:
+        raise InvalidAction(f"{slime.name} is {slime.in_dungeon and 'inside a dungeon' or slime.state}, not available.")
     if slime.grounded:
         raise InvalidAction(f"{slime.name} is grounded after a brawl. Mediate first.")
     if slime.needs.get("energy") < config.TASK_MIN_ENERGY:

@@ -100,6 +100,17 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Merge changes: compatibility swings XP, bonds inherited, colony mourns
 - [x] Save v5 and ~40 new tests
 
+## M11 — Commitment, intel & consequences
+- [x] Merging/sacrificing lowers morale (target, bystanders, friends) with compounding **sacrifice stress**
+- [x] Hollow Descent in 5-floor segments: **no exit** until the boss falls or the whole party dies
+- [x] Permanent death in the Descent; short-handed parties continue; in-dungeon camping with ambushes
+- [x] Exploration party scouting: knowledge grows with time in the dungeon (diminishing returns)
+- [x] Staged intel (counts → types → boss → abilities → weaknesses), deterministic floors, intel power bonus
+- [x] Gloop Pit as a committed session (all runs or whole party down); auto-camping
+- [x] Pit defeat: XP loss, morale loss, gear dropped; synergy-based recovery; Pit lost-and-found
+- [x] Equipment (weapon / armor / charm), Armory building, gear drops
+- [x] Save v6 and 32 new tests
+
 ## Future (post-prototype)
 - [ ] Construction time for upgrades; more buildings (Pantry, Hatchery)
 - [ ] Rivalries and mentorships as explicit relationships; couples -> new slimes
@@ -107,6 +118,8 @@ Legend: `[x]` done · `[ ]` todo
 - [ ] Spell mutation / evolving fused spells with mastery
 - [ ] Hybrid class abilities (e.g. Barbarian fire-axe imbue as a status)
 - [ ] Named dungeon registry (add dungeons as data)
+- [ ] Gear crafting / enchanting, set bonuses
+- [ ] Several delves at once (one party per dungeon) with rescue parties
 - [ ] Floor modifiers (poison fog, darkness) and shops between floors
 - [ ] Retreat / checkpoint mid-descent
 - [ ] Real-clock daily free pull (wall-time) as an option

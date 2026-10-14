@@ -24,7 +24,7 @@ MENU = """
  [4] Care (feed/sleep/pet)   [5] Set stance  [6] Hunt (one slime or a party)
  [7] Wait (time)      [8] Parties            [9] Dungeons / battles
  [t] Sparring arenas (fighting styles)   [l] Library & spell lab   [r] Rest Area
- [b] Buildings (upgrade)   [k] Council: compatibility, morale, keep-or-sacrifice
+ [b] Buildings (upgrade)   [k] Council   [i] Inventory & Armory
  [m] Merge  [e] Evolve  [c] Conflicts  [a] Auto-care  [j] Journal  [x] Graveyard  [s] Save  [q] Quit
 """
 
@@ -55,7 +55,7 @@ def show_status(g: Game) -> None:
     free = "READY" if g.free_pull_available() else f"in {g.hours_to_free_pull()}h"
     print(f"\n⏰ Day {g.day} (hour {g.tick_count}) | {g.wallet} | slimes: {len(g.roster)} "
           f"(🪦 {len(g.graveyard)}) | parties: {len(g.parties.parties)} (size {g.parties.size}) | "
-          f"rest area: {g.resting_count()}/{g.buildings.rest_capacity()} | main dungeon: floor {g.main_floor} cleared | free pull: {free} | auto-care: {'on' if g.needs.auto_care else 'off'} | "
+          f"rest area: {g.resting_count()}/{g.buildings.rest_capacity()} |{f' sacrifice stress {g.sacrifice_stress:.1f} |' if g.sacrifice_stress >= 0.1 else ''} main dungeon: floor {g.main_floor} cleared | free pull: {free} | auto-care: {'on' if g.needs.auto_care else 'off'} | "
           f"conflicts: {len(g.conflicts.conflicts)}")
 
 
@@ -81,6 +81,9 @@ def show_slime(s) -> None:
     print(f"  abilities: {', '.join(get_ability(k).name for k in s.known_abilities())}")
     show_elements(s)
     show_style_morale(s)
+    if s.gear:
+        from .equipment import GEAR
+        print("  gear: " + ", ".join(f"{GEAR.get(k).emoji}{GEAR.get(k).name}" for k in s.gear.values()))
 
 
 def show_style_morale(s) -> None:
@@ -174,6 +177,8 @@ def council_menu(g: Game) -> None:
     c = _ask("council: ")
     if c == "1":
         data = g.council()
+        print(f"  Sacrifice stress: {g.sacrifice_stress:.1f} (each recent merge makes the next one cost "
+              f"{config.SACRIFICE_STRESS_AMP:.0%} more morale and lowers everyone's morale target; decays 1/day)")
         for r in data["rows"]:
             s = r["slime"]
             print(f"  {r['verdict']:<11} {r['score']:>5}  #{s.id:<3} {s.arch.emoji} {s.name:<10} "
@@ -272,25 +277,85 @@ def pick_zone() -> str:
     return zs[_int("zone #: ") - 1].key
 
 
+def show_intel(g: Game) -> None:
+    seg = g.current_segment
+    print(f"  Knowledge of segment {seg + 1} (floors {g.intel_report()[0]['floor']}-{g.intel_report()[-1]['floor']}): "
+          f"{g._knowledge(seg):.0f}%  (more scouting time = more knowledge)")
+    for r in g.intel_report():
+        print(f"   floor {r['floor']}{' [BOSS]' if r['boss'] else ''}:")
+        for ln in r["lines"]:
+            print(f"      - {ln}")
+
+
 def dungeon_menu(g: Game) -> None:
-    print("  [1] The Gloop Pit  - safe grinding dungeon: nobody dies, great XP, little loot")
-    print(f"  [2] The Hollow Descent - ROUGH main dungeon (next: floor {g.main_floor + 1}), permadeath, "
-          f"boss every {config.MAIN_BOSS_EVERY} floors, rare purple gel")
-    print("  [3] Skirmish - a single quick fight vs a tier 1-4 wave (permadeath)")
+    print("  [1] The Gloop Pit      - committed grinding session: no leaving until all runs are done or the whole party is down.\n"
+          "                           A downed slime loses XP + morale and drops its gear (survivors may bring it back).")
+    print(f"  [2] The Hollow Descent - ROUGH, permadeath, NO WAY OUT until the segment boss falls (checkpoint: floor {g.main_floor})")
+    print("  [3] Scout the next segment with an exploration party   [4] Intel report   [5] Skirmish")
     mode = _ask("dungeon: ")
-    pid = _int("party # to send: ")
+    if mode == "4":
+        show_intel(g)
+        return
+    show_parties(g)
+    pid = _int("party #: ")
     if mode == "1":
         depth = _int(f"depth 1-{config.GRIND_DEPTHS} (3 = your level): ")
-        runs = _int("number of runs: ")
-        rest = _ask("auto-rest between runs when hurt? (y/n): ").lower() == "y"
-        res = g.grind(pid, depth, runs, rest)
+        runs = _int("number of runs (a COMMITMENT): ")
+        res = g.grind(pid, depth, runs)
         print("\n".join("  " + x for x in res.summary))
-        print(f"  Stopped: {res.stop_reason}")
+        print(f"  Session over: {res.stop_reason}")
     elif mode == "2":
-        fl = _ask(f"floor (Enter = {g.main_floor + 1}): ")
-        print("\n".join(g.descend(pid, int(fl) if fl else None).log))
+        if pid not in g.delves:
+            print("  " + g.enter_dungeon(pid))
+        while True:
+            st = g.delve_status(pid)
+            print(f"  Inside: floor {st['floor']} (boss on {st['boss_floor']}), {st['hours']}h in, knowledge "
+                  f"{st['knowledge']:.0f}%, party: " + ", ".join(f"{s.name} {s.hp}/{s.max_hp}" for s in st["members"]))
+            act = _ask("  [f]ight next floor / [c]amp / [i]ntel / [l]eave the menu (the party stays inside!): ").lower()[:1]
+            if act == "f":
+                rep = g.delve_next(pid)
+                print("\n".join(rep.log[-18:]))
+            elif act == "c":
+                print("\n".join("  " + x for x in g.delve_camp(pid, _int("hours to camp (1-24): ")) or ["  (quiet night)"]))
+            elif act == "i":
+                show_intel(g)
+            else:
+                break
+            if pid not in g.delves:
+                break
     elif mode == "3":
+        hours = _int(f"hours to scout ({config.SCOUT_MIN_HOURS}-{config.SCOUT_MAX_HOURS}; no turning back): ")
+        res = g.scout(pid, hours)
+        print("\n".join("  " + x for x in res.log))
+        if res.survivors:
+            show_intel(g)
+    elif mode == "5":
         print("\n".join(g.battle(pid, _int("tier 1-3 (4 = boss): ")).log))
+
+
+def inventory_menu(g: Game) -> None:
+    from .equipment import GEAR
+    inv = ", ".join(f"{GEAR.get(k).emoji}{GEAR.get(k).name} x{n}" for k, n in g.inventory.items.items()) or "empty"
+    print(f"  Inventory: {inv}")
+    if g.pit_lost:
+        print("  Left behind in the Pit: " + ", ".join(GEAR.get(k).name for k in g.pit_lost))
+    print("  [1] Armory (buy)   [2] Equip   [3] Unequip   [4] Who wears what")
+    c = _ask("inventory: ")
+    if c == "1":
+        for gr in g.gear_shop():
+            cost = ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in gr.cost.items())
+            print(f"   {gr.emoji} {gr.name:<16} T{gr.tier} {gr.slot:<6} {gr.stats}  {cost}   [{gr.key}]")
+        print("  " + g.buy_gear(_ask("gear key: ")))
+    elif c == "2":
+        show_roster(g)
+        print("  " + g.equip(_int("slime id: "), _ask("gear key: ")))
+    elif c == "3":
+        show_roster(g)
+        print("  " + g.unequip(_int("slime id: "), _ask("slot (weapon/armor/charm): ")))
+    elif c == "4":
+        for s in g.slimes():
+            print(f"  #{s.id:<3} {s.name:<10} " + (", ".join(f"{GEAR.get(k).emoji}{GEAR.get(k).name}"
+                                                        for k in s.gear.values()) or "-"))
 
 
 def party_menu(g: Game) -> None:
@@ -391,6 +456,8 @@ def handle(g: Game, choice: str) -> bool:
         buildings_menu(g)
     elif choice == "k":
         council_menu(g)
+    elif choice == "i":
+        inventory_menu(g)
     elif choice == "l":
         library_menu(g)
     elif choice == "x":
@@ -513,22 +580,57 @@ def run_demo(seed: int) -> None:
     for c in list(g.conflicts.conflicts)[:2]:
         print("  " + g.mediate(c.id, "talk"))
 
-    print("\n== 6. GRINDING DUNGEON: the Vanguard farms the Gloop Pit (nobody can die here) ==")
-    g.conflicts.conflicts.clear()   # keep the demo grind uninterrupted by brawls
-    g.wallet.add("food", 30)
+    print("\n== 6. GRINDING DUNGEON: a committed Gloop Pit session (downed slimes drop gear, lose XP + morale) ==")
+    g.conflicts.conflicts.clear()   # keep the demo uninterrupted by brawls
+    g.wallet.add("food", 60)
+    g.wallet.add("white_gel", 200)
     for s in g.slimes():          # top everyone up so the demo starts healthy
         s.state, s.hunt, s.grounded = "idle", None, False
         s.hp, s.needs.v["energy"], s.needs.v["food"] = s.max_hp, 100, 100
-    res = g.grind(1, 3, 6, auto_rest=True)
-    print("\n".join("  " + x for x in res.summary[:14]))
-    print(f"  Stopped: {res.stop_reason}")
+    for s, key in zip(g.party_members(1), ("wooden_club", "hunting_bow", "apprentice_wand", "leather_wrap",
+                                           "lucky_pebble")):
+        g.buy_gear(key)
+        print("  " + g.equip(s.id, key))
+    res = g.grind(1, 4, 5)
+    print("\n".join("  " + x for x in res.summary[:16]))
+    print(f"  Session over: {res.stop_reason}  | inventory: {dict(g.inventory.items)}  | left in the Pit: {g.pit_lost}")
 
-    print("\n== 6b. MAIN DUNGEON: the Hollow Descent, floor 1 (rough! casualties are permanent) ==")
+    print("\n== 6b. SCOUTING: the Reserve explores the first segment of the Hollow Descent ==")
     for s in g.slimes():
         s.state, s.hunt, s.grounded = "idle", None, False
         s.hp, s.needs.v["energy"], s.needs.v["food"] = s.max_hp, 100, 100
-    rep = g.descend(1)
-    print("\n".join(rep.log[-14:]))
+    for hrs in (3, 12):
+        g.conflicts.conflicts.clear()
+        for s in g.slimes():
+            s.grounded = False
+        sc = g.scout(2, hrs)
+        print("\n".join("  " + x for x in sc.log[:4]))
+    for r in g.intel_report()[:1] + g.intel_report()[4:]:
+        print(f"   floor {r['floor']}: " + " | ".join(r['lines']))
+
+    print("\n== 6c. THE HOLLOW DESCENT: the Vanguard goes in. There is NO way out until the boss falls (or all die) ==")
+    for s in g.slimes():
+        s.state, s.hunt, s.grounded = "idle", None, False
+        s.hp, s.needs.v["energy"], s.needs.v["food"] = s.max_hp, 100, 100
+    g.conflicts.conflicts.clear()
+    for s in g.slimes():
+        s.grounded = False
+    print("  " + g.enter_dungeon(1))
+    for _ in range(12):
+        if 1 not in g.delves:
+            break
+        if any(s.hp < s.max_hp * 0.5 for s in g._members_in("main", 1)):
+            out = g.delve_camp(1, 8)
+            print("  camped 8h" + (": " + "; ".join(out[:2]) if out else ""))
+        rep = g.descend(1)
+        extra = [l for l in rep.log if any(w in l for w in ("fallen", "lost", "carries", "found", "cleared",
+                                                           "defeated -", "bounty", "died"))]
+        print(f"  {rep.log[0]} -> {'WON' if rep.victory else 'LOST' if rep.winner == 'foes' else 'draw'}")
+        print("\n".join("      " + x for x in extra[:5]))
+    print("  Dungeon state: " + ("party still inside!" if 1 in g.delves else "the party is out (or gone)."))
+    for s in g.slimes():          # (demo housekeeping so later steps are not blocked)
+        s.in_dungeon = ""
+    g.delves.clear()
 
     print("\n== 7. COUNCIL: who to keep, who to sacrifice? Then MERGE the best suggestion ==")
     data = g.council()
@@ -540,6 +642,11 @@ def run_demo(seed: int) -> None:
     print(f"  merging {m['donor'].name} into {m['target'].name} (+{m['xp']} XP, compat {m['compat']:+d}, "
           f"colony morale cost {m['grief']})")
     print("\n".join("  " + x for x in g.merge(m["target"].id, m["donor"].id)))
+    if len(g.slimes()) > 3:
+        m2 = g.council()["merges"][0]
+        print(f"  ...and a SECOND sacrifice right away (stress {g.sacrifice_stress:.1f}): colony morale cost now "
+              f"{m2['grief']}")
+        print("\n".join("  " + x for x in g.merge(m2["target"].id, m2["donor"].id)[-2:]))
 
     print("\n== 8. NEGLECT: the food runs out and nobody is fed for 6 days... ==")
     g.wallet.spend("food", g.wallet.get("food"))

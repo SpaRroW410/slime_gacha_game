@@ -1,6 +1,7 @@
 # Software Design Document — Slime Gacha (prototype v0.1)
 
 > **v0.2 changes**: permadeath, rarity 90/9/0.9/0.09, 1–5★ ratings, white/purple gel currencies, free daily pull, fixed-size parties (§5.1, 5.9, 5.10).
+> **v0.6 changes**: no-exit delves, scouting intel, Pit defeat penalties + gear recovery, equipment & Armory, sacrifice stress (§5.11, §5.15).
 > **v0.5 changes**: sparring-based fighting styles, Rest Area, upgradable buildings, compatibility / morale / council (§5.12–5.14).
 > **v0.4 changes**: library, elements, elemental mastery, spell fusion (§5.12 Library part).
 > **v0.3 changes**: main + grinding dungeons (§5.11), currency naming (white/purple gel).
@@ -161,12 +162,12 @@ Dungeons only *generate waves* (lists of scaled `Enemy` copies via `scale_enemy`
 |---|---|---|
 | Purpose | progression, bosses, purple gel, essence | levelling up |
 | Difficulty | floor *f*: stats ×1.15^(f−1) on tier pool 1/2/3 (floors 1–4 / 5–8 / 9+), loot +25 %/floor | depth 1–5 = enemy level (party avg −2 … +2); stats +12 %/level above the tier base |
-| Death | **permadeath** | none: knocked-out slimes drop to 1 HP |
+| Death | **permadeath** (gear of the fallen is lost unless a survivor recovers it) | none: knocked-out slimes drop to 1 HP but lose XP (40 % of the next level), 25 morale and their gear |
 | XP | split among survivors | every survivor gets 35 % of the wave's XP (full, not split) |
 | Loot | white gel, food, essence; purple chance ×1.15^(f−1) (cap 50 %) | 50 % loot, **no purple gel** |
 | Bosses | every 5th floor: Hollow Warden (f5), Parched King (f10+, +25 %/cycle) with escorts; first clear pays 3 purple gel | – |
 | Time | 3 h per floor attempt | 2 h per run |
-| Extra | floors unlock in order; replay allowed (no bounty) | `runs=N`, `auto_rest` sleeps the party until healed (85 % HP) between runs; stops on defeat, level cap, brawl-grounding, or missing members |
+| Exit rule | **no exit** until the segment boss (5 floors) falls or everyone is dead; `enter_dungeon` / `delve_next` / `delve_camp` | **commitment**: `grind(runs=N)` runs all N unless the whole party is knocked out; camps (sleeps) between runs when hurt |
 Time passing means hunger: long grinds need Food, or slimes starve.
 
 ### 5.12 Library, elements & spell lab (`academy.py`, `elements.py`, `spells.py`)
@@ -229,6 +230,35 @@ invested 10 % + spells/mastery 10 % + social value 15 % + "in a party" 10 %. Top
 = SACRIFICE?, rest FLEX, with reasons. Merge suggestions rank `XP gained − 3 × colony morale cost`; the merge
 itself transfers half of the donor's bonds to the target and lowers colony morale (friends −25, others −5).
 
+### 5.15 Delves, scouting, gear & sacrifice stress (`Game`, `dungeon.py`, `equipment.py`)
+**Delves.** The Descent is split into segments (floors 5k+1 … 5k+5, the last one a boss). `enter_dungeon(pid)` flags
+every member `in_dungeon="main"` (they can't hunt, spar, study, rest, equip, merge, sleep via the colony …) and
+records `delves[pid] = {floor, start, hours}`. There is deliberately **no API to leave**: `delve_next` fights the
+current floor (floors are fixed by `dungeon_seed`), `delve_camp(hours)` heals by sleeping in the dungeon
+(8 %/h, ambush chance `0.10 × (1+0.1·floor) × (1 − 0.6·knowledge)` per hour, damage 10–30 % max HP). The delve ends when
+the boss falls (checkpoint `main_floor` advances, first clear pays 3 purple gel, flags clear) or the whole party
+dies. A party that loses members keeps going short-handed; after exit it must be refilled before another fight.
+
+**Scouting.** `scout(pid, hours 2–24)` commits a full party to the next segment. Knowledge
+`k' = 100 − (100 − k)·exp(−0.10 · skill · hours)` (skill = 0.8 + 0.1 per explore-stance member + 0.15 per rogue/ranger,
+max 2.0), so it is a function of time spent inside with diminishing returns. Hourly ambush chance (stronger
+segments, weaker parties, less intel ⇒ more danger) can kill scouts; if all die nothing is learned. Time spent
+delving or camping also adds 1.5 %/h. `dungeon.intel_view` reveals per floor: ≥20 % count & tier, ≥40 % enemy
+types & elements, ≥60 % boss, ≥80 % abilities / total HP / purple odds, 100 % weaknesses & loot. Knowledge gives
+the party up to +10 % power inside the Descent and fewer ambushes.
+
+**Equipment.** `Gear(key, slot, tier, stats, cost)`; the colony `Inventory` is a Counter, a slime holds
+`gear {slot: key}` and `max_stats()` adds the bonuses. Armory level gates purchasable tier (1/2/3 at L1/L3/L5);
+dungeons drop gear (Pit 15 %, Descent 30 %, bosses guaranteed). **Gear recovery**: when a slime falls in a dungeon
+(`_drop_gear`), each item is carried back with chance
+`clamp(0.5 + 5·(party synergy − 1) + compat(fallen, best survivor)/400, 0.10, 0.95)`; failures are lost for good
+in the Descent, or kept in the Pit's `pit_lost` list where each later Pit victory has `15 % × synergy` per item to
+dig it up. Outside dungeons a dead slime's gear returns to the inventory.
+
+**Sacrifice stress.** `merge` adds +1 stress (decays 1/day). Morale hit = base × (1 + 0.6·stress), with base −8 for
+bystanders, −30 for friends/bonded, −10 for the target (guilt). Stress also lowers every morale target by 6 per point
+(max 30). The Council's cost estimates include it.
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|
@@ -247,7 +277,7 @@ itself transfers half of the donor's bonds to the target and lowers colony moral
 Plugins: any module placed in `slime_gacha/plugins/` is auto-imported at start (optional dir).
 
 ## 7. Persistence
-`Game.save(path)` → JSON `{version 5, tick, buildings, bonds, main_floor, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. older saves load (gel/silver→white_gel, gold→purple_gel).
+`Game.save(path)` → JSON `{version 6, tick, buildings, bonds, intel, delves, inventory, pit_lost, sacrifice_stress, dungeon_seed, main_floor, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. older saves load (gel/silver→white_gel, gold→purple_gel).
 Versioned for forward migration. Unknown archetype keys on load are skipped with a warning (mod removal safe).
 
 ## 8. Error handling

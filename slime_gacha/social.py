@@ -114,13 +114,15 @@ class SocialEngine:
     def shift_morale(slime, delta: float) -> None:
         slime.morale = max(0.0, min(100.0, slime.morale + delta))
 
-    def morale_tick(self, slimes: List) -> None:
+    def morale_tick(self, slimes: List, stress: float = 0.0) -> None:
+        """`stress` = recent sacrifices (merges): it drags every morale target down."""
         drift = self.buildings.morale_drift()
+        drag = min(config.SACRIFICE_TARGET_PENALTY_MAX, config.SACRIFICE_TARGET_PENALTY * stress)
         for s in slimes:
             if s.state in ("resting",):             # the Rest Area manages its own morale
                 continue
             target = min(100.0, config.MORALE_BASE_TARGET + config.MORALE_MOOD_SPAN * s.mood()
-                         + self.buildings.morale_target_bonus())
+                         + self.buildings.morale_target_bonus() - drag)
             s.morale += (target - s.morale) * drift
 
     # ---- council: keep / sacrifice -----------------------------------------------------
@@ -162,12 +164,12 @@ class SocialEngine:
                 ("SACRIFICE?" if n >= 4 and i >= n - max(1, round(n * 0.25)) else "FLEX")
         return rows
 
-    def grief(self, donor, slimes: List) -> int:
-        """Total morale the colony loses if `donor` is sacrificed (friends hurt most)."""
+    def grief(self, donor, slimes: List, amp: float = 1.0) -> int:
+        """Total morale the colony loses if `donor` is sacrificed (friends hurt most). `amp` = 1 + stress effect."""
         total = 0
         for o in slimes:
             if o is donor:
                 continue
             total += -config.MERGE_MORALE_FRIENDS if (pair(donor, o) in self.conflicts.friends or
                                                       self.bond(donor, o) >= 20) else -config.MERGE_MORALE_OTHERS
-        return total
+        return int(round(total * amp + (-config.MERGE_MORALE_TARGET) * amp))

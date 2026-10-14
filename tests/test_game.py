@@ -337,7 +337,7 @@ class TestMainDungeon(unittest.TestCase):
             bad += bool(rep.deaths) or not rep.victory
         self.assertGreaterEqual(bad, 4)
 
-    def test_floor_gating_and_progress(self):
+    def test_enter_blocks_other_actions_and_floors_are_ordered(self):
         g = fresh(1)
         pid = full_party(g, xp=10 ** 6)
         for s in g.party_members(pid):
@@ -348,12 +348,17 @@ class TestMainDungeon(unittest.TestCase):
             g.descend(pid, 3)                     # cannot skip ahead
         rep = g.descend(pid)
         self.assertTrue(rep.victory)
-        self.assertEqual(g.main_floor, 1)
-        self.assertTrue(any("floor 1" in l for l in rep.log))
+        self.assertIn(pid, g.delves)              # inside the dungeon until the boss falls
+        self.assertEqual(g.delves[pid]["floor"], 2)
+        s = g.party_members(pid)[0]
+        self.assertEqual(s.in_dungeon, "main")
+        for act in (lambda: g.hunt(s.id, "meadow"), lambda: g.rest(s.id), lambda: g.sleep(s.id),
+                    lambda: g.enter_dungeon(pid), lambda: g.battle(pid, 1)):
+            with self.assertRaises(InvalidAction):
+                act()
 
-    def test_boss_first_clear_bounty_only_once(self):
+    def test_boss_clear_frees_party_and_pays_bounty_once(self):
         g = fresh(2)
-        g.main_floor = 4
         pid = full_party(g)
         for s in g.party_members(pid):
             s.stage = 2
@@ -361,16 +366,14 @@ class TestMainDungeon(unittest.TestCase):
             s.hp = s.max_hp
             s.stars = 5
         before = g.wallet.get("purple_gel")
-        rep = g.descend(pid)
-        self.assertTrue(rep.victory, rep.log[-6:])
-        self.assertEqual(g.main_floor, 5)
+        for _ in range(5):
+            rep = g.descend(pid)
+            self.assertTrue(rep.victory, rep.log[-6:])
+        self.assertNotIn(pid, g.delves)           # free again
+        self.assertEqual((g.main_floor, g.best_floor), (5, 5))
         self.assertGreaterEqual(g.wallet.get("purple_gel") - before, config.MAIN_BOSS_FIRST_CLEAR_PURPLE)
-        for s in g.party_members(pid):
-            s.hp, s.state = s.max_hp, "idle"
-            s.needs.v["energy"] = 100
-        before = g.wallet.get("purple_gel")
-        g.descend(pid, 5)                         # replay: no guaranteed bounty
-        self.assertLess(g.wallet.get("purple_gel") - before, config.MAIN_BOSS_FIRST_CLEAR_PURPLE)
+        self.assertTrue(all(s.in_dungeon == "" for s in g.party_members(pid)))
+        self.assertEqual(g.current_segment, 1)    # the next entrance is floor 6
 
     def test_wave_structure_and_scaling(self):
         rng = random.Random(1)
@@ -417,6 +420,12 @@ class TestGrindDungeon(unittest.TestCase):
 
     def test_grind_levels_up_everyone_fully(self):
         g, pid = self._party(2)
+        for s in g.party_members(pid):            # strong enough that nobody is knocked out
+            s.stage = 2
+            add_xp(s, 10 ** 7)
+            s.hp = s.max_hp
+            s.level = 5
+            s.xp = s.total_xp = 0
         before = [s.total_xp for s in g.party_members(pid)]
         res = g.grind(pid, 3, 3, auto_rest=True)
         self.assertTrue(res.runs)
@@ -453,14 +462,14 @@ class TestGrindDungeon(unittest.TestCase):
         self.assertGreaterEqual(runs, 30)
         self.assertEqual(g.graveyard, [])
 
-    def test_stops_when_capped_and_validates_depth(self):
+    def test_refuses_when_capped_and_validates_depth(self):
         g, pid = self._party()
         with self.assertRaises(InvalidAction):
             g.grind(pid, 6, 1)
         for s in g.party_members(pid):
             add_xp(s, 10 ** 7)
-        res = g.grind(pid, 3, 5)
-        self.assertIn("level cap", res.stop_reason)
+        with self.assertRaises(InvalidAction):
+            g.grind(pid, 3, 5)
 
     def test_party_rest_uses_the_rest_area(self):
         g, pid = self._party()
