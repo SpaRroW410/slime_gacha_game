@@ -333,6 +333,14 @@ idea.
 - **Ego relics**: a 5-star legendary relic + a sacrificed 5-star legendary slime. Stats x(1.5 + 0.02 x soul level), mods doubled, unbreakable, wieldable only by 5-star legendary slimes. Each costs a soul, hence three ego slots need three sacrifices (sacrifice stress +2).
 - Relics of a slime that dies in the Descent are carried back by survivors (synergy chance) or lost; elsewhere they return to the vault. Plain Armory gear still exists and works as before. SAVE_VERSION 8.
 
+### 5.20 Slime ascension, stones, merging & the chamber (`ascension.py`)
+- **Five rarities**: common, uncommon, rare, epic, legendary (gacha 90 / 8 / 1.9 / 0.09 / 0.01 %). **Rarity ascension** costs white gel to reach the next rarity: 10 / 100 / 1000 / 10000. **Star ascension** costs ascension stones: 10 / 100 / 1000 / 10000 common-stone equivalents for 1>2 ... 4>5. Both are permanent and raise stats.
+- **Stones** come in the five rarities; 100 of one merge into 1 of the next (a stone is worth 100^rarity commons). Payment spends the cheapest stones first and gives change in smaller stones.
+- **Sources**: the **Starfall Quarry** (1-5 slimes, monsters +1 level, no deaths, ~140 common-equivalents per run for a strong party; rates 97 / 2.6 / 0.4 / 0.01 %), small common drops in the Pit and Rift, boss hoards in the Descent, and the Destruction Chamber.
+- **Merging** now gives only the XP the donor collected (+/-25% compatibility) and a share of its stats. The share is 20% at zero merge growth and falls by 0.2 per +100% growth already in that attribute (18% at +10%), flat 1% from +100% on. There is no cap, only diminishing returns.
+- **Destruction Chamber** (building, 5 levels): destroys a slime for white gel (5 x 10^rarity x star factor) and stones (scaled by rarity and the stones its stars cost); a sacrifice with morale cost and sacrifice stress. Its relics return to the vault.
+- Not yet built: star attributes, rarity skills, weapon proficiency, potions (see ROADMAP M16).
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|

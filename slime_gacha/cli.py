@@ -24,7 +24,7 @@ MENU = """
  [4] Care (feed/sleep/pet)   [5] Set stance  [6] Hunt (one slime or a party)
  [7] Wait (time)      [8] Parties            [9] Dungeons / battles
  [t] Sparring arenas (fighting styles)   [l] Library & spell lab   [r] Rest Area
- [b] Buildings (upgrade)   [k] Council   [i] Inventory & Armory   [w] Wayfarer's Rift & relics
+ [b] Buildings (upgrade)   [k] Council   [i] Inventory & Armory   [w] Wayfarer's Rift & relics   [o] Ascension, Quarry & Chamber
  [m] Merge  [e] Evolve  [c] Conflicts  [a] Auto-care  [j] Journal  [x] Graveyard  [s] Save  [q] Quit
 """
 
@@ -416,6 +416,34 @@ def rift_menu(g: Game) -> None:
         print("\n".join("  " + x for x in g.fuse_ego(_int("relic #: "), _int("soul slime id (consumed!): "))))
 
 
+def ascension_menu(g: Game) -> None:
+    from . import ascension
+    stones = "  ".join(f"{r} {g.wallet.get(ascension.stone_key(r))}" for r in config.RARITIES)
+    print(f"  Stones: {stones}   (worth {ascension.stone_total(g.wallet)} common)")
+    print("  [r] Ascend rarity (white gel)   [s] Ascend star (stones)   [m] Merge stones up   "
+          "[q] Starfall Quarry   [d] Destroy in the chamber")
+    c = _ask("ascension: ").lower()[:1]
+    if c == "r":
+        show_roster(g)
+        print("  " + g.ascend_slime_rarity(_int("slime id: ")))
+    elif c == "s":
+        show_roster(g)
+        print("  " + g.ascend_slime_star(_int("slime id: ")))
+    elif c == "m":
+        print("  " + g.merge_stone_rarity(_ask("rarity to merge up (common/uncommon/rare/epic): ")))
+    elif c == "q":
+        show_roster(g)
+        ids = [int(x) for x in _ask("slime ids (1-5, space separated): ").split()]
+        r = g.quarry(ids, _int("runs: "))
+        print("\n".join("  " + x for x in r.summary) + f"\n  Session over: {r.stop_reason}")
+    elif c == "d":
+        show_roster(g)
+        sid = _int("slime id: ")
+        print(f"  The chamber would yield: {g.chamber_preview(sid)}")
+        if _ask("  Destroy forever? (y/n): ").lower() == "y":
+            print("\n".join("  " + x for x in g.destroy_slime(sid)))
+
+
 def party_menu(g: Game) -> None:
     show_parties(g)
     act = _ask("[n]ew / [a]dd slime / [r]emove slime / [f]ill with best free / [d]isband / [z] rest party (Rest Area): ").lower()[:1]
@@ -518,6 +546,8 @@ def handle(g: Game, choice: str) -> bool:
         inventory_menu(g)
     elif choice == "w":
         rift_menu(g)
+    elif choice == "o":
+        ascension_menu(g)
     elif choice == "l":
         library_menu(g)
     elif choice == "x":

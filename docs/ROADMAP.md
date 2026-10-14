@@ -179,3 +179,15 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Salvage: higher level = better materials
 - [x] Ego relics (5-star legendary relic + 5-star legendary slime)
 - [x] Web Rift tab, CLI menu [w], tests
+
+## M16 — Slime ascension & economy
+- [x] Uncommon rarity (five rarities)
+- [x] Rarity ascension with white gel (10 / 100 / 1000 / 10000)
+- [x] Star ascension with ascension stones (10 / 100 / 1000 / 10000), stones merge 100 > 1
+- [x] Starfall Quarry, side drops, boss hoards
+- [x] Merge rework: collected XP + diminishing stat share (20% > 1%)
+- [x] Destruction Chamber building
+- [ ] Star attributes per class (new attribute each star)
+- [ ] Rarity skills per class (Moon Slash, Aura Blade, ...)
+- [ ] Weapon proficiency, three-weapon memory, weapon-love compatibility, named weapons, slimes repairing gear
+- [ ] Potions: crafting, grades 1-5, temporary attribute boosts, stamina potion, building upgrade

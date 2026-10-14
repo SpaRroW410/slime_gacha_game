@@ -130,7 +130,7 @@ class TestItems(unittest.TestCase):
         g.buildings.levels["armory"] = 5
         g.wallet.add_many({"scrap": 400, "alloy": 100, "purple_gel": 5, "essence": 50})
         g.ascend_rarity(60)
-        self.assertEqual(it.rarity, "rare")
+        self.assertEqual(it.rarity, "uncommon")
         self.assertEqual(len(it.mods), 1)
         self.assertEqual((it.stars, it.level), (5, 10))
 

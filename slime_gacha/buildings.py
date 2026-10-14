@@ -11,7 +11,7 @@ Effects are plain functions of the level on BuildingManager so other systems jus
 from dataclasses import dataclass
 from typing import Dict, List
 
-from . import config
+from . import ascension, config
 from .errors import InvalidAction
 from .registry import Registry
 from .resources import ResourceManager
@@ -60,6 +60,9 @@ register_building(Building("barracks", "Barracks", "🏕️", 5,
 register_building(Building("armory", "Armory", "🛠️", 5,
                            "Forges gear. Higher levels stock better equipment tiers.", _costs(70, 10)))
 
+register_building(Building("chamber", "Destruction Chamber", "🔥", 5,
+                           "Breaks slimes down into gel and ascension stones. Higher levels yield more.", _costs(90, 12)))
+
 REST_HEAL = [0.30, 0.45, 0.60, 0.80, 1.00]       # fraction of max HP healed per hour, by level
 
 
@@ -93,6 +96,7 @@ class BuildingManager:
             "library": lambda: (f"study x{self.study_mult(lv):.2f}, research +{int(self.research_bonus(lv) * 100)}%, "
                                 f"{config.MAX_SPELLS + self.extra_spell_slots(lv)} spell slots"
                                 f"{', Restricted Section open' if self.tier3_open(lv) else ''}"),
+            "chamber": lambda: f"destroyed slimes yield x{ascension.chamber_factor(lv):.1f}",
             "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",
             "barracks": lambda: (f"morale +{self.morale_target_bonus(lv)}, drift {self.morale_drift(lv):.2f}/h, "
                                  f"bonds x{self.bond_mult(lv):.2f}, synergy x{self.synergy_mult(lv):.2f}"),

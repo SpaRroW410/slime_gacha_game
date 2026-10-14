@@ -12,7 +12,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import buildings as bld, dungeon, terrain as terrain_mod, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
@@ -657,6 +657,83 @@ class Game:
                 g = equipment.GEAR.get(key)
                 log.append(f"🎒 The party digs up the lost {g.emoji}{g.name}!")
 
+    # ---- slime ascension, stones, chamber (ascension.py) ------------------------------------------------
+    def _free_slime(self, sid: int) -> Slime:
+        s = self.slime(sid)
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
+        return s
+
+    def ascend_slime_rarity(self, sid: int) -> str:
+        """Common > uncommon > rare > epic > legendary, paid in white gel (10 / 100 / 1000 / 10000)."""
+        s = self._free_slime(sid)
+        up = ascension.next_rarity(s.rarity)
+        if not up:
+            raise InvalidAction(f"{s.name} is already legendary.")
+        self.wallet.spend("white_gel", ascension.rarity_cost(s))
+        old = s.max_hp
+        s.rarity = up
+        s.hp += s.max_hp - old
+        s.needs.add("esteem", 20)
+        self.social.shift_morale(s, 10)
+        return f"✨ {s.name} ascends to {up}! (stats x{config.RARITY_STAT_MULT[up]})"
+
+    def ascend_slime_star(self, sid: int) -> str:
+        """Add a star, paid in ascension stones (10 / 100 / 1000 / 10000 common-stone equivalents)."""
+        s = self._free_slime(sid)
+        need = ascension.star_cost(s)
+        if need is None:
+            raise InvalidAction(f"{s.name} already has {config.MAX_STARS} stars.")
+        ascension.pay_stones(self.wallet, need)
+        old = s.max_hp
+        s.stars += 1
+        s.hp += s.max_hp - old
+        s.needs.add("esteem", 20)
+        self.social.shift_morale(s, 10)
+        return f"🌟 {s.name} ascends to {s.stars} stars!"
+
+    def merge_stone_rarity(self, rarity: str) -> str:
+        if rarity not in config.RARITIES:
+            raise InvalidAction(f"Unknown rarity '{rarity}'.")
+        n = ascension.merge_stones(self.wallet, rarity)
+        return f"💎 {n * config.STONE_MERGE} {rarity} stones fuse into {n} {ascension.next_rarity(rarity)}."
+
+    def _consume_slime(self, s: Slime, stress: float) -> None:
+        """Remove a slime sacrificed by the player: gear comes home, the colony mourns, stress rises."""
+        amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
+        friends = {i for f in self.conflicts.friends if s.id in f for i in f if i != s.id}
+        friends |= {i for k, v in self.social.bonds.items() if s.id in k and v >= 20 for i in k if i != s.id}
+        self._return_gear(s)
+        del self.roster[s.id]
+        self.conflicts.forget(s.id)
+        self.parties.remove(s.id)
+        self.social.forget(s.id)
+        for o in self.slimes():
+            base = config.MERGE_MORALE_FRIENDS if o.id in friends else config.MERGE_MORALE_OTHERS
+            self.social.shift_morale(o, base * amp)
+        self.sacrifice_stress += stress
+
+    def chamber_preview(self, sid: int) -> Dict[str, int]:
+        return ascension.chamber_yield(self.slime(sid), self.buildings.level("chamber"))
+
+    def destroy_slime(self, sid: int) -> List[str]:
+        """The Destruction Chamber breaks a slime into white gel and ascension stones (more for rarity and stars)."""
+        s = self._free_slime(sid)
+        y = ascension.chamber_yield(s, self.buildings.level("chamber"))
+        name, label = s.name, f"{config.RARITY_TAG[s.rarity]} {s.star_str()} Lv{s.level} {s.arch.name}"
+        self._consume_slime(s, config.CHAMBER_STRESS)
+        self.wallet.add_many(y)
+        return [f"🔥 {name} ({label}) is destroyed in the chamber: " +
+                ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in y.items()) + ".",
+                f"   The colony mourns. Sacrifice stress is now {self.sacrifice_stress:.1f}."]
+
+    def _stone_side_drop(self, where: str, foes: int, log: List[str]) -> None:
+        """Other dungeons hide the odd common stone."""
+        n = sum(1 for _ in range(foes) if self.rng.random() < config.STONE_SIDE_DROP.get(where, 0))
+        if n:
+            self.wallet.add("stone_common", n)
+            log.append(f"💎 Found {n} common stone{'s' if n > 1 else ''}.")
+
     # ---- relics: forge, repair, salvage, ego (items.py) ---------------------------------------------
     def _return_gear(self, s: Slime) -> None:
         """A slime leaves the colony (merged, fused): everything it wore goes back to the colony."""
@@ -804,20 +881,9 @@ class Game:
         elif holder is not None:
             holder.items.pop(it.slot, None)
             self.vault[it.uid] = it
-        amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
-        friends = {i for f in self.conflicts.friends if s.id in f for i in f if i != s.id}
-        friends |= {i for k, v in self.social.bonds.items() if s.id in k and v >= 20 for i in k if i != s.id}
         it.ego = dict(name=s.name, level=s.level, archetype=s.archetype)
         it.durability = it.max_durability
-        self._return_gear(s)
-        del self.roster[s.id]
-        self.conflicts.forget(s.id)
-        self.parties.remove(s.id)
-        self.social.forget(s.id)
-        for o in self.slimes():
-            base = config.MERGE_MORALE_FRIENDS if o.id in friends else config.MERGE_MORALE_OTHERS
-            self.social.shift_morale(o, base * amp)
-        self.sacrifice_stress += config.EGO_MORALE_STRESS
+        self._consume_slime(s, config.EGO_MORALE_STRESS)
         return [f"👁️ {s.name} (Lv{s.level} {s.arch.name}) pours their soul into {it.spec.emoji}{it.spec.name}.",
                 f"   {it.label()} awakens - stats x{it.power_mult():.1f}, mods doubled, unbreakable. "
                 f"Only a 5-star legendary slime can wield it.",
@@ -849,6 +915,14 @@ class Game:
 
     # ---- adventure dungeon: the Wayfarer's Rift --------------------------------------------------
     def adventure(self, sids: List[int], runs: int = 5, lure: bool = False) -> GrindResult:
+        return self._expedition("adventure", sids, runs, lure)
+
+    def quarry(self, sids: List[int], runs: int = 5) -> GrindResult:
+        """The Starfall Quarry: same rules as the Rift (1-5 slimes, monsters one level up, nobody dies) but the prize
+        is ASCENSION STONES (and a little XP), not relics."""
+        return self._expedition("quarry", sids, runs, False)
+
+    def _expedition(self, kind: str, sids: List[int], runs: int, lure: bool) -> GrindResult:
         """A party of 1-5 slimes (any slimes, no formal party needed) fights waves one level ABOVE their average,
         hunting relics. Nobody dies (like the Pit): a knocked-out slime loses morale and its relics are damaged.
         Rarity odds are far harsher than the gacha's; a lure (1 purple gel per run) multiplies them."""
@@ -864,7 +938,7 @@ class Game:
             if s.grounded:
                 raise InvalidAction(f"{s.name} is grounded after a brawl.")
         res = GrindResult()
-        self._set_flag(party, "adventure")
+        self._set_flag(party, kind)
         try:
             for n in range(1, runs + 1):
                 members = [s for s in party if s.id in self.roster]
@@ -884,12 +958,14 @@ class Game:
                         lure = False
                         res.summary.append("   (out of purple gel - the lure is spent)")
                 avg = sum(s.level for s in members) / len(members)
-                theme = dungeon.pit_theme(self.dungeon_seed ^ 0xA11, self.day * 8 + (n % 8))
+                theme = dungeon.pit_theme(self.dungeon_seed ^ (0xA11 if kind == "adventure" else 0x57A), self.day * 8 + (n % 8))
                 enemies = dungeon.grind_wave(avg, 3 + config.ADV_MONSTER_LEVEL,
                                            max(1, round(len(members) * config.ADV_FOE_RATIO)), self.rng, theme)
                 rep = self._run_battle(members, enemies, permadeath=False, split_xp=False,
-                                       xp_mult=config.ADV_XP_MULT, terrain=theme.terrain)
-                rep.log.insert(0, f"🧭 The Wayfarer's Rift (monsters ~lvl {dungeon.grind_level(avg, 4)}) - "
+                                       xp_mult=(config.ADV_XP_MULT if kind == "adventure" else config.QUARRY_XP_MULT),
+                                       terrain=theme.terrain)
+                place = "🧭 The Wayfarer's Rift" if kind == "adventure" else "💎 The Starfall Quarry"
+                rep.log.insert(0, f"{place} (monsters ~lvl {dungeon.grind_level(avg, 4)}) - "
                                   f"{theme.terrain.emoji} {theme.terrain.name}")
                 self._after_battle(members, rep, scale=0.4)
                 events: List[str] = []
@@ -898,7 +974,15 @@ class Game:
                     self.social.shift_morale(s, config.GRIND_DEATH_MORALE)
                     events.append(f"💫 {s.name} was knocked out: morale {config.GRIND_DEATH_MORALE:+.0f}.")
                 self._ko_wear(downed, events)
-                if rep.victory:
+                if rep.victory and kind == "quarry":
+                    for _ in enemies:
+                        if self.rng.random() < config.QUARRY_DROP_PER_FOE:
+                            got = ascension.roll_stone(self.rng)
+                            self.wallet.add_many(got)
+                            events.append("💎 Mined " + ", ".join(
+                                f"{v} {k.replace('_', ' ')}" for k, v in got.items()) + "!")
+                elif rep.victory:
+                    self._stone_side_drop("adventure", len(enemies), events)
                     for _ in enumerate(enemies):
                         if self.rng.random() < config.ADV_DROP_PER_FOE:
                             it = self.new_item(lure)
@@ -913,7 +997,7 @@ class Game:
                     line += f", KO: {', '.join(rep.knocked_out)}"
                 res.summary.append(line)
                 res.summary.extend("   " + e for e in events if any(w in e for w in
-                                   ("Found", "shatters", "knocked", "died")))
+                                   ("Found", "Mined", "stone", "shatters", "knocked", "died")))
                 self.journal.extend(events)
                 if rep.winner == "foes":
                     res.stop_reason = "the whole party was knocked out"
@@ -1051,6 +1135,13 @@ class Game:
                 s.progress = max(s.progress, floor)         # they have now visited this floor
                 outlook.bump(s, "delve")
             self._gear_drop(1 + (floor - 1) // config.MAIN_BOSS_EVERY, config.GEAR_DROP_MAIN, events, boss)
+            if boss:                                           # a guardian's hoard holds ascension stones
+                n = self.rng.randint(3, 6) * (1 + (floor - 1) // config.MAIN_BOSS_EVERY)
+                self.wallet.add("stone_common", n)
+                events.append(f"💎 The guardian's hoard: {n} common stones.")
+                if self.rng.random() < 0.15:
+                    self.wallet.add("stone_uncommon", 1)
+                    events.append("💎 ...and an uncommon stone!")
             d["floor"] = floor + 1
             if floor == dungeon.MAX_FLOOR:
                 self.descent_cleared = True
@@ -1301,6 +1392,7 @@ class Game:
                 self._ko_wear(downed, events)
                 if rep.victory:
                     self._gear_drop(1 if depth <= 3 else 2, config.GEAR_DROP_PIT, events)
+                    self._stone_side_drop("grind", len(enemies), events)
                     self._recover_pit_gear(members, events)
                 events.extend(self.tick(config.GRIND_TICKS))
                 rep.log.extend(events)

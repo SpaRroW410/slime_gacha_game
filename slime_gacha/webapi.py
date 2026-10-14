@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import config, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import ascension, config, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -45,6 +45,9 @@ def slime_view(g: Game, s) -> dict:
         mastery={b: elements.basic_level(s, b) for b in s.attuned},
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
+        merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
+        ascend=dict(next_rarity=ascension.next_rarity(s.rarity), rarity_cost=ascension.rarity_cost(s),
+                    star_cost=ascension.star_cost(s), chamber=ascension.chamber_yield(s, g.buildings.level("chamber"))),
         gear=dict(s.gear), items={k: _item_view(v, s) for k, v in s.items.items()}, task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
         party=(party.id if party else None), can_evolve=can_evolve(s),
         evolve_cost=(evolve_cost(s) if can_evolve(s) else None), discipline=a.discipline,
@@ -114,6 +117,11 @@ def snapshot(g: Game) -> dict:
     return dict(
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
+        ascension=dict(stones={r: g.wallet.get(ascension.stone_key(r)) for r in config.RARITIES},
+                       total=ascension.stone_total(g.wallet), values={r: ascension.stone_value(r) for r in config.RARITIES},
+                       rarity_gel=config.RARITY_ASCEND_GEL, star_stones=config.STAR_ASCEND_STONES,
+                       rates=config.STONE_RATES, merge=config.STONE_MERGE, max_party=config.ADV_MAX_PARTY,
+                       max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
@@ -410,6 +418,32 @@ def _fuse_ego(g, a):
 @command("adventure")
 def _adventure(g, a):
     r = g.adventure([int(x) for x in a.get("ids", [])], _i(a, "runs", 1), bool(a.get("lure")))
+    return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
+@command("slime_rarity")
+def _slime_rarity(g, a):
+    return _msg(g.ascend_slime_rarity(_i(a, "id")))
+
+
+@command("slime_star")
+def _slime_star(g, a):
+    return _msg(g.ascend_slime_star(_i(a, "id")))
+
+
+@command("merge_stones")
+def _merge_stones(g, a):
+    return _msg(g.merge_stone_rarity(a.get("rarity", "")))
+
+
+@command("destroy_slime")
+def _destroy_slime(g, a):
+    return g.destroy_slime(_i(a, "id")), {}
+
+
+@command("quarry")
+def _quarry(g, a):
+    r = g.quarry([int(x) for x in a.get("ids", [])], _i(a, "runs", 1))
     return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
 
 

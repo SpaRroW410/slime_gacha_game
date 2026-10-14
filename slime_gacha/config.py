@@ -1,15 +1,15 @@
 """Tunable constants. Change numbers here to rebalance without touching logic."""
 
 # ---- Rarity & stars -----------------------------------------------------------
-RARITIES = ["common", "rare", "epic", "legendary"]            # ordered low -> high
-RARITY_RATES = {"common": 90, "rare": 9, "epic": 0.9, "legendary": 0.09}   # weights, normalised on roll
-RARITY_STAT_MULT = {"common": 1.0, "rare": 1.25, "epic": 1.6, "legendary": 2.2}
-RARITY_LOOT_MULT = {"common": 1.0, "rare": 1.1, "epic": 1.25, "legendary": 1.5}
-RARITY_TAG = {"common": "C", "rare": "R", "epic": "E", "legendary": "L"}
+RARITIES = ["common", "uncommon", "rare", "epic", "legendary"]            # ordered low -> high
+RARITY_RATES = {"common": 90, "uncommon": 8, "rare": 1.9, "epic": 0.09, "legendary": 0.01}   # weights, normalised on roll
+RARITY_STAT_MULT = {"common": 1.0, "uncommon": 1.12, "rare": 1.25, "epic": 1.6, "legendary": 2.2}
+RARITY_LOOT_MULT = {"common": 1.0, "uncommon": 1.05, "rare": 1.1, "epic": 1.25, "legendary": 1.5}
+RARITY_TAG = {"common": "C", "uncommon": "U", "rare": "R", "epic": "E", "legendary": "L"}
 # Star rating 1..5. P(star = k) ~ exp(-lambda * (k-1)); lambda grows with rarity, so high stars are
 # exponentially rarer and the drop-off is steeper at higher ranks.
 MAX_STARS = 5
-STAR_DECAY = {"common": 0.7, "rare": 1.0, "epic": 1.3, "legendary": 1.6}
+STAR_DECAY = {"common": 0.7, "uncommon": 0.85, "rare": 1.0, "epic": 1.3, "legendary": 1.6}
 STAR_STAT_MULT = [1.0, 1.1, 1.25, 1.45, 1.7]
 PITY_EPIC = 0           # 0 = disabled (stated rates are honest). Set e.g. 10 / 50 to enable pity.
 PITY_LEGENDARY = 0
@@ -17,9 +17,10 @@ VARIANCE = 0.10         # +/- per-slime stat roll
 
 # ---- Economy --------------------------------------------------------------
 # WHITE gel = common currency, PURPLE gel = rare currency (boosts rare pulls). Both buy pulls 1:1.
-RESOURCES = ["white_gel", "purple_gel", "food", "essence", "scrap", "alloy", "crystal", "stardust"]       # add a name here to add a resource
+RESOURCES = ["white_gel", "purple_gel", "food", "essence", "scrap", "alloy", "crystal", "stardust", "voidglass",
+             "stone_common", "stone_uncommon", "stone_rare", "stone_epic", "stone_legendary"]       # add a name here to add a resource
 STARTING_WALLET = {"white_gel": 100, "purple_gel": 10, "food": 15, "essence": 0}
-MATERIAL_OF = {"common": "scrap", "rare": "alloy", "epic": "crystal", "legendary": "stardust"}   # crafting materials
+MATERIAL_OF = {"common": "scrap", "uncommon": "alloy", "rare": "crystal", "epic": "stardust", "legendary": "voidglass"}   # crafting materials
 PULL_COST = 10          # of white OR purple gel per single pull
 PURPLE_RARITY_BOOST = 5.0 # multiplies rare/epic/legendary weights when paying with purple gel
 DAY_TICKS = 24          # one game day; one free pull per day
@@ -52,9 +53,9 @@ BRAWL_HP_LOSS = 0.08       # brawls can kill an already wounded slime
 LEVEL_CAPS = [10, 25, 50]           # per evolution stage
 STAGE_STAT_MULT = [1.0, 1.5, 2.1]
 EVOLVE_ESSENCE_BASE = 50            # * (stage + 1)
-MERGE_XP_RATIO = 0.5
+MERGE_XP_RATIO = 1.0              # a merge hands over the XP the donor collected (no more, no less)
 MERGE_SAME_CLASS_BONUS = 1.25
-MERGE_RARITY_XP = {"common": 10, "rare": 30, "epic": 80, "legendary": 200}
+MERGE_RARITY_XP = {"common": 10, "uncommon": 20, "rare": 30, "epic": 80, "legendary": 200}   # (unused: a merge gives only the XP earned)
 
 def xp_to_next(level: int) -> int:
     """XP needed to go from `level` to `level + 1`."""
@@ -217,7 +218,7 @@ OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 8
+SAVE_VERSION = 9
 DEFAULT_SAVE = "savegame.json"
 
 
@@ -232,9 +233,9 @@ ADV_DROP_PER_FOE = 0.45          # chance per defeated foe to drop a relic
 ADV_LURE_COST = 1                # purple gel per run for a lure ...
 ADV_LURE_BOOST = 4.0             # ... which multiplies the non-common relic weights
 ADV_KO_WEAR = 8                  # extra durability lost by a relic whose wearer was knocked out
-ITEM_RARITY_RATES = {"common": 97, "rare": 2.7, "epic": 0.27, "legendary": 0.03}   # slime odds, made drastic
-ITEM_STAR_DECAY = {"common": 1.0, "rare": 1.4, "epic": 1.9, "legendary": 2.4}      # steeper than slimes
-ITEM_RARITY_MULT = {"common": 1.0, "rare": 1.5, "epic": 2.2, "legendary": 3.2}
+ITEM_RARITY_RATES = {"common": 97, "uncommon": 2.5, "rare": 0.45, "epic": 0.045, "legendary": 0.005}   # slime odds, made drastic
+ITEM_STAR_DECAY = {"common": 1.0, "uncommon": 1.2, "rare": 1.4, "epic": 1.9, "legendary": 2.4}      # steeper than slimes
+ITEM_RARITY_MULT = {"common": 1.0, "uncommon": 1.25, "rare": 1.6, "epic": 2.3, "legendary": 3.2}
 ITEM_STAR_MULT = [1.0, 1.25, 1.55, 1.9, 2.3]
 ITEM_LEVEL_STEP = 0.03           # +3% per level (level 1..10 inside a star)
 ITEM_MAX_LEVEL = 10
@@ -248,3 +249,20 @@ ITEM_COMPAT_MIN, ITEM_COMPAT_MAX = 0.85, 1.15    # stat multiplier from slime <-
 EGO_BASE_MULT = 1.5              # an ego relic is a 5-star legendary fused with a 5-star legendary slime
 EGO_LEVEL_MULT = 0.02            # + 2% per level of the sacrificed slime
 EGO_MORALE_STRESS = 2.0
+
+
+# ---- slime ascension, stones, merging, destruction (ascension.py) ---------------------------------------------------
+RARITY_ASCEND_GEL = {"uncommon": 10, "rare": 100, "epic": 1000, "legendary": 10000}   # white gel to REACH that rarity
+STAR_ASCEND_STONES = {2: 10, 3: 100, 4: 1000, 5: 10000}      # common-stone equivalents to REACH that star count
+STONE_MERGE = 100                                            # 100 stones of a rarity make 1 of the next
+STONE_RATES = {"common": 97.0, "uncommon": 2.6, "rare": 0.4, "epic": 0.01}   # Starfall Quarry drop odds
+STONE_COMMON_QTY = (1, 4)
+QUARRY_DROP_PER_FOE = 0.6
+QUARRY_XP_MULT = 0.15
+STONE_SIDE_DROP = {"grind": 0.03, "adventure": 0.05}          # per foe, common stones only (other dungeons)
+MERGE_STAT_SHARE = 0.20          # the target gains this share of the donor's stats ...
+MERGE_SHARE_SLOPE = 0.20         # ... falling by 0.2 per 1.0 (100%) of merge growth already in that attribute ...
+MERGE_SHARE_FLOOR = 0.01         # ... down to this flat share
+CHAMBER_GEL_BASE = 5             # destruction chamber: gel = base x 10^rarity x star factor x chamber factor
+CHAMBER_STONE_BASE = 5           # stone equivalents = (base + 50% of stones invested in its stars) x (1 + rarity step)
+CHAMBER_STRESS = 1.0
