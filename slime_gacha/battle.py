@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional
 
 from . import config
 from .abilities import Ability, get_ability
-from . import elements, terrain as terrain_mod
+from . import elements, items as items_mod, terrain as terrain_mod
 from . import sparring
 from .archetypes import STAT_KEYS
 from .growth import add_xp
@@ -94,6 +94,7 @@ class Combatant:
     morale: float = 60.0
     nonlethal: bool = False         # sparring: reaching 1 HP means yielding, not dying
     yielded: bool = False
+    mods: Dict[str, object] = field(default_factory=dict)   # relic mods: crit_rate, crit_dmg, lifesteal, elem
 
     @property
     def alive(self) -> bool:
@@ -155,7 +156,7 @@ class BattleSystem:
         return Combatant(s.name, s.arch.emoji, side, dict(s.max_stats()), float(s.hp),
                          s.known_abilities(), s.behavior, s.power_multiplier() * morale_f * synergy, s,
                          mastery={b: elements.basic_level(s, b) for b in s.attuned},
-                         style=sparring.style_levels(s), morale=s.morale)
+                         style=sparring.style_levels(s), morale=s.morale, mods=items_mod.battle_mods(s))
 
     @staticmethod
     def from_enemy(e: Enemy) -> Combatant:
@@ -438,9 +439,11 @@ def _damage_value(bs: BattleSystem, actor, ability, target):
     raw *= max(0.6, 1 - config.STYLE_SWORD_GUARD * target.style.get("sword", 0))       # parrying
     crit = bs.rng.random() < (config.CRIT_CHANCE + (0.1 if actor.behavior == "explore" else 0)
                               + config.STYLE_ARCHERY_CRIT * actor.style.get("archery", 0)
-                              + (bs.terrain.crit if bs.terrain else 0.0))
+                              + (bs.terrain.crit if bs.terrain else 0.0) + actor.mods.get("crit_rate", 0.0))
+    if ability.element:
+        raw *= 1 + actor.mods.get("elem", {}).get(ability.element, 0.0)
     if crit:
-        raw *= config.CRIT_MULT
+        raw *= config.CRIT_MULT + actor.mods.get("crit_dmg", 0.0)
     if target.guard > 0:
         raw *= config.GUARD_REDUCTION
     return max(1, int(raw)), crit, eff
@@ -456,6 +459,9 @@ def _h_damage(bs, actor, ab, targets, everyone, log):
         t.hurt(dmg)
         log.append(f"  {actor.emoji}{actor.name} uses {ab.name} on {t.name}: {dmg} dmg{' (CRIT!)' if crit else ''}{_eff_tag(eff)}"
                    f" [{max(0, int(t.hp))}/{int(t.max_hp)}]")
+        ls = actor.mods.get("lifesteal", 0.0)
+        if ls and actor.alive:
+            actor.hp = min(actor.max_hp, actor.hp + max(1, int(dmg * ls)))
 
 
 def _h_drain(bs, actor, ab, targets, everyone, log):

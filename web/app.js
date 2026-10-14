@@ -3,10 +3,10 @@
 
 const LS_KEY = 'slimegacha.save.v1';
 const CLASS_COLORS = { barbarian: '#e5604d', mage: '#8a7cff', medic: '#4cc38a', rogue: '#aab2c0', ranger: '#e0b341', necromancer: '#a56bd1' };
-const RES = { white_gel: ['⚪', 'White gel'], purple_gel: ['🟣', 'Purple gel'], food: ['🍖', 'Food'], essence: ['✨', 'Essence'] };
+const RES = { white_gel: ['⚪', 'White gel'], purple_gel: ['🟣', 'Purple gel'], food: ['🍖', 'Food'], essence: ['✨', 'Essence'], scrap: ['🔩', 'Scrap'], alloy: ['🪙', 'Alloy'], crystal: ['💠', 'Crystal'], stardust: ['🌟', 'Stardust'] };
 const NEED_NAME = { energy: 'Energy', food: 'Food', safety: 'Safety', belonging: 'Belonging', esteem: 'Esteem' };
 const WISH = { energy: 'needs sleep', food: 'is hungry', safety: 'feels unsafe (hurt)', belonging: 'feels lonely', esteem: 'wants to prove itself' };
-const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'],
+const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'], ['rift', '🧭 Rift'],
   ['academy', '📚 Academy'], ['town', '🏠 Town'], ['council', '⚖️ Council'], ['records', '🪦 Records']];
 
 let backend = null;
@@ -130,7 +130,7 @@ function tabBadge(k) {
   return '';
 }
 function tabContent() {
-  return { colony, gacha, parties, dungeons, academy, town, council, records }[S.tab]();
+  return { colony, gacha, parties, dungeons, rift, academy, town, council, records }[S.tab]();
 }
 
 function welcome() {
@@ -200,7 +200,7 @@ function drawer(s) {
     return `<div class="row between"><span>${sl}: ${cur ? `<b>${cur.emoji} ${esc(cur.name)}</b>` : '<span class="mute">empty</span>'}</span>
       <span class="row">${opts.length ? `<select data-ui="eq_${sl}">${opts.map((g) => `<option value="${g.key}">${g.emoji} ${esc(g.name)} ×${st.gear.inventory[g.key]}</option>`).join('')}</select><button class="btn small" data-act="equip" data-slot="${sl}" ${free ? '' : 'disabled'}>Equip</button>` : ''}
       ${cur ? `<button class="btn small" data-act="unequip" data-slot="${sl}" ${free ? '' : 'disabled'}>Remove</button>` : ''}</span></div>`;
-  }).join('');
+  }).join('') + Object.values(s.items).map((it) => `<div class="row between"><span>${it.emoji} <b>${esc(it.name)}</b> ${chip(it.rarity, RARITY_CLS[it.rarity])} ${stars(it.stars)} Lv${it.level} <small class="mute">💞${it.compat}%</small></span><button class="btn small" data-act="item_unequip" data-id="${s.id}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Remove</button></div>`).join('');
   const el = (b) => {
     const e = st.elements.list.find((x) => x.key === b);
     const lv = s.mastery[b];
@@ -415,6 +415,46 @@ function academy() {
   </div>`;
 }
 
+/* ---------------------------------------------------------------- rift (adventure dungeon & relics) */
+const RARITY_CLS = { common: '', rare: 'info', epic: 'warn', legendary: 'ok' };
+function relicCard(it, holderId = null) {
+  const st = S.state, a = st.gear.adventure, free = holderId ? !slimeById(holderId)?.busy : true;
+  const stat = Object.entries(it.stats).map(([k, v]) => `+${v} ${k}`).join(' ');
+  const dur = it.durability === null ? '<span class="chip ok">unbreakable</span>' : `<div class="mute">Durability ${it.durability}/${it.max_durability}</div>${bar(it.durability, it.max_durability, it.durability < it.max_durability * 0.3 ? 'bad' : '')}`;
+  const act_ = (c, label, cs, cls = '') => `<button class="btn small ${cls}" data-act="item_cmd" data-c="${c}" data-uid="${it.uid}" ${cs && !affordable(cs) ? 'disabled' : ''} ${free ? '' : 'disabled'}>${label}${cs ? ' · ' + cost(cs) : ''}</button>`;
+  const slimeSel = holderId ? '' : `<select data-ui="ie_${it.uid}">${st.slimes.filter((s) => !s.busy).map((s) => `<option value="${s.id}" ${s.id == ui('ie_' + it.uid, st.slimes[0]?.id) ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)})</option>`).join('')}</select><button class="btn small primary" data-act="item_equip" data-uid="${it.uid}">Equip</button>`;
+  return `<div class="panel flat stack"><div class="row between"><b>${it.emoji} ${esc(it.name)}</b>${chip(it.rarity, RARITY_CLS[it.rarity])}</div>
+    <div>${stars(it.stars)} · Lv${it.level}/10 · ${stat}${it.compat !== null ? ` · 💞 compat ${it.compat}%` : ''}</div>
+    ${it.mods.length ? `<div>${it.mods.map((m) => chip(esc(m), 'info')).join(' ')}</div>` : ''}
+    ${it.ego ? `<div class="mute">👁️ Soul of ${esc(it.ego.name)} (Lv${it.ego.level}) — only 5★ legendaries may wield it.</div>` : `<small class="mute">Fits: ${it.fits.join(', ')}</small>`}
+    ${dur}
+    <div class="row">${slimeSel}
+      ${it.level_cost ? act_('level_item', '⬆ Level', it.level_cost) : ''}${it.star_cost ? act_('ascend_star', '🌟 Ascend ★', it.star_cost) : ''}${it.rarity_cost ? act_('ascend_rarity', '💎 Raise rarity', it.rarity_cost) : ''}
+      ${it.repair_cost ? act_('repair_item', '🛠 Repair', { white_gel: it.repair_cost }) : ''}
+      ${it.salvage ? `<button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${it.uid}" data-ask="Break this relic down for ${cost(it.salvage)}?" ${free ? '' : 'disabled'}>♻ Salvage → ${cost(it.salvage)}</button>` : ''}
+      ${holderId ? `<button class="btn small" data-act="item_unequip" data-id="${holderId}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Remove</button>` : ''}
+      ${!it.ego && it.rarity === 'legendary' && it.stars === 5 ? `<button class="btn small danger" data-act="item_fuse" data-uid="${it.uid}">👁 Fuse ego…</button>` : ''}</div></div>`;
+}
+function rift() {
+  const st = S.state, a = st.gear.adventure;
+  const sel = new Set((ui('adv_ids', []) || []).map(num));
+  const equipped = st.slimes.flatMap((s) => Object.values(s.items).map((it) => ({ it, s })));
+  const rates = Object.entries(a.rates).map(([k, v]) => `${k} ${v}%`).join(' · ');
+  return `<div class="grid cols2">
+  <div class="panel stack"><h2>🧭 The Wayfarer's Rift</h2>
+    <p class="mute">An adventure dungeon for <b>relics</b>. Any <b>1–${a.max_party}</b> slimes may go; monsters are <b>one level above</b> the party average (a smaller party meets fewer). Nobody dies, but a knocked-out slime loses morale and its relics are battered. Every win may drop a relic — odds are far harsher than the gacha: ${rates}. A <b>lure</b> (${a.lure_cost} 🟣 per run) multiplies the rare odds.</p>
+    <div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>
+    <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" style="width:70px"></label>
+      <button class="btn small ${ui('adv_lure', false) ? 'primary' : ''}" data-act="adv_lure">${ui('adv_lure', false) ? '✔ ' : ''}Lure (🟣)</button>
+      <button class="btn primary" data-act="adventure" ${sel.size ? '' : 'disabled'}>Venture (${sel.size}/${a.max_party})</button></div>
+    <h4>Materials</h4><div class="row">${Object.entries(a.materials || st.gear.materials).map(([k, v]) => chip(`${RES[k][0]} ${RES[k][1]}: ${v}`)).join('')}</div>
+    <small class="mute">Salvaging relics gives materials of their tier; the higher the level and stars, the more — and a better tier. Levelling needs materials of the relic's own tier. Star ascension (level 10) also needs Armory level ≥ the current star count; raising rarity needs ★5 Lv10 and Armory level 5.</small></div>
+  <div class="stack"><div class="panel stack"><h2>🎒 Relic vault <small class="mute">(${st.gear.vault.length})</small></h2>
+    ${st.gear.vault.map((it) => relicCard(it)).join('') || '<p class="mute">No relics yet. Venture into the Rift.</p>'}</div>
+    <div class="panel stack"><h2>⚔ Worn relics</h2>
+    ${equipped.map(({ it, s }) => `<div><small class="mute">${esc(s.name)}</small>${relicCard(it, s.id)}</div>`).join('') || '<p class="mute">Nothing worn.</p>'}</div></div></div>`;
+}
+
 /* ---------------------------------------------------------------- town */
 function town() {
   const st = S.state;
@@ -510,6 +550,17 @@ const A = {
   hunt: () => act('hunt', { id: S.sel, zone: ui('zone', S.state.zones[0].key) }),
   equip: (d) => act('equip', { id: S.sel, key: ui('eq_' + d.slot, Object.keys(S.state.gear.inventory).find((k) => S.state.gear.all.find((g) => g.key === k).slot === d.slot)) }),
   unequip: (d) => act('unequip', { id: S.sel, slot: d.slot }),
+  adv_lure: () => { S.ui.adv_lure = !ui('adv_lure', false); render(); },
+  adv_toggle: (d) => { const ids = new Set((ui('adv_ids', []) || []).map(num)); const id = num(d.id); ids.has(id) ? ids.delete(id) : ids.add(id); S.ui.adv_ids = [...ids].slice(0, S.state.gear.adventure.max_party); render(); },
+  adventure: () => { const ids = (ui('adv_ids', []) || []).map(num); const runs = num(ui('adv_runs', 5), 5);
+    act('adventure', { ids, runs, lure: !!ui('adv_lure', false) }, { title: "The Wayfarer's Rift", slow: true }).then(() => { S.ui.adv_ids = []; render(); }); },
+  item_equip: (d) => act('equip_item', { id: num(ui('ie_' + d.uid, S.state.slimes[0]?.id)), uid: num(d.uid) }),
+  item_unequip: (d) => act('unequip_item', { id: num(d.id), slot: d.slot }),
+  item_cmd: (d) => d.ask ? confirmThen(d.ask, () => act(d.c, { uid: num(d.uid) })) : act(d.c, { uid: num(d.uid) }),
+  item_fuse: (d) => { const souls = S.state.slimes.filter((s) => !s.busy && s.rarity === 'legendary' && s.stars === 5);
+    if (!souls.length) return toast('You need a free 5★ legendary slime to be the soul.', true);
+    const best = souls.reduce((a, b) => (b.level > a.level ? b : a));
+    confirmThen(`Sacrifice ${best.name} (Lv${best.level} ${best.class_name}) into this relic?\n\nIt becomes an EGO relic (stronger with the soul's level). ${best.name} is gone forever and the colony will mourn.`, () => act('fuse_ego', { uid: num(d.uid), id: best.id })); },
   study: (d) => act('study', { id: S.sel, element: d.el }),
   study_lib: (d) => act('study', { id: num(d.id), element: d.el }),
   pull: (d) => { S.pull = null; return act('pull', { n: num(d.n), pay: d.pay }); },

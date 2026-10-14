@@ -324,6 +324,15 @@ idea.
 - **Difficulty**: `player_curve(level) x difficulty(floor)` (difficulty ramps 1.0->1.65 over floors 1-8); calibrated by simulation so an unequipped rare 3-star party wins ordinary floors ~90-100% and bosses ~50-65%.
 - Intel: terrain shown from 20% knowledge, terrain advice at 100%. SAVE_VERSION 7; scouting budget up to 240 h.
 
+### 5.19 Relics & the Wayfarer's Rift (`items.py`, `Game.adventure`, forge methods)
+- **Adventure dungeon**: any 1-5 slimes (no formal party) fight waves one level above their average (foes = 0.75 x party size), themed by terrain/families like the Pit. Nobody dies; a knocked-out slime loses morale and its relics lose durability. Each defeated foe may drop a relic; XP is only 25%. A lure (1 purple gel per run) multiplies non-common odds x4.
+- **Relics** are unique items: base type (12), rarity (common..legendary at 97 / 2.7 / 0.27 / 0.03 %, steeper star falloff than slimes), 1-5 stars, level 1-10 per star, durability, mods (crit rate, crit damage, elemental damage, lifesteal; rarity step = number of mods). Power = rarity x star x level multipliers.
+- **Compatibility** (0-100): class fit, matching attuned element, a stable personal chemistry, and a bond that grows with battles together; scales the item's stats x0.85-1.15.
+- **Durability**: -1 per fight, -8 when the wielder is knocked out; at 0 the relic shatters into half the salvage. Repair costs white gel.
+- **Materials** (scrap, alloy, crystal, stardust by tier): salvaging yields more, and one tier better, from higher-level/star relics. Levelling needs own-tier materials; star ascension (level 10) needs Armory level >= current stars; at 5 stars / level 10 the rarity can be raised (Armory 5) and gains a mod.
+- **Ego relics**: a 5-star legendary relic + a sacrificed 5-star legendary slime. Stats x(1.5 + 0.02 x soul level), mods doubled, unbreakable, wieldable only by 5-star legendary slimes. Each costs a soul, hence three ego slots need three sacrifices (sacrifice stress +2).
+- Relics of a slime that dies in the Descent are carried back by survivors (synergy chance) or lost; elsewhere they return to the vault. Plain Armory gear still exists and works as before. SAVE_VERSION 8.
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|

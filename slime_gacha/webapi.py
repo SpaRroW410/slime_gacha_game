@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import config, dungeon, elements, equipment, outlook, sparring, spells, specialization
+from . import config, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -45,7 +45,7 @@ def slime_view(g: Game, s) -> dict:
         mastery={b: elements.basic_level(s, b) for b in s.attuned},
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
-        gear=dict(s.gear), task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
+        gear=dict(s.gear), items={k: _item_view(v, s) for k, v in s.items.items()}, task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
         party=(party.id if party else None), can_evolve=can_evolve(s),
         evolve_cost=(evolve_cost(s) if can_evolve(s) else None), discipline=a.discipline,
         progress=s.progress, exp=dict(s.exp), outlook=_outlook_view(s),
@@ -55,6 +55,21 @@ def slime_view(g: Game, s) -> dict:
                            ability=get_ability(r["spec"].ability).name, ok=r["ok"], reason=r["reason"],
                            level=r["level"], desc=r["spec"].description) for r in specialization.options(s)],
     )
+
+
+def _item_view(it, holder=None) -> dict:
+    return dict(uid=it.uid, base=it.base, name=it.name, emoji=it.spec.emoji, slot=it.slot, rarity=it.rarity,
+                stars=it.stars, level=it.level, durability=(None if it.unbreakable else it.durability),
+                max_durability=(None if it.unbreakable else it.max_durability), ego=it.ego,
+                stats=(it.stats_for(holder) if holder else it.base_stats()),
+                mods=[it.mod_text(m) for m in it.mods], bond=it.bond,
+                compat=(it.compat(holder) if holder else None), fits=list(it.spec.fits),
+                level_cost=(it.level_cost() if it.level < config.ITEM_MAX_LEVEL else None),
+                star_cost=(it.star_cost() if it.level >= config.ITEM_MAX_LEVEL and it.stars < config.MAX_STARS else None),
+                rarity_cost=(it.rarity_cost() if it.stars >= config.MAX_STARS and it.level >= config.ITEM_MAX_LEVEL
+                             and items_mod.next_rarity(it.rarity) and not it.ego else None),
+                repair_cost=it.repair_cost(), salvage=(None if it.ego else it.salvage_yield()),
+                holder=(holder.id if holder else None))
 
 
 def _pit_view(g: Game) -> dict:
@@ -122,7 +137,12 @@ def snapshot(g: Game) -> dict:
                              stats=x.stats, cost=x.cost) for x in g.gear_shop()],
                   all=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier, stats=x.stats,
                             cost=x.cost) for x in equipment.GEAR],
-                  inventory=dict(g.inventory.items), pit_lost=list(g.pit_lost)),
+                  inventory=dict(g.inventory.items), pit_lost=list(g.pit_lost),
+                  vault=[_item_view(i) for i in sorted(g.vault.values(), key=lambda i: -i.uid)],
+                  materials={m: g.wallet.get(m) for m in config.MATERIAL_OF.values()},
+                  adventure=dict(max_party=config.ADV_MAX_PARTY, max_runs=config.ADV_MAX_RUNS,
+                                 lure_cost=config.ADV_LURE_COST, rates=config.ITEM_RARITY_RATES,
+                                 armory=g.buildings.level("armory"))),
         zones=[dict(key=z.key, name=z.name, duration=z.duration, danger=z.danger, desc=z.description,
                     rewards=z.rewards, purple=z.purple_chance) for z in ZONES],
         disciplines=[dict(key=d.key, name=d.name, emoji=d.emoji, style=d.style, perk=d.perk,
@@ -345,6 +365,52 @@ def _equip(g, a):
 @command("unequip")
 def _unequip(g, a):
     return _msg(g.unequip(_i(a, "id"), a.get("slot", "")))
+
+
+@command("equip_item")
+def _equip_item(g, a):
+    return _msg(g.equip_item(_i(a, "id"), _i(a, "uid")))
+
+
+@command("unequip_item")
+def _unequip_item(g, a):
+    return _msg(g.unequip_item(_i(a, "id"), a.get("slot", "")))
+
+
+@command("level_item")
+def _level_item(g, a):
+    return _msg(g.level_item(_i(a, "uid")))
+
+
+@command("ascend_star")
+def _ascend_star(g, a):
+    return _msg(g.ascend_star(_i(a, "uid")))
+
+
+@command("ascend_rarity")
+def _ascend_rarity(g, a):
+    return _msg(g.ascend_rarity(_i(a, "uid")))
+
+
+@command("repair_item")
+def _repair_item(g, a):
+    return _msg(g.repair_item(_i(a, "uid")))
+
+
+@command("salvage_item")
+def _salvage_item(g, a):
+    return _msg(g.salvage_item(_i(a, "uid")))
+
+
+@command("fuse_ego")
+def _fuse_ego(g, a):
+    return g.fuse_ego(_i(a, "uid"), _i(a, "id")), {}
+
+
+@command("adventure")
+def _adventure(g, a):
+    r = g.adventure([int(x) for x in a.get("ids", [])], _i(a, "runs", 1), bool(a.get("lure")))
+    return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
 
 
 @command("mediate")

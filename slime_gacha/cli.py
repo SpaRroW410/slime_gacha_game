@@ -24,7 +24,7 @@ MENU = """
  [4] Care (feed/sleep/pet)   [5] Set stance  [6] Hunt (one slime or a party)
  [7] Wait (time)      [8] Parties            [9] Dungeons / battles
  [t] Sparring arenas (fighting styles)   [l] Library & spell lab   [r] Rest Area
- [b] Buildings (upgrade)   [k] Council   [i] Inventory & Armory
+ [b] Buildings (upgrade)   [k] Council   [i] Inventory & Armory   [w] Wayfarer's Rift & relics
  [m] Merge  [e] Evolve  [c] Conflicts  [a] Auto-care  [j] Journal  [x] Graveyard  [s] Save  [q] Quit
 """
 
@@ -387,6 +387,35 @@ def inventory_menu(g: Game) -> None:
                                                         for k in s.gear.values()) or "-"))
 
 
+def rift_menu(g: Game) -> None:
+    mats = "  ".join(f"{k} {g.wallet.get(k)}" for k in config.MATERIAL_OF.values())
+    print(f"  Materials: {mats}")
+    for it in sorted(g.vault.values(), key=lambda i: i.uid):
+        print(f"   #{it.uid:<3} {it.label()}  " + ", ".join(f"+{v} {k}" for k, v in it.base_stats().items())
+              + (f"  [{', '.join(it.mod_text(m) for m in it.mods)}]" if it.mods else "")
+              + ("" if it.unbreakable else f"  dur {it.durability}/{it.max_durability}"))
+    for s in g.slimes():
+        for it in s.items.values():
+            print(f"   #{it.uid:<3} {it.label()} worn by {s.name} (compat {it.compat(s)}%)")
+    print("  [a] Adventure   [e] Equip   [u] Unequip   [l] Level   [s] Ascend star   [r] Raise rarity   "
+          "[p] Repair   [b] Break down   [f] Fuse ego")
+    c = _ask("rift: ").lower()[:1]
+    if c == "a":
+        show_roster(g)
+        ids = [int(x) for x in _ask("slime ids (1-5, space separated): ").split()]
+        r = g.adventure(ids, _int("runs: "), _ask("lure (uses purple gel)? y/n: ").lower() == "y")
+        print("\n".join("  " + x for x in r.summary) + f"\n  Session over: {r.stop_reason}")
+    elif c == "e":
+        print("  " + g.equip_item(_int("slime id: "), _int("relic #: ")))
+    elif c == "u":
+        print("  " + g.unequip_item(_int("slime id: "), _ask("slot: ")))
+    elif c and c in "lsrpb":
+        fn = dict(l=g.level_item, s=g.ascend_star, r=g.ascend_rarity, p=g.repair_item, b=g.salvage_item)[c]
+        print("  " + fn(_int("relic #: ")))
+    elif c == "f":
+        print("\n".join("  " + x for x in g.fuse_ego(_int("relic #: "), _int("soul slime id (consumed!): "))))
+
+
 def party_menu(g: Game) -> None:
     show_parties(g)
     act = _ask("[n]ew / [a]dd slime / [r]emove slime / [f]ill with best free / [d]isband / [z] rest party (Rest Area): ").lower()[:1]
@@ -487,6 +516,8 @@ def handle(g: Game, choice: str) -> bool:
         council_menu(g)
     elif choice == "i":
         inventory_menu(g)
+    elif choice == "w":
+        rift_menu(g)
     elif choice == "l":
         library_menu(g)
     elif choice == "x":

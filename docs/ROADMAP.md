@@ -169,3 +169,13 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Daily-changing Gloop Pit (terrain + featured families)
 - [x] Web UI: terrain/title per floor, Today's Pit panel, victory banner
 - [ ] Art & sound (after floor 50, as planned)
+
+## M15 — Relics & the Wayfarer's Rift
+- [x] Adventure dungeon: 1-5 slimes, monsters at party average + 1
+- [x] Relic drops with harsh rarity odds, stars, mods
+- [x] Durability, repair, shatter into materials
+- [x] Levelling, star ascension (Lv10), rarity ascension with a new mod (5 stars, Lv10)
+- [x] Slime-relic compatibility
+- [x] Salvage: higher level = better materials
+- [x] Ego relics (5-star legendary relic + 5-star legendary slime)
+- [x] Web Rift tab, CLI menu [w], tests

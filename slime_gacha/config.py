@@ -17,8 +17,9 @@ VARIANCE = 0.10         # +/- per-slime stat roll
 
 # ---- Economy --------------------------------------------------------------
 # WHITE gel = common currency, PURPLE gel = rare currency (boosts rare pulls). Both buy pulls 1:1.
-RESOURCES = ["white_gel", "purple_gel", "food", "essence"]       # add a name here to add a resource
+RESOURCES = ["white_gel", "purple_gel", "food", "essence", "scrap", "alloy", "crystal", "stardust"]       # add a name here to add a resource
 STARTING_WALLET = {"white_gel": 100, "purple_gel": 10, "food": 15, "essence": 0}
+MATERIAL_OF = {"common": "scrap", "rare": "alloy", "epic": "crystal", "legendary": "stardust"}   # crafting materials
 PULL_COST = 10          # of white OR purple gel per single pull
 PURPLE_RARITY_BOOST = 5.0 # multiplies rare/epic/legendary weights when paying with purple gel
 DAY_TICKS = 24          # one game day; one free pull per day
@@ -216,5 +217,34 @@ OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 7
+SAVE_VERSION = 8
 DEFAULT_SAVE = "savegame.json"
+
+
+# ---- adventure dungeon & relics (items.py) ---------------------------------------------------------------------
+ADV_MAX_PARTY = 5
+ADV_XP_MULT = 0.25               # the Rift is for loot, not xp
+ADV_MONSTER_LEVEL = 1            # monsters are this many levels above the party average
+ADV_FOE_RATIO = 0.75             # foes per slime (a small party meets proportionally fewer)
+ADV_TICKS = 2
+ADV_MAX_RUNS = 40
+ADV_DROP_PER_FOE = 0.45          # chance per defeated foe to drop a relic
+ADV_LURE_COST = 1                # purple gel per run for a lure ...
+ADV_LURE_BOOST = 4.0             # ... which multiplies the non-common relic weights
+ADV_KO_WEAR = 8                  # extra durability lost by a relic whose wearer was knocked out
+ITEM_RARITY_RATES = {"common": 97, "rare": 2.7, "epic": 0.27, "legendary": 0.03}   # slime odds, made drastic
+ITEM_STAR_DECAY = {"common": 1.0, "rare": 1.4, "epic": 1.9, "legendary": 2.4}      # steeper than slimes
+ITEM_RARITY_MULT = {"common": 1.0, "rare": 1.5, "epic": 2.2, "legendary": 3.2}
+ITEM_STAR_MULT = [1.0, 1.25, 1.55, 1.9, 2.3]
+ITEM_LEVEL_STEP = 0.03           # +3% per level (level 1..10 inside a star)
+ITEM_MAX_LEVEL = 10
+ITEM_DURABILITY = 30             # + 10 per star + 10 per rarity step
+ITEM_SALVAGE_BASE = 2
+ITEM_ASCEND_STAR = 15            # materials of the item's own tier = this x current star ...
+ITEM_ASCEND_RARITY = 150         # ... and for a rarity step
+ITEM_MOD_RANGE = {"crit_rate": (0.03, 0.06), "crit_dmg": (0.10, 0.25), "elem_dmg": (0.08, 0.18),
+                  "lifesteal": (0.03, 0.08)}
+ITEM_COMPAT_MIN, ITEM_COMPAT_MAX = 0.85, 1.15    # stat multiplier from slime <-> item compatibility
+EGO_BASE_MULT = 1.5              # an ego relic is a 5-star legendary fused with a 5-star legendary slime
+EGO_LEVEL_MULT = 0.02            # + 2% per level of the sacrificed slime
+EGO_MORALE_STRESS = 2.0

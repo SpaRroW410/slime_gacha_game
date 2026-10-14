@@ -12,7 +12,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import buildings as bld, dungeon, terrain as terrain_mod, elements, equipment, outlook, sparring, spells, specialization
+from . import buildings as bld, dungeon, terrain as terrain_mod, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
@@ -83,6 +83,8 @@ class Game:
                              else random.SystemRandom().randrange(2 ** 31))
         self.inventory = equipment.Inventory()
         self.pit_lost: List[str] = []                  # gear left behind in the Gloop Pit
+        self.vault: Dict[int, items_mod.Item] = {}     # unequipped relics (see items.py)
+        self.next_item_id = 1
         self.sacrifice_stress = 0.0                    # recent merges; decays 1/day
         self.graveyard: List[dict] = []                # slimes that died, newest last
         self.journal: List[str] = []
@@ -148,6 +150,9 @@ class Game:
             for key in s.gear.values():                  # outside a dungeon the gear goes back to the colony
                 self.inventory.add(key)
             s.gear = {}
+            for it in s.items.values():
+                self.vault[it.uid] = it
+            s.items = {}
             del self.roster[s.id]
             self.parties.remove(s.id)
             friends = {i for f in self.conflicts.friends if s.id in f for i in f if i != s.id}
@@ -420,6 +425,7 @@ class Game:
         amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
         grief = self.social.grief(d, self.slimes(), amp)
         log = merge(t, d, compat)
+        self._return_gear(d)
         log.append(f"   (compatibility {compat:+d}, {self.social.compat_label(compat)}: "
                    f"{'a warm' if compat >= 30 else 'an awkward' if compat < 0 else 'an ordinary'} merge)")
         friends = {i for f in self.conflicts.friends if d.id in f for i in f if i != d.id}
@@ -541,6 +547,7 @@ class Game:
 
     def _after_battle(self, party, report: BattleReport, boss: bool = False, scale: float = 1.0) -> None:
         """Morale and bonds react to the outcome (deaths are handled when the dead are reaped)."""
+        report.log.extend(self._wear_items(party))
         alive = [s for s in party if s.hp > 0]
         if report.victory:
             for s in alive:
@@ -585,6 +592,9 @@ class Game:
         s = self.slime(sid)
         if s.busy:
             raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
+        slot = equipment.GEAR.get(key).slot
+        if slot in s.items:
+            self.unequip_item(sid, slot)
         return self.inventory.equip(s, key)
 
     def unequip(self, sid: int, slot: str) -> str:
@@ -607,6 +617,17 @@ class Game:
         friendship with the fallen). Unrecovered gear is lost (Pit: stays in the Pit's lost-and-found)."""
         syn = self.social.synergy(party) if len(party) > 1 else 1.0
         for f in fallen:
+            for it in ([] if where == "Gloop Pit" else list(f.items.values())):
+                f.items.pop(it.slot, None)
+                best = max(survivors, key=lambda x: self.social.compat(f, x)) if survivors else None
+                c = max(config.GEAR_RECOVERY_MIN, min(config.GEAR_RECOVERY_MAX, config.GEAR_RECOVERY_BASE
+                        + config.GEAR_RECOVERY_SYNERGY_SLOPE * (syn - 1) + self.social.compat(f, best) / 400.0)) \
+                    if best else 0.0
+                if self.rng.random() < c:
+                    self.vault[it.uid] = it
+                    log.append(f"🎒 {best.name} carries {f.name}'s {it.label()} back ({c:.0%} chance).")
+                else:
+                    log.append(f"💨 {f.name}'s {it.label()} is lost in the {where} forever.")
             items = list(f.gear.values())
             f.gear = {}
             for key in items:
@@ -635,6 +656,273 @@ class Game:
                 self.inventory.add(key)
                 g = equipment.GEAR.get(key)
                 log.append(f"🎒 The party digs up the lost {g.emoji}{g.name}!")
+
+    # ---- relics: forge, repair, salvage, ego (items.py) ---------------------------------------------
+    def _return_gear(self, s: Slime) -> None:
+        """A slime leaves the colony (merged, fused): everything it wore goes back to the colony."""
+        for key in s.gear.values():
+            self.inventory.add(key)
+        for it in s.items.values():
+            self.vault[it.uid] = it
+        s.gear, s.items = {}, {}
+
+    def new_item(self, lure: bool = False, rarity: str = None) -> items_mod.Item:
+        it = items_mod.roll_item(self.rng, self.next_item_id, lure, rarity)
+        self.next_item_id += 1
+        self.vault[it.uid] = it
+        return it
+
+    def find_item(self, uid: int):
+        """(item, holder) - holder is the Slime wearing it, or None when it is in the vault."""
+        if uid in self.vault:
+            return self.vault[uid], None
+        for s in self.slimes():
+            for it in s.items.values():
+                if it.uid == uid:
+                    return it, s
+        raise InvalidAction(f"No relic #{uid}.")
+
+    def _item_ready(self, uid: int):
+        it, holder = self.find_item(uid)
+        if holder is not None and holder.busy:
+            raise InvalidAction(f"{holder.name} is away ({holder.in_dungeon or holder.state}).")
+        return it, holder
+
+    def equip_item(self, sid: int, uid: int) -> str:
+        s = self.slime(sid)
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
+        it, holder = self._item_ready(uid)
+        why = items_mod.can_wield(s, it)
+        if why:
+            raise InvalidAction(why)
+        if holder is s:
+            raise InvalidAction(f"{s.name} already wields it.")
+        if holder is not None:
+            holder.items.pop(it.slot, None)
+        else:
+            del self.vault[uid]
+        if it.slot in s.items:
+            self.unequip_item(sid, it.slot)
+        if it.slot in s.gear:
+            self.inventory.add(s.gear.pop(it.slot))
+        s.items[it.slot] = it
+        it.bond = 0
+        s.hp = min(s.hp + int(it.stats_for(s).get("hp", 0)), s.max_hp)
+        return (f"{s.name} wields {it.label()} (compatibility {it.compat(s)}%, "
+                f"x{it.compat_mult(s):.2f} stats).")
+
+    def unequip_item(self, sid: int, slot: str) -> str:
+        s = self.slime(sid)
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
+        it = s.items.pop(slot, None)
+        if not it:
+            raise InvalidAction(f"{s.name} wields no relic in the {slot} slot.")
+        self.vault[it.uid] = it
+        s.hp = min(s.hp, s.max_hp)
+        return f"{s.name} puts away {it.label()}."
+
+    def level_item(self, uid: int) -> str:
+        it, _ = self._item_ready(uid)
+        if it.level >= config.ITEM_MAX_LEVEL:
+            raise InvalidAction(f"{it.name} is at level {config.ITEM_MAX_LEVEL} - ascend a star.")
+        self.wallet.spend_many(it.level_cost())
+        it.level += 1
+        return f"🔨 {it.label()} grows stronger."
+
+    def ascend_star(self, uid: int) -> str:
+        it, _ = self._item_ready(uid)
+        if it.level < config.ITEM_MAX_LEVEL:
+            raise InvalidAction("Only a level-10 relic can ascend a star.")
+        if it.stars >= config.MAX_STARS:
+            raise InvalidAction("Already five stars - try raising its rarity.")
+        if self.buildings.level("armory") < it.stars:
+            raise InvalidAction(f"The Armory must be level {it.stars} to forge {it.stars + 1} stars.")
+        self.wallet.spend_many(it.star_cost())
+        it.stars += 1
+        it.level = 1
+        it.durability = it.max_durability
+        return f"🌟 {it.label()} ascends to {it.stars} stars and is fully mended!"
+
+    def ascend_rarity(self, uid: int) -> str:
+        it, _ = self._item_ready(uid)
+        up = items_mod.next_rarity(it.rarity)
+        if it.ego:
+            raise InvalidAction("Ego relics cannot be reforged.")
+        if not up:
+            raise InvalidAction("It is already legendary.")
+        if it.stars < config.MAX_STARS or it.level < config.ITEM_MAX_LEVEL:
+            raise InvalidAction("Rarity can be raised only at 5 stars and level 10.")
+        if self.buildings.level("armory") < 5:
+            raise InvalidAction("The Armory must be level 5 to raise a relic's rarity.")
+        self.wallet.spend_many(it.rarity_cost())
+        it.rarity = up
+        mod = items_mod.roll_mod(self.rng, it.mods)
+        it.mods.append(mod)
+        it.durability = it.max_durability
+        return f"💎 {it.label()} is reborn as {up}! New mod: {it.mod_text(mod)}."
+
+    def repair_item(self, uid: int) -> str:
+        it, _ = self._item_ready(uid)
+        cost = it.repair_cost()
+        if cost <= 0:
+            raise InvalidAction("It needs no repair.")
+        self.wallet.spend("white_gel", cost)
+        it.durability = it.max_durability
+        return f"🛠️ {it.label()} is mended for {cost} white gel."
+
+    def salvage_item(self, uid: int) -> str:
+        it, holder = self._item_ready(uid)
+        if it.ego:
+            raise InvalidAction("An ego relic holds a soul - it cannot be broken down.")
+        y = it.salvage_yield()
+        if holder is not None:
+            holder.items.pop(it.slot, None)
+            holder.hp = min(holder.hp, holder.max_hp)
+        else:
+            del self.vault[uid]
+        self.wallet.add_many(y)
+        return f"♻️ {it.label()} is broken down: " + ", ".join(f"{v} {k}" for k, v in y.items()) + "."
+
+    def fuse_ego(self, uid: int, sid: int) -> List[str]:
+        """Sacrifice a 5-star legendary slime into a 5-star legendary relic: it becomes an EGO relic, wieldable only
+        by 5-star legendary slimes. The higher the sacrificed slime's level, the stronger the ego."""
+        s = self.slime(sid)
+        it, holder = self._item_ready(uid)
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
+        if it.ego:
+            raise InvalidAction("It is already an ego relic.")
+        if not (it.rarity == "legendary" and it.stars == config.MAX_STARS):
+            raise InvalidAction("Only a 5-star legendary relic can be fused.")
+        if not (s.rarity == "legendary" and s.stars == config.MAX_STARS):
+            raise InvalidAction("Only a 5-star legendary slime can be the soul.")
+        if holder is s:
+            holder.items.pop(it.slot, None)
+            self.vault[it.uid] = it
+        elif holder is not None:
+            holder.items.pop(it.slot, None)
+            self.vault[it.uid] = it
+        amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
+        friends = {i for f in self.conflicts.friends if s.id in f for i in f if i != s.id}
+        friends |= {i for k, v in self.social.bonds.items() if s.id in k and v >= 20 for i in k if i != s.id}
+        it.ego = dict(name=s.name, level=s.level, archetype=s.archetype)
+        it.durability = it.max_durability
+        self._return_gear(s)
+        del self.roster[s.id]
+        self.conflicts.forget(s.id)
+        self.parties.remove(s.id)
+        self.social.forget(s.id)
+        for o in self.slimes():
+            base = config.MERGE_MORALE_FRIENDS if o.id in friends else config.MERGE_MORALE_OTHERS
+            self.social.shift_morale(o, base * amp)
+        self.sacrifice_stress += config.EGO_MORALE_STRESS
+        return [f"👁️ {s.name} (Lv{s.level} {s.arch.name}) pours their soul into {it.spec.emoji}{it.spec.name}.",
+                f"   {it.label()} awakens - stats x{it.power_mult():.1f}, mods doubled, unbreakable. "
+                f"Only a 5-star legendary slime can wield it.",
+                f"   The colony mourns. Sacrifice stress is now {self.sacrifice_stress:.1f}."]
+
+    def _wear_items(self, party) -> List[str]:
+        """Every relic worn into a fight loses a point of durability and grows closer to its wielder."""
+        out = []
+        for s in party:
+            for slot, it in list(s.items.items()):
+                it.bond = min(40, it.bond + 1)
+                if it.wear(1):
+                    out.append(self._shatter(s, slot, it))
+        return out
+
+    def _ko_wear(self, downed, log: List[str]) -> None:
+        """A slime knocked out (not killed) keeps its relics, but they take a beating."""
+        for s in downed:
+            for slot, it in list(s.items.items()):
+                if it.wear(config.ADV_KO_WEAR):
+                    log.append(self._shatter(s, slot, it))
+
+    def _shatter(self, s: Slime, slot: str, it: items_mod.Item) -> str:
+        s.items.pop(slot, None)
+        y = it.salvage_yield(broken=True)
+        self.wallet.add_many(y)
+        s.hp = min(s.hp, s.max_hp)
+        return f"💥 {s.name}'s {it.label()} shatters! (" + ", ".join(f"{v} {k}" for k, v in y.items()) + ")"
+
+    # ---- adventure dungeon: the Wayfarer's Rift --------------------------------------------------
+    def adventure(self, sids: List[int], runs: int = 5, lure: bool = False) -> GrindResult:
+        """A party of 1-5 slimes (any slimes, no formal party needed) fights waves one level ABOVE their average,
+        hunting relics. Nobody dies (like the Pit): a knocked-out slime loses morale and its relics are damaged.
+        Rarity odds are far harsher than the gacha's; a lure (1 purple gel per run) multiplies them."""
+        sids = list(dict.fromkeys(sids))
+        if not 1 <= len(sids) <= config.ADV_MAX_PARTY:
+            raise InvalidAction(f"An adventuring party has 1-{config.ADV_MAX_PARTY} slimes.")
+        if not 1 <= runs <= config.ADV_MAX_RUNS:
+            raise InvalidAction(f"Runs must be 1-{config.ADV_MAX_RUNS}.")
+        party = [self.slime(i) for i in sids]
+        for s in party:
+            if s.state != "idle" or s.in_dungeon:
+                raise InvalidAction(f"{s.name} is {s.in_dungeon and 'inside a dungeon' or s.state}.")
+            if s.grounded:
+                raise InvalidAction(f"{s.name} is grounded after a brawl.")
+        res = GrindResult()
+        self._set_flag(party, "adventure")
+        try:
+            for n in range(1, runs + 1):
+                members = [s for s in party if s.id in self.roster]
+                if not members:
+                    res.stop_reason = "the whole party is gone"
+                    break
+                if any(s.hp < s.max_hp * config.GRIND_MIN_HP for s in members):
+                    res.summary.append(f"   (camped {self._camp(members)}h)")
+                    members = [s for s in party if s.id in self.roster]
+                for s in members:
+                    if s.state in ("sleeping", "resting"):
+                        s.state = "idle"
+                if lure:
+                    try:
+                        self.wallet.spend("purple_gel", config.ADV_LURE_COST)
+                    except Exception:
+                        lure = False
+                        res.summary.append("   (out of purple gel - the lure is spent)")
+                avg = sum(s.level for s in members) / len(members)
+                theme = dungeon.pit_theme(self.dungeon_seed ^ 0xA11, self.day * 8 + (n % 8))
+                enemies = dungeon.grind_wave(avg, 3 + config.ADV_MONSTER_LEVEL,
+                                           max(1, round(len(members) * config.ADV_FOE_RATIO)), self.rng, theme)
+                rep = self._run_battle(members, enemies, permadeath=False, split_xp=False,
+                                       xp_mult=config.ADV_XP_MULT, terrain=theme.terrain)
+                rep.log.insert(0, f"🧭 The Wayfarer's Rift (monsters ~lvl {dungeon.grind_level(avg, 4)}) - "
+                                  f"{theme.terrain.emoji} {theme.terrain.name}")
+                self._after_battle(members, rep, scale=0.4)
+                events: List[str] = []
+                downed = list(rep.fallen)
+                for s in downed:
+                    self.social.shift_morale(s, config.GRIND_DEATH_MORALE)
+                    events.append(f"💫 {s.name} was knocked out: morale {config.GRIND_DEATH_MORALE:+.0f}.")
+                self._ko_wear(downed, events)
+                if rep.victory:
+                    for _ in enumerate(enemies):
+                        if self.rng.random() < config.ADV_DROP_PER_FOE:
+                            it = self.new_item(lure)
+                            events.append(f"🎁 Found {it.label()}"
+                                          + (" - " + ", ".join(it.mod_text(m) for m in it.mods) if it.mods else "") + "!")
+                events.extend(self.tick(config.ADV_TICKS))
+                rep.log.extend(events)
+                res.runs.append(rep)
+                tag = "Victory" if rep.victory else "Defeat" if rep.winner == "foes" else "Draw"
+                line = f"Run {n}/{runs}: {tag} in {rep.rounds} rounds"
+                if rep.knocked_out:
+                    line += f", KO: {', '.join(rep.knocked_out)}"
+                res.summary.append(line)
+                res.summary.extend("   " + e for e in events if any(w in e for w in
+                                   ("Found", "shatters", "knocked", "died")))
+                self.journal.extend(events)
+                if rep.winner == "foes":
+                    res.stop_reason = "the whole party was knocked out"
+                    break
+            else:
+                res.stop_reason = "finished all requested runs"
+        finally:
+            self._clear_flag(party)
+        return res
 
     # ---- dungeons (common) ---------------------------------------------------------------------
     def _members_in(self, kind: str, pid: int) -> List[Slime]:
@@ -1010,6 +1298,7 @@ class Game:
                     if rep.victory and outlook.has(s, "pit"):
                         add_xp(s, int(rep.xp * config.OUTLOOK_GRINDER_XP))
                 self._drop_gear(downed, standing, members, "Gloop Pit", events)
+                self._ko_wear(downed, events)
                 if rep.victory:
                     self._gear_drop(1 if depth <= 3 else 2, config.GEAR_DROP_PIT, events)
                     self._recover_pit_gear(members, events)
@@ -1080,6 +1369,7 @@ class Game:
                     delves={str(k): v for k, v in self.delves.items()},
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
+                    vault=[i.to_dict() for i in self.vault.values()], next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -1129,6 +1419,8 @@ class Game:
         g.inventory.load(d.get("inventory"))
         g.pit_lost = [k for k in d.get("pit_lost", []) if k in equipment.GEAR]
         g.sacrifice_stress = d.get("sacrifice_stress", 0.0)
+        g.vault = {i["uid"]: items_mod.Item.from_dict(i) for i in d.get("vault", [])}
+        g.next_item_id = d.get("next_item_id", 1)
         spells.load_custom(d.get("custom_spells", []))
         g.library.discovered = {k for k in d.get("discovered", []) if k in ABILITIES}
         for sd in d.get("slimes", []):

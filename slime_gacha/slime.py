@@ -6,6 +6,7 @@ from . import config
 from .abilities import get_ability
 from .archetypes import STAT_KEYS, Archetype, get_archetype
 from .equipment import gear_bonus
+from .items import Item, item_bonus
 from .specialization import SPECS, apply_shifts
 
 STAGE_TITLES = ["", "Greater ", "Prime "]
@@ -82,6 +83,7 @@ class Slime:
         self.spec = ""                            # hybrid class key (see specialization.py)
         self.spec_disc = ""                       # the secondary discipline that made it (style affinity)
         self.gear: Dict[str, str] = {}            # slot -> gear key (see equipment.py)
+        self.items: Dict[str, Item] = {}          # slot -> equipped relic (see items.py)
         self.in_dungeon: str = ""                 # "main" / "grind" / "scout" while committed to a dungeon
         self.style_xp: Dict[str, float] = {}      # fighting-style xp per discipline (see sparring.py)
         self.morale: float = config.MORALE_START  # fight readiness 0-100 (see social.py)
@@ -109,7 +111,9 @@ class Slime:
 
     def max_stats(self) -> Dict[str, float]:
         a = self.arch
-        bonus = gear_bonus(self.gear)
+        bonus = dict(gear_bonus(self.gear))
+        for k, v in item_bonus(self).items():
+            bonus[k] = bonus.get(k, 0.0) + v
         mult = config.RARITY_STAT_MULT[self.rarity] * config.STAR_STAT_MULT[self.stars - 1] * config.STAGE_STAT_MULT[
             min(self.stage, len(config.STAGE_STAT_MULT) - 1)]
         out = {k: round((a.base_stats[k] + a.growth[k] * (self.level - 1))
@@ -178,7 +182,7 @@ class Slime:
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
                     merged=self.merged, grounded=self.grounded, style_xp=self.style_xp, morale=self.morale,
-                    gear=self.gear, in_dungeon=self.in_dungeon, progress=self.progress, exp=self.exp, spec=self.spec, spec_disc=self.spec_disc,
+                    gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, in_dungeon=self.in_dungeon, progress=self.progress, exp=self.exp, spec=self.spec, spec_disc=self.spec_disc,
                     attuned=self.attuned, mastery_xp=self.mastery_xp, spells=self.spells,
                     task=self.task)
 
@@ -190,6 +194,7 @@ class Slime:
                   "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task"):
             if k in d:
                 setattr(s, k, d[k])
+        s.items = {k: Item.from_dict(v) for k, v in (d.get("items") or {}).items()}
         s.needs = Needs(d.get("needs"))
         s.hunt = HuntAssignment(**d["hunt"]) if d.get("hunt") else None
         return s
