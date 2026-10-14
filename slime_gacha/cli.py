@@ -420,8 +420,10 @@ def ascension_menu(g: Game) -> None:
     from . import ascension
     stones = "  ".join(f"{r} {g.wallet.get(ascension.stone_key(r))}" for r in config.RARITIES)
     print(f"  Stones: {stones}   (worth {ascension.stone_total(g.wallet)} common)")
+    print(f"  Potions: {dict(g.potions) or 'none'}   herbs {g.wallet.get('herb')}")
     print("  [r] Ascend rarity (white gel)   [s] Ascend star (stones)   [m] Merge stones up   "
-          "[q] Starfall Quarry   [d] Destroy in the chamber")
+          "[q] Starfall Quarry   [d] Destroy in the chamber\n  [b] Brew a potion   [p] Drink a potion   "
+          "[f] Slime repairs its gear   [v] Slime vitals (stamina, attributes)")
     c = _ask("ascension: ").lower()[:1]
     if c == "r":
         show_roster(g)
@@ -436,6 +438,21 @@ def ascension_menu(g: Game) -> None:
         ids = [int(x) for x in _ask("slime ids (1-5, space separated): ").split()]
         r = g.quarry(ids, _int("runs: "))
         print("\n".join("  " + x for x in r.summary) + f"\n  Session over: {r.stop_reason}")
+    elif c == "b":
+        from . import potions
+        print("  kinds: " + ", ".join(potions.KINDS))
+        print("\n".join("  " + x for x in g.brew(_int("brewer id: "), _ask("kind: "), _int("grade 1-5: "))))
+    elif c == "p":
+        print("  " + g.use_potion(_int("slime id: "), _ask("kind: "), _int("grade: ")))
+    elif c == "f":
+        print("\n".join("  " + x for x in g.slime_repair(_int("slime id: "))))
+    elif c == "v":
+        from . import attributes
+        s = g.slime(_int("slime id: "))
+        print(f"  {s.name}: stamina {s.stamina}/{s.max_stamina}; buffs {s.buffs or 'none'}")
+        print("  star attributes: " + (", ".join(f"{a['label']} +{a['value']:.0%}" for a in attributes.star_attributes(s)) or "none"))
+        print("  rarity skills: " + (", ".join(get_ability(k).name for k in attributes.rarity_skills(s)) or "none"))
+        print(f"  weapons: remembers {s.weapon_memory}, proficiency {s.proficiency}")
     elif c == "d":
         show_roster(g)
         sid = _int("slime id: ")

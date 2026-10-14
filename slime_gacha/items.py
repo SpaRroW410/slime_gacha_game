@@ -35,6 +35,7 @@ class Base:
     slot: str
     stats: Dict[str, float]
     fits: Tuple[str, ...]          # classes that wield it naturally (compatibility)
+    family: str = ""               # weapons only: sword | hammer | dagger | bow | staff | tome
 
 
 BASES: "Registry[Base]" = Registry("item base")
@@ -46,12 +47,12 @@ def register_base(b: Base) -> Base:
 
 
 for _b in [
-    Base("iron_sword", "Iron Sword", "🗡️", "weapon", dict(atk=5, spd=1), ("barbarian", "rogue")),
-    Base("war_hammer", "War Hammer", "🔨", "weapon", dict(atk=7, hp=4), ("barbarian",)),
-    Base("bone_dagger", "Bone Dagger", "🔪", "weapon", dict(atk=4, spd=4), ("rogue", "necromancer")),
-    Base("hunters_bow", "Hunter's Bow", "🏹", "weapon", dict(atk=4, spd=3), ("ranger", "rogue")),
-    Base("oak_staff", "Oak Staff", "🪄", "weapon", dict(mag=5, hp=3), ("mage", "medic")),
-    Base("spell_tome", "Spell Tome", "📖", "weapon", dict(mag=4, spd=2), ("mage", "necromancer")),
+    Base("iron_sword", "Iron Sword", "🗡️", "weapon", dict(atk=5, spd=1), ("barbarian", "rogue"), "sword"),
+    Base("war_hammer", "War Hammer", "🔨", "weapon", dict(atk=7, hp=4), ("barbarian",), "hammer"),
+    Base("bone_dagger", "Bone Dagger", "🔪", "weapon", dict(atk=4, spd=4), ("rogue", "necromancer"), "dagger"),
+    Base("hunters_bow", "Hunter's Bow", "🏹", "weapon", dict(atk=4, spd=3), ("ranger", "rogue"), "bow"),
+    Base("oak_staff", "Oak Staff", "🪄", "weapon", dict(mag=5, hp=3), ("mage", "medic"), "staff"),
+    Base("spell_tome", "Spell Tome", "📖", "weapon", dict(mag=4, spd=2), ("mage", "necromancer"), "tome"),
     Base("padded_vest", "Padded Vest", "🧥", "armor", dict(defense=3, hp=8), ("rogue", "ranger", "medic")),
     Base("chain_shell", "Chain Shell", "🛡️", "armor", dict(defense=5, hp=5), ("barbarian",)),
     Base("thread_robe", "Robe of Threads", "👘", "armor", dict(defense=2, mag=3, hp=6),
@@ -63,6 +64,22 @@ for _b in [
     register_base(_b)
 
 RARITIES = config.RARITIES
+FAMILIES = ("sword", "hammer", "dagger", "bow", "staff", "tome")
+CLASS_FAMILIES = dict(barbarian=("sword", "hammer"), rogue=("dagger", "sword"), ranger=("bow", "dagger"),
+                      mage=("staff", "tome"), medic=("staff", "tome"), necromancer=("tome", "dagger"))
+_NAME_A = ["Wolf", "Storm", "Ember", "Grave", "Dawn", "Night", "Frost", "Thorn", "Gale", "Ash", "Moon", "Iron", "Sun",
+           "Hollow", "Star", "Blood"]
+_NAME_B = ["bane", "fang", "song", "render", "whisper", "breaker", "bite", "call", "reaver", "ward", "talon", "shard"]
+
+
+def favourite_family(slime) -> str:
+    """Each slime has a favourite weapon family drawn from its class's two."""
+    fams = CLASS_FAMILIES.get(slime.archetype, FAMILIES[:2])
+    return fams[slime.id % len(fams)]
+
+
+def make_title(rng: random.Random) -> str:
+    return rng.choice(_NAME_A) + rng.choice(_NAME_B)
 
 
 def material(rarity: str) -> str:
@@ -86,6 +103,7 @@ class Item:
         self.mods: List[dict] = mods or []
         self.ego: Optional[dict] = None            # {"name", "level", "archetype"} of the sacrificed soul
         self.bond = 0                               # battles fought with the current wielder (cap 40)
+        self.title = ""                              # weapons of rare quality and above are named
         self.durability = self.max_durability
 
     # ---- look ---------------------------------------------------------------
@@ -100,7 +118,7 @@ class Item:
     @property
     def name(self) -> str:
         tag = "Ego " if self.ego else ""
-        return f"{tag}{self.spec.name}"
+        return f"{self.title} the {tag}{self.spec.name}" if self.title else f"{tag}{self.spec.name}"
 
     @property
     def max_durability(self) -> int:
@@ -139,6 +157,8 @@ class Item:
             score += 15
         score += (hash((slime.id * 7919 + self.uid * 104729) % 1009) % 31) - 8        # -8..+22 chemistry
         score += min(20, self.bond // 2)
+        if self.spec.family and self.spec.family == favourite_family(slime):
+            score += config.FAVOURITE_COMPAT
         return max(0, min(100, int(score)))
 
     def compat_mult(self, slime) -> float:
@@ -147,6 +167,8 @@ class Item:
 
     def stats_for(self, slime) -> Dict[str, float]:
         k = self.compat_mult(slime)
+        if self.spec.family:                      # practice with this weapon family sharpens it
+            k *= 1 + config.PROFICIENCY_BONUS * proficiency_level(slime, self.spec.family)
         return {s: round(v * k, 1) for s, v in self.base_stats().items()}
 
     # ---- wear ---------------------------------------------------------------
@@ -206,18 +228,27 @@ class Item:
 
     def to_dict(self) -> dict:
         return dict(uid=self.uid, base=self.base, rarity=self.rarity, stars=self.stars, level=self.level,
-                    mods=self.mods, ego=self.ego, bond=self.bond, durability=self.durability)
+                    mods=self.mods, ego=self.ego, bond=self.bond, durability=self.durability, title=self.title)
 
     @classmethod
     def from_dict(cls, d: dict) -> "Item":
         it = cls(d["uid"], d["base"], d["rarity"], d["stars"], d["level"], list(d.get("mods", [])))
         it.ego = d.get("ego")
         it.bond = d.get("bond", 0)
+        it.title = d.get("title", "")
         it.durability = d.get("durability", it.max_durability)
         return it
 
 
 # ---- rolling -----------------------------------------------------------------------------------------------------
+def proficiency_level(slime, family: str) -> int:
+    return min(10, getattr(slime, "proficiency", {}).get(family, 0) // config.PROFICIENCY_PER_LEVEL)
+
+
+def wants_title(item) -> bool:
+    return item.slot == "weapon" and not item.title and RARITIES.index(item.rarity) >= RARITIES.index("rare")
+
+
 def roll_mod(rng: random.Random, have: Optional[List[dict]] = None) -> dict:
     kinds = [k for k in MOD_KINDS if k not in {m["kind"] for m in (have or [])}] or list(MOD_KINDS)
     kind = rng.choice(kinds)
@@ -244,6 +275,8 @@ def roll_item(rng: random.Random, uid: int, lure: bool = False, rarity: str = No
     it = Item(uid, rng.choice(BASES.keys()), rarity, roll_stars(rng, rarity))
     for _ in range(RARITIES.index(rarity)):
         it.mods.append(roll_mod(rng, it.mods))
+    if wants_title(it):
+        it.title = make_title(rng)
     return it
 
 

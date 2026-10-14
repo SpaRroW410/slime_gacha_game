@@ -12,7 +12,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
@@ -83,6 +83,7 @@ class Game:
                              else random.SystemRandom().randrange(2 ** 31))
         self.inventory = equipment.Inventory()
         self.pit_lost: List[str] = []                  # gear left behind in the Gloop Pit
+        self.potions: Dict[str, int] = {}              # 'kind:grade' -> count
         self.vault: Dict[int, items_mod.Item] = {}     # unequipped relics (see items.py)
         self.next_item_id = 1
         self.sacrifice_stress = 0.0                    # recent merges; decays 1/day
@@ -135,9 +136,20 @@ class Game:
             self._healer_aura(self.slimes(), events)
             self.conflicts.tick(self.slimes(), events)
             self._reap(events)
+            self._stamina_tick()
         self.journal.extend(events)
         self.journal = self.journal[-200:]
         return events
+
+    def _stamina_tick(self) -> None:
+        """Stamina refills by the hour (faster asleep); potions wear off."""
+        for s in self.slimes():
+            s.stamina_frac = min(1.0, s.stamina_frac + attributes.hourly_regen(s))
+            if s.buffs:
+                for b in s.buffs:
+                    b["hours"] -= 1
+                s.buffs = [b for b in s.buffs if b["hours"] > 0]
+                s.hp = min(s.hp, s.max_hp)
 
     # ---- death -----------------------------------------------------------------------
     def _reap(self, events: List[str]) -> List[Slime]:
@@ -734,6 +746,104 @@ class Game:
             self.wallet.add("stone_common", n)
             log.append(f"💎 Found {n} common stone{'s' if n > 1 else ''}.")
 
+    # ---- potions & herbs (potions.py) -----------------------------------------------------------------
+    def _herb_drop(self, where: str, foes: int, log: List[str]) -> None:
+        """Herbs for the Alchemy Lab: plentiful in the daily Pit, a few elsewhere."""
+        p = config.HERB_DROP.get(where, 0)
+        n = sum(self.rng.randint(1, 3) for _ in range(foes) if self.rng.random() < p)
+        if n:
+            self.wallet.add("herb", n)
+            log.append(f"🌿 Gathered {n} herb{'s' if n > 1 else ''}.")
+
+    def potion_count(self, kind: str, grade: int) -> int:
+        return self.potions.get(potions.key(kind, grade), 0)
+
+    def brew(self, sid: int, kind: str, grade: int) -> List[str]:
+        """A slime brews a potion in the Alchemy Lab (takes 2 hours per grade). Lab level caps the grade."""
+        s = self._free_slime(sid)
+        if kind not in potions.KINDS:
+            raise InvalidAction(f"Unknown potion '{kind}'.")
+        if not 1 <= grade <= 5:
+            raise InvalidAction("Grade must be 1-5.")
+        lab = self.buildings.level("alchemy")
+        if grade > lab:
+            raise InvalidAction(f"The Alchemy Lab is level {lab}: it brews up to grade {lab}.")
+        self.wallet.spend_many(potions.cost(grade))
+        chance = potions.success_chance(s, grade, lab)
+        ok = self.rng.random() < chance
+        crit = ok and grade < 5 and grade + 1 <= lab and self.rng.random() < config.BREW_CRIT
+        self._set_flag([s], "lab")
+        try:
+            self.tick(potions.brew_hours(grade))
+        finally:
+            self._clear_flag([s])
+        pk = potions.KINDS[kind]
+        if not ok:
+            self.wallet.add("herb", potions.cost(grade)["herb"] // 2)
+            return [f"💥 {s.name}'s brew fails ({chance:.0%} chance). Half the herbs are saved."]
+        g = grade + 1 if crit else grade
+        k = potions.key(kind, g)
+        self.potions[k] = self.potions.get(k, 0) + 1
+        s.needs.add("esteem", 8)
+        return [f"{pk.emoji} {s.name} brews a grade {g} {pk.name}" + (" - a masterwork!" if crit else ".")]
+
+    def use_potion(self, sid: int, kind: str, grade: int) -> str:
+        s = self.slime(sid)
+        k = potions.key(kind, grade)
+        if self.potions.get(k, 0) <= 0 or kind not in potions.KINDS:
+            raise InvalidAction("You have no such potion.")
+        self.potions[k] -= 1
+        if not self.potions[k]:
+            del self.potions[k]
+        s.buffs = [b for b in s.buffs if b["kind"] != kind]
+        s.buffs.append(dict(kind=kind, grade=grade, bonus=potions.bonus(grade), hours=potions.hours(grade)))
+        pk = potions.KINDS[kind]
+        if kind == "stamina":
+            s.stamina_frac = min(1.0, s.stamina_frac + 0.25)
+        elif kind == "vigor":
+            s.hp += int(s.max_hp * potions.bonus(grade) / (1 + potions.bonus(grade)))
+        return (f"{pk.emoji} {s.name} drinks a grade {grade} {pk.name}: {pk.effect} "
+                f"(+{potions.bonus(grade):.0%} for {potions.hours(grade)}h).")
+
+    # ---- weapons: proficiency, memory, repairs ----------------------------------------------------------
+    def _learn_family(self, s: Slime, family: str) -> Optional[str]:
+        """A slime keeps up to three weapon families in mind; a fourth makes it forget the least practised."""
+        if not family or family in s.weapon_memory:
+            return None
+        msg = None
+        if len(s.weapon_memory) >= config.WEAPON_MEMORY:
+            gone = min(s.weapon_memory, key=lambda f: s.proficiency.get(f, 0))
+            s.weapon_memory.remove(gone)
+            s.proficiency.pop(gone, None)
+            msg = f"   {s.name} forgets how to use a {gone}."
+        s.weapon_memory.append(family)
+        s.proficiency.setdefault(family, 0)
+        return msg
+
+    def slime_repair(self, sid: int) -> List[str]:
+        """The slime mends its own relics with scrap (cheaper than gel, a little time, and a proud morale lift)."""
+        s = self._free_slime(sid)
+        worn = [it for it in s.items.values() if not it.unbreakable and it.durability < it.max_durability]
+        if not worn:
+            raise InvalidAction(f"{s.name} has nothing to repair.")
+        need = {}
+        for it in worn:
+            m = items_mod.material(it.rarity)
+            need[m] = need.get(m, 0) + math.ceil((it.max_durability - it.durability) / 6) * \
+                (1 + config.RARITIES.index(it.rarity))
+        self.wallet.spend_many(need)
+        for it in worn:
+            it.durability = it.max_durability
+        self._set_flag([s], "lab")
+        try:
+            self.tick(config.SLIME_REPAIR_HOURS)
+        finally:
+            self._clear_flag([s])
+        self.social.shift_morale(s, 3)
+        s.needs.add("esteem", 6)
+        return [f"🔧 {s.name} repairs " + ", ".join(it.label() for it in worn) + " (" +
+                ", ".join(f"{v} {k}" for k, v in need.items()) + "). Morale up."]
+
     # ---- relics: forge, repair, salvage, ego (items.py) ---------------------------------------------
     def _return_gear(self, s: Slime) -> None:
         """A slime leaves the colony (merged, fused): everything it wore goes back to the colony."""
@@ -785,9 +895,10 @@ class Game:
             self.inventory.add(s.gear.pop(it.slot))
         s.items[it.slot] = it
         it.bond = 0
+        forgot = self._learn_family(s, it.spec.family)
         s.hp = min(s.hp + int(it.stats_for(s).get("hp", 0)), s.max_hp)
         return (f"{s.name} wields {it.label()} (compatibility {it.compat(s)}%, "
-                f"x{it.compat_mult(s):.2f} stats).")
+                f"x{it.compat_mult(s):.2f} stats)." + (f"\n{forgot}" if forgot else ""))
 
     def unequip_item(self, sid: int, slot: str) -> str:
         s = self.slime(sid)
@@ -835,6 +946,8 @@ class Game:
             raise InvalidAction("The Armory must be level 5 to raise a relic's rarity.")
         self.wallet.spend_many(it.rarity_cost())
         it.rarity = up
+        if items_mod.wants_title(it):
+            it.title = items_mod.make_title(self.rng)
         mod = items_mod.roll_mod(self.rng, it.mods)
         it.mods.append(mod)
         it.durability = it.max_durability
@@ -895,6 +1008,11 @@ class Game:
         for s in party:
             for slot, it in list(s.items.items()):
                 it.bond = min(40, it.bond + 1)
+                fam = it.spec.family
+                if fam:
+                    s.proficiency[fam] = s.proficiency.get(fam, 0) + 1
+                if it.bond >= config.BOND_MORALE_AT and s.hp > 0:
+                    self.social.shift_morale(s, 1)           # trusting your own weapon steadies the nerves
                 if it.wear(1):
                     out.append(self._shatter(s, slot, it))
         return out
@@ -945,7 +1063,7 @@ class Game:
                 if not members:
                     res.stop_reason = "the whole party is gone"
                     break
-                if any(s.hp < s.max_hp * config.GRIND_MIN_HP for s in members):
+                if any(s.hp < s.max_hp * config.GRIND_MIN_HP or s.stamina_frac < config.STAMINA_CAMP_AT for s in members):
                     res.summary.append(f"   (camped {self._camp(members)}h)")
                     members = [s for s in party if s.id in self.roster]
                 for s in members:
@@ -981,7 +1099,9 @@ class Game:
                             self.wallet.add_many(got)
                             events.append("💎 Mined " + ", ".join(
                                 f"{v} {k.replace('_', ' ')}" for k, v in got.items()) + "!")
-                elif rep.victory:
+                if rep.victory:
+                    self._herb_drop(kind, len(enemies), events)
+                if rep.victory and kind != "quarry":
                     self._stone_side_drop("adventure", len(enemies), events)
                     for _ in enumerate(enemies):
                         if self.rng.random() < config.ADV_DROP_PER_FOE:
@@ -997,7 +1117,7 @@ class Game:
                     line += f", KO: {', '.join(rep.knocked_out)}"
                 res.summary.append(line)
                 res.summary.extend("   " + e for e in events if any(w in e for w in
-                                   ("Found", "Mined", "stone", "shatters", "knocked", "died")))
+                                   ("Found", "Mined", "stone", "herb", "shatters", "knocked", "died")))
                 self.journal.extend(events)
                 if rep.winner == "foes":
                     res.stop_reason = "the whole party was knocked out"
@@ -1352,7 +1472,7 @@ class Game:
                 if not members:
                     res.stop_reason = "the whole party is gone"
                     break
-                if any(s.hp < s.max_hp * config.GRIND_MIN_HP for s in members):
+                if any(s.hp < s.max_hp * config.GRIND_MIN_HP or s.stamina_frac < config.STAMINA_CAMP_AT for s in members):
                     hours = self._camp(members)
                     res.summary.append(f"   (camped {hours}h)")
                     members = [s for s in party if s.id in self.roster]
@@ -1393,6 +1513,7 @@ class Game:
                 if rep.victory:
                     self._gear_drop(1 if depth <= 3 else 2, config.GEAR_DROP_PIT, events)
                     self._stone_side_drop("grind", len(enemies), events)
+                    self._herb_drop("grind", len(enemies), events)
                     self._recover_pit_gear(members, events)
                 events.extend(self.tick(config.GRIND_TICKS))
                 rep.log.extend(events)
@@ -1422,7 +1543,7 @@ class Game:
         hours = 0
         while hours < max_hours:
             members = [s for s in members if s.id in self.roster]
-            if not members or all(s.hp >= s.max_hp * 0.85 for s in members):
+            if not members or all(s.hp >= s.max_hp * 0.85 and s.stamina_frac >= 0.7 for s in members):
                 break
             for s in members:
                 if s.state == "idle":
@@ -1461,7 +1582,7 @@ class Game:
                     delves={str(k): v for k, v in self.delves.items()},
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
-                    vault=[i.to_dict() for i in self.vault.values()], next_item_id=self.next_item_id,
+                    vault=[i.to_dict() for i in self.vault.values()], potions=self.potions, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -1513,6 +1634,7 @@ class Game:
         g.sacrifice_stress = d.get("sacrifice_stress", 0.0)
         g.vault = {i["uid"]: items_mod.Item.from_dict(i) for i in d.get("vault", [])}
         g.next_item_id = d.get("next_item_id", 1)
+        g.potions = {k: v for k, v in d.get("potions", {}).items() if v > 0}
         spells.load_custom(d.get("custom_spells", []))
         g.library.discovered = {k for k in d.get("discovered", []) if k in ABILITIES}
         for sd in d.get("slimes", []):

@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional
 
 from . import config
 from .abilities import Ability, get_ability
-from . import elements, items as items_mod, terrain as terrain_mod
+from . import attributes, elements, items as items_mod, terrain as terrain_mod
 from . import sparring
 from .archetypes import STAT_KEYS
 from .growth import add_xp
@@ -71,6 +71,14 @@ register_enemy(Enemy("hollow_warden", "The Hollow Warden", "🗝️", 5, _e(260,
                      "earth"))
 
 
+def _merge_mods(a: dict, b: dict) -> dict:
+    out = dict(a)
+    out["elem"] = dict(a.get("elem", {}))
+    for k, v in b.items():
+        out[k] = out.get(k, 0.0) + v
+    return out
+
+
 # ---- combatants -----------------------------------------------------------------
 @dataclass
 class Combatant:
@@ -94,7 +102,11 @@ class Combatant:
     morale: float = 60.0
     nonlethal: bool = False         # sparring: reaching 1 HP means yielding, not dying
     yielded: bool = False
-    mods: Dict[str, object] = field(default_factory=dict)   # relic mods: crit_rate, crit_dmg, lifesteal, elem
+    mods: Dict[str, object] = field(default_factory=dict)   # relic + star mods: crit_rate, crit_dmg, lifesteal, elem, evasion, guard, regen, spell_power, resist
+    stamina: float = 0.0            # slimes only: current stamina, max, and breath caught per round (attributes.py)
+    stamina_max: float = 0.0
+    sta_regen: float = 0.0
+    winded: bool = False            # set for the action when stamina ran dry
 
     @property
     def alive(self) -> bool:
@@ -156,7 +168,9 @@ class BattleSystem:
         return Combatant(s.name, s.arch.emoji, side, dict(s.max_stats()), float(s.hp),
                          s.known_abilities(), s.behavior, s.power_multiplier() * morale_f * synergy, s,
                          mastery={b: elements.basic_level(s, b) for b in s.attuned},
-                         style=sparring.style_levels(s), morale=s.morale, mods=items_mod.battle_mods(s))
+                         style=sparring.style_levels(s), morale=s.morale, mods=_merge_mods(items_mod.battle_mods(s),
+                                                                                           attributes.battle_mods(s)),
+                         stamina=s.stamina, stamina_max=s.max_stamina, sta_regen=attributes.regen_per_round(s))
 
     @staticmethod
     def from_enemy(e: Enemy) -> Combatant:
@@ -213,6 +227,13 @@ class BattleSystem:
                     break
                 self._turn(actor, everyone, log)
             self._hazard(everyone, log)
+            for c in everyone:
+                if c.alive and c.side == "party" and not c.minion:
+                    if c.stamina_max:
+                        c.stamina = min(c.stamina_max, c.stamina + c.sta_regen)
+                    rg = c.mods.get("regen", 0.0)
+                    if rg and c.hp < c.max_hp:
+                        c.hp = min(c.max_hp, c.hp + max(1, int(c.max_hp * rg)))
         if not self._side_alive(everyone, "foes"):
             winner = "party"
         elif not self._side_alive(everyone, "party"):
@@ -250,6 +271,7 @@ class BattleSystem:
         ca, cb = self.from_slime(a, 1.0, "party"), self.from_slime(b, 1.0, "foes")
         for c in (ca, cb):
             c.nonlethal = True
+            c.stamina_max = 0.0              # sparring is not tiring
         log = [f"🥊 Sparring match: {ca.emoji}{ca.name} vs {cb.emoji}{cb.name}"]
         self.terrain = None
         rounds, winner = self._simulate([ca, cb], log, config.DUEL_ROUND_CAP)
@@ -290,7 +312,14 @@ class BattleSystem:
         targets = self.choose_targets(actor, ability, allies, foes)
         if not targets:
             return
+        if actor.stamina_max:
+            cost = attributes.action_cost(ability)
+            actor.winded = actor.stamina < cost
+            if actor.winded:
+                log.append(f"  😮‍💨 {actor.emoji}{actor.name} is winded!")
+            actor.stamina = max(0.0, actor.stamina - cost)
         KIND_HANDLERS[ability.kind](self, actor, ability, targets, everyone, log)
+        actor.winded = False
         if ability.element:
             actor.casts[ability.element] = actor.casts.get(ability.element, 0) + 1
         if ability.cooldown:
@@ -304,6 +333,8 @@ class BattleSystem:
     # -- AI ------------------------------------------------------------------
     def choose_ability(self, actor, allies, foes) -> Ability:
         ready = [get_ability(k) for k in actor.abilities if actor.cooldowns.get(k, 0) == 0]
+        if actor.stamina_max:                       # prefer what the slime can still afford
+            ready = [a for a in ready if attributes.action_cost(a) <= actor.stamina] or ready
         offense = [a for a in ready if a.kind in ("damage", "drain", "poison")]
         summons = [a for a in ready if a.kind == "summon"]
         heals = [a for a in ready if a.kind == "heal"]
@@ -363,6 +394,8 @@ class BattleSystem:
         survivors = []
         for s, c in zip(party, mine):
             s.hp = max(0, int(c.hp))
+            if c.stamina_max:
+                s.stamina_frac = max(0.0, min(1.0, c.stamina / c.stamina_max))
             if not c.alive:
                 report.fallen.append(s)
             if not c.alive and permadeath:        # Game._reap removes them
@@ -437,6 +470,12 @@ def _damage_value(bs: BattleSystem, actor, ability, target):
     eff = elements.effectiveness(ability.element, target.element)
     raw = max(1.0, raw) * bs.rng.uniform(0.9, 1.1) * eff * _style_attack(actor, ability)
     raw *= max(0.6, 1 - config.STYLE_SWORD_GUARD * target.style.get("sword", 0))       # parrying
+    if actor.winded:
+        raw *= config.STAMINA_WINDED_MULT
+    if ability.stat == "mag":
+        raw *= 1 + actor.mods.get("spell_power", 0.0)
+        raw *= 1 - min(0.5, target.mods.get("resist", 0.0))
+    raw *= 1 - min(0.5, target.mods.get("guard", 0.0))
     crit = bs.rng.random() < (config.CRIT_CHANCE + (0.1 if actor.behavior == "explore" else 0)
                               + config.STYLE_ARCHERY_CRIT * actor.style.get("archery", 0)
                               + (bs.terrain.crit if bs.terrain else 0.0) + actor.mods.get("crit_rate", 0.0))
@@ -455,6 +494,10 @@ def _eff_tag(eff: float) -> str:
 
 def _h_damage(bs, actor, ab, targets, everyone, log):
     for t in targets:
+        ev = min(0.5, t.mods.get("evasion", 0.0))
+        if ev and bs.rng.random() < ev:
+            log.append(f"  {t.emoji}{t.name} dodges {actor.name}'s {ab.name}!")
+            continue
         dmg, crit, eff = _damage_value(bs, actor, ab, t)
         t.hurt(dmg)
         log.append(f"  {actor.emoji}{actor.name} uses {ab.name} on {t.name}: {dmg} dmg{' (CRIT!)' if crit else ''}{_eff_tag(eff)}"

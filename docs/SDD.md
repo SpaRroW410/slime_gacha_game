@@ -341,6 +341,14 @@ idea.
 - **Destruction Chamber** (building, 5 levels): destroys a slime for white gel (5 x 10^rarity x star factor) and stones (scaled by rarity and the stones its stars cost); a sacrifice with morale cost and sacrifice stress. Its relics return to the vault.
 - Not yet built: star attributes, rarity skills, weapon proficiency, potions (see ROADMAP M16).
 
+### 5.21 Stamina, star attributes, rarity skills, potions & weapons (`attributes.py`, `potions.py`, `items.py`)
+- **Stamina** is a base attribute of every slime (class base + growth per level, scaled by rarity/stars). Each battle action costs stamina (8 + 8 x ability power, x1.5 for area attacks; guards and heals cheaper). A slime out of stamina is *winded*: its damage is x0.6 for that action. Between rounds it catches its breath; between fights it refills 10%/hour (x2.5 asleep or resting). Pit, Rift and Quarry parties camp when anyone is under 35% stamina. Sparring ignores stamina.
+- **Star attributes**: every extra star adds one class-specific attribute (e.g. Barbarian: crit damage, guard, regeneration, lifesteal; Mage: spell power, resist, crit rate, crit damage). They scale slightly with rarity and combine with relic mods in battle (evasion, guard, resist, regeneration and spell power are new combat hooks).
+- **Rarity skills**: one skill per rarity step above common, per class (Moon Slash, Aura Blade, Earthsplitter, Titan Break; Mana Lance, Starfall, ...). Ascending a slime's rarity unlocks the next one.
+- **Potions**: the **Alchemy Lab** (building, level caps the grade) lets a slime brew potions (2 h per grade) from herbs (dropped mostly in the daily Pit) plus gel and essence. Six kinds (stamina, vigor, might, ironhide, arcane, swift), grades 1-5 (+10/15/20/30/40% for 16-32 h). The stamina potion raises max stamina and multiplies recovery. A magical brewer and a roomy lab improve success; failure loses the gel and half the herbs; a brew can come out one grade better.
+- **Weapons**: weapons belong to six families (sword, hammer, dagger, bow, staff, tome). A slime keeps up to three families in mind (a fourth makes it forget the least practised one and its proficiency); each fight with a weapon adds proficiency (+3% weapon stats per level, max 10). Each slime has a favourite family (compatibility bonus). A weapon bonded with its wielder steadies morale after fights. Weapons of rare quality and above are named. A slime can repair its own relics with scrap.
+- Not built: the "66% of inventory" idea (unclear), herb varieties.
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|

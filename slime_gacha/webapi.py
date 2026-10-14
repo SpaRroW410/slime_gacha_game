@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import ascension, config, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import ascension, attributes, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -46,6 +46,18 @@ def slime_view(g: Game, s) -> dict:
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
         merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
+        stamina=s.stamina, max_stamina=s.max_stamina, buffs=[dict(b) for b in s.buffs],
+        star_attrs=attributes.star_attributes(s),
+        next_star_attr=next(({"star": i + 2, "label": attributes.ATTR_LABEL[k], "value": v}
+                             for i, (k, v) in enumerate(attributes.STAR_ATTRS.get(s.archetype, []))
+                             if s.stars < i + 2), None),
+        rarity_skills=[dict(key=k, name=get_ability(k).name, desc=get_ability(k).description)
+                       for k in attributes.rarity_skills(s)],
+        next_rarity_skill=(get_ability(attributes.RARITY_SKILLS[s.archetype][config.RARITIES.index(s.rarity)]).name
+                           if s.rarity != "legendary" and s.archetype in attributes.RARITY_SKILLS else None),
+        weapons=dict(memory=list(s.weapon_memory), slots=config.WEAPON_MEMORY, favourite=items_mod.favourite_family(s),
+                     proficiency={f: dict(uses=s.proficiency.get(f, 0), level=items_mod.proficiency_level(s, f))
+                                  for f in items_mod.FAMILIES if s.proficiency.get(f, 0) or f in s.weapon_memory}),
         ascend=dict(next_rarity=ascension.next_rarity(s.rarity), rarity_cost=ascension.rarity_cost(s),
                     star_cost=ascension.star_cost(s), chamber=ascension.chamber_yield(s, g.buildings.level("chamber"))),
         gear=dict(s.gear), items={k: _item_view(v, s) for k, v in s.items.items()}, task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
@@ -62,7 +74,7 @@ def slime_view(g: Game, s) -> dict:
 
 def _item_view(it, holder=None) -> dict:
     return dict(uid=it.uid, base=it.base, name=it.name, emoji=it.spec.emoji, slot=it.slot, rarity=it.rarity,
-                stars=it.stars, level=it.level, durability=(None if it.unbreakable else it.durability),
+                stars=it.stars, level=it.level, family=it.spec.family, title=it.title, durability=(None if it.unbreakable else it.durability),
                 max_durability=(None if it.unbreakable else it.max_durability), ego=it.ego,
                 stats=(it.stats_for(holder) if holder else it.base_stats()),
                 mods=[it.mod_text(m) for m in it.mods], bond=it.bond,
@@ -117,6 +129,12 @@ def snapshot(g: Game) -> dict:
     return dict(
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
+        potions=dict(stock=[dict(kind=k.split(':')[0], grade=int(k.split(':')[1]), n=n) for k, n in sorted(g.potions.items())],
+                     kinds=[dict(key=p.key, name=p.name, emoji=p.emoji, effect=p.effect) for p in potions_mod.KINDS.values()],
+                     lab=g.buildings.level("alchemy"),
+                     grades=[dict(grade=i + 1, bonus=potions_mod.bonus(i + 1), hours=potions_mod.hours(i + 1),
+                                  cost=potions_mod.cost(i + 1), brew_hours=potions_mod.brew_hours(i + 1))
+                             for i in range(5)]),
         ascension=dict(stones={r: g.wallet.get(ascension.stone_key(r)) for r in config.RARITIES},
                        total=ascension.stone_total(g.wallet), values={r: ascension.stone_value(r) for r in config.RARITIES},
                        rarity_gel=config.RARITY_ASCEND_GEL, star_stones=config.STAR_ASCEND_STONES,
@@ -445,6 +463,21 @@ def _destroy_slime(g, a):
 def _quarry(g, a):
     r = g.quarry([int(x) for x in a.get("ids", [])], _i(a, "runs", 1))
     return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
+@command("brew")
+def _brew(g, a):
+    return g.brew(_i(a, "id"), a.get("kind", ""), _i(a, "grade", 1)), {}
+
+
+@command("use_potion")
+def _use_potion(g, a):
+    return _msg(g.use_potion(_i(a, "id"), a.get("kind", ""), _i(a, "grade", 1)))
+
+
+@command("slime_repair")
+def _slime_repair(g, a):
+    return g.slime_repair(_i(a, "id")), {}
 
 
 @command("mediate")

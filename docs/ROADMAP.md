@@ -187,7 +187,7 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Starfall Quarry, side drops, boss hoards
 - [x] Merge rework: collected XP + diminishing stat share (20% > 1%)
 - [x] Destruction Chamber building
-- [ ] Star attributes per class (new attribute each star)
-- [ ] Rarity skills per class (Moon Slash, Aura Blade, ...)
-- [ ] Weapon proficiency, three-weapon memory, weapon-love compatibility, named weapons, slimes repairing gear
-- [ ] Potions: crafting, grades 1-5, temporary attribute boosts, stamina potion, building upgrade
+- [x] Stamina attribute, star attributes per class
+- [x] Rarity skills per class (Moon Slash, Aura Blade, ...)
+- [x] Weapon proficiency, three-family memory, favourite weapon, named weapons, slimes repairing gear
+- [x] Potions: Alchemy Lab, grades 1-5, temporary boosts, stamina potion, herbs

@@ -231,7 +231,7 @@ class TestRestArea(unittest.TestCase):
 class TestBuildings(unittest.TestCase):
     def test_buildings_start_at_level_one(self):
         g = rich()
-        self.assertEqual(set(BUILDINGS.keys()), {"rest_area", "training_grounds", "library", "barracks", "armory", "chamber"})
+        self.assertEqual(set(BUILDINGS.keys()), {"rest_area", "training_grounds", "library", "barracks", "armory", "chamber", "alchemy"})
         self.assertTrue(all(g.buildings.level(k) == 1 for k in BUILDINGS.keys()))
 
     def test_upgrade_pays_and_caps(self):

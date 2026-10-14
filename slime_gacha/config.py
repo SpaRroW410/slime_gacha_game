@@ -17,7 +17,7 @@ VARIANCE = 0.10         # +/- per-slime stat roll
 
 # ---- Economy --------------------------------------------------------------
 # WHITE gel = common currency, PURPLE gel = rare currency (boosts rare pulls). Both buy pulls 1:1.
-RESOURCES = ["white_gel", "purple_gel", "food", "essence", "scrap", "alloy", "crystal", "stardust", "voidglass",
+RESOURCES = ["white_gel", "purple_gel", "food", "essence", "herb", "scrap", "alloy", "crystal", "stardust", "voidglass",
              "stone_common", "stone_uncommon", "stone_rare", "stone_epic", "stone_legendary"]       # add a name here to add a resource
 STARTING_WALLET = {"white_gel": 100, "purple_gel": 10, "food": 15, "essence": 0}
 MATERIAL_OF = {"common": "scrap", "uncommon": "alloy", "rare": "crystal", "epic": "stardust", "legendary": "voidglass"}   # crafting materials
@@ -218,7 +218,7 @@ OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 9
+SAVE_VERSION = 10
 DEFAULT_SAVE = "savegame.json"
 
 
@@ -266,3 +266,27 @@ MERGE_SHARE_FLOOR = 0.01         # ... down to this flat share
 CHAMBER_GEL_BASE = 5             # destruction chamber: gel = base x 10^rarity x star factor x chamber factor
 CHAMBER_STONE_BASE = 5           # stone equivalents = (base + 50% of stones invested in its stars) x (1 + rarity step)
 CHAMBER_STRESS = 1.0
+
+
+# ---- stamina, potions, weapons (attributes.py, potions.py, items.py) -----------------------------------------------------
+STAMINA_COSTS = {"attack": 8, "power": 8, "guard": 4, "heal": 8, "summon": 12}   # cost = attack + power x ability power
+STAMINA_ROUND_REGEN = 1.5        # breath caught per round, per 100 max stamina x 4 (see attributes.regen_per_round)
+STAMINA_HOUR_REGEN = 0.10        # fraction of max stamina per hour awake ...
+STAMINA_SLEEP_MULT = 2.5         # ... faster asleep / in the Rest Area
+STAMINA_WINDED_MULT = 0.6        # damage and healing of an exhausted slime
+STAMINA_CAMP_AT = 0.35           # a Pit / Rift / Quarry party camps when anyone is below this
+HERB_DROP = {"grind": 0.35, "adventure": 0.10, "quarry": 0.10}   # per foe, 1-3 herbs
+POTION_BONUS = [0.10, 0.15, 0.20, 0.30, 0.40]                    # grade 1..5
+POTION_HERBS = [3, 8, 20, 50, 120]
+POTION_GEL = [5, 20, 80, 320, 1280]
+POTION_ESSENCE = [0, 0, 5, 15, 40]
+POTION_HOURS_BASE, POTION_HOURS_GRADE = 12, 4                    # lasts 12 + 4 x grade hours
+BREW_HOURS_PER_GRADE = 2
+BREW_BASE_CHANCE = 0.75
+BREW_CRIT = 0.10                 # chance the brew comes out one grade better
+WEAPON_MEMORY = 3                # weapon families a slime keeps in mind
+PROFICIENCY_PER_LEVEL = 10       # uses per proficiency level (max 10)
+PROFICIENCY_BONUS = 0.03         # weapon stats +3% per proficiency level
+FAVOURITE_COMPAT = 12            # compatibility bonus for a slime's favourite weapon family
+BOND_MORALE_AT = 20              # a weapon bonded this far lifts its wielder's morale after each fight
+SLIME_REPAIR_HOURS = 1
