@@ -39,6 +39,7 @@ class NeedsEngine:
         self.wallet = wallet
         self.rng = rng
         self.auto_care = True
+        self.rest_hook = None            # Game sets: callable(slime) -> bool, sends a wounded slime to the Rest Area
 
     def tick(self, slimes: List, events: List[str]) -> None:
         slimes = [s for s in slimes if s.alive]
@@ -60,11 +61,13 @@ class NeedsEngine:
             r = rate * trait_mult(s, need)
             if s.state == "hunting":
                 r *= config.HUNT_DECAY_MULT.get(need, 1.0)
-            elif s.state == "training":
-                r *= config.TRAIN_DECAY_MULT.get(need, 1.0)
-            if s.state == "sleeping":
+            elif s.state == "studying":
+                r *= config.STUDY_DECAY_MULT.get(need, 1.0)
+            if s.state in ("sleeping", "resting"):
                 r = 0.0 if need == "energy" else r * 0.4
             n.add(need, -r)
+        if s.state == "resting":                 # the Rest Area (buildings.rest_tick) handles healing & leaving
+            return
         if s.state == "sleeping":
             n.add("energy", config.SLEEP_ENERGY_GAIN)
             s.hp = min(s.max_hp, s.hp + max(1, int(s.max_hp * config.SLEEP_HP_REGEN)))
@@ -92,6 +95,9 @@ class NeedsEngine:
             if n.get("energy") < config.AUTO_SLEEP_BELOW:
                 s.state = "sleeping"
                 events.append(f"{s.name} curls up and falls asleep. zzz")
+                return
+            if (self.rest_hook and s.hp < s.max_hp * config.AUTO_REST_BELOW and self.rest_hook(s)):
+                events.append(f"{s.name} limps to the Rest Area.")
                 return
             if n.get("food") < config.AUTO_EAT_BELOW and self.wallet.get("food") > 0:
                 self.wallet.spend("food", 1)
@@ -125,6 +131,8 @@ class ConflictEngine:
         self.rng = rng
         self.conflicts: List[Conflict] = []
         self.friends: set = set()       # frozenset({id, id}) pairs that resolved a quarrel
+        self.compat_fn = None           # Game sets: callable(a, b) -> compatibility; shapes quarrel odds
+        self.hook = None                # Game sets: callable(kind, a, b[, success]) for bonds / morale
         self._next = 1
 
     # -- helpers -----------------------------------------------------------
@@ -146,6 +154,8 @@ class ConflictEngine:
             p += 0.004
         if frozenset((a.id, b.id)) in self.friends:
             p *= 0.3
+        if self.compat_fn:                          # incompatible slimes quarrel more, soulmates much less
+            p *= max(0.4, min(2.0, 1 - self.compat_fn(a, b) / 120.0))
         return max(0.0, p)
 
     def reason(self, a, b) -> str:
@@ -175,7 +185,7 @@ class ConflictEngine:
                 else:
                     self._brawl(c, by_id, events)
         # new conflicts
-        awake = [s for s in slimes if s.state != "sleeping" and s.alive]
+        awake = [s for s in slimes if s.state not in ("sleeping", "resting") and s.alive]
         busy = {i for c in self.conflicts for i in (c.a, c.b)}      # one quarrel at a time per slime
         for i, a in enumerate(awake):
             for b in awake[i + 1:]:
@@ -187,6 +197,8 @@ class ConflictEngine:
                     self.conflicts.append(c)
                     busy.update((a.id, b.id))
                     events.append(f"⚡ Conflict #{c.id}: {a.name} and {b.name} are fighting over {c.reason}!")
+                    if self.hook:
+                        self.hook("quarrel", a, b)
 
     def _brawl(self, c, by_id, events) -> None:
         for sid in (c.a, c.b):
@@ -199,10 +211,14 @@ class ConflictEngine:
             if s.busy:                   # a brawl cuts a hunt / lesson short
                 s.state, s.hunt, s.task = "idle", None, None
         events.append(f"💥 {by_id[c.a].name} and {by_id[c.b].name} brawl! Both are grounded until mediated.")
+        if self.hook:
+            self.hook("brawl", by_id[c.a], by_id[c.b])
 
     # -- player action -----------------------------------------------------
     def resolve(self, c: Conflict, slimes_by_id: Dict[int, object], success: bool) -> None:
         a, b = slimes_by_id[c.a], slimes_by_id[c.b]
+        if self.hook:
+            self.hook("resolved", a, b, success)
         if success:
             self.conflicts.remove(c)
             self.friends.add(frozenset((a.id, b.id)))

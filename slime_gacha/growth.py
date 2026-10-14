@@ -56,22 +56,24 @@ def evolve(slime, wallet: ResourceManager) -> List[str]:
     return log
 
 
-def merge_gain(target, donor) -> int:
-    """XP the target receives. Percentage of donor lifetime XP plus a flat rarity value."""
+def merge_gain(target, donor, compat: int = 0) -> int:
+    """XP the target receives. Percentage of donor lifetime XP plus a flat rarity value, x1.25 for the same
+    class, and swung +/-25% by how compatible the two slimes are (-100..100)."""
     gain = (donor.total_xp * config.MERGE_XP_RATIO + config.MERGE_RARITY_XP[donor.rarity])
     if target.archetype == donor.archetype:
         gain *= config.MERGE_SAME_CLASS_BONUS
+    gain *= 1 + config.MERGE_COMPAT_SWING * max(-100, min(100, compat)) / 100.0
     return int(gain)
 
 
-def merge(target, donor) -> List[str]:
+def merge(target, donor, compat: int = 0) -> List[str]:
     """Consume `donor` into `target`. The caller removes the donor from the roster."""
     if target is donor:
         raise InvalidAction("A slime can't merge with itself.")
     for s in (target, donor):
         if s.busy:
             raise InvalidAction(f"{s.name} is away ({s.state}).")
-    gain = merge_gain(target, donor)
+    gain = merge_gain(target, donor, compat)
     target.merged += 1
     log = [f"🫧 {donor.name} melts into {target.name}, who absorbs {gain} XP "
            f"({int(config.MERGE_XP_RATIO * 100)}% of memories + essence)."]

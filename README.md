@@ -27,7 +27,12 @@ No dependencies, no network. Saves go to `savegame.json` next to `main.py`
 | Economy | ⚪ **White gel** (common) and 🟣 **Purple gel** (rare: small drop chance in hunts/dungeons, bosses are the best source), Food, Essence |
 | Main dungeon | **The Hollow Descent** — floor after floor, deliberately rough (enemy stats +15 % compounding per floor), permadeath, boss every 5 floors, first-clear purple-gel bounty. A fresh party loses slimes on floor 1 |
 | Grinding dungeon | **The Gloop Pit** — safe, repeatable XP farm tuned to your party's level (depth 1–5). Nobody dies (knock-outs), every survivor gets XP, little loot, no purple gel. `auto-rest` lets you queue dozens of runs |
-| Training grounds | ⚔️ **Blade Yard** (sword: atk/def), 🏹 **Archery Range** (atk/spd), 🔮 **Mana Pool** (mag/hp). Permanent stat gains, ×1.5 for your own class's discipline, diminishing returns capped by level |
+| Sparring (fighting style) | Training is **not** for XP and not for the Gloop Pit: slimes **duel each other** in the ⚔️ Blade Yard, 🏹 Archery Range or 🔮 Mana Pool to develop a *style* (Swordsmanship, Marksmanship, Spellcraft) with permanent combat perks. Non-lethal: the loser is left at **1 HP** |
+| Rest Area | Heals wounded slimes back to **full** (30 → 100 %/hour by level). Auto-care sends the wounded there. Starving slimes can't heal |
+| Buildings | Four upgradable buildings: 🛏️ Rest Area (capacity, healing), 🥋 Training Grounds (style ceiling + XP), 📚 Library (study speed, spell slots, research odds, Restricted Section for tier-3 spells), 🏕️ Barracks (morale, bonds, party synergy) |
+| Compatibility & bonds | Every pair has a **compatibility** score (traits, class chemistry, shared / fusable elements, friendship, sparring/battle history, open quarrels). It shapes quarrel odds, merge XP (±25 %) and **party synergy** (±10 % power) |
+| Morale | Per-slime "fight readiness": wins and rests raise it, defeats, brawls and deaths of friends lower it. Scales power ×0.85–1.15; a broken slime may freeze in battle |
+| Council | Keep-or-sacrifice advisor: ranks the roster (KEEP / FLEX / SACRIFICE?), shows how loved each slime is, and suggests the best merges (the donor is consumed, friends grieve) |
 | Elements | 🔥 Fire, 💧 Water, 🪨 Earth, 🌪️ Wind and their **fusions**: Fire+Wind = ⚡Lightning, Lightning+Fire = 🔆Plasma, Fire+Earth = 🌋Lava, Ice, Steam, Mud, Sand … (13 elements; add recipes in data). Wheel: Water > Fire > Wind > Earth > Water |
 | Elemental mastery | Unlocks at **3★, for any class** (barbarians can cast too — they channel through attack). Mastery cap 4/6/8 and 2/3/4 element slots at 3/4/5★ (mages get +1 slot and study faster) |
 | Library | Study elements, buy tier-1 spells, learn up to 4 spells per slime |
@@ -63,7 +68,10 @@ slime_gacha/
   dungeon.py             wave generators for the Hollow Descent and the Gloop Pit
   elements.py            elements, fusion recipes, wheel, mastery rules
   spells.py              elemental spells + spell fusion
-  academy.py             training grounds, library, study/research tasks
+  academy.py             library, study / research tasks
+  sparring.py            fighting styles, arenas, sparring rules
+  buildings.py           upgradable buildings + rest-area healing
+  social.py              bonds, compatibility, synergy, morale, council advice
   battle.py              BattleSystem (turn-based auto-combat)
   game.py                Game façade: state, ticking, save/load
   cli.py                 text UI

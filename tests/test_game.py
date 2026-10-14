@@ -233,8 +233,8 @@ class TestGrowth(unittest.TestCase):
         g = fresh(1, 2)
         t, d = g.slimes()
         add_xp(d, 500)
-        expect = merge_gain(t, d)
-        self.assertGreaterEqual(expect, int(500 * config.MERGE_XP_RATIO))
+        expect = g.merge_preview(t.id, d.id)                  # includes the compatibility swing
+        self.assertGreaterEqual(expect, int(500 * config.MERGE_XP_RATIO * (1 - config.MERGE_COMPAT_SWING)))
         before = t.total_xp
         g.merge(t.id, d.id)
         self.assertEqual(t.total_xp - before, expect)
@@ -462,10 +462,10 @@ class TestGrindDungeon(unittest.TestCase):
         res = g.grind(pid, 3, 5)
         self.assertIn("level cap", res.stop_reason)
 
-    def test_party_rest_sleeps_idle_members(self):
+    def test_party_rest_uses_the_rest_area(self):
         g, pid = self._party()
         g.party_rest(pid)
-        self.assertTrue(all(s.state == "sleeping" for s in g.party_members(pid)))
+        self.assertTrue(all(s.state == "resting" for s in g.party_members(pid)))
 
 
 class TestDeath(unittest.TestCase):

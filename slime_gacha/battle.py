@@ -11,6 +11,7 @@ from typing import Callable, Dict, List, Optional
 from . import config
 from .abilities import Ability, get_ability
 from . import elements
+from . import sparring
 from .archetypes import STAT_KEYS
 from .growth import add_xp
 from .registry import Registry
@@ -86,10 +87,19 @@ class Combatant:
     mastery: Dict[str, int] = field(default_factory=dict)   # basic element -> mastery level (slimes)
     element: str = ""               # enemy's own element
     casts: Dict[str, int] = field(default_factory=dict)     # elemental casts this battle (mastery xp)
+    style: Dict[str, int] = field(default_factory=dict)     # fighting-style levels (sparring.py)
+    morale: float = 60.0
+    nonlethal: bool = False         # sparring: reaching 1 HP means yielding, not dying
+    yielded: bool = False
 
     @property
     def alive(self) -> bool:
-        return self.hp > 0
+        return self.hp > 0 and not self.yielded
+
+    def hurt(self, amount: float) -> None:
+        self.hp -= amount
+        if self.nonlethal and self.hp <= 1:
+            self.hp, self.yielded = 1, True
 
     @property
     def max_hp(self) -> float:
@@ -97,6 +107,8 @@ class Combatant:
 
     def stat(self, name: str) -> float:
         v = self.stats[name]
+        if name == "spd":
+            return v * (1 + config.STYLE_ARCHERY_SPEED * self.style.get("archery", 0))
         return v * self.power_mult if name in ("atk", "mag") else v
 
 
@@ -109,6 +121,7 @@ class BattleReport:
     loot: Dict[str, int] = field(default_factory=dict)
     deaths: List[str] = field(default_factory=list)
     knocked_out: List[str] = field(default_factory=list)
+    winner_slime: object = None            # duels only
 
     @property
     def victory(self) -> bool:
@@ -131,10 +144,13 @@ class BattleSystem:
         return [self.rng.choice(pool) for _ in range(count)]
 
     @staticmethod
-    def from_slime(s) -> Combatant:
-        return Combatant(s.name, s.arch.emoji, "party", dict(s.max_stats()), float(s.hp),
-                         s.known_abilities(), s.behavior, s.power_multiplier(), s,
-                      mastery={b: elements.basic_level(s, b) for b in s.attuned})
+    def from_slime(s, synergy: float = 1.0, side: str = "party") -> Combatant:
+        """power = mood x morale x party synergy; style levels and elemental mastery come along."""
+        morale_f = config.MORALE_POWER_MIN + (config.MORALE_POWER_MAX - config.MORALE_POWER_MIN) * s.morale / 100
+        return Combatant(s.name, s.arch.emoji, side, dict(s.max_stats()), float(s.hp),
+                         s.known_abilities(), s.behavior, s.power_multiplier() * morale_f * synergy, s,
+                         mastery={b: elements.basic_level(s, b) for b in s.attuned},
+                         style=sparring.style_levels(s), morale=s.morale)
 
     @staticmethod
     def from_enemy(e: Enemy) -> Combatant:
@@ -143,7 +159,7 @@ class BattleSystem:
 
     # -- main loop -----------------------------------------------------------
     def run(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
-            xp_mult: float = 1.0) -> BattleReport:
+            xp_mult: float = 1.0, synergy: float = 1.0) -> BattleReport:
         """party: list of Slime (HP and XP are written back). enemies: list of Enemy templates.
         permadeath=False knocks slimes out at 1 HP instead of killing them (training dungeons).
         split_xp=False gives every survivor the full wave XP instead of an equal share."""
@@ -159,12 +175,20 @@ class BattleSystem:
             if totals[e.key] > 1:          # "Dust Bunny A", "Dust Bunny B"
                 c.name = f"{e.name} {chr(65 + n)}"
             foes.append(c)
-        mine = [self.from_slime(s) for s in party]
+        mine = [self.from_slime(s, synergy) for s in party]
         everyone = mine + foes
         log = [f"⚔ Battle begins! {', '.join(c.emoji + c.name for c in mine)}  vs  "
                f"{', '.join(c.emoji + c.name for c in foes)}"]
+        rounds, winner = self._simulate(everyone, log)
+        report = BattleReport(log, winner, rounds)
+        log.append({"party": "🏆 Victory!", "foes": "💀 Defeat...", None: "🤝 Draw - everybody is too tired."}[winner])
+        self._finish(party, mine, enemies, report, permadeath, split_xp, xp_mult)
+        return report
+
+    def _simulate(self, everyone, log, cap: int = config.ROUND_CAP):
+        """Round loop shared by battles and duels. Returns (rounds, winner)."""
         rounds = 0
-        while rounds < config.ROUND_CAP and self._side_alive(everyone, "party") \
+        while rounds < cap and self._side_alive(everyone, "party") \
                 and self._side_alive(everyone, "foes"):
             rounds += 1
             log.append(f"--- Round {rounds} ---")
@@ -182,10 +206,25 @@ class BattleSystem:
             winner = "foes"
         else:
             winner = None
-        report = BattleReport(log, winner, rounds)
-        log.append({"party": "🏆 Victory!", "foes": "💀 Defeat...", None: "🤝 Draw - everybody is too tired."}[winner])
-        self._finish(party, mine, enemies, report, permadeath, split_xp, xp_mult)
-        return report
+        return rounds, winner
+
+    def duel(self, a, b) -> "BattleReport":
+        """Non-lethal friendly match between two slimes (sparring). No XP, no loot; the loser is left at 1 HP
+        (reaching 1 HP = yielding). HP is written back; the caller handles style XP, bonds and morale."""
+        ca, cb = self.from_slime(a, 1.0, "party"), self.from_slime(b, 1.0, "foes")
+        for c in (ca, cb):
+            c.nonlethal = True
+        log = [f"🥊 Sparring match: {ca.emoji}{ca.name} vs {cb.emoji}{cb.name}"]
+        rounds, winner = self._simulate([ca, cb], log, config.DUEL_ROUND_CAP)
+        if winner is None:                      # round cap: the healthier slime takes it on points
+            winner = "party" if ca.hp / ca.max_hp >= cb.hp / cb.max_hp else "foes"
+        log.append(f"🏅 {(ca if winner == 'party' else cb).name} wins the spar!")
+        for s, c in ((a, ca), (b, cb)):
+            s.hp = max(1, int(c.hp))
+            s.needs.add("energy", -8)
+        rep = BattleReport(log, winner, rounds)
+        rep.winner_slime = a if winner == "party" else b
+        return rep
 
     @staticmethod
     def _side_alive(everyone, side) -> bool:
@@ -196,12 +235,16 @@ class BattleSystem:
         # status tick
         if actor.poison[0] > 0:
             dmg = actor.poison[1]
-            actor.hp -= dmg
+            actor.hurt(dmg)
             actor.poison = (actor.poison[0] - 1, actor.poison[1])
             log.append(f"  ☠ {actor.name} takes {dmg} poison damage.")
             if not actor.alive:
                 log.append(f"  {actor.name} is defeated!")
                 return
+        if actor.morale < config.MORALE_BROKEN and actor.side == "party" and \
+                self.rng.random() < config.MORALE_FREEZE_CHANCE:
+            log.append(f"  😰 {actor.name} freezes - morale is broken!")
+            return
         for k in list(actor.cooldowns):
             actor.cooldowns[k] = max(0, actor.cooldowns[k] - 1)
         allies = [c for c in everyone if c.side == actor.side and c.alive]
@@ -327,6 +370,15 @@ def _mastery_mult(actor, ability) -> float:
     return 1 + config.MASTERY_SPELL_BONUS * elements.effective_mastery(actor.mastery, ability.element)
 
 
+def _style_attack(actor, ability) -> float:
+    """Fighting-style perks: swordsmanship boosts attack-stat moves, spellcraft boosts magic-stat moves."""
+    if ability.stat == "atk":
+        return 1 + config.STYLE_SWORD_DAMAGE * actor.style.get("sword", 0)
+    if ability.stat == "mag":
+        return 1 + config.STYLE_MAGIC_POWER * actor.style.get("magic", 0)
+    return 1.0
+
+
 def _cast_stat(actor, ability) -> float:
     """Elemental spells scale with magic - or, for non-mages, with raw attack (imbuing)."""
     if ability.element and ability.stat == "mag":
@@ -337,8 +389,10 @@ def _cast_stat(actor, ability) -> float:
 def _damage_value(bs: BattleSystem, actor, ability, target):
     raw = ability.power * _cast_stat(actor, ability) * _mastery_mult(actor, ability) - 0.5 * target.stat("defense")
     eff = elements.effectiveness(ability.element, target.element)
-    raw = max(1.0, raw) * bs.rng.uniform(0.9, 1.1) * eff
-    crit = bs.rng.random() < config.CRIT_CHANCE + (0.1 if actor.behavior == "explore" else 0)
+    raw = max(1.0, raw) * bs.rng.uniform(0.9, 1.1) * eff * _style_attack(actor, ability)
+    raw *= max(0.6, 1 - config.STYLE_SWORD_GUARD * target.style.get("sword", 0))       # parrying
+    crit = bs.rng.random() < (config.CRIT_CHANCE + (0.1 if actor.behavior == "explore" else 0)
+                              + config.STYLE_ARCHERY_CRIT * actor.style.get("archery", 0))
     if crit:
         raw *= config.CRIT_MULT
     if target.guard > 0:
@@ -353,7 +407,7 @@ def _eff_tag(eff: float) -> str:
 def _h_damage(bs, actor, ab, targets, everyone, log):
     for t in targets:
         dmg, crit, eff = _damage_value(bs, actor, ab, t)
-        t.hp -= dmg
+        t.hurt(dmg)
         log.append(f"  {actor.emoji}{actor.name} uses {ab.name} on {t.name}: {dmg} dmg{' (CRIT!)' if crit else ''}{_eff_tag(eff)}"
                    f" [{max(0, int(t.hp))}/{int(t.max_hp)}]")
 
@@ -361,7 +415,7 @@ def _h_damage(bs, actor, ab, targets, everyone, log):
 def _h_drain(bs, actor, ab, targets, everyone, log):
     for t in targets:
         dmg, _, _ = _damage_value(bs, actor, ab, t)
-        t.hp -= dmg
+        t.hurt(dmg)
         heal = max(1, dmg // 2)
         actor.hp = min(actor.max_hp, actor.hp + heal)
         log.append(f"  {actor.emoji}{actor.name} siphons {dmg} from {t.name} and heals {heal}.")
@@ -370,7 +424,7 @@ def _h_drain(bs, actor, ab, targets, everyone, log):
 def _h_heal(bs, actor, ab, targets, everyone, log):
     for t in targets:
         amt = max(1, int(ab.power * _cast_stat(actor, ab) * 1.5 * bs.rng.uniform(0.95, 1.05)
-                         * _mastery_mult(actor, ab)))
+                         * _mastery_mult(actor, ab) * _style_attack(actor, ab)))
         before = t.hp
         t.hp = min(t.max_hp, t.hp + amt)
         log.append(f"  💚 {actor.name} uses {ab.name} on {t.name}: +{int(t.hp - before)} HP")

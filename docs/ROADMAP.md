@@ -75,7 +75,7 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Tests for both dungeons
 
 ## M9 — Academy, elements & spell fusion
-- [x] Training grounds: sword / archery / magic (permanent, capped, affinity bonus)
+- [x] ~~Solo training grounds~~ (replaced in M10 by sparring)
 - [x] Four basic elements + 13-element fusion tree (data-driven recipes)
 - [x] Elemental wheel in battle (weakness / resist)
 - [x] Elemental mastery from 3★, any class; slots + caps by stars; mage perks
@@ -86,8 +86,23 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Save v4 (custom spells, mastery, training)
 - [x] Tests (32 new)
 
+## M10 — Sparring, rest, buildings, bonds
+- [x] Training reworked: sparring duels develop a fighting style (no XP, separate from the Gloop Pit)
+- [x] Non-lethal duels: the loser drops to 1 HP
+- [x] Three arenas and styles: Swordsmanship / Marksmanship / Spellcraft with combat perks
+- [x] Rest Area: heals to full, capacity + speed by level, auto-admit for the wounded
+- [x] Upgradable buildings: Rest Area, Training Grounds, Library, Barracks
+- [x] Library levels: spell slots, study speed, research odds, Restricted Section (tier 3)
+- [x] Bonds between slimes (sparring, battles, mediation, quarrels)
+- [x] Compatibility score + party synergy (±10 % power)
+- [x] Morale / fight readiness (power ×0.85–1.15, freezing when broken)
+- [x] Council: keep-or-sacrifice ranking + merge suggestions with colony-morale cost
+- [x] Merge changes: compatibility swings XP, bonds inherited, colony mourns
+- [x] Save v5 and ~40 new tests
+
 ## Future (post-prototype)
-- [ ] Upgradable facilities (training ground levels, library wings)
+- [ ] Construction time for upgrades; more buildings (Pantry, Hatchery)
+- [ ] Rivalries and mentorships as explicit relationships; couples -> new slimes
 - [ ] Enemy resistances beyond one element; elemental dungeon floors
 - [ ] Spell mutation / evolving fused spells with mastery
 - [ ] Hybrid class abilities (e.g. Barbarian fire-axe imbue as a status)

@@ -31,7 +31,10 @@ heart — dungeons almost never give it up, and the Parched King hoards it.
 
 ## The Academy
 
-Behind the Well stands the **Academy of Plip**: a Blade Yard, an Archery Range, and the glowing Mana Pool. Beneath it
+Behind the Well stands the **Academy of Plip**: a Blade Yard, an Archery Range, and the glowing Mana Pool, where droplets do not
+"level up" — they *spar*, learning how they like to fight. The loser is always left at 1 HP and carried to the **Rest Area**, a warm pond
+that puts everybody back together. The Keeper can raise and expand every building, including the **Barracks**, where friendships — and
+grudges — are made. Before any hard choice the **Council of Blorp** weighs who is loved, who is ready, and who might be given to the Mother. Beneath it
 lies the **Library of Moist Pages**, where the Mother's memories of the four elements — Fire, Water, Earth and Wind —
 are filed. Only droplets with at least three stars of the Mother's memory can *read* them, but any class may: a
 barbarian who mixes Fire and Wind into **Lightning** is just a very loud mage. The Library keeps every new spell
@@ -52,6 +55,8 @@ a slime invents, so the colony's magic grows with its mistakes.
 | Slimes are *people* | Personalities, grudges, and conflicts you mediate |
 | Merging is bittersweet | A merged slime shares memories (XP) with its heir — the donor is gone |
 | Loss matters | Permadeath, graveyard, grief that lowers belonging |
+| Fighting style, not grind | Sparring duels develop a style; the Pit is for XP |
+| Who is worth keeping? | Compatibility, bonds, morale and the Council's advice |
 | Growth through community | Evolution stages require both levels and Essence gathered by the colony |
 
 ## Cast (starter slimes)

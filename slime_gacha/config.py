@@ -63,6 +63,7 @@ def xp_to_next(level: int) -> int:
 CRIT_CHANCE = 0.08
 CRIT_MULT = 1.5
 ROUND_CAP = 30
+DUEL_ROUND_CAP = 80            # sparring continues until somebody yields
 PARTY_SIZE = 5           # fixed party size: must be a multiple of 5 (5, 10, 15 ...)
 GUARD_REDUCTION = 0.5
 
@@ -84,14 +85,50 @@ GRIND_LOOT_MULT = 0.5           # little loot, no purple gel
 GRIND_TICKS = 2
 GRIND_MIN_HP = 0.4              # auto-grind stops when anyone drops below this HP fraction
 
-# ---- Training grounds, library, elemental mastery -----------------------------------
-TRAIN_COST = {"white_gel": 2}
-TRAIN_TICKS = 4
-TRAIN_GAIN = 1.0                # base stat points per session (before weights/diminishing returns)
-TRAIN_AFFINITY_MULT = 1.5       # training the discipline that matches your class
-TRAIN_CAP_BASE = 2.0            # max trained bonus per stat = BASE + PER_LEVEL * level
-TRAIN_CAP_PER_LEVEL = 0.6
-TRAIN_DECAY_MULT = {"energy": 1.6, "food": 1.3}
+# ---- Sparring (fighting styles), rest area, morale, bonds, buildings --------------------
+# Training is NOT for XP: slimes spar against each other to develop a fighting STYLE. Spars are non-lethal
+# (loser is left at 1 HP) and cost no XP; the Rest Area heals everybody back to full.
+SPAR_COST = {"white_gel": 2}
+SPAR_TICKS = 3
+SPAR_STYLE_XP = 15              # style xp per spar (winner x1.3, own-discipline x1.5, grounds level bonus)
+SPAR_WINNER_MULT = 1.3
+SPAR_DUMMY_MULT = 0.5           # odd slime out trains on a dummy at half rate (no HP loss)
+SPAR_MIN_HP = 0.4
+SPAR_BOND = 3
+STYLE_AFFINITY_MULT = 1.5       # practising the discipline that matches your class
+STYLE_XP = [30, 80, 150, 250, 400, 600, 850, 1150, 1500, 2000]   # cumulative xp for style level 1..10
+STYLE_SWORD_DAMAGE = 0.03       # per level: +3% attack-stat damage ...
+STYLE_SWORD_GUARD = 0.02        # ... and -2% damage taken (max -40%)
+STYLE_ARCHERY_CRIT = 0.02       # per level: +2% crit chance ...
+STYLE_ARCHERY_SPEED = 0.03      # ... and +3% speed
+STYLE_MAGIC_POWER = 0.03        # per level: +3% magic damage/healing
+STUDY_DECAY_MULT = {"energy": 1.6, "food": 1.3}
+# Morale = "fight readiness" (0-100). Drifts toward a target set by mood; battles, deaths and bonds move it.
+MORALE_START = 60.0
+MORALE_BASE_TARGET = 35.0       # target = BASE + 55 * mood (+ barracks bonus)
+MORALE_MOOD_SPAN = 55.0
+MORALE_DRIFT = 0.08             # fraction of the gap closed per hour (+ barracks)
+MORALE_POWER_MIN, MORALE_POWER_MAX = 0.85, 1.15
+MORALE_BROKEN = 20              # below this a slime may freeze in battle
+MORALE_FREEZE_CHANCE = 0.25
+MORALE_WIN, MORALE_BOSS_WIN, MORALE_LOSS = 8, 4, -15
+MORALE_ALLY_DEATH, MORALE_FRIEND_DEATH = -4, -20
+# Compatibility between two slimes (-100..100) and party synergy
+SYNERGY_MAX = 0.10              # a perfectly compatible party fights +10% (discord: -10%)
+COMPAT_RIVAL = -25
+COMPAT_SAME_CLASS = 6
+COMPAT_FRIEND = 10
+COMPAT_OPEN_CONFLICT = -20
+COMPAT_SHARED_ELEMENT = 8
+COMPAT_FUSION_PARTNERS = 12
+BOND_MIN, BOND_MAX = -40.0, 60.0
+MERGE_COMPAT_SWING = 0.25       # merge xp x(1 +/- 25%) depending on compatibility
+MERGE_BOND_INHERIT = 0.5        # the target inherits half of the donor's bonds
+MERGE_MORALE_OTHERS, MERGE_MORALE_FRIENDS = -5, -25
+# Rest Area: heals fast; capacity and speed depend on its level (see buildings.py)
+REST_ENERGY_GAIN = 10
+AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
+# Library / mastery
 TASK_MIN_ENERGY = 25
 MASTERY_MIN_STARS = 3           # elemental mastery unlocks at 3 stars, for ANY class
 MASTERY_XP = [20, 60, 120, 200, 320, 480, 700, 1000]     # cumulative xp for mastery level 1..8
@@ -117,5 +154,5 @@ ELEMENT_DISADVANTAGE = 0.7
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 4
+SAVE_VERSION = 5
 DEFAULT_SAVE = "savegame.json"

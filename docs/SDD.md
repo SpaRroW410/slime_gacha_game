@@ -1,7 +1,8 @@
 # Software Design Document — Slime Gacha (prototype v0.1)
 
 > **v0.2 changes**: permadeath, rarity 90/9/0.9/0.09, 1–5★ ratings, white/purple gel currencies, free daily pull, fixed-size parties (§5.1, 5.9, 5.10).
-> **v0.4 changes**: training grounds, library, elements, elemental mastery, spell fusion (§5.12).
+> **v0.5 changes**: sparring-based fighting styles, Rest Area, upgradable buildings, compatibility / morale / council (§5.12–5.14).
+> **v0.4 changes**: library, elements, elemental mastery, spell fusion (§5.12 Library part).
 > **v0.3 changes**: main + grinding dungeons (§5.11), currency naming (white/purple gel).
 
 ## 1. Goals & non-goals
@@ -168,15 +169,10 @@ Dungeons only *generate waves* (lists of scaled `Enemy` copies via `scale_enemy`
 | Extra | floors unlock in order; replay allowed (no bounty) | `runs=N`, `auto_rest` sleeps the party until healed (85 % HP) between runs; stops on defeat, level cap, brawl-grounding, or missing members |
 Time passing means hunger: long grinds need Food, or slimes starve.
 
-### 5.12 Training, elements, library & spell lab (`academy.py`, `elements.py`, `spells.py`)
-**Tasks.** Training, studying and researching are timed *tasks*: the slime's state becomes `training`
+### 5.12 Library, elements & spell lab (`academy.py`, `elements.py`, `spells.py`)
+**Tasks.** Studying and researching are timed *tasks*: the slime's state becomes `studying`
 with `slime.task = {kind, ticks_left, ...}`; `AcademySystem.tick` resolves it. Busy slimes can't hunt,
-fight, merge or sleep (`Slime.busy`); a brawl or `recall` cancels the task.
-
-**Training grounds.** `Discipline(key, name, weights)` registry: sword (atk .. def), archery (atk, spd), magic
-(mag, hp×3). A session costs 2 white gel + 4 h. Gain = `1.0 × weight × (1.5 if class discipline) ×
-(1 − bonus/cap)`; cap per stat = `2 + 0.6·level` (hp ×3). Bonuses are flat, permanent and added in
-`Slime.max_stats()`. Archetypes declare `discipline`.
+fight, merge or sleep (`Slime.busy`); a brawl or `recall` cancels the task. (Sparring is separate, §5.13.)
 
 **Elements.** Four basics; `RECIPES` maps an unordered pair to a result element (tier 2 = two basics,
 tier 3 = a compound + anything). Every element has `components` (basics). Effectiveness uses the wheel
@@ -189,7 +185,8 @@ element is the **weakest component**. Spell power ×(1 + 0.06 × effective maste
 spells with `max(mag, 0.85·atk)`.
 
 **Library.** Catalogue = tier-1 spells (data) + `discovered` fusions. Learning needs attunement, mastery
-≥ 1/3/5 by tier, and a fee; slimes hold max 4 learned spells.
+≥ 1/3/5 by tier, and a fee; slimes hold 4 learned spells (+1 at Library L3, +2 at L5). Tier-3 spells and
+tier-3 research need Library level 3 (the Restricted Section).
 
 **Spell lab (research).** Pick two learned elemental spells whose elements have a recipe. Needs attunement to
 all components, mastery ≥ 3 (tier 2) or 5 (tier 3), HP ≥ 50 %, and a fee (15/40 essence, tier 3 also purple
@@ -198,6 +195,40 @@ Success registers a new `Ability` (power = avg × 1.15/1.3, cooldown +1, kind by
 is) and adds it to the Library; failure backfires for 35 % max HP but never kills. Fused spells are persisted
 in the save (`custom_spells`, `discovered`) and re-registered on load.
 
+### 5.13 Sparring, Rest Area & buildings (`sparring.py`, `buildings.py`)
+**Training is about fighting style, not XP.** `Game.spar(a, b, discipline)` runs `BattleSystem.duel`: a non-lethal
+friendly match (`Combatant.nonlethal`: reaching 1 HP = *yielded*, the match ends; nothing can die). No XP or loot.
+Both fighters gain **style XP** in the arena's discipline: `15 × grounds multiplier × 1.5 (own class discipline)
+× 1.3 (winner)`; an odd party member drills on a dummy at half rate without HP loss. A duel costs 2 white gel and
+the group spends 3 game hours. Style levels (cumulative XP `[30, 80, 150, 250, 400, 600, 850, 1150, 1500, 2000]`)
+are capped by the **Training Grounds** level (4/6/8/10/10). Perks per level — sword: +3 % attack-stat damage and
+−2 % damage taken; archery: +2 % crit and +3 % speed; magic: +3 % magic damage/healing. Duels also grow bonds and
+morale. Slimes below 40 % HP can't spar.
+
+**Rest Area.** State `resting`. `buildings.rest_tick` heals `30/45/60/80/100 %` of max HP per hour by level (not
+while starving), restores energy and morale, and releases the slime when full. Capacity is 5 per level. With
+auto-care on, idle slimes under 50 % HP admit themselves if there is room. `party_rest` and the grind's
+`auto_rest` use it first and fall back to plain sleep.
+
+**Buildings.** Registry of `Building(key, levels, upgrade_costs)`; `BuildingManager` stores levels and exposes
+effect getters: Rest Area (capacity/heal), Training Grounds (style cap, style XP ×1+0.15/lvl), Library (study ×,
+research +4 %/lvl, spell slots, tier-3 gate), Barracks (morale target +2/lvl, faster drift, bonds ×1+0.25/lvl,
+synergy ×1+0.2/lvl). Upgrades cost white gel (≈ 60–100 × L^1.7), essence from level 3, purple gel from level 5.
+
+### 5.14 Compatibility, morale & the Council (`social.py`)
+**Bonds** (−40..60 per pair): sparring +3, fighting side by side +2, mediation +10, quarrels −3, brawls −10.
+**Compatibility** (−100..100) = trait chemistry table (±30) + class (rivals −25, same +6, complementary pairs
+up to +14) + elements (shared +8 each, fusable partners +12) + friendship +10 + bond − open quarrel 20.
+It scales quarrel odds (×0.4 … ×2), merge XP (±25 %) and **party synergy**: average pairwise compatibility →
+±10 % power for every member (Barracks scales it).
+**Morale** (0–100, default 60): drifts 8 %/h toward `35 + 55 × mood (+ barracks)`; victories +8 (+4 boss),
+defeats −15, an ally dying −4 (a friend −20), brawls −15, resting +3…7/h, successful mediation +10. Battle power
+× `0.85 + 0.30 × morale/100`; below 20 a party member freezes 25 % of its turns.
+**Council** (`Game.council()`): every slime gets a keep score = power 35 % + quality (stars/rarity) 20 % + XP
+invested 10 % + spells/mastery 10 % + social value 15 % + "in a party" 10 %. Top 40 % = KEEP, bottom 25 %
+= SACRIFICE?, rest FLEX, with reasons. Merge suggestions rank `XP gained − 3 × colony morale cost`; the merge
+itself transfers half of the donor's bonds to the target and lowers colony morale (friends −25, others −5).
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|
@@ -205,7 +236,9 @@ in the save (`custom_spells`, `discovered`) and re-registered on load.
 | New ability | `register_ability(Ability(...))` and reference its key from an archetype |
 | New ability kind | add handler in `battle.KIND_HANDLERS` |
 | New zone / enemy | `register_zone(...)`, `register_enemy(...)` |
-| New discipline | `register_discipline(Discipline(...))`; set `Archetype.discipline` |
+| New arena / style | `register_discipline(Discipline(...))` in `sparring.py` (+ a perk in `battle._style_attack`); set `Archetype.discipline` |
+| New building | `register_building(Building(...))` + an effect getter on `BuildingManager` |
+| New trait chemistry | add a row to `social.TRAIT_PAIRS` |
 | New element / recipe | `register_recipe(a, b, result, name, emoji)` in `elements.py` |
 | New library spell | `register_ability(Ability(..., element="fire", tier=1))` - tier 1 spells go on sale automatically |
 | New dungeon | write a `*_wave(...)` function in `dungeon.py` + a `Game` method that calls `BattleSystem.run(permadeath=..., split_xp=...)` |
@@ -214,7 +247,7 @@ in the save (`custom_spells`, `discovered`) and re-registered on load.
 Plugins: any module placed in `slime_gacha/plugins/` is auto-imported at start (optional dir).
 
 ## 7. Persistence
-`Game.save(path)` → JSON `{version 4, tick, main_floor, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. older saves load (gel/silver→white_gel, gold→purple_gel).
+`Game.save(path)` → JSON `{version 5, tick, buildings, bonds, main_floor, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. older saves load (gel/silver→white_gel, gold→purple_gel).
 Versioned for forward migration. Unknown archetype keys on load are skipped with a warning (mod removal safe).
 
 ## 8. Error handling

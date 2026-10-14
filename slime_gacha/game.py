@@ -11,8 +11,10 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import dungeon, elements, spells
-from .academy import DISCIPLINES, AcademySystem, Library
+from . import buildings as bld, dungeon, elements, sparring, spells
+from .academy import AcademySystem, Library
+from .buildings import BUILDINGS, BuildingManager
+from .social import SocialEngine
 from .abilities import ABILITIES
 from .errors import GameError, InvalidAction
 from .gacha import GachaSystem
@@ -22,6 +24,12 @@ from .party import Party, PartyManager
 from .registry import load_plugins
 from .resources import ResourceManager
 from .slime import Slime
+
+
+@dataclass
+class SparResult:
+    reports: List[BattleReport] = field(default_factory=list)
+    summary: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -44,8 +52,13 @@ class Game:
         self.conflicts = ConflictEngine(self.rng)
         self.hunts = HuntSystem(self.wallet, self.rng)
         self.battles = BattleSystem(self.rng, self.wallet)
-        self.library = Library(self.wallet)
-        self.academy = AcademySystem(self.wallet, self.rng, self.library)
+        self.buildings = BuildingManager(self.wallet)
+        self.library = Library(self.wallet, self.buildings)
+        self.academy = AcademySystem(self.wallet, self.rng, self.library, self.buildings)
+        self.social = SocialEngine(self.conflicts, self.buildings)
+        self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
+        self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
+        self.conflicts.hook = self._social_hook
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
         self.main_floor = 0                            # deepest main-dungeon floor cleared
         self.graveyard: List[dict] = []                # slimes that died, newest last
@@ -87,6 +100,8 @@ class Game:
             self.tick_count += 1
             self.needs.tick(self.slimes(), events)
             self._reap(events)
+            bld.rest_tick(self.slimes(), self.buildings, events)
+            self.social.morale_tick(self.slimes())
             self.hunts.tick(self.slimes(), events)
             self._reap(events)
             self.academy.tick(self.slimes(), events)
@@ -110,8 +125,12 @@ class Game:
             self.parties.remove(s.id)
             friends = {i for f in self.conflicts.friends if s.id in f for i in f if i != s.id}
             self.conflicts.forget(s.id)
+            friends |= {i for k, v in self.social.bonds.items() if s.id in k and v >= 20 for i in k if i != s.id}
+            self.social.forget(s.id)
             for o in self.slimes():                      # grief: friends hurt more
                 o.needs.add("belonging", -25 if o.id in friends else -8)
+                self.social.shift_morale(o, config.MORALE_FRIEND_DEATH if o.id in friends
+                                         else config.MORALE_ALLY_DEATH)
             events.append(f"🪦 {s.name} the {s.title()} (Lv{s.level}) has died: {cause}.")
         return dead
 
@@ -147,7 +166,7 @@ class Game:
 
     def wake(self, sid: int) -> str:
         s = self.slime(sid)
-        if s.state == "sleeping":
+        if s.state in ("sleeping", "resting"):
             s.state = "idle"
         return f"{s.name} wakes up."
 
@@ -177,21 +196,166 @@ class Game:
         self.academy.cancel(s)
         return f"{s.name} was called back."
 
-    # ---- training grounds & library --------------------------------------------------
-    def train(self, sid: int, discipline: str) -> str:
-        """Send a slime to the Blade Yard (sword), Archery Range or Mana Pool (magic). Permanent stat gains;
-        training your class's own discipline is 1.5x as effective."""
-        return self.academy.start_training(self.slime(sid), discipline)
+    # ---- sparring (fighting styles) -------------------------------------------------
+    def spar(self, a_id: int, b_id: int, discipline: str) -> SparResult:
+        """Two slimes duel non-lethally in the chosen arena (sword / archery / magic) to develop a fighting
+        STYLE. No XP; the loser is left at 1 HP (use the Rest Area). Costs 2 white gel and 3 hours."""
+        return self._spar_group([(self.slime(a_id), self.slime(b_id))], None, discipline)
 
-    def train_party(self, pid: int, discipline: str) -> List[str]:
+    def spar_party(self, pid: int, discipline: str) -> SparResult:
+        """Everyone in a full party spars in random pairs; an odd slime out trains on a dummy."""
         self._require_full(pid)
-        out = []
+        members = self.party_members(pid)
+        self.rng.shuffle(members)
+        pairs = [(members[i], members[i + 1]) for i in range(0, len(members) - 1, 2)]
+        odd = members[-1] if len(members) % 2 else None
+        return self._spar_group(pairs, odd, discipline)
+
+    def _spar_group(self, pairs, dummy_slime, discipline: str) -> SparResult:
+        d = sparring.DISCIPLINES.get(discipline)
+        cap = self.buildings.style_cap()
+        everyone = [s for p in pairs for s in p] + ([dummy_slime] if dummy_slime else [])
+        if len({s.id for s in everyone}) != len(everyone):
+            raise InvalidAction("A slime can't spar with themselves.")
+        for s in everyone:
+            sparring.check_ready(s)
+        if all(sparring.style_level(s, d.key) >= cap for s in everyone):
+            raise InvalidAction(f"Everyone is already at the {d.style} ceiling (level {cap}) - upgrade the "
+                                f"Training Grounds.")
+        self.wallet.spend_many({k: v * (len(pairs) + (1 if dummy_slime else 0))
+                                for k, v in config.SPAR_COST.items()})
+        res = SparResult()
+        mult = self.buildings.style_mult()
+
+        def reward(s, won, dummy=False):
+            before = sparring.style_level(s, d.key)
+            xp = sparring.style_xp_for(s, d.key, won, mult, dummy)
+            after = sparring.gain_style_xp(s, d.key, xp, cap)
+            self.social.shift_morale(s, 2 + (2 if won else 0))
+            note = f"+{xp:.0f} {d.style} xp"
+            if after > before:
+                note += f" ⬆ {d.style} level {after}!"
+            elif after >= cap and sparring.style_level(s, d.key) >= cap:
+                note += " (Training Grounds ceiling)"
+            res.summary.append(f"   {s.name}: {note}")
+
+        for a, b in pairs:
+            rep = self.battles.duel(a, b)
+            res.reports.append(rep)
+            win, lose = (a, b) if rep.winner == "party" else (b, a)
+            res.summary.append(f"{d.emoji} {win.name} beat {lose.name} in {rep.rounds} rounds "
+                               f"({lose.name} left at {lose.hp} HP)")
+            reward(win, True)
+            reward(lose, False)
+            self.social.add_bond(a, b, config.SPAR_BOND)
+        if dummy_slime:
+            res.summary.append(f"{d.emoji} {dummy_slime.name} drills on a training dummy")
+            reward(dummy_slime, None, dummy=True)
+            dummy_slime.needs.add("energy", -4)
+        events = self.tick(config.SPAR_TICKS)
+        res.summary.extend("   " + e for e in events if "died" in e)
+        self.journal.extend(events)
+        return res
+
+    # ---- rest area -------------------------------------------------------------------------
+    def resting_count(self) -> int:
+        return sum(1 for s in self.slimes() if s.state == "resting")
+
+    def _auto_rest(self, s) -> bool:
+        if s.state == "idle" and self.resting_count() < self.buildings.rest_capacity():
+            s.state = "resting"
+            return True
+        return False
+
+    def rest(self, sid: int) -> str:
+        """Send a slime to the Rest Area: heals a fraction of max HP per hour (see Rest Area level)."""
+        s = self.slime(sid)
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away ({s.state}).")
+        if s.state == "resting":
+            return f"{s.name} is already resting."
+        if self.resting_count() >= self.buildings.rest_capacity():
+            raise InvalidAction(f"The Rest Area is full ({self.buildings.rest_capacity()}). Upgrade it for more room.")
+        s.state = "resting"
+        return f"{s.name} sinks into the Rest Area."
+
+    def party_rest(self, pid: int) -> str:
+        """Rest every unavailable-for-nothing member: Rest Area first, then plain sleep if it is full."""
+        rested = slept = 0
         for s in self.party_members(pid):
+            if s.state not in ("idle", "sleeping"):
+                continue
             try:
-                out.append(self.academy.start_training(s, discipline))
-            except GameError as e:
-                out.append(f"✋ {e}")
+                self.rest(s.id)
+                rested += 1
+            except InvalidAction:
+                s.state = "sleeping"
+                slept += 1
+        return f"{rested} slime(s) soak in the Rest Area, {slept} curl up to sleep."
+
+    # ---- buildings ---------------------------------------------------------------------------
+    def upgrade_building(self, key: str) -> str:
+        if key not in BUILDINGS:
+            raise InvalidAction(f"Unknown building '{key}'. Options: {', '.join(BUILDINGS.keys())}.")
+        return self.buildings.upgrade(key)
+
+    def building_report(self) -> List[dict]:
+        out = []
+        for b in BUILDINGS:
+            lv = self.buildings.level(b.key)
+            nxt = self.buildings.next_cost(b.key)
+            out.append(dict(key=b.key, name=b.name, emoji=b.emoji, level=lv, max=b.max_level,
+                            now=self.buildings.describe(b.key), cost=nxt,
+                            nxt=self.buildings.describe(b.key, lv + 1) if nxt else None))
         return out
+
+    # ---- social: morale, compatibility, council -----------------------------------------------
+    def _social_hook(self, kind: str, a, b, success: bool = None) -> None:
+        if kind == "quarrel":
+            self.social.add_bond(a, b, -3)
+            for s in (a, b):
+                self.social.shift_morale(s, -3)
+        elif kind == "brawl":
+            self.social.add_bond(a, b, -10)
+            for s in (a, b):
+                self.social.shift_morale(s, -15)
+        elif kind == "resolved":
+            if success:
+                self.social.add_bond(a, b, 10)
+                for s in (a, b):
+                    self.social.shift_morale(s, 10)
+            else:
+                self.social.add_bond(a, b, -2)
+
+    def compat(self, a_id: int, b_id: int) -> dict:
+        a, b = self.slime(a_id), self.slime(b_id)
+        parts = self.social.compat_parts(a, b)
+        total = self.social.compat(a, b)
+        return dict(total=total, label=self.social.compat_label(total), parts=parts)
+
+    def party_synergy(self, pid: int) -> float:
+        return self.social.synergy(self.party_members(pid))
+
+    def council(self) -> dict:
+        """Keep-vs-sacrifice advice: ranked roster plus the best merge suggestions."""
+        in_party = {i for p in self.parties.parties.values() for i in p.members}
+        rows = self.social.keep_scores(self.slimes(), in_party)
+        sugg = []
+        if len(rows) >= 2:
+            half = max(1, len(rows) // 2)
+            targets = [r["slime"] for r in rows[:half]][:5]
+            donors = [r["slime"] for r in rows[::-1][:half]][:5]
+            for t in targets:
+                for d in donors:
+                    if t is d:
+                        continue
+                    c = self.social.compat(t, d)
+                    gain = merge_gain(t, d, c)
+                    grief = self.social.grief(d, self.slimes())
+                    sugg.append(dict(target=t, donor=d, xp=gain, compat=c, grief=grief,
+                                     net=gain - 3 * grief))
+            sugg.sort(key=lambda x: -x["net"])
+        return dict(rows=rows, merges=sugg[:5])
 
     def study(self, sid: int, element: str) -> str:
         """Attune to / study a basic element at the Library (3-star+ slimes of ANY class)."""
@@ -222,14 +386,27 @@ class Game:
 
     def merge(self, target_id: int, donor_id: int) -> List[str]:
         t, d = self.slime(target_id), self.slime(donor_id)
-        log = merge(t, d)
+        compat = self.social.compat(t, d)
+        grief = self.social.grief(d, self.slimes())
+        log = merge(t, d, compat)
+        log.append(f"   (compatibility {compat:+d}, {self.social.compat_label(compat)}: "
+                   f"{'a warm' if compat >= 30 else 'an awkward' if compat < 0 else 'an ordinary'} merge)")
+        friends = {i for f in self.conflicts.friends if d.id in f for i in f if i != d.id}
+        friends |= {i for k, v in self.social.bonds.items() if d.id in k and v >= 20 for i in k if i != d.id}
+        self.social.inherit(d, t, self.slimes())               # the target keeps half the donor's friendships
         del self.roster[d.id]
         self.conflicts.forget(d.id)
         self.parties.remove(d.id)
+        self.social.forget(d.id)
+        for o in self.slimes():                               # the colony mourns the sacrifice
+            self.social.shift_morale(o, config.MERGE_MORALE_FRIENDS if o.id in friends
+                                     else config.MERGE_MORALE_OTHERS)
+        log.append(f"   The colony's morale dips (-{grief} total) - sacrifices are felt.")
         return log
 
     def merge_preview(self, target_id: int, donor_id: int) -> int:
-        return merge_gain(self.slime(target_id), self.slime(donor_id))
+        t, d = self.slime(target_id), self.slime(donor_id)
+        return merge_gain(t, d, self.social.compat(t, d))
 
     # ---- conflict -----------------------------------------------------------------
     def mediate(self, cid: int, method: str = "talk") -> str:
@@ -318,10 +495,32 @@ class Game:
                 raise InvalidAction(f"{s.name} is grounded after a brawl.")
         return party
 
+    def _run_battle(self, party, enemies, **opts) -> BattleReport:
+        """BattleSystem.run with party synergy (compatibility) applied; the log mentions it."""
+        syn = self.social.synergy(party)
+        report = self.battles.run(party, enemies, synergy=syn, **opts)
+        report.log.insert(1, f"🤝 Party synergy {syn - 1:+.1%} (avg compatibility "
+                             f"{self.social.avg_compat(party):+.0f})")
+        return report
+
+    def _after_battle(self, party, report: BattleReport, boss: bool = False, scale: float = 1.0) -> None:
+        """Morale and bonds react to the outcome (deaths are handled when the dead are reaped)."""
+        alive = [s for s in party if s.hp > 0]
+        if report.victory:
+            for s in alive:
+                self.social.shift_morale(s, scale * (config.MORALE_WIN + (config.MORALE_BOSS_WIN if boss else 0)))
+            for i, a in enumerate(alive):
+                for b in alive[i + 1:]:
+                    self.social.add_bond(a, b, 2 * scale)
+        elif report.winner == "foes":
+            for s in alive:
+                self.social.shift_morale(s, scale * config.MORALE_LOSS)
+
     def _fight(self, party, enemies, hours: int, **opts) -> BattleReport:
         """Run a battle, bury the fallen, then let `hours` pass (the colony keeps living)."""
-        report = self.battles.run(party, enemies, **opts)
+        report = self._run_battle(party, enemies, **opts)
         events: List[str] = []
+        self._after_battle(party, report)
         self._reap(events)
         if hours:
             events.extend(self.tick(hours))
@@ -343,7 +542,8 @@ class Game:
 
     def _fight_main(self, party, enemies, floor) -> BattleReport:
         first_clear = floor > self.main_floor
-        report = self.battles.run(party, enemies)
+        report = self._run_battle(party, enemies)
+        self._after_battle(party, report, boss=dungeon.is_boss_floor(floor))
         report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}"
                              f"{' (BOSS)' if dungeon.is_boss_floor(floor) else ''}")
         events: List[str] = []
@@ -371,7 +571,8 @@ class Game:
         for n in range(1, max(1, runs) + 1):
             if auto_rest:
                 members = self.party_members(pid)
-                if any(s.state == "sleeping" or s.hp < s.max_hp * config.GRIND_MIN_HP for s in members):
+                if any(s.state in ("sleeping", "resting") or s.hp < s.max_hp * config.GRIND_MIN_HP
+                       for s in members):
                     hours = self._rest_party_until_healed(pid)
                     res.summary.append(f"   (rested {hours}h)")
             try:
@@ -389,8 +590,9 @@ class Game:
                 break
             avg = sum(s.level for s in party) / len(party)
             enemies = dungeon.grind_wave(avg, depth, self.parties.size, self.rng)
-            rep = self.battles.run(party, enemies, permadeath=False, split_xp=False,
+            rep = self._run_battle(party, enemies, permadeath=False, split_xp=False,
                                    xp_mult=config.GRIND_XP_MULT)
+            self._after_battle(party, rep, scale=0.4)
             rep.log.insert(0, f"🕳 The Gloop Pit - depth {depth} (enemy lvl ~{dungeon.grind_level(avg, depth)})")
             events = self.tick(config.GRIND_TICKS)
             rep.log.extend(events)
@@ -413,7 +615,7 @@ class Game:
         return res
 
     def _rest_party_until_healed(self, pid: int, max_hours: int = 24) -> int:
-        """Sleep the party until everyone is at 85% HP (or max_hours pass). Returns hours spent."""
+        """Rest the party until everyone is at 85% HP (or max_hours pass). Returns hours spent."""
         hours = 0
         while hours < max_hours:
             members = self.party_members(pid)
@@ -421,26 +623,22 @@ class Game:
                 break                                   # healed AND awake
             for s in members:
                 if s.state == "idle" and s.hp < s.max_hp * 0.85:
-                    s.state = "sleeping"
+                    try:
+                        self.rest(s.id)                      # Rest Area first ...
+                    except InvalidAction:
+                        s.state = "sleeping"                 # ... plain sleep if it is full
             self.tick(1)
             hours += 1
             if len(self.parties.get(pid).members) < self.parties.size:
                 break                                   # someone died while resting
         return hours
 
-    def party_rest(self, pid: int) -> str:
-        """Put every idle member of a party to sleep (they heal and recover energy)."""
-        n = 0
-        for s in self.party_members(pid):
-            if s.state == "idle":
-                s.state = "sleeping"
-                n += 1
-        return f"{n} slime(s) curl up for a rest."
-
     # ---- persistence -----------------------------------------------------------
     def to_dict(self) -> dict:
         return dict(version=config.SAVE_VERSION, seed=self.seed, tick=self.tick_count,
                     main_floor=self.main_floor, custom_spells=spells.custom_records(),
+                    buildings=self.buildings.to_dict(),
+                    bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
                     parties=self.parties.to_dict(), graveyard=self.graveyard,
                     wallet=self.wallet.to_dict(), gacha=self.gacha.to_dict(),
@@ -473,9 +671,10 @@ class Game:
                 wallet[new] = wallet.get(new, 0) + wallet.pop(old)
         g.wallet = ResourceManager(wallet)
         # re-point systems at the new wallet
-        for sysobj in (g.gacha, g.needs, g.hunts, g.battles, g.academy, g.library):
+        for sysobj in (g.gacha, g.needs, g.hunts, g.battles, g.academy, g.library, g.buildings):
             sysobj.wallet = g.wallet
         g.gacha.load(d.get("gacha", {}))
+        g.buildings.load(d.get("buildings"))
         spells.load_custom(d.get("custom_spells", []))
         g.library.discovered = {k for k in d.get("discovered", []) if k in ABILITIES}
         for sd in d.get("slimes", []):
@@ -489,6 +688,8 @@ class Game:
         g.graveyard = d.get("graveyard", [])
         g.conflicts.conflicts = [Conflict(**c) for c in d.get("conflicts", [])
                                  if c["a"] in g.roster and c["b"] in g.roster]
+        g.social.bonds = {frozenset(b[:2]): b[2] for b in d.get("bonds", [])
+                          if b[0] in g.roster and b[1] in g.roster}
         g.conflicts._next = d.get("conflict_next", 1)
         g.conflicts.friends = {frozenset(f) for f in d.get("friends", [])}
         g.needs.auto_care = d.get("auto_care", True)

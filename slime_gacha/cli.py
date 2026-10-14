@@ -4,7 +4,7 @@ from typing import List
 
 from . import config, elements
 from .abilities import ABILITIES, get_ability
-from .academy import DISCIPLINES
+from .sparring import DISCIPLINES, style_label, style_levels
 from .archetypes import BEHAVIORS
 from .errors import GameError
 from .game import Game
@@ -23,7 +23,8 @@ MENU = """
  [1] Roster           [2] Slime details      [3] Pull (free / white / purple)
  [4] Care (feed/sleep/pet)   [5] Set stance  [6] Hunt (one slime or a party)
  [7] Wait (time)      [8] Parties            [9] Dungeons / battles
- [t] Training grounds   [l] Library & spell lab (elements, fusion)
+ [t] Sparring arenas (fighting styles)   [l] Library & spell lab   [r] Rest Area
+ [b] Buildings (upgrade)   [k] Council: compatibility, morale, keep-or-sacrifice
  [m] Merge  [e] Evolve  [c] Conflicts  [a] Auto-care  [j] Journal  [x] Graveyard  [s] Save  [q] Quit
 """
 
@@ -54,7 +55,7 @@ def show_status(g: Game) -> None:
     free = "READY" if g.free_pull_available() else f"in {g.hours_to_free_pull()}h"
     print(f"\n⏰ Day {g.day} (hour {g.tick_count}) | {g.wallet} | slimes: {len(g.roster)} "
           f"(🪦 {len(g.graveyard)}) | parties: {len(g.parties.parties)} (size {g.parties.size}) | "
-          f"main dungeon: floor {g.main_floor} cleared | free pull: {free} | auto-care: {'on' if g.needs.auto_care else 'off'} | "
+          f"rest area: {g.resting_count()}/{g.buildings.rest_capacity()} | main dungeon: floor {g.main_floor} cleared | free pull: {free} | auto-care: {'on' if g.needs.auto_care else 'off'} | "
           f"conflicts: {len(g.conflicts.conflicts)}")
 
 
@@ -79,11 +80,19 @@ def show_slime(s) -> None:
         print(f"  ➜ {s.name} {wish[dom]}.")
     print(f"  abilities: {', '.join(get_ability(k).name for k in s.known_abilities())}")
     show_elements(s)
+    show_style_morale(s)
+
+
+def show_style_morale(s) -> None:
+    from .social import SocialEngine
+    lv = style_levels(s)
+    styles = ", ".join(f"{DISCIPLINES.get(k).style} {v}" for k, v in lv.items() if v) or "none yet"
+    print(f"  fighting style: {style_label(s)}  (all: {styles})")
+    print(f"  morale: {int(s.morale)} ({SocialEngine.morale_label(s.morale)}) -> fight power x"
+          f"{SocialEngine.morale_factor(s.morale):.2f}")
 
 
 def show_elements(s) -> None:
-    if s.training:
-        print("  trained: " + ", ".join(f"+{v} {k}" for k, v in s.training.items()))
     if not elements.can_master(s):
         print(f"  elements: locked (needs {config.MASTERY_MIN_STARS}★+, any class)")
         return
@@ -115,19 +124,75 @@ def show_recipes() -> None:
     print("  Wheel: Water > Fire > Wind > Earth > Water (x1.5 damage, x0.7 the other way)")
 
 
-def training_menu(g: Game) -> None:
+def sparring_menu(g: Game) -> None:
+    print("  Sparring = slimes duel each other to develop a FIGHTING STYLE. No XP. Non-lethal: the loser is left at"
+          " 1 HP\n  (the Rest Area heals them). Costs 2 white gel + 3 hours per duel.")
     for i, d in enumerate(DISCIPLINES.all(), 1):
-        print(f"  [{i}] {d.emoji} {d.name} ({d.key}) trains {', '.join(d.weights)} - {d.description}")
-    print(f"  Cost {config.TRAIN_COST} per session, {config.TRAIN_TICKS}h. Your class's own discipline is "
-          f"x{config.TRAIN_AFFINITY_MULT} as effective. Gains are permanent but capped by level.")
-    d = DISCIPLINES.all()[_int("discipline #: ") - 1].key
-    who = _ask("train a [s]lime or a whole [p]arty: ").lower()[:1]
+        print(f"  [{i}] {d.emoji} {d.name} -> {d.style}: {d.perk}")
+    print(f"  Training Grounds level {g.buildings.level('training_grounds')}: "
+          f"{g.buildings.describe('training_grounds')}")
+    d = DISCIPLINES.all()[_int("arena #: ") - 1].key
+    who = _ask("spar [s]ingle duel or a whole [p]arty: ").lower()[:1]
     if who == "p":
         show_parties(g)
-        print("\n".join("  " + x for x in g.train_party(_int("party #: "), d)))
+        res = g.spar_party(_int("party #: "), d)
     else:
         show_roster(g)
-        print("  " + g.train(_int("slime id: "), d))
+        res = g.spar(_int("first slime id: "), _int("second slime id: "), d)
+    print("\n".join("  " + x for x in res.summary))
+
+
+def rest_menu(g: Game) -> None:
+    print(f"  🛏️ Rest Area level {g.buildings.level('rest_area')}: {g.buildings.describe('rest_area')} "
+          f"({g.resting_count()}/{g.buildings.rest_capacity()} used)")
+    act = _ask("send a [s]lime, a whole [p]arty, or [w]ake someone: ").lower()[:1]
+    if act == "p":
+        show_parties(g)
+        print("  " + g.party_rest(_int("party #: ")))
+    elif act == "w":
+        print("  " + g.wake(_int("slime id: ")))
+    else:
+        show_roster(g)
+        print("  " + g.rest(_int("slime id: ")))
+
+
+def buildings_menu(g: Game) -> None:
+    rows = g.building_report()
+    for i, r in enumerate(rows, 1):
+        cost = ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in r["cost"].items()) if r["cost"] else "MAX"
+        print(f"  [{i}] {r['emoji']} {r['name']} L{r['level']}/{r['max']}: {r['now']}")
+        if r["nxt"]:
+            print(f"        next level ({cost}): {r['nxt']}")
+    c = _ask("upgrade which # (Enter = none): ")
+    if c:
+        print("  " + g.upgrade_building(rows[int(c) - 1]["key"]))
+
+
+def council_menu(g: Game) -> None:
+    from .social import SocialEngine
+    print("  [1] Keep-or-sacrifice advice   [2] Compatibility of two slimes   [3] Morale board")
+    c = _ask("council: ")
+    if c == "1":
+        data = g.council()
+        for r in data["rows"]:
+            s = r["slime"]
+            print(f"  {r['verdict']:<11} {r['score']:>5}  #{s.id:<3} {s.arch.emoji} {s.name:<10} "
+                  f"{s.star_str()} {s.rarity:<9} Lv{s.level:<2} compat avg {r['avg_compat']:+d}  "
+                  f"({', '.join(r['reasons']) or '-'})")
+        if data["merges"]:
+            print("  Best merges (target <- donor; the donor is CONSUMED):")
+            for m in data["merges"][:3]:
+                print(f"    #{m['target'].id} {m['target'].name} <- #{m['donor'].id} {m['donor'].name}: "
+                      f"+{m['xp']} XP, compat {m['compat']:+d}, colony morale cost {m['grief']}")
+    elif c == "2":
+        show_roster(g)
+        r = g.compat(_int("first slime id: "), _int("second slime id: "))
+        print(f"  Compatibility {r['total']:+d} ({r['label']}): " +
+              ", ".join(f"{k} {v:+d}" for k, v in r["parts"].items() if v))
+    elif c == "3":
+        for s in sorted(g.slimes(), key=lambda s: s.morale):
+            print(f"  #{s.id:<3} {s.name:<10} morale {int(s.morale):>3} {SocialEngine.morale_label(s.morale):<8}"
+                  f" (power x{SocialEngine.morale_factor(s.morale):.2f})")
 
 
 def _pick_spell(s, prompt: str) -> str:
@@ -181,7 +246,8 @@ def show_parties(g: Game) -> None:
         print("  (no parties - create one from the Parties menu)")
     for p in g.parties.parties.values():
         names = ", ".join(g.slime(i).name for i in p.members) or "empty"
-        print(f"  Party #{p.id} '{p.name}' [{len(p.members)}/{g.parties.size}]: {names}")
+        syn = f" | synergy {g.party_synergy(p.id) - 1:+.1%}" if len(p.members) > 1 else ""
+        print(f"  Party #{p.id} '{p.name}' [{len(p.members)}/{g.parties.size}]: {names}{syn}")
 
 
 def show_graveyard(g: Game) -> None:
@@ -229,7 +295,7 @@ def dungeon_menu(g: Game) -> None:
 
 def party_menu(g: Game) -> None:
     show_parties(g)
-    act = _ask("[n]ew / [a]dd slime / [r]emove slime / [f]ill with best free / [d]isband / [z] rest party: ").lower()[:1]
+    act = _ask("[n]ew / [a]dd slime / [r]emove slime / [f]ill with best free / [d]isband / [z] rest party (Rest Area): ").lower()[:1]
     if act == "n":
         p = g.create_party(_ask("name (optional): "))
         print(f"  Created party #{p.id} '{p.name}' - needs {g.parties.size} slimes.")
@@ -318,7 +384,13 @@ def handle(g: Game, choice: str) -> bool:
         g.needs.auto_care = not g.needs.auto_care
         print(f"  auto-care {'ON' if g.needs.auto_care else 'OFF'}")
     elif choice == "t":
-        training_menu(g)
+        sparring_menu(g)
+    elif choice == "r":
+        rest_menu(g)
+    elif choice == "b":
+        buildings_menu(g)
+    elif choice == "k":
+        council_menu(g)
     elif choice == "l":
         library_menu(g)
     elif choice == "x":
@@ -387,13 +459,11 @@ def run_demo(seed: int) -> None:
     show_events(g.tick(4))
     show_status(g)
 
-    print("\n== 4b. TRAINING GROUNDS & LIBRARY (the demo hires a 3-star scholar: ANY class can master elements) ==")
+    print("\n== 4b. LIBRARY (the demo hires a 3-star scholar: ANY class can master elements) ==")
     sch = g.gacha.make_slime("rare", "barbarian", stars=3)
     g.roster[sch.id] = sch
     g.wallet.add("white_gel", 400)
     g.wallet.add("essence", 60)
-    print("  " + g.train(sch.id, "sword"))
-    show_events([e for e in g.tick(4) if "Blade" in e])
     for el in ("fire", "wind"):
         print("  " + g.study(sch.id, el))
         show_events([e for e in g.tick(4) if "studied" in e])
@@ -411,6 +481,31 @@ def run_demo(seed: int) -> None:
         if any("invented" in e or "recreated" in e for e in done):
             break
     show_slime(sch)
+
+    print("\n== 4c. SPARRING (fighting styles, no XP) -> RESTING AREA -> BUILDINGS ==")
+    g.wallet.add("white_gel", 300)
+    g.wallet.add("essence", 40)
+    g.conflicts.conflicts.clear()      # (the demo calls a truce so everyone can train)
+    for s in g.slimes():
+        s.grounded = False
+        s.hp, s.state = s.max_hp, "idle"
+        s.needs.v["energy"] = s.needs.v["food"] = 100
+    res = g.spar_party(1, "sword")
+    print("\n".join("  " + x for x in res.summary[:9]))
+    print("  HP after sparring: " + ", ".join(f"{s.name} {s.hp}/{s.max_hp}" for s in g.party_members(1)))
+    print("  " + g.party_rest(1))
+    g.tick(4)
+    print("  4 hours later:     " + ", ".join(f"{s.name} {s.hp}/{s.max_hp}" for s in g.party_members(1)))
+    print("  " + g.upgrade_building("training_grounds"))
+    print("  " + g.upgrade_building("barracks"))
+    for r in g.building_report():
+        print(f"  {r['emoji']} {r['name']} L{r['level']}: {r['now']}")
+    a, b = g.party_members(1)[:2]
+    c = g.compat(a.id, b.id)
+    print(f"  Compatibility {a.name} & {b.name}: {c['total']:+d} ({c['label']}) "
+          + ", ".join(f"{k} {v:+d}" for k, v in c['parts'].items() if v))
+    print(f"  Vanguard synergy {g.party_synergy(1) - 1:+.1%}; morale: "
+          + ", ".join(f"{s.name} {int(s.morale)}" for s in g.party_members(1)))
 
     print("\n== 5. CONFLICT: let the colony simmer for 24h ==")
     ev = g.tick(24)
@@ -435,11 +530,16 @@ def run_demo(seed: int) -> None:
     rep = g.descend(1)
     print("\n".join(rep.log[-14:]))
 
-    print("\n== 7. MERGE: weakest into strongest ==")
-    ordered = sorted(g.slimes(), key=lambda s: s.power_rating())
-    weak, strong = ordered[0], ordered[-1]
-    print(f"  merging {weak.name} into {strong.name} (preview +{g.merge_preview(strong.id, weak.id)} XP)")
-    print("\n".join("  " + x for x in g.merge(strong.id, weak.id)))
+    print("\n== 7. COUNCIL: who to keep, who to sacrifice? Then MERGE the best suggestion ==")
+    data = g.council()
+    for r in data["rows"][:3] + data["rows"][-2:]:
+        s = r["slime"]
+        print(f"  {r['verdict']:<11} {r['score']:>5} {s.name:<9} {s.star_str()} compat avg {r['avg_compat']:+d} "
+              f"({', '.join(r['reasons']) or '-'})")
+    m = data["merges"][0]
+    print(f"  merging {m['donor'].name} into {m['target'].name} (+{m['xp']} XP, compat {m['compat']:+d}, "
+          f"colony morale cost {m['grief']})")
+    print("\n".join("  " + x for x in g.merge(m["target"].id, m["donor"].id)))
 
     print("\n== 8. NEGLECT: the food runs out and nobody is fed for 6 days... ==")
     g.wallet.spend("food", g.wallet.get("food"))

@@ -1,54 +1,25 @@
-"""Academy: the Training Grounds (sword / archery / magic), the Library (learn spells, study elements) and
-spell RESEARCH (fusing two spells into a new element). All of it is "tasks": the slime leaves for a few hours
-(state "training"), and AcademySystem.tick() resolves the task when the hours are up.
+"""Academy: the Library (learn spells, study elements) and spell RESEARCH (fusing two spells into a new
+element). Studying and researching are "tasks": the slime leaves for a few hours (state "studying") and
+AcademySystem.tick() resolves the task when the hours are up. (Fighting styles live in sparring.py.)
 
-Extend: register_discipline(Discipline(...)); new spells/elements live in spells.py / elements.py.
+Library level (buildings.py) adds spell slots, study speed, research odds and the Restricted Section
+(tier-3 spells). New spells/elements live in spells.py / elements.py.
 """
 import random
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
 
 from . import config, elements, spells
 from .abilities import ABILITIES, Ability, get_ability
-from .archetypes import get_archetype
+from .buildings import BuildingManager
 from .errors import InvalidAction
-from .registry import Registry
 from .resources import ResourceManager
-
-
-# ---- training disciplines (data) -----------------------------------------------------------
-@dataclass(frozen=True)
-class Discipline:
-    key: str
-    name: str
-    emoji: str
-    weights: Dict[str, float]       # stat -> share of a training session
-    description: str = ""
-
-
-DISCIPLINES: "Registry[Discipline]" = Registry("discipline")
-
-
-def register_discipline(d: Discipline) -> Discipline:
-    return DISCIPLINES.register(d, d.key)
-
-
-register_discipline(Discipline("sword", "Blade Yard", "⚔️", {"atk": 1.0, "defense": 0.7},
-                               "Dummies, wooden swords and a very patient instructor."))
-register_discipline(Discipline("archery", "Archery Range", "🏹", {"atk": 0.8, "spd": 0.8},
-                               "Moving targets. Mind the fingers."))
-register_discipline(Discipline("magic", "Mana Pool", "🔮", {"mag": 1.0, "hp": 3.0},
-                               "Meditate in glowing goo until your spells stop fizzling."))
-
-
-def train_cap(slime, stat: str) -> float:
-    return (config.TRAIN_CAP_BASE + config.TRAIN_CAP_PER_LEVEL * slime.level) * (3 if stat == "hp" else 1)
 
 
 # ---- the library: spell catalogue + colony knowledge -----------------------------------------
 class Library:
-    def __init__(self, wallet: ResourceManager):
+    def __init__(self, wallet: ResourceManager, buildings: BuildingManager):
         self.wallet = wallet
+        self.buildings = buildings
         self.discovered: Set[str] = set()      # keys of fused spells the colony has invented
 
     def catalog(self) -> List[Ability]:
@@ -62,8 +33,11 @@ class Library:
         check_mastery_ready(slime)
         if key in slime.spells:
             raise InvalidAction(f"{slime.name} already knows {spell.name}.")
-        if len(slime.spells) >= config.MAX_SPELLS:
-            raise InvalidAction(f"{slime.name} already knows {config.MAX_SPELLS} spells - forget one first.")
+        if spell.tier >= 3 and not self.buildings.tier3_open():
+            raise InvalidAction("Tier-3 spells are in the Restricted Section: upgrade the Library to level 3.")
+        if len(slime.spells) >= self.spell_slots():
+            raise InvalidAction(f"{slime.name} already knows {self.spell_slots()} spells - forget one first "
+                                f"(or upgrade the Library).")
         missing = [c for c in spells.components_of(spell) if c not in slime.attuned]
         if missing:
             raise InvalidAction(f"{slime.name} must study {', '.join(missing)} first (attune at the Library).")
@@ -74,6 +48,9 @@ class Library:
         self.wallet.spend_many(spells.spell_cost(spell))
         slime.spells.append(key)
         return f"📕 {slime.name} learned {spell.name}!"
+
+    def spell_slots(self) -> int:
+        return config.MAX_SPELLS + self.buildings.extra_spell_slots()
 
     def forget(self, slime, key: str) -> str:
         if key not in slime.spells:
@@ -90,15 +67,17 @@ def check_mastery_ready(slime) -> None:
 
 # ---- tasks -----------------------------------------------------------------------------------------
 class AcademySystem:
-    def __init__(self, wallet: ResourceManager, rng: random.Random, library: Library):
+    def __init__(self, wallet: ResourceManager, rng: random.Random, library: Library,
+                 buildings: BuildingManager):
         self.wallet = wallet
         self.rng = rng
         self.library = library
+        self.buildings = buildings
 
     # -- shared ----------------------------------------------------------------
     def _begin(self, slime, kind: str, ticks: int, cost: Dict[str, int], **args) -> None:
         self.wallet.spend_many(cost)
-        slime.state = "training"
+        slime.state = "studying"
         slime.task = dict(kind=kind, ticks_left=ticks, total=ticks, **args)
 
     @staticmethod
@@ -111,35 +90,8 @@ class AcademySystem:
             raise InvalidAction(f"{slime.name} is too tired.")
 
     def cancel(self, slime) -> None:
-        if slime.state == "training":
+        if slime.state == "studying":
             slime.state, slime.task = "idle", None
-
-    # -- training grounds -------------------------------------------------------------
-    def start_training(self, slime, discipline: str) -> str:
-        d = DISCIPLINES.get(discipline)
-        self._check_free(slime)
-        if all(slime.training.get(s, 0) >= train_cap(slime, s) - 0.05 for s in d.weights):
-            raise InvalidAction(f"{slime.name} has hit the {d.name} ceiling for Lv{slime.level} - "
-                                f"level up to train further.")
-        self._begin(slime, "train", config.TRAIN_TICKS, config.TRAIN_COST, discipline=discipline)
-        return f"{slime.name} heads to the {d.name} for {config.TRAIN_TICKS} hours."
-
-    def _finish_train(self, s, events) -> None:
-        d = DISCIPLINES.get(s.task["discipline"])
-        aff = config.TRAIN_AFFINITY_MULT if get_archetype(s.archetype).discipline == d.key else 1.0
-        parts = []
-        for stat, w in d.weights.items():
-            cap, cur = train_cap(s, stat), s.training.get(stat, 0.0)
-            gain = config.TRAIN_GAIN * w * aff * max(0.05, 1 - cur / cap) if cur < cap else 0.0
-            gain = round(min(gain, cap - cur), 2)
-            if gain > 0:
-                s.training[stat] = round(cur + gain, 2)
-                if stat == "hp":
-                    s.hp += int(round(gain))
-                parts.append(f"+{gain} {stat}")
-        s.needs.add("esteem", 6)
-        events.append(f"{d.emoji} {s.name} finished at the {d.name}: " + (", ".join(parts) or "no progress")
-                      + (" (class affinity!)" if aff > 1 else ""))
 
     # -- library: study an element -------------------------------------------------------
     def start_study(self, slime, element: str) -> str:
@@ -161,7 +113,8 @@ class AcademySystem:
 
     def _finish_study(self, s, events) -> None:
         e = s.task["element"]
-        gain = config.STUDY_XP * (config.MAGE_STUDY_MULT if s.archetype == "mage" else 1.0)
+        gain = config.STUDY_XP * self.buildings.study_mult() * \
+            (config.MAGE_STUDY_MULT if s.archetype == "mage" else 1.0)
         before = elements.basic_level(s, e)
         top = config.MASTERY_XP[max(0, elements.mastery_cap(s) - 1)]
         s.mastery_xp[e] = min(top, s.mastery_xp.get(e, 0) + gain)
@@ -188,6 +141,8 @@ class AcademySystem:
         missing = [c for c in el.components if c not in slime.attuned]
         if missing:
             raise InvalidAction(f"{slime.name} lacks attunement to: {', '.join(missing)}.")
+        if el.tier >= 3 and not self.buildings.tier3_open():
+            raise InvalidAction("Tier-3 research is in the Restricted Section: upgrade the Library to level 3.")
         need = config.SPELL_TIER_MASTERY[el.tier]
         have = elements.slime_mastery(slime, el.key)
         if have < need:
@@ -195,7 +150,7 @@ class AcademySystem:
                                 f"({', '.join(sorted(el.components))}); {slime.name} has {have}.")
         ms = slime.max_stats()
         chance = 0.5 + 0.06 * (have - need) + 0.002 * max(ms["mag"], config.IMBUE_ATK_FACTOR * ms["atk"]) + \
-            (0.1 if slime.archetype == "mage" else 0.0)
+            (0.1 if slime.archetype == "mage" else 0.0) + self.buildings.research_bonus()
         chance = max(0.25, min(0.95, chance))
         return a, b, el, dict(config.RESEARCH_COST[el.tier]), config.RESEARCH_TICKS[el.tier], chance
 
@@ -231,24 +186,23 @@ class AcademySystem:
                                   s.mastery_xp.get(c, 0) + 10)
         s.needs.add("esteem", 15)
         msg = f"✨ {s.name} {'invented' if fresh else 'recreated'} {el.emoji}{spell.name}! "
-        if key not in s.spells and len(s.spells) < config.MAX_SPELLS:
+        if key not in s.spells and len(s.spells) < self.library.spell_slots():
             s.spells.append(key)
             msg += "It is now in their spellbook and the Library."
         elif key in s.spells:
             msg += "Already in their spellbook."
         else:
-            msg += f"Their spellbook is full ({config.MAX_SPELLS}) - it is stored in the Library."
+            msg += f"Their spellbook is full ({self.library.spell_slots()}) - it is stored in the Library."
         events.append(msg)
 
     # -- time ---------------------------------------------------------------------------------
     def tick(self, slimes: List, events: List[str]) -> None:
         for s in slimes:
-            if s.state != "training" or not s.task:
+            if s.state != "studying" or not s.task:
                 continue
             s.task["ticks_left"] -= 1
             if s.task["ticks_left"] > 0:
                 continue
             kind = s.task["kind"]
-            {"train": self._finish_train, "study": self._finish_study,
-             "research": self._finish_research}[kind](s, events)
+            {"study": self._finish_study, "research": self._finish_research}[kind](s, events)
             s.state, s.task = "idle", None

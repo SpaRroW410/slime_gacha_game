@@ -74,12 +74,13 @@ class Slime:
         self.xp = 0                    # xp toward next level
         self.total_xp = 0              # lifetime xp (used by merging)
         self.stage = 0
-        # --- training / elemental mastery (see academy.py, elements.py, spells.py)
-        self.training: Dict[str, float] = {}      # permanent flat stat bonuses from the training grounds
+        # --- fighting style / elemental mastery (see sparring.py, elements.py, spells.py)
+        self.style_xp: Dict[str, float] = {}      # fighting-style xp per discipline (see sparring.py)
+        self.morale: float = config.MORALE_START  # fight readiness 0-100 (see social.py)
         self.attuned: List[str] = []              # basic elements this slime has attuned to
         self.mastery_xp: Dict[str, float] = {}    # per basic element
         self.spells: List[str] = []               # learned spell keys (max config.MAX_SPELLS)
-        self.task: Optional[dict] = None          # active training / study / research assignment
+        self.task: Optional[dict] = None          # active study / research assignment (Library)
         self.behavior = self.arch.default_behavior
         self.state = "idle"            # idle | sleeping | hunting
         self.hunt: Optional[HuntAssignment] = None
@@ -103,7 +104,7 @@ class Slime:
         mult = config.RARITY_STAT_MULT[self.rarity] * config.STAR_STAT_MULT[self.stars - 1] * config.STAGE_STAT_MULT[
             min(self.stage, len(config.STAGE_STAT_MULT) - 1)]
         return {k: round((a.base_stats[k] + a.growth[k] * (self.level - 1))
-                         * mult * self.variance.get(k, 1.0) + self.training.get(k, 0.0), 1)
+                         * mult * self.variance.get(k, 1.0) , 1)
                 for k in STAT_KEYS}
 
     @property
@@ -139,7 +140,7 @@ class Slime:
     @property
     def busy(self) -> bool:
         """Away from the colony on a task (hunting or at the training grounds / library)."""
-        return self.state in ("hunting", "training")
+        return self.state in ("hunting", "studying")
 
     @property
     def alive(self) -> bool:
@@ -162,7 +163,7 @@ class Slime:
                     total_xp=self.total_xp, stage=self.stage, behavior=self.behavior,
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
-                    merged=self.merged, grounded=self.grounded, training=self.training,
+                    merged=self.merged, grounded=self.grounded, style_xp=self.style_xp, morale=self.morale,
                     attuned=self.attuned, mastery_xp=self.mastery_xp, spells=self.spells,
                     task=self.task)
 
@@ -171,7 +172,7 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "training", "attuned", "mastery_xp", "spells", "task"):
+                  "merged", "grounded", "style_xp", "morale", "attuned", "mastery_xp", "spells", "task"):
             if k in d:
                 setattr(s, k, d[k])
         s.needs = Needs(d.get("needs"))
