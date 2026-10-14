@@ -307,7 +307,7 @@ function dungeons() {
   const delves = Object.entries(d.delves);
   const nowFloors = Object.fromEntries(delves.map(([pid, v]) => [v.floor, pid]));
   const depth = ui('depth', 3), runs = ui('runs', 5), camp = ui('camp_h', 6), tier = ui('tier', 1);
-  const floorHtml = (f) => `<div class="floor ${f.boss ? 'boss' : ''} ${nowFloors[f.floor] ? 'now' : ''}"><div class="row between"><b>Floor ${f.floor}${f.boss ? ' · BOSS' : ''}</b><small class="mute">${f.knowledge.toFixed(0)}% known</small></div>
+  const floorHtml = (f) => `<div class="floor ${f.boss ? 'boss' : ''} ${nowFloors[f.floor] ? 'now' : ''}"><div class="row between"><b>Floor ${f.floor}${f.boss ? ' · BOSS' : ''}${f.terrain ? ` · ${esc(f.title || f.terrain.name || '')}` : ''}</b><small class="mute">${f.knowledge.toFixed(0)}% known</small></div>
     ${bar(f.knowledge, 100, 'know')}${f.knowledge > 0 ? f.lines.map((l) => `<div class="mute">• ${esc(l)}</div>`).join('') : ''}</div>`;
   const segs = [];
   for (let i = 0; i < d.floors.length; i += d.boss_every) segs.push(d.floors.slice(i, i + d.boss_every));
@@ -318,7 +318,8 @@ function dungeons() {
   const plan = S.plan && S.plan.first === sfirst && S.plan.last === slast ? S.plan : null;
   return `<div class="grid cols2">
   <div class="panel stack"><h2>🕳 The Hollow Descent</h2>
-    <p class="mute">Rough, permanent death. Walk the floors <b>in order</b>. You may only <b>leave after a boss floor</b> (every ${d.boss_every}) — go home, train, study, come back stronger. <b>Each slime must have cleared the floors above</b> to enter a floor, so nobody can be carried; other parties may walk the same floors again. Best floor ever: <b>${d.best_floor}</b>.</p>
+    <p class="mute">Rough, permanent death. Walk the floors <b>in order</b>. You may only <b>leave after a boss floor</b> (every ${d.boss_every}) — go home, train, study, come back stronger. <b>Each slime must have cleared the floors above</b> to enter a floor, so nobody can be carried; other parties may walk the same floors again. Best floor ever: <b>${d.best_floor}</b> of ${d.max_floor}.</p>
+    ${d.cleared ? '<div class="panel flat">👑 <b>The Parched King has fallen.</b> The Descent is conquered — but the floors remain for training and scouting.</div>' : ''}
     ${delves.map(([pid, v]) => { const p = partyById(+pid); return `<div class="panel flat"><div class="row between"><b>${esc(p?.name)}</b>${chip(`floor ${v.floor} · exit after boss ${v.boss_floor}`, v.can_leave ? 'ok' : 'bad')}</div>
       <p class="mute">${v.hours}h inside · this floor ${v.knowledge.toFixed(0)}% known</p>
       <div class="row">${v.members.map((id) => mini(id)).join('')}</div>
@@ -336,12 +337,13 @@ function dungeons() {
   <div class="stack">
     <div class="panel stack"><h2>🔭 Scouting</h2>
       <p class="mute">Send an exploration party to learn specific floors (1 to ${d.scout_max_floors} at a time, not only multiples of 5). Scouts must reach <b>100% of every targeted floor</b> before their time runs out — <b>otherwise the whole party is lost</b> (a half-finished note survives). Time needed grows with depth and is never exactly predictable. They must have cleared the floors above the first one. Supplies (${d.scout_food} 🍖 per budgeted hour) are paid up front, even if they finish early.</p>
-      <div class="row">${partyOptions('spid')}<label class="f">Floors <input type="number" min="1" max="99" value="${sfirst}" data-ui="sfirst" style="width:64px"> to <input type="number" min="1" max="99" value="${slast}" data-ui="slast" style="width:64px"></label>
+      <div class="row">${partyOptions('spid')}<label class="f">Floors <input type="number" min="1" max="${d.max_floor}" value="${sfirst}" data-ui="sfirst" style="width:64px"> to <input type="number" min="1" max="${d.max_floor}" value="${slast}" data-ui="slast" style="width:64px"></label>
         <button class="btn small" data-act="scout_plan">📏 Estimate</button></div>
       ${plan ? `<div class="panel flat"><b>Estimate:</b> ~${plan.nominal}h (between ${plan.low}h and ${plan.high}h) · skill ×${plan.skill}<br>Safe budget: <b>${plan.safe}h</b> costs ${plan.food} 🍖 <button class="btn small" data-act="use_safe" data-h="${plan.safe}">use it</button></div>` : '<small class="mute">Press Estimate to see how long it should take.</small>'}
       <div class="row"><label class="f">Hour budget <input type="number" min="${d.scout_hours[0]}" max="${d.scout_hours[1]}" value="${ui('shours', plan ? plan.safe : 8)}" data-ui="shours" style="width:72px"></label>
         <button class="btn danger" data-act="scout">Send scouts</button></div></div>
     <div class="panel stack"><h2>🫧 The Gloop Pit</h2>
+      ${d.pit ? `<div class="panel flat"><b>Today (day ${d.pit.day}): ${esc(d.pit.title)}</b><br><span class="mute">${d.pit.terrain.emoji} ${esc(d.pit.terrain.name)} — ${esc(d.pit.terrain.effects)}</span></div>` : ''}
       <p class="mute">A <b>committed</b> XP-farming session. The party fights all the runs (camping when hurt) unless everyone goes down. Nobody dies here, but a downed slime <b>loses XP, morale and drops its gear</b> — survivors may carry it back (more likely with high party synergy); else it stays in the Pit's lost-and-found${st.gear.pit_lost.length ? ` (${st.gear.pit_lost.length} item(s) lost there now)` : ''}.</p>
       <div class="row">${partyOptions('gpid')}
         <label class="f">Depth <input type="range" min="1" max="${d.grind_depths}" value="${depth}" data-ui="depth" data-rerender="1"> <b>${depth}</b></label>

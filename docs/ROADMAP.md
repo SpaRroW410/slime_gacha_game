@@ -160,3 +160,12 @@ Legend: `[x]` done · `[ ]` todo
 - [ ] Balance pass with simulation harness
 - [ ] Localisation
 - [ ] Mod loader (`plugins/`) with docs
+
+## M14 — Floor-50 content
+- [x] Terrain system with element effects, hazards, crit bonus
+- [x] Bestiary: roles, families, ~50 monster moves, 71 monsters
+- [x] Ten bosses (floors 5-50), final boss completes the Descent
+- [x] Unique, mixed-family floors 1-50 (no consecutive terrain repeats)
+- [x] Daily-changing Gloop Pit (terrain + featured families)
+- [x] Web UI: terrain/title per floor, Today's Pit panel, victory banner
+- [ ] Art & sound (after floor 50, as planned)

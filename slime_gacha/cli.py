@@ -2,7 +2,7 @@
 import os
 from typing import List
 
-from . import config, elements
+from . import config, dungeon, elements, terrain as terrain_mod
 from .abilities import ABILITIES, get_ability
 from .sparring import DISCIPLINES, style_label, style_levels
 from .archetypes import BEHAVIORS
@@ -304,8 +304,10 @@ def show_intel(g: Game, first: int = 1, last: int = None) -> None:
 
 
 def dungeon_menu(g: Game) -> None:
+    th = dungeon.pit_theme(g.dungeon_seed, g.day)
     print("  [1] The Gloop Pit      - committed grinding session: no leaving until all runs are done or the whole party is down.\n"
-          "                           A downed slime loses XP + morale and drops its gear (survivors may bring it back).")
+          "                           A downed slime loses XP + morale and drops its gear (survivors may bring it back).\n"
+          f"                           TODAY (day {g.day + 1}): {th.terrain.emoji} {th.title} - {terrain_mod.describe(th.terrain)}")
     print("  [2] The Hollow Descent - ROUGH, permadeath. Walk the floors in order; you may only leave after a BOSS floor\n"
           f"                           (every {config.MAIN_BOSS_EVERY}). Each slime must have cleared the floors above; other parties may re-walk them.")
     print("  [3] Scout floors with an exploration party (must reach 100% or the party is lost)   [4] Intel report   [5] Skirmish")

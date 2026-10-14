@@ -23,6 +23,7 @@ class Ability:
     element: str = ""          # "" = non-elemental; spells carry an element key (see elements.py)
     tier: int = 0              # spell tier (1 basic, 2/3 fused); 0 = class ability
     creator: str = ""          # who researched it (custom spells)
+    minion: str = ""           # summon: "emoji Name" of what appears (default: a Bone Pal)
 
 
 ABILITIES: "Registry[Ability]" = Registry("ability")

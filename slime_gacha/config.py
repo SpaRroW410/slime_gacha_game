@@ -164,7 +164,7 @@ ELEMENT_DISADVANTAGE = 0.7
 CAMP_HEAL_HOURS_MAX = 24
 CAMP_AMBUSH_BASE = 0.10         # per hour of camping inside the Descent (scaled by floor, cut by intel)
 CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
-SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 24
+SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 240
 SCOUT_RATE = 0.10               # knowledge: k' = 100 - (100 - k) * exp(-RATE * skill * hours)
 SCOUT_AMBUSH_BASE = 0.12        # per hour in the segment, vs party strength, cut by what is already known
 DELVE_PASSIVE_INTEL = 1.5       # % knowledge gained per hour spent inside the dungeon
@@ -187,7 +187,7 @@ GEAR_DROP_PIT, GEAR_DROP_MAIN = 0.15, 0.30
 # Scouting is per floor range: the exploration party must reach 100% knowledge of every floor it targets
 # before its supplies run out - otherwise the whole party is lost (a half-finished note survives).
 SCOUT_HOURS_PER_FLOOR = 3.0     # nominal hours to fully scout floor 1 (grows with depth, shrinks with skill)
-SCOUT_DEPTH_GROWTH = 0.12       # +12% hours per floor of depth
+SCOUT_DEPTH_GROWTH = 0.05       # +5% hours per floor of depth (floor 50: ~10h per floor)
 SCOUT_VARIANCE = (0.85, 1.20)   # hidden per-floor factor: the estimate is never exact
 SCOUT_MAX_FLOORS = 10
 SCOUT_FOOD_PER_HOUR = 1.0      # supplies are paid up front for the whole hour budget (unused food is not refunded)

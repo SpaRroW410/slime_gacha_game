@@ -12,7 +12,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import buildings as bld, dungeon, elements, equipment, outlook, sparring, spells, specialization
+from . import buildings as bld, dungeon, terrain as terrain_mod, elements, equipment, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
@@ -75,6 +75,7 @@ class Game:
         self.conflicts.hook = self._social_hook
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
         self.best_floor = 0                            # deepest floor ever cleared by anyone
+        self.descent_cleared = False                   # the final boss (floor 50) has fallen
         self.bounties: set = set()                     # boss floors whose purple-gel bounty is already paid
         self.delves: Dict[int, dict] = {}              # party id -> active delve {floor, start, hours}
         self.intel: Dict[int, float] = {}              # floor -> knowledge 0-100 (scouting / having walked it)
@@ -654,7 +655,7 @@ class Game:
     def floor_horizon(self) -> int:
         """How many floors the colony lists: a little beyond the deepest cleared, in whole segments."""
         h = max(10, self.best_floor + 6)
-        return -(-h // config.MAIN_BOSS_EVERY) * config.MAIN_BOSS_EVERY
+        return min(dungeon.MAX_FLOOR, -(-h // config.MAIN_BOSS_EVERY) * config.MAIN_BOSS_EVERY)
 
     def intel_report(self, first: int = 1, last: Optional[int] = None) -> List[dict]:
         last = last or self.floor_horizon()
@@ -668,7 +669,8 @@ class Game:
         """Floors a party may start from: 1, or the floor after any checkpoint every member has cleared."""
         members = self.party_members(pid)
         low = min((s.progress for s in members), default=0)
-        return [1] + [c + 1 for c in range(config.MAIN_BOSS_EVERY, low + 1, config.MAIN_BOSS_EVERY)]
+        return [1] + [c + 1 for c in range(config.MAIN_BOSS_EVERY, low + 1, config.MAIN_BOSS_EVERY)
+                      if c < dungeon.MAX_FLOOR]
 
     def enter_dungeon(self, pid: int, start: Optional[int] = None) -> str:
         """Enter the Hollow Descent at `start` (default: as deep as every member's progress allows).
@@ -738,13 +740,17 @@ class Game:
             if s.state == "sleeping":
                 s.state = "idle"                      # woken by the next fight
         floor = d["floor"]
+        if floor > dungeon.MAX_FLOOR:
+            raise InvalidAction("The Hollow Descent ends here: there is nothing deeper than floor "
+                                f"{dungeon.MAX_FLOOR}. Climb out.")
         k = self._knowledge(floor)
-        enemies = dungeon.floor_plan(self.dungeon_seed, floor, self.parties.size)
+        info = dungeon.floor_info(self.dungeon_seed, floor, self.parties.size)
+        enemies = info.enemies
         delver_share = sum(outlook.has(s, "delve") for s in party) / max(1, len(party))
         report = self._run_battle(party, enemies, intel=(1 + config.INTEL_POWER_BONUS * k / 100)
-                                  * (1 + config.OUTLOOK_DELVER_POWER * delver_share))
+                                  * (1 + config.OUTLOOK_DELVER_POWER * delver_share), terrain=info.terrain)
         boss = dungeon.is_boss_floor(floor)
-        report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}{' (BOSS)' if boss else ''} "
+        report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}{' (BOSS)' if boss else ''}: {info.title} "
                              f"[knowledge {k:.0f}%]")
         self._after_battle(party, report, boss=boss)
         survivors = [s for s in party if s.hp > 0]
@@ -758,6 +764,10 @@ class Game:
                 outlook.bump(s, "delve")
             self._gear_drop(1 + (floor - 1) // config.MAIN_BOSS_EVERY, config.GEAR_DROP_MAIN, events, boss)
             d["floor"] = floor + 1
+            if floor == dungeon.MAX_FLOOR:
+                self.descent_cleared = True
+                events.append("👑 THE PARCHED KING FALLS! The Dry Tide shudders and begins to recede - the Mother Gloop "
+                              "stirs. You have cleared the Hollow Descent.")
             if boss:
                 events.append(f"🔓 The boss of floor {floor} is down. This is a checkpoint: the party may climb out "
                               f"or push on to floor {floor + 1}.")
@@ -802,7 +812,7 @@ class Game:
             party = self._members_in("main", pid)
             if not party:
                 break
-            p = config.CAMP_AMBUSH_BASE * (1 + 0.1 * d["floor"]) * (1 - 0.6 * self._knowledge(d["floor"]) / 100)
+            p = min(0.7, config.CAMP_AMBUSH_BASE * (1 + 0.1 * d["floor"]) * (1 - 0.6 * self._knowledge(d["floor"]) / 100))
             if self.rng.random() < p:
                 v = self.rng.choice(party)
                 dmg = max(1, int(v.max_hp * self.rng.uniform(*config.CAMP_AMBUSH_DAMAGE) * (1 + 0.05 * d["floor"])))
@@ -847,8 +857,9 @@ class Game:
         within `hours`; if they run out of time the whole party is lost (it leaves a half-finished note behind).
         They finish and return as soon as they are done. Supplies (food per hour of the budget) are paid up front.
         Every member must have cleared the floor above `first`. Ambushes can kill scouts (permanent)."""
-        if not 1 <= first <= last or last - first + 1 > config.SCOUT_MAX_FLOORS:
-            raise InvalidAction(f"Scout 1-{config.SCOUT_MAX_FLOORS} consecutive floors (e.g. floors 3-5).")
+        if not 1 <= first <= last <= dungeon.MAX_FLOOR or last - first + 1 > config.SCOUT_MAX_FLOORS:
+            raise InvalidAction(f"Scout 1-{config.SCOUT_MAX_FLOORS} consecutive floors between 1 and "
+                                f"{dungeon.MAX_FLOOR} (e.g. floors 3-5).")
         hours = int(hours)
         if not config.SCOUT_MIN_HOURS <= hours <= config.SCOUT_MAX_HOURS:
             raise InvalidAction(f"The budget is {config.SCOUT_MIN_HOURS}-{config.SCOUT_MAX_HOURS} hours.")
@@ -954,6 +965,7 @@ class Game:
         if all(s.level >= s.level_cap for s in party):
             raise InvalidAction("Everyone is at their level cap - time to evolve!")
         res = GrindResult()
+        last_day = -1
         self._set_flag(party, "grind")
         try:
             for n in range(1, max(1, runs) + 1):
@@ -972,10 +984,16 @@ class Game:
                     if s.state in ("sleeping", "resting"):
                         s.state = "idle"
                 avg = sum(s.level for s in members) / len(members)
-                enemies = dungeon.grind_wave(avg, depth, self.parties.size, self.rng)
+                theme = dungeon.pit_theme(self.dungeon_seed, self.day)
+                enemies = dungeon.grind_wave(avg, depth, self.parties.size, self.rng, theme)
                 rep = self._run_battle(members, enemies, permadeath=False, split_xp=False,
-                                       xp_mult=config.GRIND_XP_MULT)
-                rep.log.insert(0, f"🕳 The Gloop Pit - depth {depth} (enemy lvl ~{dungeon.grind_level(avg, depth)})")
+                                       xp_mult=config.GRIND_XP_MULT, terrain=theme.terrain)
+                rep.log.insert(0, f"🕳 The Gloop Pit - depth {depth} (enemy lvl ~{dungeon.grind_level(avg, depth)}) - "
+                                  f"today: {theme.title}")
+                if n == 1 or theme.day != last_day:
+                    res.summary.append(f"   Today's Pit (day {theme.day + 1}): {theme.terrain.emoji} {theme.title} - "
+                                       f"{terrain_mod.describe(theme.terrain)}")
+                last_day = theme.day
                 self._after_battle(members, rep, scale=0.4)
                 events: List[str] = []
                 downed = list(rep.fallen)
@@ -1057,7 +1075,7 @@ class Game:
     # ---- persistence -----------------------------------------------------------
     def to_dict(self) -> dict:
         return dict(version=config.SAVE_VERSION, seed=self.seed, tick=self.tick_count,
-                    bounties=sorted(self.bounties), custom_spells=spells.custom_records(),
+                    bounties=sorted(self.bounties), descent_cleared=self.descent_cleared, custom_spells=spells.custom_records(),
                     buildings=self.buildings.to_dict(), best_floor=self.best_floor,
                     delves={str(k): v for k, v in self.delves.items()},
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
@@ -1102,6 +1120,7 @@ class Game:
         g.gacha.load(d.get("gacha", {}))
         g.buildings.load(d.get("buildings"))
         g.best_floor = d.get("best_floor", 0)
+        g.descent_cleared = d.get("descent_cleared", False)
         g.intel = {int(k): v for k, v in d.get("intel", {}).items()}
         if d.get("version", 0) < 7:                          # v6 knew intel per 5-floor segment, progress globally
             seg_intel = g.intel

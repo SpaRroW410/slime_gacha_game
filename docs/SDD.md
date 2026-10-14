@@ -316,6 +316,14 @@ the runner-up, the favourite becomes an outlook: Duelist (+10 % style xp), Grind
 asks for it when esteem is its dominant need. First draft of the "slimes think differently depending on what they do"
 idea.
 
+### 5.18 Floor-50 content engine (`terrain.py`, `bestiary.py`, `dungeon.py`)
+- **Terrains** (29, 12 kinds: valley, dunes, islands, caverns, tundra, volcano, swamp, canyon, cliffs, plains, barrens, ruins) boost or dampen elements (x1.25 / x0.8), may deal a per-round hazard (% max HP; immune elements exempt) or add crit chance. `battle.run(..., terrain=)` applies them; sparring ignores terrain.
+- **Bestiary**: 8 roles (swarmer..support) x floor-derived unit stats; 71 monsters in ~20 families (goblins, direwolves, orcs, ogres, trolls, scarabs, undead, sea, golems, imps, dragonkin, ...) with ~50 monster moves and summons. 10 bosses (floors 5,10,...,50; floor 50 = the Parched King, completing the Descent).
+- **Floor plan**: generated sequentially from the dungeon seed, per 10-floor palettes; terrain never repeats consecutively and no (terrain, family, pattern) signature repeats within 4 floors. Patterns: swarm, warband (leaders+followers of two families, e.g. goblins with direwolves, orcs with ogres), rabble, siege, ambush. Boss floors use the boss lair terrain.
+- **Daily Pit**: `pit_theme(seed, day)` picks a terrain and two featured families, never the same as yesterday; waves are drawn from the featured families.
+- **Difficulty**: `player_curve(level) x difficulty(floor)` (difficulty ramps 1.0->1.65 over floors 1-8); calibrated by simulation so an unequipped rare 3-star party wins ordinary floors ~90-100% and bosses ~50-65%.
+- Intel: terrain shown from 20% knowledge, terrain advice at 100%. SAVE_VERSION 7; scouting budget up to 240 h.
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|

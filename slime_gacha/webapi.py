@@ -57,6 +57,14 @@ def slime_view(g: Game, s) -> dict:
     )
 
 
+def _pit_view(g: Game) -> dict:
+    th = dungeon.pit_theme(g.dungeon_seed, g.day)
+    from . import terrain as terrain_mod
+    return dict(day=th.day, title=th.title, terrain=dict(key=th.terrain.key, name=th.terrain.name,
+                emoji=th.terrain.emoji, effects=terrain_mod.describe(th.terrain), desc=th.terrain.desc),
+                families=[dungeon.family_plural(f) for f in th.families])
+
+
 def _spec_table() -> list:
     rows = []
     for (a, b), key in specialization.BY_PAIR.items():
@@ -99,6 +107,8 @@ def snapshot(g: Game) -> dict:
         graveyard=list(g.graveyard)[-50:], journal=list(g.journal)[-60:],
         dungeon=dict(
             best_floor=g.best_floor, boss_every=config.MAIN_BOSS_EVERY, floors=g.intel_report(),
+            max_floor=dungeon.MAX_FLOOR, cleared=g.descent_cleared,
+            pit=_pit_view(g),
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
                                    boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
                                    knowledge=g._knowledge(d["floor"]),
