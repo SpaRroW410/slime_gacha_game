@@ -111,6 +111,15 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Equipment (weapon / armor / charm), Armory building, gear drops
 - [x] Save v6 and 32 new tests
 
+## M12 — Browser edition
+- [x] JSON command API (`webapi.py`) with render-ready snapshot and error envelope
+- [x] Local server (`serve.py`, stdlib only, localhost) with `/api` and static hosting
+- [x] Responsive, themable UI (dark/light): colony, gacha reveal, parties, dungeons, academy, town, council, records
+- [x] Battle report viewer, confirmations for irreversible actions, toasts and event log
+- [x] Browser auto-save (localStorage) + export/import
+- [x] Static Pyodide build (`tools/build_web.py`): same Python in the page, offline-capable
+- [x] API / server tests (12) and browser smoke tests (Playwright, local)
+
 ## Future (post-prototype)
 - [ ] Construction time for upgrades; more buildings (Pantry, Hatchery)
 - [ ] Rivalries and mentorships as explicit relationships; couples -> new slimes
@@ -131,7 +140,9 @@ Legend: `[x]` done · `[ ]` todo
 - [ ] Equipment / items
 - [ ] Campaign chapters from `STORY.md`
 - [ ] Slime relationships tree (best friends, rivals, couples → "budding" new slimes)
-- [ ] Simple GUI (pygame/Tkinter) or ASCII animations
+- [ ] Art pass: sprite sheets / animated slimes instead of CSS blobs, sound effects
+- [ ] PWA manifest + service worker for installable offline play
+- [ ] Web worker for Pyodide so long Pit sessions never block the UI
 - [ ] Balance pass with simulation harness
 - [ ] Localisation
 - [ ] Mod loader (`plugins/`) with docs

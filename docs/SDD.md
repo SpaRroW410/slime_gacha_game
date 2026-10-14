@@ -1,6 +1,7 @@
 # Software Design Document — Slime Gacha (prototype v0.1)
 
 > **v0.2 changes**: permadeath, rarity 90/9/0.9/0.09, 1–5★ ratings, white/purple gel currencies, free daily pull, fixed-size parties (§5.1, 5.9, 5.10).
+> **v0.7 changes**: browser front-end (§5.16): JSON command API, local server, Pyodide static build.
 > **v0.6 changes**: no-exit delves, scouting intel, Pit defeat penalties + gear recovery, equipment & Armory, sacrifice stress (§5.11, §5.15).
 > **v0.5 changes**: sparring-based fighting styles, Rest Area, upgradable buildings, compatibility / morale / council (§5.12–5.14).
 > **v0.4 changes**: library, elements, elemental mastery, spell fusion (§5.12 Library part).
@@ -259,6 +260,37 @@ dig it up. Outside dungeons a dead slime's gear returns to the inventory.
 bystanders, −30 for friends/bonded, −10 for the target (guilt). Stress also lowers every morale target by 6 per point
 (max 30). The Council's cost estimates include it.
 
+### 5.16 Web edition (`webapi.py`, `serve.py`, `web/`, `tools/build_web.py`)
+**One engine, three front-ends.** The rules never touch the UI: the terminal CLI, the local web server and the
+in-browser Pyodide build all call `Game`.
+
+```
+ browser UI (web/app.js) ──backend.call(cmd, args)──▶ ServerBackend ── POST /api ──▶ serve.py ─┐
+        │                                      └────▶ PyodideBackend ── in-page ──────────────┤
+        ▼                                                                                      ▼
+  localStorage save  ◀── envelope {ok, error, log[], result, state, save} ◀──────────── webapi.Session.call
+```
+
+* **Command API** (`webapi.HANDLERS`, registered with `@command`): ~60 verbs (pull, feed, hunt, spar, scout, grind,
+  enter_dungeon, delve_next, delve_camp, study, learn, research, upgrade, buy_gear, merge, council …). Each returns
+  `(log lines, result)`; `GameError`s and bad input become `ok: false` with a message — the engine is never exposed to
+  tracebacks. Battle reports travel as `result.battle[]` (`log`, `victory`, `rounds`, `xp`, `loot`, `deaths`).
+* **Snapshot** (`webapi.snapshot`): every response carries the full render-ready state (slimes with derived values,
+  parties + synergy, buildings, dungeon intel, library, gear, zones, elements …) so the UI needs no extra round trips
+  and cannot drift from the engine. Static data (zones, elements, gear, classes, disciplines) comes from the same
+  registries, so new content shows up in the browser without front-end changes (unknown classes get a hashed colour).
+* **Persistence**: the browser keeps the last `save` (the normal `Game.to_dict()`) in `localStorage` and replays it with
+  the `load` command on start-up, so the server (or a Pyodide worker) is stateless across restarts. Export / Import
+  moves saves between browsers. The server holds a single `Session` guarded by a lock (single-player, localhost).
+* **Transports** (`web/backend.js`): `chooseBackend()` pings `/api/ping`; if the Python server answers it uses
+  `ServerBackend`, otherwise it boots `PyodideBackend` (vendored runtime first, CDN fallback), unpacks
+  `slime_gacha.zip` and calls `Session.call_json`.
+* **Static build**: `tools/build_web.py` copies `web/`, zips the `slime_gacha` package and vendors the five Pyodide
+  files (~14 MB total), producing a self-contained, offline-capable `dist/`.
+* **UI**: vanilla JS/CSS without a build step. One `render()` rebuilds the page from `S.state`; actions are
+  `data-act` attributes dispatched through a table (`A`), so adding a button is one table entry plus the API verb.
+  Dangerous actions (merge, enter the Descent, scout, Pit commitment) ask for confirmation and spell out the rules.
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|
@@ -267,6 +299,7 @@ bystanders, −30 for friends/bonded, −10 for the target (guilt). Stress also 
 | New ability kind | add handler in `battle.KIND_HANDLERS` |
 | New zone / enemy | `register_zone(...)`, `register_enemy(...)` |
 | New arena / style | `register_discipline(Discipline(...))` in `sparring.py` (+ a perk in `battle._style_attack`); set `Archetype.discipline` |
+| New web verb | `@command("name")` handler in `webapi.py` + an entry in `A` (app.js) |
 | New building | `register_building(Building(...))` + an effect getter on `BuildingManager` |
 | New trait chemistry | add a row to `social.TRAIT_PAIRS` |
 | New element / recipe | `register_recipe(a, b, result, name, emoji)` in `elements.py` |

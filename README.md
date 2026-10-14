@@ -6,7 +6,28 @@ Inspired by the *Pick Me Up! Unlimited Gacha* comics — except your heroes are 
 > Collect slimes. Feed them, let them sleep, mediate their squabbles, send them hunting,
 > merge the spares into your favourites, and carry them into battle.
 
-## Quick start
+## Play in the browser 🌐
+
+```bash
+python3 serve.py              # opens http://127.0.0.1:8765/ (add --no-open, --port N)
+```
+
+The whole game — gacha reveal animations, roster cards, parties, dungeons with battle reports, academy / spell lab,
+buildings, armory, council and memorial — runs in the browser. The Python rules run in a tiny local server
+(offline, localhost only); your colony is **auto-saved in the browser** (and Export / Import from the ⋯ menu), so
+restarting the server never loses progress. Works on desktop and phones (responsive, light/dark theme).
+
+**Static build (no server, deployable anywhere):**
+
+```bash
+python3 tools/build_web.py    # needs node/npm once, to vendor Pyodide (Python-in-WebAssembly) into dist/
+python3 -m http.server -d dist 8766    # or upload dist/ to GitHub Pages / itch.io
+```
+
+`dist/` (~14 MB) runs the *same Python code* inside the page via Pyodide and works fully offline.
+`python3 tools/build_web.py --cdn` skips vendoring and loads Pyodide from a CDN instead.
+
+## Quick start (terminal edition)
 
 ```bash
 python3 main.py              # interactive menu
@@ -79,6 +100,10 @@ slime_gacha/
   battle.py              BattleSystem (turn-based auto-combat)
   game.py                Game façade: state, ticking, save/load
   cli.py                 text UI
+  webapi.py              JSON command API + render-ready state snapshot (used by the browser)
+serve.py                 local web server (static files + POST /api)
+web/                     browser front-end: index.html, style.css, app.js, backend.js
+tools/build_web.py       builds the static Pyodide edition into dist/
 docs/
   SDD.md                 software design document
   ROADMAP.md             milestones + checklist
