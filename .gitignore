@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 savegame.json
+dist/
+web/vendor/

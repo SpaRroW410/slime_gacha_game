@@ -111,7 +111,30 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Equipment (weapon / armor / charm), Armory building, gear drops
 - [x] Save v6 and 32 new tests
 
+## M12 — Browser edition
+- [x] JSON command API (`webapi.py`) with render-ready snapshot and error envelope
+- [x] Local server (`serve.py`, stdlib only, localhost) with `/api` and static hosting
+- [x] Responsive, themable UI (dark/light): colony, gacha reveal, parties, dungeons, academy, town, council, records
+- [x] Battle report viewer, confirmations for irreversible actions, toasts and event log
+- [x] Browser auto-save (localStorage) + export/import
+- [x] Static Pyodide build (`tools/build_web.py`): same Python in the page, offline-capable
+- [x] API / server tests (12) and browser smoke tests (Playwright, local)
+
+## M13 — Rules revision: progress, checkpoints, scouting, classes
+- [x] Leave the Descent only after a boss floor (checkpoints every 5); may also push on
+- [x] Per-slime dungeon progress; a party's entry floor is limited by its least-travelled member
+- [x] Several parties can be inside at once and re-walk the same floors; boss bounty once per boss floor
+- [x] Scouting by floor range (1–10 floors): 100 % or the whole party is lost; hidden time variance; up-front supplies
+- [x] Per-floor knowledge (scouting, or having walked the floor) and staged intel
+- [x] Specialization: hybrid classes from cross-training (Battlemage and 8 more)
+- [x] Outlook: experience shapes the slime (Duelist, Grinder, Delver, Pathfinder, Forager, Scholar)
+- [x] Save v7 with migration from v6; web UI + CLI updated
+- [x] 29 new tests
+
 ## Future (post-prototype)
+- [ ] Reach floor 50 (the milestone before the art & sound pass)
+- [ ] More spec paths (three-way hybrids, evolution of specs), outlook-driven behaviours (slimes ask for jobs)
+- [ ] Rescue parties for scouts that are overdue
 - [ ] Construction time for upgrades; more buildings (Pantry, Hatchery)
 - [ ] Rivalries and mentorships as explicit relationships; couples -> new slimes
 - [ ] Enemy resistances beyond one element; elemental dungeon floors
@@ -131,7 +154,18 @@ Legend: `[x]` done · `[ ]` todo
 - [ ] Equipment / items
 - [ ] Campaign chapters from `STORY.md`
 - [ ] Slime relationships tree (best friends, rivals, couples → "budding" new slimes)
-- [ ] Simple GUI (pygame/Tkinter) or ASCII animations
+- [ ] Art pass: sprite sheets / animated slimes instead of CSS blobs, sound effects
+- [ ] PWA manifest + service worker for installable offline play
+- [ ] Web worker for Pyodide so long Pit sessions never block the UI
 - [ ] Balance pass with simulation harness
 - [ ] Localisation
 - [ ] Mod loader (`plugins/`) with docs
+
+## M14 — Floor-50 content
+- [x] Terrain system with element effects, hazards, crit bonus
+- [x] Bestiary: roles, families, ~50 monster moves, 71 monsters
+- [x] Ten bosses (floors 5-50), final boss completes the Descent
+- [x] Unique, mixed-family floors 1-50 (no consecutive terrain repeats)
+- [x] Daily-changing Gloop Pit (terrain + featured families)
+- [x] Web UI: terrain/title per floor, Today's Pit panel, victory banner
+- [ ] Art & sound (after floor 50, as planned)

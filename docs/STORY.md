@@ -56,6 +56,14 @@ flat loses a little of what it learned and drops its gear on the sticky floor, a
 enough — fish it out before the Pit swallows it. Every time the Keeper gives a droplet to another, the colony remembers,
 and a colony that remembers too much stops singing.
 
+## Between the floors
+
+The Hollow Kings built their shaft with landings every five floors: ledges where the Mother's echo is quiet enough to turn
+back. Nowhere else will the stairs let a party go up. Slimes that have never stood on a landing cannot be towed past it, so
+every droplet must earn its own way down. Scouts carry only what they can pack and a promise to finish what they start —
+the dark does not give partial credit. Back in the colony, a droplet that spends its days swinging a wooden sword and its
+nights in the Mana Pool starts to think of itself as something new: a *Battlemage*. What a slime does becomes who it is.
+
 ## Themes (and how they map to mechanics)
 
 | Theme | Mechanic |

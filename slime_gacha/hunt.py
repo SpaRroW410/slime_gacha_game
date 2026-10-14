@@ -3,7 +3,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
-from . import config
+from . import config, outlook
 from .errors import InvalidAction
 from .growth import add_xp
 from .registry import Registry
@@ -98,6 +98,8 @@ class HuntSystem:
             amt = self.rng.randint(lo, hi) * factor
             amt *= s.arch.hunt_bonus.get(res, 1.0) * STANCE_LOOT.get(stance, {}).get(res, 1.0)
             amt *= config.RARITY_LOOT_MULT[s.rarity]
+            if outlook.has(s, "hunt"):
+                amt *= config.OUTLOOK_FORAGER_LOOT
             if not ok:
                 amt *= 0.3
             amt = int(amt + self.rng.random())          # stochastic rounding keeps small hauls fair
@@ -108,6 +110,7 @@ class HuntSystem:
             gains["purple_gel"] = 1
         self.wallet.add_many(gains)
         s.needs.add("esteem", 12 if ok else -8)
+        outlook.bump(s, "hunt")
         xp = int(zone.xp * (1.0 if ok else 0.4) * factor)
         lv = add_xp(s, xp)
         loot = ", ".join(f"{v} {k}" for k, v in gains.items()) or "nothing"

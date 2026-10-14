@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional
 
 from . import config
 from .abilities import Ability, get_ability
-from . import elements
+from . import elements, terrain as terrain_mod
 from . import sparring
 from .archetypes import STAT_KEYS
 from .growth import add_xp
@@ -32,6 +32,9 @@ class Enemy:
     purple_chance: float = 0.0     # purple gel is rare: chance per kill to drop `purple_amount`
     purple_amount: int = 1
     element: str = ""            # defensive element: weak to what beats it, resists what it beats
+    family: str = ""             # goblin, direwolf, orc ... (see bestiary.py)
+    role: str = ""
+    boss: bool = False
 
 
 ENEMIES: "Registry[Enemy]" = Registry("enemy")
@@ -134,6 +137,7 @@ class BattleSystem:
     def __init__(self, rng: random.Random, wallet: Optional[ResourceManager] = None):
         self.rng = rng
         self.wallet = wallet
+        self.terrain = None              # set per fight (see run); a terrain.Terrain or None
 
     # -- setup ---------------------------------------------------------------
     def generate_enemies(self, tier: int, count: int = 3) -> List[Enemy]:
@@ -160,7 +164,7 @@ class BattleSystem:
 
     # -- main loop -----------------------------------------------------------
     def run(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
-            xp_mult: float = 1.0, synergy: float = 1.0) -> BattleReport:
+            xp_mult: float = 1.0, synergy: float = 1.0, terrain=None) -> BattleReport:
         """party: list of Slime (HP and XP are written back). enemies: list of Enemy templates.
         permadeath=False knocks slimes out at 1 HP instead of killing them (training dungeons).
         split_xp=False gives every survivor the full wave XP instead of an equal share."""
@@ -178,9 +182,15 @@ class BattleSystem:
             foes.append(c)
         mine = [self.from_slime(s, synergy) for s in party]
         everyone = mine + foes
+        self.terrain = terrain
         log = [f"⚔ Battle begins! {', '.join(c.emoji + c.name for c in mine)}  vs  "
                f"{', '.join(c.emoji + c.name for c in foes)}"]
-        rounds, winner = self._simulate(everyone, log)
+        if terrain:
+            log.append(f"🌍 {terrain.emoji} {terrain.name}: {terrain_mod.describe(terrain)}")
+        try:
+            rounds, winner = self._simulate(everyone, log)
+        finally:
+            self.terrain = None
         report = BattleReport(log, winner, rounds)
         log.append({"party": "🏆 Victory!", "foes": "💀 Defeat...", None: "🤝 Draw - everybody is too tired."}[winner])
         self._finish(party, mine, enemies, report, permadeath, split_xp, xp_mult)
@@ -201,6 +211,7 @@ class BattleSystem:
                 if not (self._side_alive(everyone, "party") and self._side_alive(everyone, "foes")):
                     break
                 self._turn(actor, everyone, log)
+            self._hazard(everyone, log)
         if not self._side_alive(everyone, "foes"):
             winner = "party"
         elif not self._side_alive(everyone, "party"):
@@ -209,6 +220,29 @@ class BattleSystem:
             winner = None
         return rounds, winner
 
+    def _hazard(self, everyone, log) -> None:
+        """End of round: the terrain's hazard hurts everybody who isn't immune (an attuned / native element)."""
+        t = self.terrain
+        if not t or not t.hazard_pct or not (self._side_alive(everyone, "party") and self._side_alive(everyone, "foes")):
+            return
+        hit = {"party": [], "foes": []}
+        for c in everyone:
+            if not c.alive or c.minion:
+                continue
+            own = set(c.mastery) | ({c.element} if c.element else set())
+            own |= {b for e in own for b in elements.components(e)}
+            if own & set(t.hazard_immune):
+                continue
+            dmg = max(1, int(c.max_hp * t.hazard_pct))
+            c.hurt(dmg)
+            hit[c.side].append(f"{c.name} -{dmg}")
+            if not c.alive:
+                log.append(f"  {c.emoji}{c.name} succumbs to the {t.hazard_label or 'terrain'}!")
+        for side, who in hit.items():
+            if who:
+                log.append(f"  🌫 {t.hazard_label or 'hazard'} ({'party' if side == 'party' else 'foes'}): " + ", ".join(who[:6])
+                           + (f" +{len(who) - 6} more" if len(who) > 6 else ""))
+
     def duel(self, a, b) -> "BattleReport":
         """Non-lethal friendly match between two slimes (sparring). No XP, no loot; the loser is left at 1 HP
         (reaching 1 HP = yielding). HP is written back; the caller handles style XP, bonds and morale."""
@@ -216,6 +250,7 @@ class BattleSystem:
         for c in (ca, cb):
             c.nonlethal = True
         log = [f"🥊 Sparring match: {ca.emoji}{ca.name} vs {cb.emoji}{cb.name}"]
+        self.terrain = None
         rounds, winner = self._simulate([ca, cb], log, config.DUEL_ROUND_CAP)
         if winner is None:                      # round cap: the healthier slime takes it on points
             winner = "party" if ca.hp / ca.max_hp >= cb.hp / cb.max_hp else "foes"
@@ -391,13 +426,19 @@ def _cast_stat(actor, ability) -> float:
     return actor.stat(ability.stat)
 
 
+def _terrain_mult(bs, ability) -> float:
+    return terrain_mod.element_factor(bs.terrain, ability.element) if bs.terrain else 1.0
+
+
 def _damage_value(bs: BattleSystem, actor, ability, target):
-    raw = ability.power * _cast_stat(actor, ability) * _mastery_mult(actor, ability) - 0.5 * target.stat("defense")
+    raw = ability.power * _cast_stat(actor, ability) * _mastery_mult(actor, ability) * _terrain_mult(bs, ability) \
+        - 0.5 * target.stat("defense")
     eff = elements.effectiveness(ability.element, target.element)
     raw = max(1.0, raw) * bs.rng.uniform(0.9, 1.1) * eff * _style_attack(actor, ability)
     raw *= max(0.6, 1 - config.STYLE_SWORD_GUARD * target.style.get("sword", 0))       # parrying
     crit = bs.rng.random() < (config.CRIT_CHANCE + (0.1 if actor.behavior == "explore" else 0)
-                              + config.STYLE_ARCHERY_CRIT * actor.style.get("archery", 0))
+                              + config.STYLE_ARCHERY_CRIT * actor.style.get("archery", 0)
+                              + (bs.terrain.crit if bs.terrain else 0.0))
     if crit:
         raw *= config.CRIT_MULT
     if target.guard > 0:
@@ -429,7 +470,7 @@ def _h_drain(bs, actor, ab, targets, everyone, log):
 def _h_heal(bs, actor, ab, targets, everyone, log):
     for t in targets:
         amt = max(1, int(ab.power * _cast_stat(actor, ab) * 1.5 * bs.rng.uniform(0.95, 1.05)
-                         * _mastery_mult(actor, ab) * _style_attack(actor, ab)))
+                         * _mastery_mult(actor, ab) * _style_attack(actor, ab) * _terrain_mult(bs, ab)))
         before = t.hp
         t.hp = min(t.max_hp, t.hp + amt)
         log.append(f"  💚 {actor.name} uses {ab.name} on {t.name}: +{int(t.hp - before)} HP")
@@ -443,19 +484,20 @@ def _h_guard(bs, actor, ab, targets, everyone, log):
 
 def _h_poison(bs, actor, ab, targets, everyone, log):
     for t in targets:
-        per = max(1, int(ab.power * _cast_stat(actor, ab) * _mastery_mult(actor, ab)))
+        per = max(1, int(ab.power * _cast_stat(actor, ab) * _mastery_mult(actor, ab) * _terrain_mult(bs, ab)))
         t.poison = (ab.duration, per)
         log.append(f"  🧪 {actor.name} uses {ab.name} on {t.name}: poisoned ({per}/turn for {ab.duration}).")
 
 
 def _h_summon(bs, actor, ab, targets, everyone, log):
     mag = actor.stat(ab.stat)
-    pal = Combatant(f"{actor.name}'s Bone Pal", "🦴", actor.side,
+    emoji, _, mname = (ab.minion or "🦴 Bone Pal").partition(" ")
+    pal = Combatant(f"{actor.name}'s {mname}", emoji, actor.side,
                     dict(hp=mag * 2.2 * ab.power + 5, atk=mag * ab.power * 1.2 + 2, defense=2,
                          mag=0, spd=5), mag * 2.2 * ab.power + 5, ["splat"], "attack", 1.0,
                     None, minion=True)
     everyone.append(pal)
-    log.append(f"  🦴 {actor.name} raises a Bone Pal!")
+    log.append(f"  {emoji} {actor.name} calls up a {mname}!")
 
 
 KIND_HANDLERS: Dict[str, Callable] = {

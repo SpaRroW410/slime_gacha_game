@@ -357,7 +357,7 @@ class TestMainDungeon(unittest.TestCase):
             with self.assertRaises(InvalidAction):
                 act()
 
-    def test_boss_clear_frees_party_and_pays_bounty_once(self):
+    def test_boss_is_a_checkpoint_not_a_forced_exit(self):
         g = fresh(2)
         pid = full_party(g)
         for s in g.party_members(pid):
@@ -365,39 +365,40 @@ class TestMainDungeon(unittest.TestCase):
             add_xp(s, 10 ** 7)
             s.hp = s.max_hp
             s.stars = 5
-        before = g.wallet.get("purple_gel")
         for _ in range(5):
             rep = g.descend(pid)
             self.assertTrue(rep.victory, rep.log[-6:])
-        self.assertNotIn(pid, g.delves)           # free again
-        self.assertEqual((g.main_floor, g.best_floor), (5, 5))
-        self.assertGreaterEqual(g.wallet.get("purple_gel") - before, config.MAIN_BOSS_FIRST_CLEAR_PURPLE)
-        self.assertTrue(all(s.in_dungeon == "" for s in g.party_members(pid)))
-        self.assertEqual(g.current_segment, 1)    # the next entrance is floor 6
+        self.assertIn(pid, g.delves)              # still inside: the party may leave or push on
+        self.assertTrue(g.can_leave(pid))
+        self.assertEqual(g.best_floor, 5)
+        self.assertEqual(g.bounties, {5})
+        g.leave_dungeon(pid)
+        self.assertEqual(g.entry_options(pid), [1, 6])
 
-    def test_wave_structure_and_scaling(self):
-        rng = random.Random(1)
-        w5 = dungeon.main_wave(5, 5, rng)
-        self.assertEqual(w5[0].key, "hollow_warden")
-        self.assertEqual(len(w5), 3)
-        self.assertEqual(dungeon.main_wave(10, 5, rng)[0].key, "parched_king")
-        self.assertEqual(len(dungeon.main_wave(3, 5, rng)), 5)
-        self.assertEqual(len(dungeon.main_wave(3, 10, rng)), 10)
-        hp = lambda f: max(e.stats["hp"] for e in dungeon.main_wave(f, 5, random.Random(2)) if e.tier == 1)
-        self.assertGreater(hp(4), hp(1) * 1.4)
+    def test_boss_floors_have_bosses_and_escorts(self):
+        w5 = dungeon.floor_plan(7, 5, 5)
+        self.assertEqual((w5[0].key, w5[0].boss, len(w5)), ("hollow_warden", True, 3))
+        self.assertEqual(dungeon.floor_plan(7, 10, 5)[0].key, "grumpus")
+        self.assertEqual(dungeon.floor_plan(7, 50, 5)[0].key, "parched_king")
+        self.assertEqual(len(dungeon.floor_plan(7, 3, 5)), 5)
+        self.assertEqual(len(dungeon.floor_plan(7, 3, 10)), 10)
+        self.assertEqual(len(dungeon.floor_plan(7, 5, 10)), 5)             # boss + 2 escorts per 5 slots
 
     def test_purple_gel_rare_but_present_deeper(self):
-        rng = random.Random(3)
-        shallow = sum(e.purple_chance for e in dungeon.main_wave(1, 5, rng)) / 5
-        deep = sum(e.purple_chance for e in dungeon.main_wave(12, 5, rng)) / 5
+        shallow = max(e.purple_chance for e in dungeon.floor_plan(1, 1, 5))
+        deep = max(e.purple_chance for e in dungeon.floor_plan(1, 49, 5) if not e.boss)
         self.assertLess(shallow, 0.03)
         self.assertGreater(deep, shallow)
-        self.assertLessEqual(deep, config.MAIN_PURPLE_CAP)
+        self.assertLessEqual(deep, 0.4)
 
-    def test_main_floor_persists(self):
+    def test_progress_and_bounties_persist(self):
         g = fresh(1)
-        g.main_floor = 7
-        self.assertEqual(Game.from_dict(g.to_dict()).main_floor, 7)
+        s = g.gacha.make_slime("common", "barbarian")
+        g.roster[s.id] = s
+        s.progress = 7
+        g.best_floor, g.bounties = 7, {5}
+        h = Game.from_dict(g.to_dict())
+        self.assertEqual((h.slime(s.id).progress, h.best_floor, h.bounties), (7, 7, {5}))
 
 
 class TestGrindDungeon(unittest.TestCase):
@@ -453,6 +454,7 @@ class TestGrindDungeon(unittest.TestCase):
         """Getting a fresh party to the stage-0 cap takes dozens of runs, not a handful."""
         g, pid = self._party(3)
         g.wallet.add("food", 5000)                        # a long grind needs snacks
+        g.conflicts.tick = lambda slimes, events: None    # no brawls: this test is about XP, not quarrels
         runs = 0
         while runs < 200 and not all(s.level >= s.level_cap for s in g.party_members(pid)):
             g.conflicts.conflicts.clear()

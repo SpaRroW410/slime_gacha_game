@@ -1,6 +1,8 @@
 # Software Design Document — Slime Gacha (prototype v0.1)
 
 > **v0.2 changes**: permadeath, rarity 90/9/0.9/0.09, 1–5★ ratings, white/purple gel currencies, free daily pull, fixed-size parties (§5.1, 5.9, 5.10).
+> **v0.8 changes**: per-slime dungeon progress + checkpoint exits, floor-level scouting that kills incomplete parties, specialization (hybrid classes), outlook (§5.11, §5.15, §5.17).
+> **v0.7 changes**: browser front-end (§5.16): JSON command API, local server, Pyodide static build.
 > **v0.6 changes**: no-exit delves, scouting intel, Pit defeat penalties + gear recovery, equipment & Armory, sacrifice stress (§5.11, §5.15).
 > **v0.5 changes**: sparring-based fighting styles, Rest Area, upgradable buildings, compatibility / morale / council (§5.12–5.14).
 > **v0.4 changes**: library, elements, elemental mastery, spell fusion (§5.12 Library part).
@@ -167,7 +169,7 @@ Dungeons only *generate waves* (lists of scaled `Enemy` copies via `scale_enemy`
 | Loot | white gel, food, essence; purple chance ×1.15^(f−1) (cap 50 %) | 50 % loot, **no purple gel** |
 | Bosses | every 5th floor: Hollow Warden (f5), Parched King (f10+, +25 %/cycle) with escorts; first clear pays 3 purple gel | – |
 | Time | 3 h per floor attempt | 2 h per run |
-| Exit rule | **no exit** until the segment boss (5 floors) falls or everyone is dead; `enter_dungeon` / `delve_next` / `delve_camp` | **commitment**: `grind(runs=N)` runs all N unless the whole party is knocked out; camps (sleeps) between runs when hurt |
+| Exit rule | walk floors **in order**; leave **only at a checkpoint** (after a boss floor); `enter_dungeon(pid, start)` / `delve_next` / `delve_camp` / `leave_dungeon` | **commitment**: `grind(runs=N)` runs all N unless the whole party is knocked out; camps (sleeps) between runs when hurt |
 Time passing means hunger: long grinds need Food, or slimes starve.
 
 ### 5.12 Library, elements & spell lab (`academy.py`, `elements.py`, `spells.py`)
@@ -231,21 +233,28 @@ invested 10 % + spells/mastery 10 % + social value 15 % + "in a party" 10 %. Top
 itself transfers half of the donor's bonds to the target and lowers colony morale (friends −25, others −5).
 
 ### 5.15 Delves, scouting, gear & sacrifice stress (`Game`, `dungeon.py`, `equipment.py`)
-**Delves.** The Descent is split into segments (floors 5k+1 … 5k+5, the last one a boss). `enter_dungeon(pid)` flags
-every member `in_dungeon="main"` (they can't hunt, spar, study, rest, equip, merge, sleep via the colony …) and
-records `delves[pid] = {floor, start, hours}`. There is deliberately **no API to leave**: `delve_next` fights the
-current floor (floors are fixed by `dungeon_seed`), `delve_camp(hours)` heals by sleeping in the dungeon
-(8 %/h, ambush chance `0.10 × (1+0.1·floor) × (1 − 0.6·knowledge)` per hour, damage 10–30 % max HP). The delve ends when
-the boss falls (checkpoint `main_floor` advances, first clear pays 3 purple gel, flags clear) or the whole party
-dies. A party that loses members keeps going short-handed; after exit it must be refilled before another fight.
+**Delves & progress.** Every slime stores `progress` = the deepest floor it has *cleared*. A party may start at floor 1 or at
+`c + 1` for any checkpoint `c` (a multiple of 5) up to its **least-travelled member** (`entry_options`) — so a
+fresh slime pulls the whole party back to floor 1, and nobody is ever carried past floors they have not walked.
+`enter_dungeon(pid, start)` flags every member `in_dungeon="main"` (no hunting, sparring, colony rest, equipping,
+merging …) and records `delves[pid] = {floor, start, hours}`. Parties are independent: several can be inside at
+once and **any party may walk the same floors again** (floors are fixed by `dungeon_seed`; the boss bounty is paid
+once per boss floor for the colony). `delve_next` fights the current floor; clearing it sets `progress` for
+the survivors and the colony's knowledge of that floor to 100 %. **Leaving** (`leave_dungeon`) is only possible when
+`(floor − 1) % 5 == 0` — right after a boss floor (or before the first fight) — so training and the Academy happen
+between segments; the party may also push on. `delve_camp(hours)` heals by sleeping inside (8 %/h; ambush chance
+`0.10 × (1+0.1·floor) × (1 − 0.6·knowledge)` per hour, 10–30 % max HP). The delve also ends if the whole party dies.
 
-**Scouting.** `scout(pid, hours 2–24)` commits a full party to the next segment. Knowledge
-`k' = 100 − (100 − k)·exp(−0.10 · skill · hours)` (skill = 0.8 + 0.1 per explore-stance member + 0.15 per rogue/ranger,
-max 2.0), so it is a function of time spent inside with diminishing returns. Hourly ambush chance (stronger
-segments, weaker parties, less intel ⇒ more danger) can kill scouts; if all die nothing is learned. Time spent
-delving or camping also adds 1.5 %/h. `dungeon.intel_view` reveals per floor: ≥20 % count & tier, ≥40 % enemy
-types & elements, ≥60 % boss, ≥80 % abilities / total HP / purple odds, 100 % weaknesses & loot. Knowledge gives
-the party up to +10 % power inside the Descent and fewer ambushes.
+**Scouting by floor.** `scout(pid, first, last, hours)` (1–10 consecutive floors, any range). Each floor needs
+`3h × (1 + 0.12·(floor−1)) / skill` hours, multiplied by a hidden seeded factor in 0.85–1.20 (`dungeon.floor_hours`);
+`scout_plan` shows the nominal figure, the low/high range and a safe budget. Skill = 0.8 + 0.1 per explore-stance
+member + 0.15 per rogue/ranger + Pathfinder outlook. **The party must reach 100 % of every targeted floor within its
+hour budget; if not, the whole party is lost** (permanent, gear gone) and only a half-finished note survives
+(50 % of what it had learned). Success sets knowledge to 100 % and returns the party as soon as it is done; food
+(1 per budgeted hour) is paid up front and never refunded. Scouts need `progress ≥ first − 1`. Hourly ambushes
+(`0.12 × (1+0.06·floor)/strength × (1 − 0.7·knowledge)`) can kill individual scouts. `dungeon.intel_lines` reveals per
+floor: ≥20 % count & tier, ≥40 % enemy types & elements, ≥60 % boss, ≥80 % abilities / HP / purple odds, 100 %
+weaknesses & loot; a floor known to the party grants up to +10 % power and fewer ambushes.
 
 **Equipment.** `Gear(key, slot, tier, stats, cost)`; the colony `Inventory` is a Counter, a slime holds
 `gear {slot: key}` and `max_stats()` adds the bonuses. Armory level gates purchasable tier (1/2/3 at L1/L3/L5);
@@ -259,6 +268,62 @@ dig it up. Outside dungeons a dead slime's gear returns to the inventory.
 bystanders, −30 for friends/bonded, −10 for the target (guilt). Stress also lowers every morale target by 6 per point
 (max 30). The Council's cost estimates include it.
 
+### 5.16 Web edition (`webapi.py`, `serve.py`, `web/`, `tools/build_web.py`)
+**One engine, three front-ends.** The rules never touch the UI: the terminal CLI, the local web server and the
+in-browser Pyodide build all call `Game`.
+
+```
+ browser UI (web/app.js) ──backend.call(cmd, args)──▶ ServerBackend ── POST /api ──▶ serve.py ─┐
+        │                                      └────▶ PyodideBackend ── in-page ──────────────┤
+        ▼                                                                                      ▼
+  localStorage save  ◀── envelope {ok, error, log[], result, state, save} ◀──────────── webapi.Session.call
+```
+
+* **Command API** (`webapi.HANDLERS`, registered with `@command`): ~60 verbs (pull, feed, hunt, spar, scout, grind,
+  enter_dungeon, delve_next, delve_camp, study, learn, research, upgrade, buy_gear, merge, council …). Each returns
+  `(log lines, result)`; `GameError`s and bad input become `ok: false` with a message — the engine is never exposed to
+  tracebacks. Battle reports travel as `result.battle[]` (`log`, `victory`, `rounds`, `xp`, `loot`, `deaths`).
+* **Snapshot** (`webapi.snapshot`): every response carries the full render-ready state (slimes with derived values,
+  parties + synergy, buildings, dungeon intel, library, gear, zones, elements …) so the UI needs no extra round trips
+  and cannot drift from the engine. Static data (zones, elements, gear, classes, disciplines) comes from the same
+  registries, so new content shows up in the browser without front-end changes (unknown classes get a hashed colour).
+* **Persistence**: the browser keeps the last `save` (the normal `Game.to_dict()`) in `localStorage` and replays it with
+  the `load` command on start-up, so the server (or a Pyodide worker) is stateless across restarts. Export / Import
+  moves saves between browsers. The server holds a single `Session` guarded by a lock (single-player, localhost).
+* **Transports** (`web/backend.js`): `chooseBackend()` pings `/api/ping`; if the Python server answers it uses
+  `ServerBackend`, otherwise it boots `PyodideBackend` (vendored runtime first, CDN fallback), unpacks
+  `slime_gacha.zip` and calls `Session.call_json`.
+* **Static build**: `tools/build_web.py` copies `web/`, zips the `slime_gacha` package and vendors the five Pyodide
+  files (~14 MB total), producing a self-contained, offline-capable `dist/`.
+* **UI**: vanilla JS/CSS without a build step. One `render()` rebuilds the page from `S.state`; actions are
+  `data-act` attributes dispatched through a table (`A`), so adding a button is one table entry plus the API verb.
+  Dangerous actions (merge, enter the Descent, scout, Pit commitment) ask for confirmation and spell out the rules.
+
+### 5.17 Specialization & outlook (`specialization.py`, `outlook.py`)
+**Hybrid classes.** Every archetype has a primary discipline (sword / archery / magic). Training (sparring) in a
+*different* discipline up to style level 3 — plus slime level 5 — lets the slime **specialize** for 100 white gel +
+25 essence. The spec is looked up by `(archetype, secondary)` first, then `(primary, secondary)`:
+Battlemage (sword+magic), Spellknight (magic+sword), Arcane Archer (archery+magic), Hexshot (magic+archery),
+Swashbuckler (sword+archery), Bulwark Archer (archery+sword), Battle Medic (medic+sword), Death Knight
+(necromancer+sword), Shadowcaster (rogue+magic). A spec adds stat shifts computed from the *pre-shift* stats
+(e.g. `mag += 0.5 · atk`), a signature ability, a new title, and affinity (×1.5 style xp) in both disciplines. It is
+permanent and stored on the slime (`spec`, `spec_disc`); `Slime.max_stats()` applies it after gear.
+
+**Outlook.** Slimes count experiences (`exp`: spar, pit, delve, scout, hunt, study). With ≥5 and a 20 % lead over
+the runner-up, the favourite becomes an outlook: Duelist (+10 % style xp), Grinder (+10 % Pit xp, KO costs 30 % less xp /
+40 % less morale), Delver (+5 % party power in the Descent by share), Pathfinder (+0.1 scouting skill), Forager
+(+10 % hunt loot), Scholar (+10 % study xp, +5 % research). Doing your favourite thing adds +3 esteem, and the slime
+asks for it when esteem is its dominant need. First draft of the "slimes think differently depending on what they do"
+idea.
+
+### 5.18 Floor-50 content engine (`terrain.py`, `bestiary.py`, `dungeon.py`)
+- **Terrains** (29, 12 kinds: valley, dunes, islands, caverns, tundra, volcano, swamp, canyon, cliffs, plains, barrens, ruins) boost or dampen elements (x1.25 / x0.8), may deal a per-round hazard (% max HP; immune elements exempt) or add crit chance. `battle.run(..., terrain=)` applies them; sparring ignores terrain.
+- **Bestiary**: 8 roles (swarmer..support) x floor-derived unit stats; 71 monsters in ~20 families (goblins, direwolves, orcs, ogres, trolls, scarabs, undead, sea, golems, imps, dragonkin, ...) with ~50 monster moves and summons. 10 bosses (floors 5,10,...,50; floor 50 = the Parched King, completing the Descent).
+- **Floor plan**: generated sequentially from the dungeon seed, per 10-floor palettes; terrain never repeats consecutively and no (terrain, family, pattern) signature repeats within 4 floors. Patterns: swarm, warband (leaders+followers of two families, e.g. goblins with direwolves, orcs with ogres), rabble, siege, ambush. Boss floors use the boss lair terrain.
+- **Daily Pit**: `pit_theme(seed, day)` picks a terrain and two featured families, never the same as yesterday; waves are drawn from the featured families.
+- **Difficulty**: `player_curve(level) x difficulty(floor)` (difficulty ramps 1.0->1.65 over floors 1-8); calibrated by simulation so an unequipped rare 3-star party wins ordinary floors ~90-100% and bosses ~50-65%.
+- Intel: terrain shown from 20% knowledge, terrain advice at 100%. SAVE_VERSION 7; scouting budget up to 240 h.
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|
@@ -267,6 +332,9 @@ bystanders, −30 for friends/bonded, −10 for the target (guilt). Stress also 
 | New ability kind | add handler in `battle.KIND_HANDLERS` |
 | New zone / enemy | `register_zone(...)`, `register_enemy(...)` |
 | New arena / style | `register_discipline(Discipline(...))` in `sparring.py` (+ a perk in `battle._style_attack`); set `Archetype.discipline` |
+| New hybrid class | `register_spec(Spec(...), pair=(primary, secondary))` or `cls=(archetype, secondary)` |
+| New outlook | add an `Outlook` to `outlook.OUTLOOKS`, count it with `outlook.bump`, and use `outlook.has` where its perk applies |
+| New web verb | `@command("name")` handler in `webapi.py` + an entry in `A` (app.js) |
 | New building | `register_building(Building(...))` + an effect getter on `BuildingManager` |
 | New trait chemistry | add a row to `social.TRAIT_PAIRS` |
 | New element / recipe | `register_recipe(a, b, result, name, emoji)` in `elements.py` |
@@ -277,7 +345,7 @@ bystanders, −30 for friends/bonded, −10 for the target (guilt). Stress also 
 Plugins: any module placed in `slime_gacha/plugins/` is auto-imported at start (optional dir).
 
 ## 7. Persistence
-`Game.save(path)` → JSON `{version 6, tick, buildings, bonds, intel, delves, inventory, pit_lost, sacrifice_stress, dungeon_seed, main_floor, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. older saves load (gel/silver→white_gel, gold→purple_gel).
+`Game.save(path)` → JSON `{version 7, tick, buildings, bonds, intel{floor→%}, delves, bounties, inventory, pit_lost, sacrifice_stress, dungeon_seed, main_floor, rng_state, wallet, gacha{pity, last_free_day, next_id}, parties, graveyard, slimes[], conflicts[], friends}`. older saves load (gel/silver→white_gel, gold→purple_gel).
 Versioned for forward migration. Unknown archetype keys on load are skipped with a warning (mod removal safe).
 
 ## 8. Error handling
