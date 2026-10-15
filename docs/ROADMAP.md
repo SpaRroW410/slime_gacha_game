@@ -191,3 +191,5 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Rarity skills per class (Moon Slash, Aura Blade, ...)
 - [x] Weapon proficiency, three-family memory, favourite weapon, named weapons, slimes repairing gear
 - [x] Potions: Alchemy Lab, grades 1-5, temporary boosts, stamina potion, herbs
+- [x] Four coloured herbs, combination potions, terrain-driven herb drops
+- [x] Slime autonomy: 66% of stocks usable without asking

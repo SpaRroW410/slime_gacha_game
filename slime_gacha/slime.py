@@ -6,11 +6,10 @@ from . import config
 from .abilities import get_ability
 from .archetypes import STAT_KEYS, Archetype, get_archetype
 from .equipment import gear_bonus
-from . import attributes
+from . import attributes, potions
 from .items import Item, item_bonus
 from .specialization import SPECS, apply_shifts
 
-BUFF_STAT = dict(hp="vigor", atk="might", defense="ironhide", mag="arcane", spd="swift")   # potion kind per stat
 STAGE_TITLES = ["", "Greater ", "Prime "]
 
 
@@ -131,7 +130,7 @@ class Slime:
         for k, v in self.merge_bonus.items():
             bonus[k] = bonus.get(k, 0.0) + v
         core = self.core_stats()
-        out = {k: round((core[k] + bonus.get(k, 0.0)) * (1 + attributes.buff_value(self, BUFF_STAT.get(k, ''))), 1)
+        out = {k: round((core[k] + bonus.get(k, 0.0)) * potions.stat_mult(self.buffs, k), 1)
                for k in STAT_KEYS}
         return apply_shifts(out, self.spec) if self.spec else out
 

@@ -420,10 +420,10 @@ def ascension_menu(g: Game) -> None:
     from . import ascension
     stones = "  ".join(f"{r} {g.wallet.get(ascension.stone_key(r))}" for r in config.RARITIES)
     print(f"  Stones: {stones}   (worth {ascension.stone_total(g.wallet)} common)")
-    print(f"  Potions: {dict(g.potions) or 'none'}   herbs {g.wallet.get('herb')}")
+    print(f"  Potions: {dict(g.potions) or 'none'}   herbs " + ", ".join(f"{c} {g.wallet.get('herb_' + c)}" for c in config.HERBS) + f"   autonomy {'on' if g.autonomy else 'off'}")
     print("  [r] Ascend rarity (white gel)   [s] Ascend star (stones)   [m] Merge stones up   "
           "[q] Starfall Quarry   [d] Destroy in the chamber\n  [b] Brew a potion   [p] Drink a potion   "
-          "[f] Slime repairs its gear   [v] Slime vitals (stamina, attributes)")
+          "[f] Slime repairs its gear   [v] Slime vitals (stamina, attributes)   [z] Toggle slime autonomy (66%)")
     c = _ask("ascension: ").lower()[:1]
     if c == "r":
         show_roster(g)
@@ -446,6 +446,8 @@ def ascension_menu(g: Game) -> None:
         print("  " + g.use_potion(_int("slime id: "), _ask("kind: "), _int("grade: ")))
     elif c == "f":
         print("\n".join("  " + x for x in g.slime_repair(_int("slime id: "))))
+    elif c == "z":
+        print("  " + g.set_autonomy(not g.autonomy))
     elif c == "v":
         from . import attributes
         s = g.slime(_int("slime id: "))

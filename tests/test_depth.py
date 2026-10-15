@@ -10,7 +10,7 @@ from slime_gacha.game import Game
 
 def mk(seed=3, n=6, level=5):
     g = Game(seed)
-    g.wallet.add_many({"white_gel": 100000, "herb": 1000, "essence": 1000, "scrap": 1000, "alloy": 500})
+    g.wallet.add_many({"white_gel": 100000, "herb_green": 500, "herb_red": 500, "herb_blue": 500, "herb_yellow": 500, "essence": 1000, "scrap": 1000, "alloy": 500})
     g.pull(n, "white_gel")
     for s in g.slimes():
         s.level = level
@@ -183,8 +183,8 @@ class TestPotions(unittest.TestCase):
         g.brew(s.id, "might", 2)
 
     def test_costs_scale(self):
-        c = [potions.cost(i) for i in range(1, 6)]
-        self.assertTrue(all(c[i]["herb"] < c[i + 1]["herb"] for i in range(4)))
+        c = [potions.cost("might", i) for i in range(1, 6)]
+        self.assertTrue(all(c[i]["herb_red"] < c[i + 1]["herb_red"] for i in range(4)))
         self.assertNotIn("essence", c[0])
         self.assertIn("essence", c[4])
 
@@ -192,27 +192,28 @@ class TestPotions(unittest.TestCase):
         g = mk()
         s = g.slimes()[0]
         made = 0
-        herbs = g.wallet.get("herb")
+        herbs = g.wallet.get("herb_yellow")
         for _ in range(40):
             before = sum(g.potions.values())
             g.brew(s.id, "stamina", 1)
             made += sum(g.potions.values()) - before
             s.state = "idle"
         self.assertGreater(made, 20)
-        self.assertLess(g.wallet.get("herb"), herbs)
+        self.assertLess(g.wallet.get("herb_yellow"), herbs)
 
     def test_brewing_takes_time_and_frees_the_slime(self):
         g = mk()
         s = g.slimes()[0]
         t0 = g.tick_count
         g.buildings.levels["alchemy"] = 3
-        g.brew(s.id, "swift", 3)
+        g.brew(s.id, "gale", 3)
         self.assertEqual(g.tick_count - t0, potions.brew_hours(3))
         self.assertEqual(s.in_dungeon, "")
 
     def test_needs_ingredients(self):
         g = mk()
-        g.wallet.add("herb", -g.wallet.get("herb"))
+        for c in config.HERBS:
+            g.wallet.add(potions.herb_key(c), -g.wallet.get(potions.herb_key(c)))
         with self.assertRaises(NotEnoughResources):
             g.brew(g.slimes()[0].id, "might", 1)
 
@@ -248,14 +249,16 @@ class TestPotions(unittest.TestCase):
         g = mk()
         log = []
         g.rng = random.Random(1)
-        g.wallet.add("herb", -g.wallet.get("herb"))
+        total = lambda: sum(g.wallet.get(potions.herb_key(c)) for c in config.HERBS)
+        for c in config.HERBS:
+            g.wallet.add(potions.herb_key(c), -g.wallet.get(potions.herb_key(c)))
         for _ in range(30):
             g._herb_drop("grind", 5, log)
-        self.assertGreater(g.wallet.get("herb"), 20)
-        n = g.wallet.get("herb")
+        self.assertGreater(total(), 20)
+        n = total()
         for _ in range(30):
             g._herb_drop("adventure", 5, log)
-        self.assertLess(g.wallet.get("herb") - n, n)
+        self.assertLess(total() - n, n)
 
     def test_persists(self):
         g = mk()

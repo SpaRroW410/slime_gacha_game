@@ -84,6 +84,8 @@ class Game:
         self.inventory = equipment.Inventory()
         self.pit_lost: List[str] = []                  # gear left behind in the Gloop Pit
         self.potions: Dict[str, int] = {}              # 'kind:grade' -> count
+        self.potion_peak: Dict[str, int] = {}          # most of each ever held: slimes leave 34% of it alone
+        self.autonomy = True                           # slimes may use up to 66% of the stock by themselves
         self.vault: Dict[int, items_mod.Item] = {}     # unequipped relics (see items.py)
         self.next_item_id = 1
         self.sacrifice_stress = 0.0                    # recent merges; decays 1/day
@@ -137,6 +139,7 @@ class Game:
             self.conflicts.tick(self.slimes(), events)
             self._reap(events)
             self._stamina_tick()
+            self._autonomy_tick(events)
         self.journal.extend(events)
         self.journal = self.journal[-200:]
         return events
@@ -747,13 +750,81 @@ class Game:
             log.append(f"💎 Found {n} common stone{'s' if n > 1 else ''}.")
 
     # ---- potions & herbs (potions.py) -----------------------------------------------------------------
-    def _herb_drop(self, where: str, foes: int, log: List[str]) -> None:
-        """Herbs for the Alchemy Lab: plentiful in the daily Pit, a few elsewhere."""
+    def _herb_drop(self, where: str, foes: int, log: List[str], terrain=None) -> None:
+        """Coloured herbs for the Alchemy Lab. The terrain decides the main colour (so the daily Pit's herb changes
+        with its theme); plentiful in the Pit, a few elsewhere."""
         p = config.HERB_DROP.get(where, 0)
-        n = sum(self.rng.randint(1, 3) for _ in range(foes) if self.rng.random() < p)
-        if n:
-            self.wallet.add("herb", n)
-            log.append(f"🌿 Gathered {n} herb{'s' if n > 1 else ''}.")
+        got: Dict[str, int] = {}
+        local = config.TERRAIN_HERB.get(terrain.kind) if terrain else None
+        for _ in range(foes):
+            if self.rng.random() < p:
+                color = local if local and self.rng.random() < config.HERB_LOCAL_SHARE else self.rng.choice(config.HERBS)
+                got[color] = got.get(color, 0) + self.rng.randint(1, 3)
+        if got:
+            self.wallet.add_many({potions.herb_key(c): n for c, n in got.items()})
+            log.append("🌿 Gathered " + ", ".join(f"{n} {c} herb{'s' if n > 1 else ''}" for c, n in got.items()) + ".")
+
+    # ---- autonomy: slimes help themselves to (at most) 66% of a stock ------------------------------------
+    def _potion_free(self, k: str) -> bool:
+        """May a slime take one of these by itself? Only while more than 34% of the most ever held remains."""
+        stock = self.potions.get(k, 0)
+        peak = max(self.potion_peak.get(k, 0), stock)
+        return stock > math.ceil(peak * (1 - config.AUTONOMY_SHARE))
+
+    def _auto_drink(self, s: Slime, kind: str, log: List[str]) -> bool:
+        if any(b["kind"] == kind for b in s.buffs):
+            return False
+        grades = sorted(g for (kk, g) in ((k.split(":")[0], int(k.split(":")[1])) for k in self.potions) if kk == kind)
+        for g in grades:                                     # the humblest grade that is free to take
+            if self._potion_free(potions.key(kind, g)):
+                log.append("🧃 " + self.use_potion(s.id, kind, g))
+                return True
+        return False
+
+    _LIKES = dict(barbarian=("might", "ironhide", "bulwark"), mage=("arcane", "renewal"), medic=("renewal", "arcane", "bulwark"),
+                  rogue=("fury", "gale", "might"), ranger=("fury", "gale", "might"),
+                  necromancer=("bloodthirst", "arcane", "renewal"))
+
+    def _autonomy_prepare(self, members: List[Slime], log: List[str]) -> None:
+        """Before a trip the slimes pick the potions that suit their class (a couple each)."""
+        if not self.autonomy:
+            return
+        for s in members:
+            n = 0
+            for kind in self._LIKES.get(s.archetype, ()):
+                if n >= config.AUTONOMY_MAX_BUFFS:
+                    break
+                if self._auto_drink(s, kind, log):
+                    n += 1
+
+    def _autonomy_tick(self, log: List[str]) -> None:
+        """Hourly: tired slimes drink stamina potions, hurt ones vigor, worn gear gets mended - all unasked."""
+        if not self.autonomy:
+            return
+        for s in self.slimes():
+            if s.busy or s.hp <= 0:
+                continue
+            if s.stamina_frac < config.AUTONOMY_STAMINA_BELOW:
+                self._auto_drink(s, "stamina", log)
+            if s.hp < s.max_hp * config.AUTONOMY_HP_BELOW:
+                self._auto_drink(s, "vigor", log)
+            self._auto_repair(s, log)
+
+    def _auto_repair(self, s: Slime, log: List[str]) -> None:
+        for it in list(s.items.values()):
+            if it.unbreakable or it.durability >= it.max_durability * config.AUTONOMY_REPAIR_BELOW:
+                continue
+            m = items_mod.material(it.rarity)
+            need = math.ceil((it.max_durability - it.durability) / 6) * (1 + config.RARITIES.index(it.rarity))
+            if need <= self.wallet.get(m) * config.AUTONOMY_SHARE:
+                self.wallet.add(m, -need)
+                it.durability = it.max_durability
+                log.append(f"🔧 {s.name} mends {it.label()} by itself ({need} {m}).")
+
+    def set_autonomy(self, on: bool) -> str:
+        self.autonomy = bool(on)
+        return "Slimes will help themselves to up to 66% of potions and materials." if on else \
+            "Slimes will wait for your orders."
 
     def potion_count(self, kind: str, grade: int) -> int:
         return self.potions.get(potions.key(kind, grade), 0)
@@ -768,8 +839,9 @@ class Game:
         lab = self.buildings.level("alchemy")
         if grade > lab:
             raise InvalidAction(f"The Alchemy Lab is level {lab}: it brews up to grade {lab}.")
-        self.wallet.spend_many(potions.cost(grade))
-        chance = potions.success_chance(s, grade, lab)
+        c = potions.cost(kind, grade)
+        self.wallet.spend_many(c)
+        chance = potions.success_chance(s, grade, lab, kind)
         ok = self.rng.random() < chance
         crit = ok and grade < 5 and grade + 1 <= lab and self.rng.random() < config.BREW_CRIT
         self._set_flag([s], "lab")
@@ -779,11 +851,12 @@ class Game:
             self._clear_flag([s])
         pk = potions.KINDS[kind]
         if not ok:
-            self.wallet.add("herb", potions.cost(grade)["herb"] // 2)
+            self.wallet.add_many({k: v // 2 for k, v in c.items() if k.startswith("herb_")})
             return [f"💥 {s.name}'s brew fails ({chance:.0%} chance). Half the herbs are saved."]
         g = grade + 1 if crit else grade
         k = potions.key(kind, g)
         self.potions[k] = self.potions.get(k, 0) + 1
+        self.potion_peak[k] = max(self.potion_peak.get(k, 0), self.potions[k])
         s.needs.add("esteem", 8)
         return [f"{pk.emoji} {s.name} brews a grade {g} {pk.name}" + (" - a masterwork!" if crit else ".")]
 
@@ -1056,6 +1129,9 @@ class Game:
             if s.grounded:
                 raise InvalidAction(f"{s.name} is grounded after a brawl.")
         res = GrindResult()
+        pre: List[str] = []
+        self._autonomy_prepare(party, pre)
+        res.summary.extend("   " + x for x in pre)
         self._set_flag(party, kind)
         try:
             for n in range(1, runs + 1):
@@ -1100,7 +1176,7 @@ class Game:
                             events.append("💎 Mined " + ", ".join(
                                 f"{v} {k.replace('_', ' ')}" for k, v in got.items()) + "!")
                 if rep.victory:
-                    self._herb_drop(kind, len(enemies), events)
+                    self._herb_drop(kind, len(enemies), events, theme.terrain)
                 if rep.victory and kind != "quarry":
                     self._stone_side_drop("adventure", len(enemies), events)
                     for _ in enumerate(enemies):
@@ -1176,11 +1252,14 @@ class Game:
             laggard = min(party, key=lambda s: s.progress)
             raise InvalidAction(f"The party can start at floor {', '.join(map(str, options))}. {laggard.name} has only "
                                 f"cleared floor {laggard.progress}; every member must have walked the floors above.")
+        pre: List[str] = []
+        self._autonomy_prepare(party, pre)
         self._set_flag(party, "main")
         self.delves[pid] = dict(floor=start, start=start, hours=0)
         nxt = self._checkpoint_after(start)
         return (f"🕳 {self.parties.get(pid).name} enters the Hollow Descent at floor {start} "
-                f"(knowledge {self._knowledge(start):.0f}%). The next exit is after the boss on floor {nxt}.")
+                f"(knowledge {self._knowledge(start):.0f}%). The next exit is after the boss on floor {nxt}."
+                + "".join("\n   " + x for x in pre))
 
     @staticmethod
     def _checkpoint_after(floor: int) -> int:
@@ -1465,6 +1544,9 @@ class Game:
             raise InvalidAction("Everyone is at their level cap - time to evolve!")
         res = GrindResult()
         last_day = -1
+        pre: List[str] = []
+        self._autonomy_prepare(party, pre)
+        res.summary.extend("   " + x for x in pre)
         self._set_flag(party, "grind")
         try:
             for n in range(1, max(1, runs) + 1):
@@ -1513,7 +1595,7 @@ class Game:
                 if rep.victory:
                     self._gear_drop(1 if depth <= 3 else 2, config.GEAR_DROP_PIT, events)
                     self._stone_side_drop("grind", len(enemies), events)
-                    self._herb_drop("grind", len(enemies), events)
+                    self._herb_drop("grind", len(enemies), events, theme.terrain)
                     self._recover_pit_gear(members, events)
                 events.extend(self.tick(config.GRIND_TICKS))
                 rep.log.extend(events)
@@ -1582,7 +1664,7 @@ class Game:
                     delves={str(k): v for k, v in self.delves.items()},
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
-                    vault=[i.to_dict() for i in self.vault.values()], potions=self.potions, next_item_id=self.next_item_id,
+                    vault=[i.to_dict() for i in self.vault.values()], potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -1634,7 +1716,16 @@ class Game:
         g.sacrifice_stress = d.get("sacrifice_stress", 0.0)
         g.vault = {i["uid"]: items_mod.Item.from_dict(i) for i in d.get("vault", [])}
         g.next_item_id = d.get("next_item_id", 1)
-        g.potions = {k: v for k, v in d.get("potions", {}).items() if v > 0}
+        g.potions = {k: v for k, v in d.get("potions", {}).items() if v > 0 and k.split(":")[0] in potions.KINDS}
+        g.potion_peak = {k: max(v, g.potions.get(k, 0)) for k, v in d.get("potion_peak", {}).items()}
+        for k, v in g.potions.items():
+            g.potion_peak[k] = max(g.potion_peak.get(k, 0), v)
+        g.autonomy = d.get("autonomy", True)
+        if g.wallet.get("herb"):                              # v10 saves had one kind of herb: share it out
+            n = g.wallet.get("herb")
+            g.wallet.add("herb", -n)
+            for i, color in enumerate(config.HERBS):
+                g.wallet.add(potions.herb_key(color), n // 4 + (1 if i < n % 4 else 0))
         spells.load_custom(d.get("custom_spells", []))
         g.library.discovered = {k for k in d.get("discovered", []) if k in ABILITIES}
         for sd in d.get("slimes", []):

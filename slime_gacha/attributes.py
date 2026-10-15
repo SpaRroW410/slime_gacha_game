@@ -82,6 +82,9 @@ def battle_mods(slime) -> Dict[str, float]:
     out: Dict[str, float] = {}
     for a in star_attributes(slime):
         out[a["key"]] = out.get(a["key"], 0.0) + a["value"]
+    from . import potions                      # local import: potions -> config only, but keep the layers loose
+    for k, v in potions.combat_mods(getattr(slime, "buffs", [])).items():
+        out[k] = out.get(k, 0.0) + v
     return out
 
 

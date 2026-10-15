@@ -3,7 +3,7 @@
 
 const LS_KEY = 'slimegacha.save.v1';
 const CLASS_COLORS = { barbarian: '#e5604d', mage: '#8a7cff', medic: '#4cc38a', rogue: '#aab2c0', ranger: '#e0b341', necromancer: '#a56bd1' };
-const RES = { white_gel: ['⚪', 'White gel'], purple_gel: ['🟣', 'Purple gel'], food: ['🍖', 'Food'], essence: ['✨', 'Essence'], herb: ['🌿', 'Herb'], scrap: ['🔩', 'Scrap'], alloy: ['🪙', 'Alloy'], crystal: ['💠', 'Crystal'], stardust: ['🌟', 'Stardust'], voidglass: ['🕳️', 'Voidglass'],
+const RES = { white_gel: ['⚪', 'White gel'], purple_gel: ['🟣', 'Purple gel'], food: ['🍖', 'Food'], essence: ['✨', 'Essence'], herb_green: ['🟢🌿', 'Green herb (health)'], herb_red: ['🔴🌿', 'Red herb (strength)'], herb_blue: ['🔵🌿', 'Blue herb (armor)'], herb_yellow: ['🟡🌿', 'Yellow herb (stamina)'], scrap: ['🔩', 'Scrap'], alloy: ['🪙', 'Alloy'], crystal: ['💠', 'Crystal'], stardust: ['🌟', 'Stardust'], voidglass: ['🕳️', 'Voidglass'],
   stone_common: ['⚪💎', 'Common stone'], stone_uncommon: ['🟢💎', 'Uncommon stone'], stone_rare: ['🔵💎', 'Rare stone'], stone_epic: ['🟣💎', 'Epic stone'], stone_legendary: ['🟡💎', 'Legendary stone'] };
 const CORE_RES = ['white_gel', 'purple_gel', 'food', 'essence'];
 const NEED_NAME = { energy: 'Energy', food: 'Food', safety: 'Safety', belonging: 'Belonging', esteem: 'Esteem' };
@@ -490,13 +490,17 @@ function town() {
       ${bar(b.level, b.max)}<p>${esc(b.now)}</p>
       ${b.cost ? `<p class="mute">Next: ${esc(b.nxt)}</p><button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="${b.key}" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade · ${cost(b.cost)}</button>` : '<p class="chip ok">Max level</p>'}</div>`).join('')}</div>
   <div class="panel stack" style="margin-top:12px"><h2>⚗️ Alchemy Lab <small class="mute">(level ${st.potions.lab}: brews up to grade ${st.potions.lab})</small></h2>
-    <p class="mute">A slime brews potions from 🌿 herbs (the daily Pit drops plenty; other dungeons a few). A potion raises one attribute for a while; the <b>stamina potion</b> raises max stamina and makes it recover much faster. A better lab and a magical brewer (medics and necromancers have a knack) improve the odds; failures lose the gel and half the herbs.</p>
+    <p class="mute">A slime brews potions from coloured herbs: 🟢 <b>green</b> = health, 🔴 <b>red</b> = strength, 🔵 <b>blue</b> = armor, 🟡 <b>yellow</b> = stamina. Each makes its basic potion; <b>two different herbs combine</b> into a further attribute (lifesteal, guard, regeneration, magic, crit, speed & evasion). The daily Pit's terrain decides which herb is plentiful; other dungeons drop a few. A magical brewer (medics and necromancers have a knack) and a roomy lab improve the odds; failures lose the gel and half the herbs.</p>
+    <div class="row">${Object.entries(st.potions.herbs).map(([c, n]) => chip(`${RES['herb_' + c][0]} ${n}`)).join('')}</div>
     <div class="row"><label class="f">Brewer <select data-ui="brewer">${st.slimes.filter((x) => !x.busy).map((x) => `<option value="${x.id}">${esc(x.name)} (${esc(x.class_name)})</option>`).join('')}</select></label>
-      <label class="f">Potion <select data-ui="brew_kind">${st.potions.kinds.map((k) => `<option value="${k.key}" ${k.key === ui('brew_kind', 'stamina') ? 'selected' : ''}>${k.emoji} ${esc(k.name)}</option>`).join('')}</select></label>
+      <label class="f">Potion <select data-ui="brew_kind" data-rerender="1">${st.potions.kinds.map((k) => `<option value="${k.key}" ${k.key === ui('brew_kind', 'stamina') ? 'selected' : ''}>${k.emoji} ${esc(k.name)} — ${esc(k.effect)}</option>`).join('')}</select></label>
       <label class="f">Grade <select data-ui="brew_grade" data-rerender="1">${st.potions.grades.map((g) => `<option value="${g.grade}" ${g.grade == ui('brew_grade', 1) ? 'selected' : ''} ${g.grade > st.potions.lab ? 'disabled' : ''}>${g.grade}</option>`).join('')}</select></label>
-      <button class="btn primary" data-act="brew" ${(() => { const g = st.potions.grades[num(ui('brew_grade', 1)) - 1]; return affordable(g.cost) && num(ui('brew_grade', 1)) <= st.potions.lab ? '' : 'disabled'; })()}>Brew · ${cost(st.potions.grades[num(ui('brew_grade', 1)) - 1].cost)} · ${st.potions.grades[num(ui('brew_grade', 1)) - 1].brew_hours}h</button></div>
+      ${(() => { const k = st.potions.kinds.find((x) => x.key === ui('brew_kind', 'stamina')) || st.potions.kinds[0]; const gr = num(ui('brew_grade', 1), 1); const c = k.costs[gr - 1];
+        return `<button class="btn primary" data-act="brew" ${affordable(c) && gr <= st.potions.lab ? '' : 'disabled'}>Brew · ${cost(c)} · ${st.potions.grades[gr - 1].brew_hours}h</button>`; })()}</div>
     <small class="mute">Grades: ${st.potions.grades.map((g) => `${g.grade}: +${Math.round(g.bonus * 100)}% for ${g.hours}h`).join(' · ')}</small>
-    <div class="row">${st.potions.stock.map((p) => chip(`${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}`, 'info')).join('') || '<small class="mute">No potions yet.</small>'}</div></div>
+    <div class="row">${st.potions.stock.map((p) => chip(`${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}`, 'info')).join('') || '<small class="mute">No potions yet.</small>'}</div>
+    <div class="row"><button class="btn small ${st.potions.autonomy ? 'primary' : ''}" data-act="autonomy">🤖 Slime autonomy: ${st.potions.autonomy ? 'on' : 'off'}</button>
+      <small class="mute">When on, slimes help themselves to up to ${Math.round(st.potions.autonomy_share * 100)}% of your potions (tired ones drink stamina, hurt ones vigor, class-suited potions before a trip) and mend worn gear with up to ${Math.round(st.potions.autonomy_share * 100)}% of your scrap — the rest is yours.</small></div></div>
   <div class="grid cols2" style="margin-top:12px">
     <div class="panel stack"><h2>🛠️ Armory</h2><p class="mute">Gear is usable by any class. The Armory level limits which tier it sells. Gear also drops in dungeons — but a fallen slime's gear can be lost.</p>
       <table><tbody>${st.gear.shop.map((g) => `<tr><td>${g.emoji} <b>${esc(g.name)}</b><br><small class="mute">T${g.tier} ${g.slot} · ${stat(g.stats)}</small></td><td>${cost(g.cost)}</td>
@@ -591,6 +595,7 @@ const A = {
   brew: () => act('brew', { id: num(ui('brewer', S.state.slimes.find((x) => !x.busy)?.id)), kind: ui('brew_kind', 'stamina'), grade: num(ui('brew_grade', 1), 1) }, { slow: true }),
   use_potion: () => { const [kind, grade] = String(ui('pot_sel', S.state.potions.stock[0] ? S.state.potions.stock[0].kind + ':' + S.state.potions.stock[0].grade : ':')).split(':'); act('use_potion', { id: S.sel, kind, grade: num(grade) }); },
   slime_repair: () => act('slime_repair', { id: S.sel }),
+  autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
   adv_lure: () => { S.ui.adv_lure = !ui('adv_lure', false); render(); },
   adv_toggle: (d) => { const ids = new Set((ui('adv_ids', []) || []).map(num)); const id = num(d.id); ids.has(id) ? ids.delete(id) : ids.add(id); S.ui.adv_ids = [...ids].slice(0, S.state.gear.adventure.max_party); render(); },
   adventure: () => { const ids = (ui('adv_ids', []) || []).map(num); const runs = num(ui('adv_runs', 5), 5);

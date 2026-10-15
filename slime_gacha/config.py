@@ -17,7 +17,7 @@ VARIANCE = 0.10         # +/- per-slime stat roll
 
 # ---- Economy --------------------------------------------------------------
 # WHITE gel = common currency, PURPLE gel = rare currency (boosts rare pulls). Both buy pulls 1:1.
-RESOURCES = ["white_gel", "purple_gel", "food", "essence", "herb", "scrap", "alloy", "crystal", "stardust", "voidglass",
+RESOURCES = ["white_gel", "purple_gel", "food", "essence", "herb_green", "herb_red", "herb_blue", "herb_yellow", "scrap", "alloy", "crystal", "stardust", "voidglass",
              "stone_common", "stone_uncommon", "stone_rare", "stone_epic", "stone_legendary"]       # add a name here to add a resource
 STARTING_WALLET = {"white_gel": 100, "purple_gel": 10, "food": 15, "essence": 0}
 MATERIAL_OF = {"common": "scrap", "uncommon": "alloy", "rare": "crystal", "epic": "stardust", "legendary": "voidglass"}   # crafting materials
@@ -218,7 +218,7 @@ OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 10
+SAVE_VERSION = 11
 DEFAULT_SAVE = "savegame.json"
 
 
@@ -290,3 +290,16 @@ PROFICIENCY_BONUS = 0.03         # weapon stats +3% per proficiency level
 FAVOURITE_COMPAT = 12            # compatibility bonus for a slime's favourite weapon family
 BOND_MORALE_AT = 20              # a weapon bonded this far lifts its wielder's morale after each fight
 SLIME_REPAIR_HOURS = 1
+
+# ---- coloured herbs & slime autonomy ---------------------------------------------------------------------------------------
+HERBS = ("green", "red", "blue", "yellow")      # health, strength, armor, stamina
+TERRAIN_HERB = {"valley": "green", "plains": "green", "swamp": "green", "volcano": "red", "barrens": "red",
+                "ruins": "red", "islands": "blue", "tundra": "blue", "caverns": "blue", "dunes": "yellow",
+                "canyon": "yellow", "cliffs": "yellow"}
+HERB_LOCAL_SHARE = 0.7           # share of herbs that match the terrain's colour (the rest is random)
+POTION_COMBO_SHARE = 0.6         # a two-herb potion needs this share of the herbs of each colour
+AUTONOMY_SHARE = 0.66            # slimes may use up to this share of a stock by themselves (the rest is yours)
+AUTONOMY_STAMINA_BELOW = 0.35    # a tired slime drinks a stamina potion by itself
+AUTONOMY_HP_BELOW = 0.5
+AUTONOMY_REPAIR_BELOW = 0.35     # a slime mends its own gear when durability is below this share
+AUTONOMY_MAX_BUFFS = 2           # potions a slime drinks by itself before a trip

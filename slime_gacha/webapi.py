@@ -130,11 +130,14 @@ def snapshot(g: Game) -> dict:
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
         potions=dict(stock=[dict(kind=k.split(':')[0], grade=int(k.split(':')[1]), n=n) for k, n in sorted(g.potions.items())],
-                     kinds=[dict(key=p.key, name=p.name, emoji=p.emoji, effect=p.effect) for p in potions_mod.KINDS.values()],
+                     kinds=[dict(key=p.key, name=p.name, emoji=p.emoji, effect=p.effect, herbs=list(p.herbs),
+                                 costs=[potions_mod.cost(p.key, i + 1) for i in range(5)])
+                            for p in potions_mod.KINDS.values()],
                      lab=g.buildings.level("alchemy"),
                      grades=[dict(grade=i + 1, bonus=potions_mod.bonus(i + 1), hours=potions_mod.hours(i + 1),
-                                  cost=potions_mod.cost(i + 1), brew_hours=potions_mod.brew_hours(i + 1))
-                             for i in range(5)]),
+                                  brew_hours=potions_mod.brew_hours(i + 1)) for i in range(5)],
+                     herbs={c: g.wallet.get(potions_mod.herb_key(c)) for c in config.HERBS},
+                     autonomy=g.autonomy, autonomy_share=config.AUTONOMY_SHARE),
         ascension=dict(stones={r: g.wallet.get(ascension.stone_key(r)) for r in config.RARITIES},
                        total=ascension.stone_total(g.wallet), values={r: ascension.stone_value(r) for r in config.RARITIES},
                        rarity_gel=config.RARITY_ASCEND_GEL, star_stones=config.STAR_ASCEND_STONES,
@@ -463,6 +466,11 @@ def _destroy_slime(g, a):
 def _quarry(g, a):
     r = g.quarry([int(x) for x in a.get("ids", [])], _i(a, "runs", 1))
     return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
+@command("autonomy")
+def _autonomy(g, a):
+    return _msg(g.set_autonomy(bool(a.get("on", True))))
 
 
 @command("brew")
