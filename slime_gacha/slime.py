@@ -89,6 +89,9 @@ class Slime:
         self.emotion_floor: Dict[str, float] = {} # permanent undercurrents (see awakening.py)
         self.awareness = 0.0                      # 5-star legendaries realise they are code (see awakening.py)
         self.temperament = ""                     # how an awakened slime took it: accept | despair
+        self.parents: List[int] = []              # lineage: ids of the two parents (budding)
+        self.parent_names: List[str] = []
+        self.generation = 0
         self.stamina_frac = 1.0                   # stamina as a fraction of max (see attributes.py)
         self.buffs: List[dict] = []               # potion effects: {kind, grade, bonus, hours}
         self.proficiency: Dict[str, int] = {}     # weapon family -> uses (see items.FAMILIES)
@@ -208,7 +211,8 @@ class Slime:
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
                     merged=self.merged, grounded=self.grounded, style_xp=self.style_xp, morale=self.morale,
-                    gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, buffs=self.buffs, emotions=self.emotions,
+                    gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, buffs=self.buffs, parents=self.parents, parent_names=self.parent_names,
+                    generation=self.generation, emotions=self.emotions,
                     emotion_floor=self.emotion_floor, awareness=self.awareness, temperament=self.temperament,
                     proficiency=self.proficiency, weapon_memory=self.weapon_memory, in_dungeon=self.in_dungeon, progress=self.progress, exp=self.exp, spec=self.spec, spec_disc=self.spec_disc,
                     attuned=self.attuned, mastery_xp=self.mastery_xp, spells=self.spells,
@@ -219,7 +223,7 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task"):
+                  "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task"):
             if k in d:
                 setattr(s, k, d[k])
         s.items = {k: Item.from_dict(v) for k, v in (d.get("items") or {}).items()}

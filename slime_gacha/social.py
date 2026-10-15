@@ -38,13 +38,14 @@ class SocialEngine:
         self.conflicts = conflicts
         self.buildings = buildings
         self.bonds: Dict[frozenset, float] = {}
+        self.bond_boost = 1.0            # Keeper skill: bonds grow faster
 
     # ---- bonds ---------------------------------------------------------------------
     def bond(self, a, b) -> float:
         return self.bonds.get(pair(a, b), 0.0)
 
     def add_bond(self, a, b, amount: float) -> None:
-        amount = amount * self.buildings.bond_mult() if amount > 0 else amount
+        amount = amount * self.buildings.bond_mult() * self.bond_boost if amount > 0 else amount
         k = pair(a, b)
         self.bonds[k] = max(config.BOND_MIN, min(config.BOND_MAX, self.bonds.get(k, 0.0) + amount))
 

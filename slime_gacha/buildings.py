@@ -73,6 +73,7 @@ class BuildingManager:
     def __init__(self, wallet: ResourceManager):
         self.wallet = wallet
         self.levels: Dict[str, int] = {b.key: b.start_level for b in BUILDINGS}
+        self.discount = 0.0              # Keeper skill (Thrifty)
 
     # ---- generic ---------------------------------------------------------------
     def level(self, key: str) -> int:
@@ -80,7 +81,9 @@ class BuildingManager:
 
     def next_cost(self, key: str):
         b, lv = BUILDINGS.get(key), self.level(key)
-        return None if lv >= b.max_level else dict(b.upgrade_costs[lv - 1])
+        if lv >= b.max_level:
+            return None
+        return {k: max(1, int(v * (1 - self.discount))) for k, v in b.upgrade_costs[lv - 1].items()}
 
     def upgrade(self, key: str) -> str:
         b = BUILDINGS.get(key)

@@ -25,6 +25,7 @@ MENU = """
  [7] Wait (time)      [8] Parties            [9] Dungeons / battles
  [t] Sparring arenas (fighting styles)   [l] Library & spell lab   [r] Rest Area
  [b] Buildings (upgrade)   [k] Council   [i] Inventory & Armory   [w] Wayfarer's Rift & relics   [o] Ascension, Quarry & Chamber
+ [y] Keeper skills   [h] Bonds & family tree
  [m] Merge  [e] Evolve  [c] Conflicts  [a] Auto-care  [j] Journal  [x] Graveyard  [s] Save  [q] Quit
 """
 
@@ -470,6 +471,44 @@ def ascension_menu(g: Game) -> None:
             print("\n".join("  " + x for x in g.destroy_slime(sid)))
 
 
+def keeper_menu(g: Game) -> None:
+    from . import keeper as km
+    k = g.keeper
+    print(f"  {km.title(k.level)} - level {k.level}, xp {k.xp}/{km.xp_to_next(k.level)}, {k.points} skill point(s)")
+    for b, (name, emoji) in km.BRANCHES.items():
+        print(f"  {emoji} {name}")
+        for sk in (x for x in km.SKILLS.values() if x.branch == b):
+            print(f"     {sk.key:<15} {sk.emoji}{sk.name:<14} rank {k.rank(sk.key)}/{sk.max_rank}  (lvl {sk.level}+)  {sk.per_rank}")
+        for a in (x for x in km.ACTIVES.values() if x.branch == b):
+            state = "ready" if k.ready(a.key, g.day) else "locked" if not k.unlocked(a.key) else "recovering"
+            print(f"     [active] {a.key:<10} {a.emoji}{a.name:<16} {state}: {a.desc}")
+    c = _ask("[l]earn a skill / [u]se an ability / enter: ").lower()[:1]
+    if c == "l":
+        print("  " + g.keeper_learn(_ask("skill key: ")))
+    elif c == "u":
+        print("  " + g.keeper_use(_ask("ability key: ")))
+
+
+def bonds_menu(g: Game) -> None:
+    t = g.family_tree()
+    from . import relationships as rl
+    for kind in rl.KINDS:
+        for x in t["ties"][kind]:
+            extra = f" (bud in {x['bud_in']}d)" if kind == "couple" else ""
+            print(f"  {rl.EMOJI[kind]} {rl.LABEL[kind]:<16} {x['a_name']} & {x['b_name']}  bond {x['bond']}{extra}")
+
+    def show(u, d=0):
+        print("  " + "   " * d + "👪 " + " & ".join(u["names"]))
+        for c in u["children"]:
+            print("  " + "   " * (d + 1) + ("" if c["alive"] else "(gone) ") + c["name"])
+            for f in c["families"]:
+                show(f, d + 2)
+    for r in t["families"]:
+        show(r)
+    if _ask("[b]ud (have a child) / enter: ").lower().startswith("b"):
+        print("\n".join("  " + x for x in g.bud(_int("parent id: "), _int("partner id: "))))
+
+
 def party_menu(g: Game) -> None:
     show_parties(g)
     act = _ask("[n]ew / [a]dd slime / [r]emove slime / [f]ill with best free / [d]isband / [z] rest party (Rest Area): ").lower()[:1]
@@ -574,6 +613,10 @@ def handle(g: Game, choice: str) -> bool:
         rift_menu(g)
     elif choice == "o":
         ascension_menu(g)
+    elif choice == "y":
+        keeper_menu(g)
+    elif choice == "h":
+        bonds_menu(g)
     elif choice == "l":
         library_menu(g)
     elif choice == "x":

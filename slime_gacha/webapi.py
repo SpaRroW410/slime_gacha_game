@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import ascension, attributes, awakening, emotions, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import ascension, attributes, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -51,6 +51,9 @@ def slime_view(g: Game, s) -> dict:
         feeling_effects={k: round(100 * (m - 1)) for k, m in emotions.modifiers(s)[0].items() if abs(m - 1) >= 0.01},
         awareness=(dict(stage=awakening.stage(s), name=awakening.STAGE_NAME[awakening.stage(s)],
                         points=round(s.awareness, 1), temperament=s.temperament) if awakening.candidate(s) else None),
+        relations=[dict(other=r["other"], kind=r["kind"], since=r["since"], mentor=r.get("mentor"))
+                   for r in g.relations.of(s.id)],
+        parents=list(s.parents), parent_names=list(s.parent_names), generation=s.generation,
         merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
         stamina=s.stamina, max_stamina=s.max_stamina, buffs=[dict(b) for b in s.buffs],
         star_attrs=attributes.star_attributes(s),
@@ -144,6 +147,19 @@ def snapshot(g: Game) -> dict:
                                   brew_hours=potions_mod.brew_hours(i + 1)) for i in range(5)],
                      herbs={c: g.wallet.get(potions_mod.herb_key(c)) for c in config.HERBS},
                      autonomy=g.autonomy, autonomy_share=config.AUTONOMY_SHARE),
+        keeper=dict(level=g.keeper.level, xp=g.keeper.xp, xp_next=keeper_mod.xp_to_next(g.keeper.level),
+                    title=keeper_mod.title(g.keeper.level), points=g.keeper.points, max_level=config.KEEPER_MAX_LEVEL,
+                    branches={k: dict(name=v[0], emoji=v[1]) for k, v in keeper_mod.BRANCHES.items()},
+                    skills=[dict(key=sk.key, branch=sk.branch, name=sk.name, emoji=sk.emoji, level=sk.level,
+                                 per_rank=sk.per_rank, max_rank=sk.max_rank, rank=g.keeper.rank(sk.key),
+                                 why_not=g.keeper.why_not(sk.key)) for sk in keeper_mod.SKILLS.values()],
+                    actives=[dict(key=a.key, branch=a.branch, name=a.name, emoji=a.emoji, desc=a.desc,
+                                  cooldown_days=a.cooldown_days, needs=keeper_mod.SKILLS[a.needs].name,
+                                  unlocked=g.keeper.unlocked(a.key), ready=g.keeper.ready(a.key, g.day))
+                             for a in keeper_mod.ACTIVES.values()]),
+        family=dict(g.family_tree(), kinds={k: dict(label=relationships.LABEL[k], emoji=relationships.EMOJI[k])
+                                            for k in relationships.KINDS},
+                    bud_cost=config.BUD_COST),
         ascension=dict(stones={r: g.wallet.get(ascension.stone_key(r)) for r in config.RARITIES},
                        total=ascension.stone_total(g.wallet), values={r: ascension.stone_value(r) for r in config.RARITIES},
                        rarity_gel=config.RARITY_ASCEND_GEL, star_stones=config.STAR_ASCEND_STONES,
@@ -472,6 +488,21 @@ def _destroy_slime(g, a):
 def _quarry(g, a):
     r = g.quarry([int(x) for x in a.get("ids", [])], _i(a, "runs", 1))
     return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
+@command("keeper_learn")
+def _keeper_learn(g, a):
+    return _msg(g.keeper_learn(a.get("key", "")))
+
+
+@command("keeper_use")
+def _keeper_use(g, a):
+    return _msg(g.keeper_use(a.get("key", "")))
+
+
+@command("bud")
+def _bud(g, a):
+    return g.bud(_i(a, "a"), _i(a, "b")), {}
 
 
 @command("talk")

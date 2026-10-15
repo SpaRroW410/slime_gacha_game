@@ -218,7 +218,7 @@ OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 12
+SAVE_VERSION = 13
 DEFAULT_SAVE = "savegame.json"
 
 
@@ -310,3 +310,21 @@ THOUGHT_CHANCE = 0.04            # per hour, once aware
 AUTONOMY_BREW_HOUR = 6           # slimes may brew by themselves once a day at this hour
 AUTONOMY_BREW_STOCK = 2          # ... when they hold fewer than this many of a class-suited potion
 EMOTION_BATTLE_NOTE = 40         # intensity at which a feeling is mentioned in the battle log
+
+# ---- relationships & budding (relationships.py) -----------------------------------------------------------------------------
+FRIEND_BOND, BEST_FRIEND_BOND, COUPLE_BOND = 25, 45, 40
+COUPLE_CHANCE = 0.20             # per day for a suitable pair
+MENTOR_CHANCE = 0.30
+MENTOR_XP = 0.10                 # a mentee fighting beside its mentor earns this much extra XP
+RELATIONS_HOUR = 12              # relationships are reviewed once a day at this hour
+BUD_COST = {"food": 20, "essence": 10, "white_gel": 50}
+BUD_COOLDOWN_DAYS = 10
+BUD_MIN_DAYS = 3                 # a couple must be together this long
+BUD_TOP_PARENT = 0.35            # chance the child takes the better parent's rarity (else the lower)
+BUD_BLESSING = 0.03              # chance of one rarity above both parents
+
+# ---- the Keeper (keeper.py) ---------------------------------------------------------------------------------------------------
+KEEPER_MAX_LEVEL = 30
+KEEPER_XP = {"pull": 2, "care": 1, "win": 3, "boss": 12, "mediate": 4, "brew": 3, "forge": 2, "ascend": 6,
+             "relation": 5, "bud": 25, "floor": 4, "scout": 10, "merge": 2, "quarry": 2}
+KEEPER_DAILY_CAP = {"care": 10, "win": 45, "pull": 12, "forge": 10}

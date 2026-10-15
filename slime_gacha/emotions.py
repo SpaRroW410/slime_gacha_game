@@ -94,7 +94,7 @@ def soothe(slime, key: str, amount: float) -> None:
     feel(slime, key, -abs(amount))
 
 
-def tick(slime, rng: random.Random, sleeping: bool = False) -> None:
+def tick(slime, rng: random.Random, sleeping: bool = False, fade: float = 1.0) -> None:
     """One hour: feelings fade (faster asleep) and needs stir new ones."""
     n = slime.needs
     drift = []
@@ -121,7 +121,8 @@ def tick(slime, rng: random.Random, sleeping: bool = False) -> None:
     mult = 2.0 if sleeping else 1.0
     floor = getattr(slime, "emotion_floor", {})
     for k in list(slime.emotions):
-        slime.emotions[k] = max(floor.get(k, 0.0), slime.emotions[k] - EMOTIONS[k].decay * mult)
+        f = fade if EMOTIONS[k].kind == "bad" else 1.0
+        slime.emotions[k] = max(floor.get(k, 0.0), slime.emotions[k] - EMOTIONS[k].decay * mult * f)
         if slime.emotions[k] < 1:
             slime.emotions.pop(k)
     for k, f in floor.items():                                    # a permanent undercurrent (see awakening.py)

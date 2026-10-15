@@ -136,24 +136,24 @@ Legend: `[x]` done · `[ ]` todo
 - [ ] More spec paths (three-way hybrids, evolution of specs), outlook-driven behaviours (slimes ask for jobs)
 - [ ] Rescue parties for scouts that are overdue
 - [ ] Construction time for upgrades; more buildings (Pantry, Hatchery)
-- [ ] Rivalries and mentorships as explicit relationships; couples -> new slimes
+- [x] Rivalries and mentorships as explicit relationships; couples -> new slimes (M18)
 - [ ] Enemy resistances beyond one element; elemental dungeon floors
 - [ ] Spell mutation / evolving fused spells with mastery
 - [ ] Hybrid class abilities (e.g. Barbarian fire-axe imbue as a status)
 - [ ] Named dungeon registry (add dungeons as data)
-- [ ] Gear crafting / enchanting, set bonuses
+- [~] Gear crafting / enchanting done (relic forge, mods); set bonuses still todo
 - [ ] Several delves at once (one party per dungeon) with rescue parties
 - [ ] Floor modifiers (poison fog, darkness) and shops between floors
 - [ ] Retreat / checkpoint mid-descent
 - [ ] Real-clock daily free pull (wall-time) as an option
 - [ ] Resurrection items / Necromancer "revive" ability
-- [ ] Star-up by merging duplicates
+- [x] Star-up (done as stone-based star ascension, M16)
 - [ ] Formations and front/back rows
 - [ ] Offline progress by wall-clock time
 - [ ] More classes: Bard, Paladin, Alchemist, Druid (via registry)
-- [ ] Equipment / items
+- [x] Equipment / items (relics, M15)
 - [ ] Campaign chapters from `STORY.md`
-- [ ] Slime relationships tree (best friends, rivals, couples → "budding" new slimes)
+- [x] Slime relationships tree (best friends, rivals, couples -> budding) (M18)
 - [ ] Art pass: sprite sheets / animated slimes instead of CSS blobs, sound effects
 - [ ] PWA manifest + service worker for installable offline play
 - [ ] Web worker for Pyodide so long Pit sessions never block the UI
@@ -200,3 +200,12 @@ Legend: `[x]` done · `[ ]` todo
 - [x] 5-star legendaries awaken: they realise they are code (accept / despair)
 - [x] Autonomy covers relics, gear and brewing
 - [ ] Art & sound (after floor 50)
+
+## M18 — Relationships, budding & the Keeper
+- [x] Explicit ties: friend, best friend, rival, mentor/mentee, couple (daily review)
+- [x] Ties affect synergy, pre-battle feelings, mentee XP and grief
+- [x] Budding: couples have children; lineage and family tree
+- [x] Keeper levels, XP sources with daily caps
+- [x] 16 Keeper skills in 4 branches, 4 daily abilities
+- [x] Web Bonds and Keeper tabs, CLI [y] and [h]
+- [ ] Keeper achievements / titles, skill respec
