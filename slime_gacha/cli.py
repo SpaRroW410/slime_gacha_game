@@ -423,7 +423,7 @@ def ascension_menu(g: Game) -> None:
     print(f"  Potions: {dict(g.potions) or 'none'}   herbs " + ", ".join(f"{c} {g.wallet.get('herb_' + c)}" for c in config.HERBS) + f"   autonomy {'on' if g.autonomy else 'off'}")
     print("  [r] Ascend rarity (white gel)   [s] Ascend star (stones)   [m] Merge stones up   "
           "[q] Starfall Quarry   [d] Destroy in the chamber\n  [b] Brew a potion   [p] Drink a potion   "
-          "[f] Slime repairs its gear   [v] Slime vitals (stamina, attributes)   [z] Toggle slime autonomy (66%)")
+          "[f] Slime repairs its gear   [v] Slime vitals (stamina, attributes)   [z] Toggle slime autonomy (66%)   [t] Talk to a slime")
     c = _ask("ascension: ").lower()[:1]
     if c == "r":
         show_roster(g)
@@ -446,6 +446,8 @@ def ascension_menu(g: Game) -> None:
         print("  " + g.use_potion(_int("slime id: "), _ask("kind: "), _int("grade: ")))
     elif c == "f":
         print("\n".join("  " + x for x in g.slime_repair(_int("slime id: "))))
+    elif c == "t":
+        print("  " + g.talk(_int("slime id: ")))
     elif c == "z":
         print("  " + g.set_autonomy(not g.autonomy))
     elif c == "v":
@@ -455,6 +457,11 @@ def ascension_menu(g: Game) -> None:
         print("  star attributes: " + (", ".join(f"{a['label']} +{a['value']:.0%}" for a in attributes.star_attributes(s)) or "none"))
         print("  rarity skills: " + (", ".join(get_ability(k).name for k in attributes.rarity_skills(s)) or "none"))
         print(f"  weapons: remembers {s.weapon_memory}, proficiency {s.proficiency}")
+        from . import awakening, emotions
+        print("  feelings: " + (", ".join(f"{emotions.EMOTIONS[k].emoji}{emotions.EMOTIONS[k].name} {int(v)}"
+                                         for k, v in emotions.dominant(s, 5)) or "calm"))
+        if awakening.candidate(s):
+            print(f"  awareness: {awakening.STAGE_NAME[awakening.stage(s)]} ({s.awareness:.0f}/100) {s.temperament}")
     elif c == "d":
         show_roster(g)
         sid = _int("slime id: ")

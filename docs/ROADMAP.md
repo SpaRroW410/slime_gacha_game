@@ -193,3 +193,10 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Potions: Alchemy Lab, grades 1-5, temporary boosts, stamina potion, herbs
 - [x] Four coloured herbs, combination potions, terrain-driven herb drops
 - [x] Slime autonomy: 66% of stocks usable without asking
+
+## M17 — Emotions & awakening
+- [x] Thirteen emotions with battle effects (anger +ATK -DEF, sadness -SPD ...)
+- [x] Events, needs and traits drive feelings; they fade; own RNG
+- [x] 5-star legendaries awaken: they realise they are code (accept / despair)
+- [x] Autonomy covers relics, gear and brewing
+- [ ] Art & sound (after floor 50)

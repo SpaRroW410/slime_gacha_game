@@ -218,7 +218,7 @@ OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 11
+SAVE_VERSION = 12
 DEFAULT_SAVE = "savegame.json"
 
 
@@ -303,3 +303,10 @@ AUTONOMY_STAMINA_BELOW = 0.35    # a tired slime drinks a stamina potion by itse
 AUTONOMY_HP_BELOW = 0.5
 AUTONOMY_REPAIR_BELOW = 0.35     # a slime mends its own gear when durability is below this share
 AUTONOMY_MAX_BUFFS = 2           # potions a slime drinks by itself before a trip
+
+# ---- emotions & awakening, wider autonomy (emotions.py, awakening.py) ------------------------------------------------------
+AWARENESS_PER_HOUR = 0.25        # a 5-star legendary: stage 1 at ~4 days, 2 at ~10, 3 at ~17
+THOUGHT_CHANCE = 0.04            # per hour, once aware
+AUTONOMY_BREW_HOUR = 6           # slimes may brew by themselves once a day at this hour
+AUTONOMY_BREW_STOCK = 2          # ... when they hold fewer than this many of a class-suited potion
+EMOTION_BATTLE_NOTE = 40         # intensity at which a feeling is mentioned in the battle log

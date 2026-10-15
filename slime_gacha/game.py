@@ -12,7 +12,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
+from . import awakening, emotions, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
@@ -85,6 +85,9 @@ class Game:
         self.pit_lost: List[str] = []                  # gear left behind in the Gloop Pit
         self.potions: Dict[str, int] = {}              # 'kind:grade' -> count
         self.potion_peak: Dict[str, int] = {}          # most of each ever held: slimes leave 34% of it alone
+        self.mood_rng = random.Random(((seed or 0) ^ 0xE70) & 0xFFFFFFFF)   # feelings never disturb the main dice
+        self.vault_peak = 0                            # relics: slimes leave 34% of the most ever held
+        self.gear_peak: Dict[str, int] = {}
         self.autonomy = True                           # slimes may use up to 66% of the stock by themselves
         self.vault: Dict[int, items_mod.Item] = {}     # unequipped relics (see items.py)
         self.next_item_id = 1
@@ -139,10 +142,30 @@ class Game:
             self.conflicts.tick(self.slimes(), events)
             self._reap(events)
             self._stamina_tick()
+            self._emotion_tick(events)
             self._autonomy_tick(events)
         self.journal.extend(events)
         self.journal = self.journal[-200:]
         return events
+
+    def _emotion_tick(self, events: List[str]) -> None:
+        """Feelings fade and are stirred by needs; legendary 5-star slimes slowly realise they are code."""
+        for s in self.slimes():
+            emotions.tick(s, self.mood_rng, s.state in ("sleeping", "resting"))
+            if awakening.candidate(s):
+                friends = sum(1 for k, v in self.social.bonds.items() if s.id in k and v >= 20)
+                friends += sum(1 for f in self.conflicts.friends if s.id in f)
+                awakening.tick(s, self.mood_rng, friends, events)
+
+    def talk(self, sid: int) -> str:
+        """Ask a slime how it feels. Aware legendaries may say something unsettling."""
+        s = self.slime(sid)
+        line = awakening.thought(s, self.mood_rng) if awakening.stage(s) and self.mood_rng.random() < 0.6 else None
+        line = line or emotions.say(s, self.mood_rng)
+        top = emotions.dominant(s, 1)
+        feel = f" ({emotions.EMOTIONS[top[0][0]].emoji} {emotions.EMOTIONS[top[0][0]].name.lower()})" if top else ""
+        emotions.feel(s, "affection", 3)
+        return f'{s.name}{feel}: "{line}"'
 
     def _stamina_tick(self) -> None:
         """Stamina refills by the hour (faster asleep); potions wear off."""
@@ -176,6 +199,13 @@ class Game:
             self.social.forget(s.id)
             for o in self.slimes():                      # grief: friends hurt more
                 o.needs.add("belonging", -25 if o.id in friends else -8)
+                emotions.feel(o, "sadness", 35 if o.id in friends else 8)
+                if o.id in friends:
+                    emotions.feel(o, "anger", 15)
+                    emotions.feel(o, "guilt", 8)
+                emotions.feel(o, "fear", 6)
+                if awakening.candidate(o):
+                    o.awareness += 2.0
                 self.social.shift_morale(o, config.MORALE_FRIEND_DEATH if o.id in friends
                                          else config.MORALE_ALLY_DEATH)
             events.append(f"🪦 {s.name} the {s.title()} (Lv{s.level}) has died: {cause}.")
@@ -202,6 +232,8 @@ class Game:
         self.wallet.spend("food", 1)
         s.needs.add("food", config.FOOD_NUTRITION)
         s.needs.add("belonging", 3)
+        emotions.feel(s, "joy", 6)
+        emotions.soothe(s, "anger", 10 if s.needs.get("food") < 60 else 0)
         return f"{s.name} nibbles happily (food {int(s.needs.get('food'))})."
 
     def sleep(self, sid: int) -> str:
@@ -228,6 +260,11 @@ class Game:
         s = self.slime(sid)
         s.needs.add("belonging", 15)
         s.needs.add("esteem", 5)
+        emotions.feel(s, "joy", 12)
+        emotions.feel(s, "affection", 8)
+        emotions.soothe(s, "loneliness", 15)
+        emotions.soothe(s, "anger", 6)
+        awakening.comfort(s)
         return f"You pet {s.name}. Blorp! (mood: {s.mood_label()})"
 
     # ---- hunting -----------------------------------------------------------------
@@ -365,17 +402,27 @@ class Game:
             self.social.add_bond(a, b, -3)
             for s in (a, b):
                 self.social.shift_morale(s, -3)
+                emotions.feel(s, "anger", 18)
         elif kind == "brawl":
             self.social.add_bond(a, b, -10)
             for s in (a, b):
                 self.social.shift_morale(s, -15)
+                emotions.feel(s, "anger", 40)
+                emotions.feel(s, "sadness", 10)
+                emotions.feel(s, "guilt", 8)
         elif kind == "resolved":
             if success:
                 self.social.add_bond(a, b, 10)
                 for s in (a, b):
                     self.social.shift_morale(s, 10)
+                    emotions.feel(s, "calm", 20)
+                    emotions.feel(s, "joy", 12)
+                    emotions.feel(s, "affection", 15)
+                    emotions.soothe(s, "anger", 30)
             else:
                 self.social.add_bond(a, b, -2)
+                for s in (a, b):
+                    emotions.feel(s, "anger", 10)
 
     def compat(self, a_id: int, b_id: int) -> dict:
         a, b = self.slime(a_id), self.slime(b_id)
@@ -455,6 +502,7 @@ class Game:
             if o.id == t.id:
                 base = config.MERGE_MORALE_TARGET            # the survivor carries the guilt
             self.social.shift_morale(o, base * amp)
+            self._mourn_sacrifice(o, o.id in friends, o.id == t.id)
         self.sacrifice_stress += 1.0
         log.append(f"   The colony's morale falls (-{grief} total). Sacrifice stress is now "
                    f"{self.sacrifice_stress:.1f}" + (" - the colony is wearing thin!" if self.sacrifice_stress >= 2 else "."))
@@ -564,6 +612,25 @@ class Game:
         """Morale and bonds react to the outcome (deaths are handled when the dead are reaped)."""
         report.log.extend(self._wear_items(party))
         alive = [s for s in party if s.hp > 0]
+        lost = [s for s in party if s.hp <= 0 or s in report.fallen]
+        if report.victory:
+            for s in alive:
+                emotions.feel(s, "joy", 14 * scale + 4)
+                emotions.feel(s, "pride", (10 + (15 if boss else 0)) * scale + 2)
+                emotions.soothe(s, "fear", 10)
+                emotions.soothe(s, "anxiety", 8)
+                if boss and awakening.candidate(s):
+                    s.awareness += 3.0
+        elif report.winner == "foes":
+            for s in alive:
+                emotions.feel(s, "sadness", 18 * scale + 4)
+                emotions.feel(s, "anger", 12 * scale + 2)
+                emotions.feel(s, "fear", 12 * scale + 2)
+                emotions.feel(s, "determination", 10)
+        for s in alive:
+            if lost and s not in lost:
+                emotions.feel(s, "sadness", 8 * len(lost))
+                emotions.feel(s, "determination", 8)
         if report.victory:
             for s in alive:
                 self.social.shift_morale(s, scale * (config.MORALE_WIN + (config.MORALE_BOSS_WIN if boss else 0)))
@@ -726,7 +793,22 @@ class Game:
         for o in self.slimes():
             base = config.MERGE_MORALE_FRIENDS if o.id in friends else config.MERGE_MORALE_OTHERS
             self.social.shift_morale(o, base * amp)
+            self._mourn_sacrifice(o, o.id in friends, False)
         self.sacrifice_stress += stress
+
+    @staticmethod
+    def _mourn_sacrifice(o: Slime, friend: bool, target: bool) -> None:
+        """Feelings after a merge / chamber / ego fusion: friends grieve and rage, the survivor feels guilty,
+        everyone else wonders whether they are next."""
+        if friend:
+            emotions.feel(o, "sadness", 30)
+            emotions.feel(o, "anger", 20)
+        if target:
+            emotions.feel(o, "guilt", 28)
+            emotions.feel(o, "sadness", 10)
+        else:
+            emotions.feel(o, "fear", 8)
+            emotions.feel(o, "anxiety", 6)
 
     def chamber_preview(self, sid: int) -> Dict[str, int]:
         return ascension.chamber_yield(self.slime(sid), self.buildings.level("chamber"))
@@ -785,11 +867,70 @@ class Game:
                   rogue=("fury", "gale", "might"), ranger=("fury", "gale", "might"),
                   necromancer=("bloodthirst", "arcane", "renewal"))
 
+    def _relic_free(self) -> bool:
+        self.vault_peak = max(self.vault_peak, len(self.vault))
+        return len(self.vault) > math.ceil(self.vault_peak * (1 - config.AUTONOMY_SHARE))
+
+    def _gear_free(self, key: str) -> bool:
+        have = self.inventory.items.get(key, 0)
+        self.gear_peak[key] = peak = max(self.gear_peak.get(key, 0), have)
+        return have > math.ceil(peak * (1 - config.AUTONOMY_SHARE))
+
+    @staticmethod
+    def _relic_score(s: Slime, it) -> float:
+        st = it.stats_for(s)
+        return sum(st.values()) * (1 + 0.5 * sum(m["value"] for m in it.mods) * it.mod_scale())
+
+    def _auto_equip(self, s: Slime, log: List[str]) -> None:
+        """A slime dresses itself from the vault / armory stock: fills empty slots, or swaps for a clearly better
+        relic - but only while at least 34% of what you have ever held is left untouched."""
+        for slot in items_mod.SLOTS:
+            cur, legacy = s.items.get(slot), s.gear.get(slot)
+            cur_score = self._relic_score(s, cur) if cur else (
+                sum(equipment.GEAR.get(legacy).stats.values()) if legacy else 0.0)
+            best, best_sc = None, 0.0
+            for it in self.vault.values():
+                if it.slot != slot or items_mod.can_wield(s, it):
+                    continue
+                sc = self._relic_score(s, it)
+                if sc > best_sc:
+                    best, best_sc = it, sc
+            if best and best_sc > cur_score * 1.25 and (cur is not None or self._relic_free()):
+                log.append("🎒 " + self.equip_item(s.id, best.uid).splitlines()[0])
+                continue
+            if not cur and not legacy:                          # plain armory gear for an empty slot
+                keys = [k for k in self.inventory.items if equipment.GEAR.get(k).slot == slot and self._gear_free(k)]
+                if keys:
+                    k = max(keys, key=lambda k: sum(equipment.GEAR.get(k).stats.values()))
+                    log.append("🎒 " + self.inventory.equip(s, k))
+
+    def _auto_brew(self, log: List[str]) -> None:
+        """Once a day a free slime (magical ones first) brews a potion the colony is short of, spending at most 66%
+        of each ingredient stock."""
+        lab = self.buildings.level("alchemy")
+        free = [s for s in self.slimes() if not s.busy and s.state == "idle" and s.hp > 0]
+        if not free:
+            return
+        brewer = max(free, key=lambda s: s.core_stats()["mag"] + (50 if s.archetype in ("medic", "necromancer") else 0))
+        wanted = []
+        for s in self.slimes():
+            wanted += list(self._LIKES.get(s.archetype, ()))
+        stock = lambda k: sum(n for kk, n in self.potions.items() if kk.split(":")[0] == k)
+        for kind in sorted(set(wanted), key=lambda k: (stock(k), k)):
+            if stock(kind) >= config.AUTONOMY_BREW_STOCK:
+                continue
+            for grade in range(lab, 0, -1):
+                c = potions.cost(kind, grade)
+                if all(v <= self.wallet.get(k) * config.AUTONOMY_SHARE for k, v in c.items()):
+                    log.extend("⚗️ " + x for x in self.brew(brewer.id, kind, grade, wait=False))
+                    return
+
     def _autonomy_prepare(self, members: List[Slime], log: List[str]) -> None:
         """Before a trip the slimes pick the potions that suit their class (a couple each)."""
         if not self.autonomy:
             return
         for s in members:
+            self._auto_equip(s, log)
             n = 0
             for kind in self._LIKES.get(s.archetype, ()):
                 if n >= config.AUTONOMY_MAX_BUFFS:
@@ -809,6 +950,9 @@ class Game:
             if s.hp < s.max_hp * config.AUTONOMY_HP_BELOW:
                 self._auto_drink(s, "vigor", log)
             self._auto_repair(s, log)
+            self._auto_equip(s, log)
+        if self.tick_count % 24 == config.AUTONOMY_BREW_HOUR:
+            self._auto_brew(log)
 
     def _auto_repair(self, s: Slime, log: List[str]) -> None:
         for it in list(s.items.values()):
@@ -823,13 +967,13 @@ class Game:
 
     def set_autonomy(self, on: bool) -> str:
         self.autonomy = bool(on)
-        return "Slimes will help themselves to up to 66% of potions and materials." if on else \
+        return "Slimes will help themselves to up to 66% of potions, relics, gear and materials - and brew on their own." if on else \
             "Slimes will wait for your orders."
 
     def potion_count(self, kind: str, grade: int) -> int:
         return self.potions.get(potions.key(kind, grade), 0)
 
-    def brew(self, sid: int, kind: str, grade: int) -> List[str]:
+    def brew(self, sid: int, kind: str, grade: int, wait: bool = True) -> List[str]:
         """A slime brews a potion in the Alchemy Lab (takes 2 hours per grade). Lab level caps the grade."""
         s = self._free_slime(sid)
         if kind not in potions.KINDS:
@@ -844,11 +988,12 @@ class Game:
         chance = potions.success_chance(s, grade, lab, kind)
         ok = self.rng.random() < chance
         crit = ok and grade < 5 and grade + 1 <= lab and self.rng.random() < config.BREW_CRIT
-        self._set_flag([s], "lab")
-        try:
-            self.tick(potions.brew_hours(grade))
-        finally:
-            self._clear_flag([s])
+        if wait:
+            self._set_flag([s], "lab")
+            try:
+                self.tick(potions.brew_hours(grade))
+            finally:
+                self._clear_flag([s])
         pk = potions.KINDS[kind]
         if not ok:
             self.wallet.add_many({k: v // 2 for k, v in c.items() if k.startswith("herb_")})
@@ -1664,7 +1809,7 @@ class Game:
                     delves={str(k): v for k, v in self.delves.items()},
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
-                    vault=[i.to_dict() for i in self.vault.values()], potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, next_item_id=self.next_item_id,
+                    vault=[i.to_dict() for i in self.vault.values()], potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -1721,6 +1866,9 @@ class Game:
         for k, v in g.potions.items():
             g.potion_peak[k] = max(g.potion_peak.get(k, 0), v)
         g.autonomy = d.get("autonomy", True)
+        g.vault_peak = d.get("vault_peak", 0)
+        g.gear_peak = dict(d.get("gear_peak", {}))
+        g.mood_rng = random.Random((((g.seed or 0) ^ 0xE70) + d.get("tick", 0)) & 0xFFFFFFFF)
         if g.wallet.get("herb"):                              # v10 saves had one kind of herb: share it out
             n = g.wallet.get("herb")
             g.wallet.add("herb", -n)
@@ -1752,4 +1900,5 @@ class Game:
             st = d["rng_state"]
             g.rng.setstate((3, tuple(st[0]), st[1]))
         g.journal = d.get("journal", [])
+        g.journal.extend(awakening.load_notes(g.slimes(), g.mood_rng))
         return g

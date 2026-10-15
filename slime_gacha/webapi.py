@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import ascension, attributes, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import ascension, attributes, awakening, emotions, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -45,6 +45,12 @@ def slime_view(g: Game, s) -> dict:
         mastery={b: elements.basic_level(s, b) for b in s.attuned},
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
+        feelings=[dict(key=k, name=emotions.EMOTIONS[k].name, emoji=emotions.EMOTIONS[k].emoji,
+                       value=round(v), kind=emotions.EMOTIONS[k].kind) for k, v in
+                  sorted(s.emotions.items(), key=lambda kv: -kv[1]) if v >= 3],
+        feeling_effects={k: round(100 * (m - 1)) for k, m in emotions.modifiers(s)[0].items() if abs(m - 1) >= 0.01},
+        awareness=(dict(stage=awakening.stage(s), name=awakening.STAGE_NAME[awakening.stage(s)],
+                        points=round(s.awareness, 1), temperament=s.temperament) if awakening.candidate(s) else None),
         merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
         stamina=s.stamina, max_stamina=s.max_stamina, buffs=[dict(b) for b in s.buffs],
         star_attrs=attributes.star_attributes(s),
@@ -466,6 +472,11 @@ def _destroy_slime(g, a):
 def _quarry(g, a):
     r = g.quarry([int(x) for x in a.get("ids", [])], _i(a, "runs", 1))
     return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
+@command("talk")
+def _talk(g, a):
+    return _msg(g.talk(_i(a, "id")))
 
 
 @command("autonomy")

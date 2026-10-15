@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional
 
 from . import config
 from .abilities import Ability, get_ability
-from . import attributes, elements, items as items_mod, terrain as terrain_mod
+from . import attributes, elements, emotions, items as items_mod, terrain as terrain_mod
 from . import sparring
 from .archetypes import STAT_KEYS
 from .growth import add_xp
@@ -165,11 +165,14 @@ class BattleSystem:
     def from_slime(s, synergy: float = 1.0, side: str = "party") -> Combatant:
         """power = mood x morale x party synergy; style levels and elemental mastery come along."""
         morale_f = config.MORALE_POWER_MIN + (config.MORALE_POWER_MAX - config.MORALE_POWER_MIN) * s.morale / 100
-        return Combatant(s.name, s.arch.emoji, side, dict(s.max_stats()), float(s.hp),
+        stats = dict(s.max_stats())
+        emult, emods = emotions.modifiers(s)               # feelings colour the fight (anger: +ATK -DEF ...)
+        for k, m in emult.items():
+            stats[k] = round(stats[k] * m, 1)
+        return Combatant(s.name, s.arch.emoji, side, stats, float(s.hp),
                          s.known_abilities(), s.behavior, s.power_multiplier() * morale_f * synergy, s,
                          mastery={b: elements.basic_level(s, b) for b in s.attuned},
-                         style=sparring.style_levels(s), morale=s.morale, mods=_merge_mods(items_mod.battle_mods(s),
-                                                                                           attributes.battle_mods(s)),
+                         style=sparring.style_levels(s), morale=s.morale, mods=_merge_mods(_merge_mods(items_mod.battle_mods(s), attributes.battle_mods(s)), emods),
                          stamina=s.stamina, stamina_max=s.max_stamina, sta_regen=attributes.regen_per_round(s))
 
     @staticmethod
@@ -202,6 +205,10 @@ class BattleSystem:
                f"{', '.join(c.emoji + c.name for c in foes)}"]
         if terrain:
             log.append(f"🌍 {terrain.emoji} {terrain.name}: {terrain_mod.describe(terrain)}")
+        for s_ in party:
+            note = emotions.battle_note(s_)
+            if note:
+                log.append(note)
         try:
             rounds, winner = self._simulate(everyone, log)
         finally:
