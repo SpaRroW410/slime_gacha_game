@@ -344,6 +344,8 @@ idea.
 
 > **Update (stars & XP)**: a slime may ascend to 2/3/4/5 stars only at level 10/30/60/100 (`config.STAR_LEVELS`; level caps per stage are now 10/30/100). Rising in rarity resets stars to 1 (star attributes are derived from stars, so they lock until re-earned). XP per level doubles with each rarity (20/40/80/160/320 at level 1); stars no longer affect it.
 
+> **Update (level 100 balance)**: stats grow linearly to level 50, then at 60% per level (`config.stat_level`, level 100 counts as 80); the bestiary uses the same curve. Pit rewards are multiplied by `config.pit_xp_boost(avg level)` (x1 to level 20, ~x2.3 at 60, ~x3.3 at 100) so a common needs about 10 Pit runs per level throughout; a legendary needs 16x that by design.
+
 ### 5.21 Stamina, star attributes, rarity skills, potions & weapons (`attributes.py`, `potions.py`, `items.py`)
 - **Stamina** is a base attribute of every slime (class base + growth per level, scaled by rarity/stars). Each battle action costs stamina (8 + 8 x ability power, x1.5 for area attacks; guards and heals cheaper). A slime out of stamina is *winded*: its damage is x0.6 for that action. Between rounds it catches its breath; between fights it refills 10%/hour (x2.5 asleep or resting). Pit, Rift and Quarry parties camp when anyone is under 35% stamina. Sparring ignores stamina.
 - **Star attributes**: every extra star adds one class-specific attribute (e.g. Barbarian: crit damage, guard, regeneration, lifesteal; Mage: spell power, resist, crit rate, crit damage). They scale slightly with rarity and combine with relic mods in battle (evasion, guard, resist, regeneration and spell power are new combat hooks).

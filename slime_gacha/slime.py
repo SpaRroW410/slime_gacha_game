@@ -131,7 +131,7 @@ class Slime:
         a = self.arch
         mult = config.RARITY_STAT_MULT[self.rarity] * config.STAR_STAT_MULT[self.stars - 1] * config.STAGE_STAT_MULT[
             min(self.stage, len(config.STAGE_STAT_MULT) - 1)]
-        return {k: (a.base_stats[k] + a.growth[k] * (self.level - 1)) * mult * self.variance.get(k, 1.0)
+        return {k: (a.base_stats[k] + a.growth[k] * (config.stat_level(self.level) - 1)) * mult * self.variance.get(k, 1.0)
                 for k in STAT_KEYS}
 
     def max_stats(self) -> Dict[str, float]:

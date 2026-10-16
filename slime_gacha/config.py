@@ -57,6 +57,17 @@ MERGE_XP_RATIO = 1.0              # a merge hands over the XP the donor collecte
 MERGE_SAME_CLASS_BONUS = 1.25
 MERGE_RARITY_XP = {"common": 10, "uncommon": 20, "rare": 30, "epic": 80, "legendary": 200}   # (unused: a merge gives only the XP earned)
 
+SOFT_LEVEL = 50                     # above this level each level adds only SOFT_LEVEL_RATE of the usual stat growth
+SOFT_LEVEL_RATE = 0.6
+
+def stat_level(level: float) -> float:
+    """The level stats are computed from: linear to 50, then diminishing (level 100 counts as 80)."""
+    return level if level <= SOFT_LEVEL else SOFT_LEVEL + (level - SOFT_LEVEL) * SOFT_LEVEL_RATE
+
+def pit_xp_boost(avg_level: float) -> float:
+    """Pit rewards keep pace with the XP a level costs: x1 up to level 20, ~x2.3 at 60, ~x3.3 at 100."""
+    return max(1.0, (avg_level / 20) ** 0.75)
+
 XP_RARITY_MULT = {"common": 1, "uncommon": 2, "rare": 4, "epic": 8, "legendary": 16}   # doubles with every rarity
 STAR_LEVELS = {                                   # level needed to ascend to 2 / 3 / 4 / 5 stars: rarer slimes level slower, so they need fewer
     "common": [10, 30, 60, 100], "uncommon": [10, 25, 50, 80], "rare": [10, 20, 40, 65],
