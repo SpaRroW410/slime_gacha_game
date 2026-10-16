@@ -3,6 +3,7 @@ from typing import List
 
 from . import config
 from .ascension import absorb
+from . import attributes
 from .abilities import get_ability
 from .errors import InvalidAction
 from .resources import ResourceManager
@@ -71,9 +72,9 @@ def evolve(slime, wallet: ResourceManager) -> List[str]:
     slime.hp += slime.max_hp - old
     slime.needs.add("esteem", 30)
     log = [f"🌟 {slime.name} evolved into a {slime.title()}!"]
-    ab = slime.arch.evolve_abilities.get(slime.stage)
+    ab = slime.arch.evolve_abilities.get(slime.stage) or attributes.evolution_skill(slime)
     if ab:
-        log.append(f"   New ability: {get_ability(ab).name}")
+        log.append(f"   {'New ability' if slime.stage == 1 else 'Skill raised'}: {get_ability(ab).name}")
     return log
 
 

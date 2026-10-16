@@ -605,6 +605,9 @@ def _damage_value(bs: BattleSystem, actor, ability, target):
     raw *= 1 - min(0.5, target.mods.get("guard", 0.0)) * (1 - pierce.get("guard", 0.0))
     if target.marked[0] > 0:
         raw *= 1 + target.marked[1]
+    tb = fx.find(ability, "terrain_boost")
+    if tb and bs.terrain and bs.terrain.hazard_pct:
+        raw *= 1 + tb[1]
     ex = fx.find(ability, "execute")
     if ex and target.hp < target.max_hp * ex[1]:
         raw *= ex[2]
@@ -627,14 +630,19 @@ def _eff_tag(eff: float) -> str:
 
 
 def _h_damage(bs, actor, ab, targets, everyone, log):
-    for t in targets:
+    n_hits = (fx.find(ab, "hits") or (0, 1))[1]
+    plan = [(t, h) for t in targets for h in range(n_hits)]
+    for t, _h in plan:
+        if not t.alive:
+            continue
         ev = 0.0 if fx.find(ab, "nomiss") else min(0.5, t.mods.get("evasion", 0.0))
         if ev and bs.rng.random() < ev:
             log.append(f"  {t.emoji}{t.name} dodges {actor.name}'s {ab.name}!")
             continue
-        dmg, crit, eff = _damage_value(bs, actor, ab, t)
+        hit_ab = replace(ab, element=bs.rng.choice(elements.BASICS)) if fx.find(ab, "prism") else ab
+        dmg, crit, eff = _damage_value(bs, actor, hit_ab, t)
         t.hurt(dmg)
-        bs.last_hits[id(t)] = dmg
+        bs.last_hits[id(t)] = bs.last_hits.get(id(t), 0) + dmg
         log.append(f"  {actor.emoji}{actor.name} uses {ab.name} on {t.name}: {dmg} dmg{' (CRIT!)' if crit else ''}{_eff_tag(eff)}"
                    f" [{max(0, int(t.hp))}/{int(t.max_hp)}]")
         ls = actor.mods.get("lifesteal", 0.0)
@@ -677,6 +685,8 @@ def _h_guard(bs, actor, ab, targets, everyone, log):
 def _h_poison(bs, actor, ab, targets, everyone, log):
     for t in targets:
         per = max(1, int(ab.power * _cast_stat(actor, ab) * _mastery_mult(actor, ab) * _terrain_mult(bs, ab)))
+        if fx.find(ab, "stack") and t.poison[0] > 0:
+            per += t.poison[1]
         t.poison = (ab.duration, per)
         log.append(f"  🧪 {actor.name} uses {ab.name} on {t.name}: poisoned ({per}/turn for {ab.duration}).")
 
@@ -684,12 +694,15 @@ def _h_poison(bs, actor, ab, targets, everyone, log):
 def _h_summon(bs, actor, ab, targets, everyone, log):
     mag = actor.stat(ab.stat)
     emoji, _, mname = (ab.minion or "🦴 Bone Pal").partition(" ")
-    pal = Combatant(f"{actor.name}'s {mname}", emoji, actor.side,
-                    dict(hp=mag * 2.2 * ab.power + 5, atk=mag * ab.power * 1.2 + 2, defense=2,
-                         mag=0, spd=5), mag * 2.2 * ab.power + 5, ["splat"], "attack", 1.0,
-                    None, minion=True)
-    everyone.append(pal)
-    log.append(f"  {emoji} {actor.name} calls up a {mname}!")
+    n = (fx.find(ab, "count") or (0, 1))[1]
+    share = 1.0 if n == 1 else 0.6                       # a legion is many, each weaker
+    for i in range(n):
+        pal = Combatant(f"{actor.name}'s {mname}" + (f" {i + 1}" if n > 1 else ""), emoji, actor.side,
+                        dict(hp=(mag * 2.2 * ab.power + 5) * share, atk=(mag * ab.power * 1.2 + 2) * share, defense=2,
+                             mag=0, spd=5), (mag * 2.2 * ab.power + 5) * share, ["splat"], "attack", 1.0,
+                        None, minion=True)
+        everyone.append(pal)
+    log.append(f"  {emoji} {actor.name} calls up {'a ' + mname if n == 1 else str(n) + ' ' + mname + 's'}!")
 
 
 def _h_utility(bs, actor, ab, targets, everyone, log):

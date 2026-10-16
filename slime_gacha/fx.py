@@ -28,6 +28,12 @@ An `Ability.fx` is a tuple of effect tuples, applied after the ability's main ef
   ("spread",)                      poison also lands on every other foe
   ("copy",)                        use the last skill a foe used
   ("chorus", ability_key)          the caster's classmates in the party also use that ability
+  ("hits", n)                      the damage is dealt as n separate hits (each can crit)
+  ("prism",)                       every hit lands with a random basic element
+  ("terrain_boost", bonus)         +bonus damage on a terrain that has a hazard
+  ("stack",)                       poison adds to a poison already running
+  ("minion",)                      also raise one weak bone minion if the caster has none
+  ("count", n)                     a summon calls n minions instead of one
 """
 from dataclasses import replace
 from typing import List, Optional
@@ -229,7 +235,7 @@ def apply(bs, actor, ab, targets, everyone, log, cast_stat) -> None:
                 log.append(f"  {actor.name} has no minion to sacrifice.")
             else:
                 pal = pals[0]
-                heal = int(pal.max_hp)
+                heal = int(pal.max_hp * (f[1] if len(f) > 1 else 1.0))
                 pal.hp = 0
                 for c in allies:
                     if not c.minion and c.alive:
@@ -247,6 +253,11 @@ def apply(bs, actor, ab, targets, everyone, log, cast_stat) -> None:
             for t in targets:
                 t.counter = (f[1], f[2])
             log.append(f"  ↩ {targets[0].name} takes a counter stance for {f[1]} turns.")
+        elif kind == "minion":
+            if not any(c.minion and c.side == actor.side and c.alive for c in everyone):
+                from .abilities import Ability
+                from .battle import _h_summon
+                _h_summon(bs, actor, Ability("_pal", "Bone Pal", "summon", 0.4, "mag", "self"), [actor], everyone, log)
         elif kind == "spread" and ab.kind == "poison":
             for t in targets:
                 for o in foes:

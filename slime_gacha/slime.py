@@ -174,6 +174,9 @@ class Slime:
         a = self.arch
         keys = [k for lvl, k in sorted(a.abilities.items()) if lvl <= self.level]
         keys += [k for st, k in sorted(a.evolve_abilities.items()) if st <= self.stage]
+        evo = attributes.evolution_skill(self)
+        if evo and evo not in keys:
+            keys.append(evo)
         if self.spec in SPECS and SPECS[self.spec].ability not in keys:
             keys.append(SPECS[self.spec].ability)
         keys += [k for k in attributes.rarity_skills(self) if k not in keys]

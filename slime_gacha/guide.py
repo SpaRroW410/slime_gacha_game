@@ -60,6 +60,21 @@ def _specialization_section() -> dict:
     return dict(title="Specialization (hybrid classes)", icon="🧬", blurb="Which cross-training makes which hybrid.", items=items)
 
 
+def _class_skills_section() -> dict:
+    from . import attributes
+    from .archetypes import ARCHETYPES
+    items = []
+    for cls, keys in attributes.RARITY_SKILLS.items():
+        arch = ARCHETYPES.get(cls)
+        rar = "; ".join(f"{r}: {get_ability(k).name} - {get_ability(k).description}" for r, k in zip(config.RARITIES[1:], keys))
+        evo = attributes.EVOLUTION_SKILLS[cls]
+        items.append(dict(name=f"{arch.emoji} {arch.name}",
+                          text=f"By rarity - {rar}. First evolution: {evo[0].name} - {evo[0].description} "
+                               f"The second evolution raises it to {evo[1].name}."))
+    return dict(title="Class skills", icon="🌟", blurb="One class skill per rarity step, and one signature skill when a slime "
+                "evolves (stars give attributes instead, see Rarity, stars and ascension).", items=items)
+
+
 def build() -> list:
     c = config
     need_rows = [
@@ -125,6 +140,7 @@ def build() -> list:
             dict(name="Merging", text=f"A donor's collected XP and {c.MERGE_STAT_SHARE:.0%} of its stats are absorbed; the share shrinks as an "
                                       f"attribute grows (down to {c.MERGE_SHARE_FLOOR:.0%}). The donor is consumed."),
             dict(name="Evolution", text="At the level cap a slime may evolve (costs essence) and raises its cap.")]),
+        _class_skills_section(),
         dict(title="Bonds, family and the Keeper", icon="💞", blurb="Relationships between slimes, and your own progress.", items=[
             dict(name="Ties", text="Friends (bond 25+), best friends (45+), rivals (sour bond and quarrels), mentors (8+ levels ahead) and "
                                    "couples (deep bond, compatibility, affection). Reviewed once a day."),
