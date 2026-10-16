@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional
 
 from . import config
 from .abilities import Ability, get_ability
-from . import attributes, elements, emotions, items as items_mod, terrain as terrain_mod
+from . import attributes, elements, emotions, fx, items as items_mod, terrain as terrain_mod
 from . import sparring
 from .archetypes import STAT_KEYS
 from .growth import add_xp
@@ -107,13 +107,33 @@ class Combatant:
     stamina_max: float = 0.0
     sta_regen: float = 0.0
     winded: bool = False            # set for the action when stamina ran dry
+    # --- status mechanics (fx.py) ---
+    shield: float = 0.0             # damage soaked before HP
+    bleed: List[tuple] = field(default_factory=list)       # (turns left, damage per turn), up to 3 stacks
+    stun: int = 0                   # turns still to lose
+    marked: tuple = (0, 0.0)        # (turns, extra damage taken)
+    buffs: List[dict] = field(default_factory=list)        # temporary stat / mod changes
+    stat_set: Dict[str, tuple] = field(default_factory=dict)   # stat -> (forced value, turns)
+    untarget: int = 0
+    undying: int = 0
+    counter: tuple = (0, 0.0)       # (turns, power) strike back when hit
+    oath: float = 0.0               # extra attack while below 30% HP
+    extra_turns: int = 0
+    acted: bool = False             # has acted this round
+    last_ability: str = ""
 
     @property
     def alive(self) -> bool:
         return self.hp > 0 and not self.yielded
 
     def hurt(self, amount: float) -> None:
+        if self.shield > 0:
+            soaked = min(self.shield, amount)
+            self.shield -= soaked
+            amount -= soaked
         self.hp -= amount
+        if self.undying > 0 and self.hp < 1:
+            self.hp = 1
         if self.nonlethal and self.hp <= 1:
             self.hp, self.yielded = 1, True
 
@@ -122,7 +142,11 @@ class Combatant:
         return self.stats["hp"]
 
     def stat(self, name: str) -> float:
-        v = self.stats[name]
+        v = self.stat_set[name][0] if name in self.stat_set else self.stats[name]
+        if self.buffs:
+            v *= fx.stat_factor(self, name)
+        if self.oath and name == "atk" and self.hp < self.max_hp * 0.3:
+            v *= 1 + self.oath
         if name == "spd":
             return v * (1 + config.STYLE_ARCHERY_SPEED * self.style.get("archery", 0))
         return v * self.power_mult if name in ("atk", "mag") else v
@@ -151,6 +175,9 @@ class BattleSystem:
         self.rng = rng
         self.wallet = wallet
         self.terrain = None              # set per fight (see run); a terrain.Terrain or None
+        self.last_hits: Dict[int, int] = {}    # damage dealt by the latest ability, per target (for bleed)
+        self.delayed: List[dict] = []          # abilities that land in a later round
+        self.round = 0
 
     # -- setup ---------------------------------------------------------------
     def generate_enemies(self, tier: int, count: int = 3) -> List[Enemy]:
@@ -233,10 +260,16 @@ class BattleSystem:
         """The round loop as a generator: it yields whenever `run` is in manual mode and a party slime must choose.
         The generator's return value is (rounds, winner)."""
         rounds = 0
+        self.delayed, self.last_hits, self.round = [], {}, 0
+        self._everyone = everyone
         while rounds < cap and self._side_alive(everyone, "party") \
                 and self._side_alive(everyone, "foes"):
             rounds += 1
+            self.round = rounds
             log.append(f"--- Round {rounds} ---")
+            for c in everyone:
+                c.acted = False
+            self._land_delayed(everyone, log)
             order = sorted((c for c in everyone if c.alive),
                            key=lambda c: (-c.stat("spd"), self.rng.random()))
             if run:
@@ -249,6 +282,11 @@ class BattleSystem:
                 if not (self._side_alive(everyone, "party") and self._side_alive(everyone, "foes")):
                     break
                 yield from self._turn_gen(actor, everyone, log, run)
+                actor.acted = True
+                while actor.extra_turns > 0 and actor.alive and self._side_alive(everyone, "party") \
+                        and self._side_alive(everyone, "foes"):
+                    actor.extra_turns -= 1
+                    yield from self._turn_gen(actor, everyone, log, run)
             self._hazard(everyone, log)
             for c in everyone:
                 if c.alive and c.side == "party" and not c.minion:
@@ -264,6 +302,29 @@ class BattleSystem:
         else:
             winner = None
         return rounds, winner
+
+    def _land_delayed(self, everyone, log) -> None:
+        """Abilities cast with a delay land at the start of the round they are due."""
+        due = [d for d in self.delayed if d["round"] <= self.round]
+        self.delayed = [d for d in self.delayed if d["round"] > self.round]
+        for d in due:
+            actor, ab = d["actor"], d["ability"]
+            foes = [c for c in everyone if c.side != actor.side and c.alive]
+            targets = [t for t in d["targets"] if t.alive] or self.choose_targets(
+                actor, ab, [c for c in everyone if c.side == actor.side and c.alive], foes)
+            if not targets:
+                continue
+            log.append(f"  ⏳ {actor.name}'s {ab.name} lands!")
+            KIND_HANDLERS[ab.kind](self, actor, ab, targets, everyone, log)
+            fx.apply(self, actor, ab, targets, everyone, log, _cast_stat(actor, ab))
+            for t in targets:
+                if not t.alive and t.side != actor.side:
+                    log.append(f"  {t.emoji}{t.name} is defeated!")
+
+    @staticmethod
+    def targetable(foes):
+        """Foes that can be picked (hidden ones only if nobody else is left)."""
+        return [c for c in foes if not c.untarget] or foes
 
     def _hazard(self, everyone, log) -> None:
         """End of round: the terrain's hazard hurts everybody who isn't immune (an attuned / native element)."""
@@ -328,6 +389,11 @@ class BattleSystem:
             if not actor.alive:
                 log.append(f"  {actor.name} is defeated!")
                 return
+        state = fx.tick(actor, log)
+        if state == "dead":
+            return
+        if state == "skip":
+            return
         if actor.morale < config.MORALE_BROKEN and actor.side == "party" and \
                 self.rng.random() < config.MORALE_FREEZE_CHANCE:
             log.append(f"  😰 {actor.name} freezes - morale is broken!")
@@ -335,7 +401,7 @@ class BattleSystem:
         for k in list(actor.cooldowns):
             actor.cooldowns[k] = max(0, actor.cooldowns[k] - 1)
         allies = [c for c in everyone if c.side == actor.side and c.alive]
-        foes = [c for c in everyone if c.side != actor.side and c.alive]
+        foes = self.targetable([c for c in everyone if c.side != actor.side and c.alive])
         choice = None
         if run and run.manual and actor.side == "party" and not actor.minion:
             run.waiting = actor                     # hand control to the player
@@ -348,6 +414,14 @@ class BattleSystem:
         else:
             ability = self.choose_ability(actor, allies, foes)
             targets = self.choose_targets(actor, ability, allies, foes)
+        if fx.find(ability, "copy"):                       # Stolen Spell: use the last skill a foe used
+            seen = [c.last_ability for c in foes if c.last_ability and not fx.find(get_ability(c.last_ability), "copy")]
+            if not seen:
+                log.append(f"  {actor.emoji}{actor.name}'s {ability.name} has nothing to copy.")
+                return
+            log.append(f"  🪞 {actor.name} copies {get_ability(seen[0]).name}!")
+            ability = get_ability(seen[0])
+            targets = self.choose_targets(actor, ability, allies, foes)
         if not targets:
             return
         if actor.stamina_max:
@@ -356,7 +430,16 @@ class BattleSystem:
             if actor.winded:
                 log.append(f"  😮‍💨 {actor.emoji}{actor.name} is winded!")
             actor.stamina = max(0.0, actor.stamina - cost)
-        KIND_HANDLERS[ability.kind](self, actor, ability, targets, everyone, log)
+        actor.last_ability = ability.key
+        delay = fx.find(ability, "delay")
+        if delay and ability.kind in ("damage", "drain", "poison"):
+            self.delayed.append(dict(round=self.round + delay[1], actor=actor, ability=fx.strip_delay(ability), targets=list(targets)))
+            log.append(f"  ⏳ {actor.emoji}{actor.name} gathers power for {ability.name}...")
+        else:
+            self.last_hits = {}
+            KIND_HANDLERS[ability.kind](self, actor, ability, targets, everyone, log)
+            if ability.fx:
+                fx.apply(self, actor, ability, targets, everyone, log, _cast_stat(actor, ability))
         actor.winded = False
         if ability.element:
             actor.casts[ability.element] = actor.casts.get(ability.element, 0) + 1
@@ -390,6 +473,9 @@ class BattleSystem:
                 return get_ability("defend")
         elif stance != "heal" and actor.hp < actor.max_hp * 0.3 and heals:
             return heals[0]          # panic-heal regardless of stance
+        for a in [a for a in ready if a.kind == "utility"]:
+            if _utility_worth(self, actor, a, allies, foes):
+                return a
         if summons and not any(c.minion and c.side == actor.side for c in allies):
             return summons[0]
         if offense:
@@ -423,6 +509,8 @@ class BattleSystem:
         if ability.key == "backstab":
             return [min(foes, key=lambda c: c.hp)]
         real = [c for c in foes if not c.minion] or foes
+        if ability.kind == "utility":                       # debuffs, marks and stuns go to the most dangerous foe
+            return [max(real, key=lambda c: c.stat("atk") + c.stat("mag"))]
         return [min(real, key=lambda c: c.hp)]
 
     # -- aftermath: write HP back, grant XP and loot ---------------------------
@@ -503,8 +591,9 @@ def _terrain_mult(bs, ability) -> float:
 
 
 def _damage_value(bs: BattleSystem, actor, ability, target):
+    pierce = {f[1]: f[2] for f in ability.fx if f[0] == "pierce"}
     raw = ability.power * _cast_stat(actor, ability) * _mastery_mult(actor, ability) * _terrain_mult(bs, ability) \
-        - 0.5 * target.stat("defense")
+        - 0.5 * target.stat("defense") * (1 - pierce.get("def", 0.0))
     eff = elements.effectiveness(ability.element, target.element)
     raw = max(1.0, raw) * bs.rng.uniform(0.9, 1.1) * eff * _style_attack(actor, ability)
     raw *= max(0.6, 1 - config.STYLE_SWORD_GUARD * target.style.get("sword", 0))       # parrying
@@ -512,17 +601,24 @@ def _damage_value(bs: BattleSystem, actor, ability, target):
         raw *= config.STAMINA_WINDED_MULT
     if ability.stat == "mag":
         raw *= 1 + actor.mods.get("spell_power", 0.0)
-        raw *= 1 - min(0.5, target.mods.get("resist", 0.0))
-    raw *= 1 - min(0.5, target.mods.get("guard", 0.0))
+        raw *= 1 - min(0.5, target.mods.get("resist", 0.0)) * (1 - pierce.get("resist", 0.0))
+    raw *= 1 - min(0.5, target.mods.get("guard", 0.0)) * (1 - pierce.get("guard", 0.0))
+    if target.marked[0] > 0:
+        raw *= 1 + target.marked[1]
+    ex = fx.find(ability, "execute")
+    if ex and target.hp < target.max_hp * ex[1]:
+        raw *= ex[2]
     crit = bs.rng.random() < (config.CRIT_CHANCE + (0.1 if actor.behavior == "explore" else 0)
                               + config.STYLE_ARCHERY_CRIT * actor.style.get("archery", 0)
                               + (bs.terrain.crit if bs.terrain else 0.0) + actor.mods.get("crit_rate", 0.0))
+    if fx.find(ability, "crit") or (fx.find(ability, "first_strike") and not target.acted):
+        crit = True
     if ability.element:
         raw *= 1 + actor.mods.get("elem", {}).get(ability.element, 0.0)
     if crit:
         raw *= config.CRIT_MULT + actor.mods.get("crit_dmg", 0.0)
     if target.guard > 0:
-        raw *= config.GUARD_REDUCTION
+        raw *= 1 - (1 - config.GUARD_REDUCTION) * (1 - pierce.get("guard", 0.0))
     return max(1, int(raw)), crit, eff
 
 
@@ -532,17 +628,22 @@ def _eff_tag(eff: float) -> str:
 
 def _h_damage(bs, actor, ab, targets, everyone, log):
     for t in targets:
-        ev = min(0.5, t.mods.get("evasion", 0.0))
+        ev = 0.0 if fx.find(ab, "nomiss") else min(0.5, t.mods.get("evasion", 0.0))
         if ev and bs.rng.random() < ev:
             log.append(f"  {t.emoji}{t.name} dodges {actor.name}'s {ab.name}!")
             continue
         dmg, crit, eff = _damage_value(bs, actor, ab, t)
         t.hurt(dmg)
+        bs.last_hits[id(t)] = dmg
         log.append(f"  {actor.emoji}{actor.name} uses {ab.name} on {t.name}: {dmg} dmg{' (CRIT!)' if crit else ''}{_eff_tag(eff)}"
                    f" [{max(0, int(t.hp))}/{int(t.max_hp)}]")
         ls = actor.mods.get("lifesteal", 0.0)
         if ls and actor.alive:
             actor.hp = min(actor.max_hp, actor.hp + max(1, int(dmg * ls)))
+        if t.alive and t.counter[0] > 0 and actor.alive and t.side != actor.side:
+            back = max(1, int(t.counter[1] * t.stat("atk") - 0.5 * actor.stat("defense")))
+            actor.hurt(back)
+            log.append(f"  ↩ {t.emoji}{t.name} counters for {back}!")
 
 
 def _h_drain(bs, actor, ab, targets, everyone, log):
@@ -561,6 +662,10 @@ def _h_heal(bs, actor, ab, targets, everyone, log):
         before = t.hp
         t.hp = min(t.max_hp, t.hp + amt)
         log.append(f"  💚 {actor.name} uses {ab.name} on {t.name}: +{int(t.hp - before)} HP")
+        extra = amt - (t.hp - before)
+        if extra > 0 and fx.find(ab, "overheal"):
+            t.shield += extra
+            log.append(f"  🔰 The overflow becomes a {int(extra)} point shield on {t.name}.")
 
 
 def _h_guard(bs, actor, ab, targets, everyone, log):
@@ -587,10 +692,42 @@ def _h_summon(bs, actor, ab, targets, everyone, log):
     log.append(f"  {emoji} {actor.name} calls up a {mname}!")
 
 
+def _h_utility(bs, actor, ab, targets, everyone, log):
+    log.append(f"  ✨ {actor.emoji}{actor.name} uses {ab.name}.")
+
+
 KIND_HANDLERS: Dict[str, Callable] = {
     "damage": _h_damage, "drain": _h_drain, "heal": _h_heal,
-    "guard": _h_guard, "poison": _h_poison, "summon": _h_summon,
+    "guard": _h_guard, "poison": _h_poison, "summon": _h_summon, "utility": _h_utility,
 }
+
+
+def _utility_worth(bs, actor, ab, allies, foes) -> bool:
+    """Simple AI: is it worth spending this utility skill now?"""
+    t = ab.target
+    names = {f[0] for f in ab.fx}
+    fallen = [c for c in bs._everyone if c.side == actor.side and not c.alive and not c.minion] if hasattr(bs, "_everyone") else []
+    if "revive" in names:
+        return bool(fallen)
+    if "raise" in names:
+        return bool([c for c in bs._everyone if not c.alive and not c.minion]) if hasattr(bs, "_everyone") else False
+    if "tithe" in names:
+        return any(c.minion for c in allies) and any(c.hp < c.max_hp * 0.6 for c in allies if not c.minion)
+    if "cleanse" in names:
+        return any(fx._has_bad(c) for c in allies)
+    if "strip" in names:
+        return any(fx._has_good(c) for c in foes)
+    if "shield" in names:
+        return any(c.shield == 0 and c.hp < c.max_hp * 0.75 for c in allies)
+    if names & {"untarget", "undying", "counter"}:
+        return actor.hp < actor.max_hp * 0.5
+    if names & {"buff"}:
+        key = next(f for f in ab.fx if f[0] == "buff")[1]
+        return not any(b["name"] == key for c in allies for b in c.buffs)
+    if names & {"debuff", "mark", "rewrite", "stun"}:
+        strongest = max(foes, key=lambda c: c.stat("atk") + c.stat("mag"))
+        return not (strongest.marked[0] or strongest.stun or strongest.stat_set or any(b["amount"] < 0 for b in strongest.buffs))
+    return True
 
 
 # ---- a battle you can step through ------------------------------------------------------
@@ -687,7 +824,7 @@ class BattleRun:
         if actor.cooldowns.get(ability_key, 0):
             raise ValueError(f"{ab.name} is on cooldown for {actor.cooldowns[ability_key]} more turn(s).")
         allies = [c for c in self.everyone if c.side == actor.side and c.alive]
-        foes = [c for c in self.everyone if c.side != actor.side and c.alive]
+        foes = self.bs.targetable([c for c in self.everyone if c.side != actor.side and c.alive])
         if ab.target in ("enemy", "ally"):
             pool = foes if ab.target == "enemy" else [c for c in allies if not c.minion] or allies
             if target is None:
@@ -708,7 +845,7 @@ class BattleRun:
                     alive=c.alive, minion=c.minion, element=c.element or "", guard=c.guard,
                     poison=c.poison[0] if c.poison[0] > 0 else 0,
                     stamina=int(c.stamina) if c.stamina_max else None, stamina_max=int(c.stamina_max) or None,
-                    winded=c.winded)
+                    winded=c.winded, status=fx.statuses(c))
 
     def view(self, tail: int = 40) -> dict:
         t = self.terrain

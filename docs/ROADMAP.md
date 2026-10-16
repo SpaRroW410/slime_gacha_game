@@ -226,4 +226,5 @@ Legend: `[x]` done · `[ ]` todo
 - [x] No mediation for quarrels involving a slime that is away
 - [x] Commander's gifts (purple gel) for Descent and skirmish parties; potion slots 2-6 by stars
 - [x] Relic merge, gear scrap and gear merge in Town > Merge & destroy
+- [x] Battle effect mechanics (bleed, stun, mark, shield, revive, delay, ...) - step 1 of the 60-skill plan
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

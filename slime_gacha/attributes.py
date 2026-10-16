@@ -39,6 +39,8 @@ def hourly_regen(slime) -> float:
 
 
 def action_cost(ability) -> float:
+    if ability.kind == "utility":
+        return config.STAMINA_COSTS["heal"]
     if ability.kind == "guard":
         return config.STAMINA_COSTS["guard"]
     if ability.kind == "heal":

@@ -1,6 +1,7 @@
 """Ability definitions (pure data). BattleSystem interprets `kind` via KIND_HANDLERS.
 
-kind:   damage | heal | guard | drain | poison | summon      (add handlers in battle.py)
+kind:   damage | heal | guard | drain | poison | summon | utility   (add handlers in battle.py; utility = effects only)
+fx:     extra effects, see fx.py (bleed, stun, mark, buff, shield, revive ...)
 stat:   which stat scales the effect: atk | mag | spd | defense | hp
 target: enemy | all_enemies | ally | all_allies | self
 """
@@ -24,6 +25,7 @@ class Ability:
     tier: int = 0              # spell tier (1 basic, 2/3 fused); 0 = class ability
     creator: str = ""          # who researched it (custom spells)
     minion: str = ""           # summon: "emoji Name" of what appears (default: a Bone Pal)
+    fx: tuple = ()             # status effects applied after the main effect (see fx.py)
 
 
 ABILITIES: "Registry[Ability]" = Registry("ability")
