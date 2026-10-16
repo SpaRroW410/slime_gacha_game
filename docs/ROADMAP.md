@@ -145,11 +145,11 @@ Legend: `[x]` done · `[ ]` todo
 - [ ] Several delves at once (one party per dungeon) with rescue parties
 - [ ] Floor modifiers (poison fog, darkness) and shops between floors
 - [ ] Retreat / checkpoint mid-descent
-- [ ] Real-clock daily free pull (wall-time) as an option
+- [~] Real-clock daily free pull: the live clock makes the daily pull follow real time at x1 (M19)
 - [ ] Resurrection items / Necromancer "revive" ability
 - [x] Star-up (done as stone-based star ascension, M16)
 - [ ] Formations and front/back rows
-- [ ] Offline progress by wall-clock time
+- [x] Offline progress by wall-clock time (live mode, M19)
 - [ ] More classes: Bard, Paladin, Alchemist, Druid (via registry)
 - [x] Equipment / items (relics, M15)
 - [ ] Campaign chapters from `STORY.md`
@@ -209,3 +209,10 @@ Legend: `[x]` done · `[ ]` todo
 - [x] 16 Keeper skills in 4 branches, 4 daily abilities
 - [x] Web Bonds and Keeper tabs, CLI [y] and [h]
 - [ ] Keeper achievements / titles, skill respec
+
+## M19 — Time dilation, calmer UI, booklet
+- [x] No feeding / petting / sleeping / talking / potions inside dungeons
+- [x] Live (wall-clock) time: home x1, dungeons x3, presets, offline cap
+- [x] Dungeon activities keep parties away on the wall clock; floor clear time from depth, level and knowledge
+- [x] (i) tooltips, death-only dungeon subheadings, eight tabs with sub-tabs, tabbed slime card
+- [x] Guide tab (booklet of attributes, with what raises / lowers them)

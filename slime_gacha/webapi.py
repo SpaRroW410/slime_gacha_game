@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import ascension, attributes, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -309,6 +309,11 @@ def _recall(g, a):
 @command("party_hunt")
 def _party_hunt(g, a):
     return g.party_hunt(_i(a, "pid"), a.get("zone", "")), {}
+
+
+@command("guide")
+def _guide(g, a):
+    return [], dict(sections=guide_mod.build())
 
 
 @command("sync")
