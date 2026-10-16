@@ -27,6 +27,13 @@ python3 -m http.server -d dist 8766    # or upload dist/ to GitHub Pages / itch.
 `dist/` (~14 MB) runs the *same Python code* inside the page via Pyodide and works fully offline.
 `python3 tools/build_web.py --cdn` skips vendoring and loads Pyodide from a CDN instead.
 
+**Play from a link (desktop, Android, iPhone/iPad):** the repo includes a GitHub Actions workflow
+(`.github/workflows/pages.yml`) that runs the tests, builds the static edition and publishes it to GitHub Pages
+whenever `main` changes (or from the Actions tab: *Deploy to GitHub Pages -> Run workflow*). One-time setup: repo
+**Settings -> Pages -> Source: GitHub Actions**. Then open `https://<your-user>.github.io/<repo>/`; on iPhone use
+Safari -> Share -> *Add to Home Screen*. Saves live in each browser, so use *Export / Import save* in the ⋯ menu to
+move a colony between devices.
+
 ## Quick start (terminal edition)
 
 ```bash
