@@ -1163,7 +1163,7 @@ class Game:
         need = ascension.star_cost(s)
         if need is None:
             raise InvalidAction(f"{s.name} already has {config.MAX_STARS} stars.")
-        lv = config.STAR_LEVELS[s.stars + 1]
+        lv = ascension.star_level(s)
         if s.level < lv:
             raise InvalidAction(f"{s.name} must reach level {lv} to ascend to {s.stars + 1} stars (now level {s.level}).")
         ascension.pay_stones(self.wallet, need)

@@ -114,8 +114,10 @@ def build() -> list:
         dict(title="Rarity, stars and ascension", icon="✨", blurb="How a slime grows beyond levels.", items=[
             dict(name="Rarity", text="Common, uncommon, rare, epic, legendary. Each step multiplies stats and unlocks one class skill. "
                                      "Ascend with white gel: " + ", ".join(f"{k} {v}" for k, v in c.RARITY_ASCEND_GEL.items()) + "."),
-            dict(name="Stars", text="1-5. Each star adds one class attribute. A slime may ascend to 2/3/4/5 stars only once it has reached level " +
-                 "/".join(str(v) for v in c.STAR_LEVELS.values()) + ". Rising in rarity resets the stars to 1 and locks the star attributes until they are re-earned. Ascend with ascension stones: " +
+            dict(name="Stars", text="1-5. Each star adds one class attribute, boosted by rarity (" + ", ".join(f"{k} x{v:g}" for k, v in c.STAR_ATTR_RARITY_BOOST.items()) +
+                 "). A slime may ascend to 2/3/4/5 stars only once it has reached a level that depends on its rarity: " +
+                 "; ".join(f"{k} " + "/".join(map(str, v)) for k, v in c.STAR_LEVELS.items()) + ". Stone costs are multiplied by " +
+                 ", ".join(f"x{v:g} ({k})" for k, v in c.STAR_STONE_MULT.items()) + ". Rising in rarity resets the stars to 1 and locks the star attributes until they are re-earned. Ascend with ascension stones: " +
                  ", ".join(f"{k - 1}>{k}: {v}" for k, v in c.STAR_ASCEND_STONES.items()) +
                  f" (common equivalents; {c.STONE_MERGE} stones merge into one of the next rarity)."),
             dict(name="XP needed per level", text="Doubles with each rarity: x" +

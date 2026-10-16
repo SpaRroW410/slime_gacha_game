@@ -107,6 +107,25 @@ class TestRarityAndStars(unittest.TestCase):
         g.ascend_slime_rarity(s.id)
         self.assertEqual((s.rarity, s.stars), ("uncommon", 1))     # stars (and their attributes) start over
 
+    def test_star_requirements_and_attributes_scale_with_rarity(self):
+        from slime_gacha import attributes, config
+        g = mk()
+        s = g.slimes()[0]
+        s.rarity, s.stars = "legendary", 2
+        self.assertEqual(ascension.star_level(s), 12)               # common would need 30
+        self.assertEqual(ascension.star_cost(s), 400)               # 100 x4
+        s.level = 11
+        g.wallet.add("stone_common", 400)
+        with self.assertRaises(InvalidAction):
+            g.ascend_slime_star(s.id)
+        s.level = 12
+        g.ascend_slime_star(s.id)
+        self.assertEqual(s.stars, 3)
+        s.rarity = "common"
+        low = attributes.star_attributes(s)[0]["value"]
+        s.rarity = "legendary"
+        self.assertAlmostEqual(attributes.star_attributes(s)[0]["value"], low * 3, places=2)
+
     def test_busy_slimes_cannot_ascend(self):
         g = mk()
         s = g.slimes()[0]

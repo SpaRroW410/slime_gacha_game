@@ -58,7 +58,11 @@ MERGE_SAME_CLASS_BONUS = 1.25
 MERGE_RARITY_XP = {"common": 10, "uncommon": 20, "rare": 30, "epic": 80, "legendary": 200}   # (unused: a merge gives only the XP earned)
 
 XP_RARITY_MULT = {"common": 1, "uncommon": 2, "rare": 4, "epic": 8, "legendary": 16}   # doubles with every rarity
-STAR_LEVELS = {2: 10, 3: 30, 4: 60, 5: 100}       # level a slime must have reached to ascend to that many stars
+STAR_LEVELS = {                                   # level needed to ascend to 2 / 3 / 4 / 5 stars: rarer slimes level slower, so they need fewer
+    "common": [10, 30, 60, 100], "uncommon": [10, 25, 50, 80], "rare": [10, 20, 40, 65],
+    "epic": [10, 15, 30, 50], "legendary": [10, 12, 22, 35]}
+STAR_STONE_MULT = {"common": 1, "uncommon": 1.5, "rare": 2, "epic": 3, "legendary": 4}   # stones for a star scale with rarity
+STAR_ATTR_RARITY_BOOST = {"common": 1.0, "uncommon": 1.3, "rare": 1.7, "epic": 2.2, "legendary": 3.0}   # star attributes hit harder
 
 def xp_to_next(level: int, rarity: str = "common", stars: int = 1) -> int:
     """XP needed to go from `level` to `level + 1`: doubles with each rarity (common 1x ... legendary 16x). Stars do not change it."""
