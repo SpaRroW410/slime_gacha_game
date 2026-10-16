@@ -32,7 +32,7 @@ def slime_view(g: Game, s) -> dict:
     return dict(
         id=s.id, name=s.name, archetype=s.archetype, class_name=a.name, emoji=a.emoji, title=s.title(),
         rarity=s.rarity, stars=s.stars, level=s.level, level_cap=s.level_cap, stage=s.stage,
-        xp=s.xp, xp_next=config.xp_to_next(s.level), total_xp=s.total_xp,
+        xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
         hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),

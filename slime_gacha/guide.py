@@ -117,6 +117,9 @@ def build() -> list:
             dict(name="Stars", text="1-5. Each star adds one class attribute. Ascend with ascension stones: " +
                  ", ".join(f"{k - 1}>{k}: {v}" for k, v in c.STAR_ASCEND_STONES.items()) +
                  f" (common equivalents; {c.STONE_MERGE} stones merge into one of the next rarity)."),
+            dict(name="XP needed per level", text="Rarer and higher-star slimes need more XP: x" +
+                 ", x".join(f"{v:g} ({k})" for k, v in c.XP_RARITY_MULT.items()) +
+                 f" for rarity, and +{c.XP_STAR_STEP:.0%} per star beyond the first. Ascending never needs a particular level: only gel or stones."),
             dict(name="Merging", text=f"A donor's collected XP and {c.MERGE_STAT_SHARE:.0%} of its stats are absorbed; the share shrinks as an "
                                       f"attribute grows (down to {c.MERGE_SHARE_FLOOR:.0%}). The donor is consumed."),
             dict(name="Evolution", text="At the level cap a slime may evolve (costs essence) and raises its cap.")]),

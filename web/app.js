@@ -928,6 +928,7 @@ document.addEventListener('click', (e) => {
   if (el.tagName === 'A') e.preventDefault();
   if (el.disabled) return;
   e.stopPropagation();
+  document.querySelectorAll('select[data-ui], input[data-ui]').forEach((x) => { if (x.type !== 'checkbox') S.ui[x.dataset.ui] = x.value; });   // what every dropdown shows is what the action uses
   fn(el.dataset, el);
 });
 document.addEventListener('change', async (e) => {

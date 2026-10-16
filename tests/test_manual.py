@@ -150,3 +150,13 @@ def play_by_hand_one(g):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestXpCurve(unittest.TestCase):
+    def test_rarer_and_higher_star_slimes_need_more_xp(self):
+        from slime_gacha import config
+        base = config.xp_to_next(10)
+        self.assertEqual(config.xp_to_next(10, "common", 1), base)
+        self.assertGreater(config.xp_to_next(10, "rare", 1), config.xp_to_next(10, "uncommon", 1))
+        self.assertGreater(config.xp_to_next(10, "common", 3), config.xp_to_next(10, "common", 2))
+        self.assertGreater(config.xp_to_next(10, "legendary", 5), 5 * base)
