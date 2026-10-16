@@ -133,6 +133,9 @@ def build() -> list:
             dict(name="Hollow Descent", text="Permadeath. Floors in order; you may leave only after a boss floor. Every slime must have "
                                              "cleared the floors above."),
             dict(name="Gloop Pit, Wayfarer's Rift, Starfall Quarry", text="Nobody dies. A knocked-out slime loses morale (and XP in the Pit) and its relics are battered."),
+            dict(name="Take command", text="Hollow Descent, Gloop Pit and skirmishes can be fought by hand: every slime acts on its own turn "
+                                           "(pick the ability, then the target). Switch to auto, for one turn or the rest of the fight, whenever you like. "
+                                           "Rift, Quarry and sparring are always automatic."),
             dict(name="Scouting", text="Reach 100% of every targeted floor within the hour budget or the whole party is lost."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),

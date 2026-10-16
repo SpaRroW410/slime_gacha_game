@@ -186,6 +186,13 @@ class BattleSystem:
         """party: list of Slime (HP and XP are written back). enemies: list of Enemy templates.
         permadeath=False knocks slimes out at 1 HP instead of killing them (training dungeons).
         split_xp=False gives every survivor the full wave XP instead of an equal share."""
+        run = self.start(party, enemies, permadeath, split_xp, xp_mult, synergy, terrain, manual=False)
+        run.advance()
+        return run.report
+
+    def start(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
+              xp_mult: float = 1.0, synergy: float = 1.0, terrain=None, manual: bool = False) -> "BattleRun":
+        """Set a battle up and return it un-advanced; BattleRun.advance() plays it until a manual slime must choose."""
         totals: Dict[str, int] = {}
         for e in enemies:
             totals[e.key] = totals.get(e.key, 0) + 1
@@ -200,7 +207,6 @@ class BattleSystem:
             foes.append(c)
         mine = [self.from_slime(s, synergy) for s in party]
         everyone = mine + foes
-        self.terrain = terrain
         log = [f"⚔ Battle begins! {', '.join(c.emoji + c.name for c in mine)}  vs  "
                f"{', '.join(c.emoji + c.name for c in foes)}"]
         if terrain:
@@ -209,17 +215,21 @@ class BattleSystem:
             note = emotions.battle_note(s_)
             if note:
                 log.append(note)
-        try:
-            rounds, winner = self._simulate(everyone, log)
-        finally:
-            self.terrain = None
-        report = BattleReport(log, winner, rounds)
-        log.append({"party": "🏆 Victory!", "foes": "💀 Defeat...", None: "🤝 Draw - everybody is too tired."}[winner])
-        self._finish(party, mine, enemies, report, permadeath, split_xp, xp_mult)
-        return report
+        return BattleRun(self, party, mine, enemies, everyone, log, terrain, manual,
+                         dict(permadeath=permadeath, split_xp=split_xp, xp_mult=xp_mult))
 
     def _simulate(self, everyone, log, cap: int = config.ROUND_CAP):
         """Round loop shared by battles and duels. Returns (rounds, winner)."""
+        gen = self._sim_gen(everyone, log, cap, None)
+        try:
+            while True:
+                next(gen)                      # no BattleRun: nothing ever pauses
+        except StopIteration as stop:
+            return stop.value
+
+    def _sim_gen(self, everyone, log, cap: int, run: Optional["BattleRun"]):
+        """The round loop as a generator: it yields whenever `run` is in manual mode and a party slime must choose.
+        The generator's return value is (rounds, winner)."""
         rounds = 0
         while rounds < cap and self._side_alive(everyone, "party") \
                 and self._side_alive(everyone, "foes"):
@@ -227,12 +237,16 @@ class BattleSystem:
             log.append(f"--- Round {rounds} ---")
             order = sorted((c for c in everyone if c.alive),
                            key=lambda c: (-c.stat("spd"), self.rng.random()))
-            for actor in order:
+            if run:
+                run.round, run.order, run.turn_index = rounds, order, 0
+            for i, actor in enumerate(order):
+                if run:
+                    run.turn_index = i
                 if not actor.alive:
                     continue
                 if not (self._side_alive(everyone, "party") and self._side_alive(everyone, "foes")):
                     break
-                self._turn(actor, everyone, log)
+                yield from self._turn_gen(actor, everyone, log, run)
             self._hazard(everyone, log)
             for c in everyone:
                 if c.alive and c.side == "party" and not c.minion:
@@ -298,6 +312,11 @@ class BattleSystem:
 
     # -- one turn ------------------------------------------------------------
     def _turn(self, actor: Combatant, everyone, log) -> None:
+        gen = self._turn_gen(actor, everyone, log, None)
+        for _ in gen:
+            pass
+
+    def _turn_gen(self, actor: Combatant, everyone, log, run: Optional["BattleRun"]):
         # status tick
         if actor.poison[0] > 0:
             dmg = actor.poison[1]
@@ -315,8 +334,18 @@ class BattleSystem:
             actor.cooldowns[k] = max(0, actor.cooldowns[k] - 1)
         allies = [c for c in everyone if c.side == actor.side and c.alive]
         foes = [c for c in everyone if c.side != actor.side and c.alive]
-        ability = self.choose_ability(actor, allies, foes)
-        targets = self.choose_targets(actor, ability, allies, foes)
+        choice = None
+        if run and run.manual and actor.side == "party" and not actor.minion:
+            run.waiting = actor                     # hand control to the player
+            while run.waiting is not None and run.manual:
+                yield run
+            choice, run.choice = run.choice, None
+        if choice:
+            ability, targets = choice
+            targets = [t for t in targets if t.alive] or self.choose_targets(actor, ability, allies, foes)
+        else:
+            ability = self.choose_ability(actor, allies, foes)
+            targets = self.choose_targets(actor, ability, allies, foes)
         if not targets:
             return
         if actor.stamina_max:
@@ -560,3 +589,121 @@ KIND_HANDLERS: Dict[str, Callable] = {
     "damage": _h_damage, "drain": _h_drain, "heal": _h_heal,
     "guard": _h_guard, "poison": _h_poison, "summon": _h_summon,
 }
+
+
+# ---- a battle you can step through ------------------------------------------------------
+class BattleRun:
+    """One battle in progress. In auto mode `advance()` plays it to the end. In manual mode it pauses whenever a
+    party slime's turn comes (`waiting`); answer with `act()` (own choice) or `auto_turn()` (let the AI choose for
+    this one turn), or hand the whole fight back to the AI with `set_manual(False)`. The player can flip
+    between manual and auto at any moment. `view()` is the data a battle area (text now, animation later) draws."""
+
+    def __init__(self, bs: BattleSystem, party, mine, enemies, everyone, log, terrain, manual: bool, opts: dict):
+        self.bs, self.party, self.mine, self.enemies = bs, party, mine, enemies
+        self.everyone, self.log, self.terrain, self.manual, self.opts = everyone, log, terrain, manual, opts
+        self.round, self.order, self.turn_index = 0, [], 0
+        self.waiting: Optional[Combatant] = None
+        self.choice = None
+        self.report: Optional[BattleReport] = None
+        self._gen = None
+
+    @property
+    def done(self) -> bool:
+        return self.report is not None
+
+    # -- driving ----------------------------------------------------------------
+    def advance(self) -> None:
+        """Play until a manual slime must choose, or the battle ends (then `report` is set)."""
+        if self.done:
+            return
+        bs = self.bs
+        bs.terrain = self.terrain
+        try:
+            if self._gen is None:
+                self._gen = bs._sim_gen(self.everyone, self.log, config.ROUND_CAP, self)
+            try:
+                next(self._gen)
+                return
+            except StopIteration as stop:
+                rounds, winner = stop.value
+        finally:
+            bs.terrain = None
+        report = BattleReport(self.log, winner, rounds)
+        self.log.append({"party": "🏆 Victory!", "foes": "💀 Defeat...", None: "🤝 Draw - everybody is too tired."}[winner])
+        bs._finish(self.party, self.mine, self.enemies, report, **self.opts)
+        self.report = report
+        self.waiting = None
+
+    def set_manual(self, manual: bool) -> None:
+        self.manual = manual
+        if not manual and self.waiting is not None:
+            self.waiting = None            # the pending turn is decided by the AI
+        self.advance()
+
+    def auto_turn(self) -> None:
+        """Let the AI take this one turn, then carry on (stops again at the next manual slime)."""
+        if self.waiting is None:
+            return
+        self.choice, self.waiting = None, None
+        self.advance()
+
+    def legal_abilities(self, actor: Optional[Combatant] = None) -> List[dict]:
+        actor = actor or self.waiting
+        out = []
+        foes = [(i, c) for i, c in enumerate(self.everyone) if c.side != actor.side and c.alive]
+        for k in actor.abilities:
+            a = get_ability(k)
+            cd = actor.cooldowns.get(k, 0)
+            cost = attributes.action_cost(a) if actor.stamina_max else 0
+            out.append(dict(key=a.key, name=a.name, kind=a.kind, element=a.element, power=a.power,
+                            target=a.target, cooldown=cd, cost=cost,
+                            winded=bool(actor.stamina_max and actor.stamina < cost), ready=cd == 0,
+                            eff=({i: round(elements.effectiveness(a.element, c.element), 2) for i, c in foes}
+                                 if a.element and a.target in ("enemy", "all_enemies") else {})))
+        return out
+
+    def act(self, ability_key: str, target: Optional[int] = None) -> None:
+        """The waiting slime uses `ability_key` on combatant index `target` (into `everyone`) when it needs one."""
+        actor = self.waiting
+        if actor is None:
+            raise ValueError("Nobody is waiting for orders.")
+        if ability_key not in actor.abilities:
+            raise ValueError(f"{actor.name} does not know that ability.")
+        ab = get_ability(ability_key)
+        if actor.cooldowns.get(ability_key, 0):
+            raise ValueError(f"{ab.name} is on cooldown for {actor.cooldowns[ability_key]} more turn(s).")
+        allies = [c for c in self.everyone if c.side == actor.side and c.alive]
+        foes = [c for c in self.everyone if c.side != actor.side and c.alive]
+        if ab.target in ("enemy", "ally"):
+            pool = foes if ab.target == "enemy" else [c for c in allies if not c.minion] or allies
+            if target is None:
+                tgt = None
+            else:
+                if not 0 <= target < len(self.everyone) or self.everyone[target] not in pool:
+                    raise ValueError("That is not a valid target.")
+                tgt = self.everyone[target]
+            targets = [tgt] if tgt else self.bs.choose_targets(actor, ab, allies, foes)
+        else:
+            targets = self.bs.choose_targets(actor, ab, allies, foes)
+        self.choice, self.waiting = (ab, targets), None
+        self.advance()
+
+    # -- what a battle area draws --------------------------------------------------------
+    def _unit(self, i: int, c: Combatant) -> dict:
+        return dict(i=i, name=c.name, emoji=c.emoji, side=c.side, hp=max(0, int(c.hp)), max_hp=int(c.max_hp),
+                    alive=c.alive, minion=c.minion, element=c.element or "", guard=c.guard,
+                    poison=c.poison[0] if c.poison[0] > 0 else 0,
+                    stamina=int(c.stamina) if c.stamina_max else None, stamina_max=int(c.stamina_max) or None,
+                    winded=c.winded)
+
+    def view(self, tail: int = 40) -> dict:
+        t = self.terrain
+        w = self.waiting
+        return dict(manual=self.manual, done=self.done, round=self.round,
+                    terrain=dict(name=t.name, emoji=t.emoji, text=terrain_mod.describe(t)) if t else None,
+                    units=[self._unit(i, c) for i, c in enumerate(self.everyone)],
+                    order=[self.everyone.index(c) for c in self.order if c.alive],
+                    current=self.everyone.index(self.order[self.turn_index]) if self.order and self.turn_index < len(self.order) else None,
+                    waiting=self.everyone.index(w) if w is not None else None,
+                    abilities=self.legal_abilities() if w is not None else [],
+                    log=self.log[-tail:])

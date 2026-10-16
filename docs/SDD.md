@@ -369,6 +369,15 @@ idea.
 - **Floor clear time** (both modes): `clear_hours = (1.5 + 0.08 x floor) x level factor (0.6-1.4 by party level vs floor) x (1 - 40% x knowledge) x party-size factor`.
 - **UI**: eight tabs (Colony, Gacha, Parties, Dungeons, Academy, Town, People, Guide) with sub-tabs; long explanations live behind (i) tooltips (hover, focus or click); each dungeon states only whether death is possible; the slime card has Overview / Fight / Mind / Gear tabs; the header shows the four core resources plus a stock popover. The **Guide** tab is a searchable booklet built from the live constants (elements and the wheel, fusion recipes, the list of hybrid classes (specialization), needs, morale, feelings with what raises and lowers them, stats, ascension, bonds, dungeons, time, autonomy).
 
+### 5.25 Manual battles — "take command" (`battle.py: BattleRun`, `game.py: _play/_pump`, `web/app.js: ARENA`)
+- **Scope**: only the Hollow Descent, the Gloop Pit and skirmishes can be fought by hand; the Rift, Quarry, sparring and scouting stay automatic.
+- **Engine**: the round loop is a generator (`BattleSystem._sim_gen` / `_turn_gen`). In manual mode it yields whenever a *party* slime's turn comes (after poison/morale/cooldown upkeep) and resumes with the player's `(ability, target)` or, for an AI turn, none. Foes always use the existing AI. `BattleSystem.run` simply drives the same generator to the end, so auto fights are unchanged (all earlier tests pass untouched). `BattleRun.view()` is the render-ready state: units (HP, stamina, guard, poison), turn order, current actor, legal abilities with cooldown, stamina cost and element effectiveness per foe, the log tail.
+- **Switching**: `set_manual(False)` hands the whole fight to the AI at any moment; `auto_turn()` lets the AI take one turn; the choice applies to every later Pit run of the session until changed.
+- **Flows**: `Game.delve_next / grind / battle` accept `manual=`. Each is a generator (`_delve_gen`, `_grind_gen`, `_skirmish_gen`) that `yield from`s `_battle_gen`; `Game.flow` holds the one open battle (memory only). Rewards, permadeath/knock-out, drops, live-clock cost and Pit camping run through exactly the same code as auto fights. Slimes' HP is written back only when the fight ends, so an abandoned battle never happened; loading a save frees a party left in a Pit flow.
+- **Web API**: `battle_act`, `battle_auto_turn`, `battle_manual`; the snapshot carries `battle` while a fight is open and every other command is refused until it ends.
+- **Arena**: `ARENA.render(view)` in `web/app.js` is the only code that knows what a fight looks like (text cards, HP/stamina bars, turn-order strip, ability and target buttons). Each unit exposes `data-unit`, `.alive/.dead/.acting/.targetable` hooks, so an animated arena can replace it without touching rules or commands.
+- No Flee command: the Descent has no exit by design and Pit sessions are committed; "hand over to auto" is the escape hatch.
+
 ## 6. Extensibility recipes
 | Want | Do |
 |------|----|

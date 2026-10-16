@@ -135,7 +135,9 @@ def snapshot(g: Game) -> dict:
                     entry=(g.entry_options(p.id) if p.members else [1]),
                     min_progress=min((g.slime(i).progress for i in p.members), default=0))
                for p in g.parties.parties.values()]
+    run = g.battle_run()
     return dict(
+        battle=(dict(run.view(), kind=g.flow["kind"]) if run else None),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
         potions=dict(stock=[dict(kind=k.split(':')[0], grade=int(k.split(':')[1]), n=n) for k, n in sorted(g.potions.items())],
@@ -614,11 +616,57 @@ def _scout_plan(g, a):
     return [], g.scout_plan(_i(a, "pid"), _i(a, "first"), _i(a, "last"))
 
 
-@command("delve_next")
-def _delve_next(g, a):
-    r = g.delve_next(_i(a, "pid"))
+def _finish_delve(r):
     return [r.log[0]] + [l for l in r.log if "cleared" in l or "fallen" in l or "bounty" in l
                          or "found" in l or "carries" in l or "lost in" in l], dict(battle=[_battle(r)])
+
+
+def _finish_grind(r):
+    return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
+def _finish_skirmish(r):
+    return [r.log[-1]], dict(battle=[_battle(r)])
+
+
+_FINISH = dict(delve=_finish_delve, pit=_finish_grind, skirmish=_finish_skirmish)
+
+
+def _flow_result(g, kind, r):
+    """A command that may have paused for orders: `pending` while a battle waits, the usual result once it ends."""
+    if r is None:
+        run = g.battle_run()
+        return ([], dict(pending=True)) if run else ([], dict(pending=False))
+    log, result = _FINISH[kind](r)
+    return log, dict(result, pending=False)
+
+
+def _manual(a) -> bool:
+    return bool(a.get("manual"))
+
+
+@command("delve_next")
+def _delve_next(g, a):
+    return _flow_result(g, "delve", g.delve_next(_i(a, "pid"), _manual(a)))
+
+
+@command("battle_act")
+def _battle_act(g, a):
+    kind = g.flow["kind"] if g.flow else None
+    t = a.get("target")
+    return _flow_result(g, kind, g.battle_act(str(a.get("ability", "")), None if t is None else int(t)))
+
+
+@command("battle_auto_turn")
+def _battle_auto_turn(g, a):
+    kind = g.flow["kind"] if g.flow else None
+    return _flow_result(g, kind, g.battle_auto_turn())
+
+
+@command("battle_manual")
+def _battle_manual(g, a):
+    kind = g.flow["kind"] if g.flow else None
+    return _flow_result(g, kind, g.battle_set_manual(bool(a.get("manual"))))
 
 
 @command("delve_camp")
@@ -642,17 +690,18 @@ def _scout(g, a):
 
 @command("grind")
 def _grind(g, a):
-    r = g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)))
-    return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+    return _flow_result(g, "pit", g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)), manual=_manual(a)))
 
 
 @command("skirmish")
 def _skirmish(g, a):
-    r = g.battle(_i(a, "pid"), _i(a, "tier", 1))
-    return [r.log[-1]], dict(battle=[_battle(r)])
+    return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a)))
 
 
 # ---- session -----------------------------------------------------------------------------------------------
+BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual"}
+
+
 class Session:
     """Holds one Game. `call` is the only method transports need."""
 
@@ -675,7 +724,12 @@ class Session:
                 return dict(ok=False, error="No game in progress.", log=[], result={}, state=None, save=None)
             if cmd not in HANDLERS:
                 raise InvalidAction(f"Unknown command '{cmd}'.")
-            woke = self.game.sync()                    # live mode: the wall clock moves the colony forward first
+            if self.game.flow is not None:             # a battle is under way: only battle orders (and reads) are allowed
+                if cmd not in BATTLE_CMDS:
+                    raise InvalidAction("A battle is under way - finish it first (or press Auto to let the slimes finish it).")
+                woke = []
+            else:
+                woke = self.game.sync()                # live mode: the wall clock moves the colony forward first
             log, result = HANDLERS[cmd](self.game, args)
             return self._ok(woke + log, result)
         except GameError as e:

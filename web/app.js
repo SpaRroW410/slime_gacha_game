@@ -29,6 +29,9 @@ const onCouncil = () => S.tab === 'people' && sub('people') === 'council';
 
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ui = (k, d) => (S.ui[k] === undefined ? d : S.ui[k]);
+const kindTitle = () => ({ pit: 'The Gloop Pit', delve: 'The Hollow Descent', skirmish: 'Skirmish' })[S.state?.battle?.kind];
+const manualOn = () => !!S.ui.manual;
+const cmdToggle = () => `<button class="btn small ${manualOn() ? 'primary' : ''}" data-act="toggle_manual" title="Fight turn by turn: every slime acts on its own turn. You can hand the fight back to the slimes at any time.">🎮 Take command: ${manualOn() ? 'ON' : 'off'}</button>`;
 const num = (x, d = 0) => { const n = parseInt(x, 10); return Number.isFinite(n) ? n : d; };
 const slimeById = (id) => S.state.slimes.find((s) => s.id === id);
 const partyById = (id) => S.state.parties.find((p) => p.id === id);
@@ -156,6 +159,7 @@ function render() {
   <main>${tabContent()}</main>
   <section style="padding:0 16px 20px;max-width:1280px;margin:0 auto;width:100%"><details><summary class="mute">Event log</summary><div class="feed">${S.feed.map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Nothing yet.</small>'}</div></details></section>
   ${S.sel && slimeById(S.sel) ? `<div class="scrim" data-act="closesel"></div>${drawer(slimeById(S.sel))}` : ''}
+  ${S.state.battle ? ARENA.render(S.state.battle) : ''}
   ${S.modal ? modalHtml() : ''}`;
   declutter();
   window.scrollTo(0, keep);
@@ -442,7 +446,7 @@ function dungeonsAll() {
       <p class="mute">${v.hours}h inside · this floor ${v.knowledge.toFixed(0)}% known · clearing it takes ~${v.next_hours} game hour${v.next_hours === 1 ? '' : 's'}${S.state.clock.mode === 'live' ? ` (~${Math.max(1, Math.round(v.next_hours / S.state.clock.dungeon_rate * 60))} real min)` : ''}</p>
       ${v.ready_in > 0 ? `<div class="chip bad">⏱ busy — back in ~${Math.max(1, Math.round(v.ready_in / (S.state.clock.rate_now || 1) * 60))} real min</div>` : ''}
       <div class="row">${v.members.map((id) => mini(id)).join('')}</div>
-      <div class="row" style="margin-top:6px"><button class="btn primary" data-act="delve_next" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight floor ${v.floor}</button>
+      <div class="row" style="margin-top:6px"><button class="btn primary" data-act="delve_next" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight floor ${v.floor}</button>${cmdToggle()}
         <input type="number" min="1" max="24" value="${camp}" data-ui="camp_h" style="width:70px"><button class="btn" data-act="delve_camp" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⛺ Camp (h)</button>
         <button class="btn ${v.can_leave ? 'primary' : ''}" data-act="leave_dungeon" data-pid="${pid}" ${v.can_leave ? '' : 'disabled'} title="${v.can_leave ? 'Climb out' : 'Only possible at a checkpoint'}">🚪 Leave</button></div>
       ${v.can_leave ? '' : `<small class="mute">No way out until the boss of floor ${v.boss_floor} falls.</small>`}</div>`; }).join('')}
@@ -467,10 +471,10 @@ function dungeonsAll() {
       <div class="row">${partyOptions('gpid')}
         <label class="f">Depth <input type="range" min="1" max="${d.grind_depths}" value="${depth}" data-ui="depth" data-rerender="1"> <b>${depth}</b></label>
         <label class="f">Runs <input type="number" min="1" max="60" value="${runs}" data-ui="runs" style="width:70px"></label>
-        <button class="btn primary" data-act="grind">Commit</button></div>
+        <button class="btn primary" data-act="grind">Commit</button>${cmdToggle()}</div>
       <small class="mute">Depth 3 = enemies at your party's average level; 1 is easier, 5 is harder and pays more XP.</small></div>
     <div class="panel stack"><h2>⚔ Skirmish</h2><p class="mute">One quick fight (permanent death applies). Tier 4 is a boss.</p>
-      <div class="row">${partyOptions('kpid')}<select data-ui="tier">${[1, 2, 3, 4].map((t) => `<option ${t == tier ? 'selected' : ''}>${t}</option>`).join('')}</select><button class="btn" data-act="skirmish">Fight</button></div></div>
+      <div class="row">${partyOptions('kpid')}<select data-ui="tier">${[1, 2, 3, 4].map((t) => `<option ${t == tier ? 'selected' : ''}>${t}</option>`).join('')}</select><button class="btn" data-act="skirmish">Fight</button>${cmdToggle()}</div></div>
   </div></div>`;
 }
 
@@ -723,6 +727,47 @@ function records() {
     <div class="panel"><h2>📜 Journal</h2><div class="feed" style="max-height:60vh">${st.journal.slice().reverse().map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Quiet so far.</small>'}</div></div></div>`;
 }
 
+/* ---------------------------------------------------------------- battle arena
+   ARENA.render(view) turns the server's battle view into markup. It is the ONLY place that knows how a fight looks, so
+   an animated arena (sprites, tweens) can replace it later without touching the rules or the commands.
+   Every unit has data-unit="<index>" and classes (.alive/.dead/.acting/.targetable) a stylesheet or canvas can hook. */
+const EL_EMOJI = { fire: '🔥', water: '💧', earth: '🪨', air: '🌪', light: '✨', dark: '🌑', lightning: '⚡', ice: '❄', steam: '♨', mud: '🟤', lava: '🌋', storm: '⛈' };
+const ARENA = {
+  unit(u, b, targetable) {
+    const acting = b.waiting === u.i, pct = u.max_hp ? Math.max(0, Math.min(100, 100 * u.hp / u.max_hp)) : 0;
+    const cls = ['unit', u.alive ? 'alive' : 'dead', acting ? 'acting' : '', targetable ? 'targetable' : '', u.side].join(' ');
+    return `<div class="${cls}" data-unit="${u.i}" ${targetable ? `data-act="battle_target" data-i="${u.i}"` : ''}>
+      <div class="uname">${esc(u.emoji)} ${esc(u.name)}${u.element ? ` <small>${EL_EMOJI[u.element] || esc(u.element)}</small>` : ''}</div>
+      <div class="bar ${pct < 30 ? 'lvl-low' : pct < 60 ? 'lvl-mid' : 'lvl-ok'}"><i style="width:${pct}%"></i></div>
+      <small class="mute">${u.hp}/${u.max_hp}${u.stamina != null ? ` · ⚡${u.stamina}/${u.stamina_max}` : ''}</small>
+      <div class="ustat">${u.guard ? '<span>🛡</span>' : ''}${u.poison ? `<span>☠${u.poison}</span>` : ''}${!u.alive ? '<span>💀</span>' : ''}${u.minion ? '<span>👻</span>' : ''}</div></div>`;
+  },
+  render(b) {
+    const pick = S.ui.pick ? b.abilities.find((a) => a.key === S.ui.pick) : null;
+    const tside = pick ? (pick.target === 'enemy' ? 'foes' : 'party') : null;
+    const col = (side) => b.units.filter((u) => u.side === side).map((u) => this.unit(u, b, !!pick && u.alive && u.side === tside && (side === 'foes' || !u.minion))).join('');
+    const order = b.order.map((i) => { const u = b.units[i]; return `<span class="ord ${u.side} ${i === b.current ? 'now' : ''}" title="${esc(u.name)}">${esc(u.emoji)}</span>`; }).join('');
+    const w = b.waiting != null ? b.units[b.waiting] : null;
+    const abil = w ? b.abilities.map((a) => {
+      const tip = `${a.kind}${a.element ? ' · ' + a.element : ''} · power ${a.power}${a.cooldown ? ` · cooldown ${a.cooldown}` : ''}${a.cost ? ` · stamina ${a.cost}` : ''}`;
+      const eff = Object.values(a.eff || {});
+      const hint = eff.length ? (eff.some((v) => v > 1) ? ' ▲' : eff.every((v) => v < 1) ? ' ▼' : '') : '';
+      return `<button class="btn ${S.ui.pick === a.key ? 'primary' : ''}" data-act="battle_pick" data-key="${esc(a.key)}" ${a.ready ? '' : 'disabled'} title="${esc(tip)}">${esc(a.name)}${hint}${a.cooldown ? ` (${a.cooldown})` : ''}${a.winded ? ' 😮‍💨' : ''}</button>`;
+    }).join('') : '';
+    return `<div class="scrim" style="z-index:70"></div><div class="arena-wrap"><div class="arena panel">
+      <div class="row between"><b>⚔ ${b.kind === 'pit' ? 'The Gloop Pit' : b.kind === 'delve' ? 'The Hollow Descent' : 'Skirmish'} — round ${b.round}</b>
+        ${b.terrain ? chip(`${b.terrain.emoji} ${esc(b.terrain.name)}`, 'info') : ''}</div>
+      ${b.terrain ? `<small class="mute">${esc(b.terrain.text)}</small>` : ''}
+      <div class="turns" title="Turn order this round">${order}</div>
+      <div class="field"><div class="side party">${col('party')}</div><div class="vs">VS</div><div class="side foes">${col('foes')}</div></div>
+      <div class="cmd">${w ? `<div><b>${esc(w.emoji)} ${esc(w.name)}</b>'s turn ${pick ? `— choose a target for <b>${esc(pick.name)}</b> <button class="btn small" data-act="battle_cancel">cancel</button>` : '— choose an action'}</div>
+        <div class="row">${abil}</div>` : '<div class="mute">The slimes are fighting on their own…</div>'}
+        <div class="row" style="margin-top:6px">${w ? '<button class="btn small" data-act="battle_auto_turn" title="Let the slime decide this one turn">⏩ Auto this turn</button>' : ''}
+          <button class="btn small" data-act="battle_manual" data-on="0" title="Let the slimes finish this fight (and later Pit runs) on their own">🤖 Hand over to auto</button></div></div>
+      <div class="log arena-log">${logHtml(b.log.slice(-14))}</div></div></div>`;
+  },
+};
+
 /* ---------------------------------------------------------------- modal */
 function logHtml(lines) {
   return lines.map((l) => {
@@ -828,7 +873,19 @@ const A = {
     const r = await backend.call('scout_plan', { pid, first, last });
     if (r.ok) { S.plan = { ...r.result, first, last }; render(); } else toast(r.error, true); },
   use_safe: (d) => { S.ui.shours = num(d.h); render(); },
-  delve_next: (d) => act('delve_next', { pid: num(d.pid) }, { title: 'The Hollow Descent' }),
+  toggle_manual: () => { S.ui.manual = !manualOn(); render(); },
+  delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn() }, { title: 'The Hollow Descent' }),
+  battle_pick: (d) => { const b = S.state.battle; const ab = b?.abilities.find((a) => a.key === d.key); if (!ab) return;
+    if (ab.target === 'enemy' || ab.target === 'ally') {
+      const side = ab.target === 'enemy' ? 'foes' : 'party';
+      const pool = b.units.filter((u) => u.alive && u.side === side && (side === 'foes' || !u.minion));
+      if (pool.length === 1) return act('battle_act', { ability: ab.key, target: pool[0].i }, { title: kindTitle() });
+      S.ui.pick = ab.key; render();
+    } else act('battle_act', { ability: ab.key }, { title: kindTitle() }); },
+  battle_target: (d) => { const key = S.ui.pick; S.ui.pick = null; if (key) act('battle_act', { ability: key, target: num(d.i) }, { title: kindTitle() }); },
+  battle_cancel: () => { S.ui.pick = null; render(); },
+  battle_auto_turn: () => { S.ui.pick = null; act('battle_auto_turn', {}, { title: kindTitle() }); },
+  battle_manual: (d) => { S.ui.pick = null; S.ui.manual = d.on === '1'; act('battle_manual', { manual: d.on === '1' }, { slow: d.on !== '1', title: kindTitle() }); },
   delve_camp: (d) => act('delve_camp', { pid: num(d.pid), hours: num(ui('camp_h', 6), 6) }),
   scout: () => { const pid = num(ui('spid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const h = num(ui('shours', 8), 8);
     const first = num(ui('sfirst', 1), 1), last = num(ui('slast', first), first);
@@ -837,9 +894,9 @@ const A = {
   specialize: (d) => confirmThen(`Specialize ${d.n} as a ${d.spec}? This is permanent and costs ${d.cost}.`, () => act('specialize', { id: num(d.id), discipline: d.disc })),
   grind: () => { const pid = num(ui('gpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const depth = num(ui('depth', 3), 3), runs = num(ui('runs', 5), 5);
     if (!pid) return toast('You need a full party.', true);
-    confirmThen(`Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose XP, morale and gear.`, () => act('grind', { pid, depth, runs }, { slow: true, title: 'The Gloop Pit' })); },
+    confirmThen(`Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose XP, morale and gear.`, () => act('grind', { pid, depth, runs, manual: manualOn() }, { slow: !manualOn(), title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
-    act('skirmish', { pid, tier: num(ui('tier', 1), 1) }, { title: 'Skirmish' }); },
+    act('skirmish', { pid, tier: num(ui('tier', 1), 1), manual: manualOn() }, { title: 'Skirmish' }); },
   spar: () => { const a = num(ui('spa', S.state.slimes[0]?.id)), b = num(ui('spb', S.state.slimes[1]?.id)); act('spar', { a, b, discipline: ui('arena', 'sword') }, { title: 'Sparring match' }); },
   spar_party: () => { const pid = num(ui('sppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     act('spar_party', { pid, discipline: ui('arena', 'sword') }, { title: 'Sparring session', slow: true }); },
@@ -890,7 +947,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.mo
 /* ---------------------------------------------------------------- boot */
 /* Live time: let the wall clock move the colony while the page is open (every 30 s, when nothing is being edited). */
 setInterval(async () => {
-  if (!backend || !S.state || S.busy || S.modal || S.state.clock.mode !== 'live') return;
+  if (!backend || !S.state || S.busy || S.modal || S.state.battle || S.state.clock.mode !== 'live') return;
   const el = document.activeElement;
   if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
   const r = await backend.call('sync', {});
