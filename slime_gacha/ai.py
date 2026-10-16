@@ -133,6 +133,7 @@ class ConflictEngine:
         self.friends: set = set()       # frozenset({id, id}) pairs that resolved a quarrel
         self.compat_fn = None           # Game sets: callable(a, b) -> compatibility; shapes quarrel odds
         self.hook = None                # Game sets: callable(kind, a, b[, success]) for bonds / morale
+        self.calm = 1.0                 # Keeper skill (Peacemaker): multiplies the quarrel chance
         self._next = 1
 
     # -- helpers -----------------------------------------------------------
@@ -156,7 +157,7 @@ class ConflictEngine:
             p *= 0.3
         if self.compat_fn:                          # incompatible slimes quarrel more, soulmates much less
             p *= max(0.4, min(2.0, 1 - self.compat_fn(a, b) / 120.0))
-        return max(0.0, p)
+        return max(0.0, p * self.calm)
 
     def reason(self, a, b) -> str:
         if a.needs.get("food") < config.NEED_THRESHOLD or b.needs.get("food") < config.NEED_THRESHOLD:

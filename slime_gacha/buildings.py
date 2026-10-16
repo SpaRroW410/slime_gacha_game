@@ -11,7 +11,7 @@ Effects are plain functions of the level on BuildingManager so other systems jus
 from dataclasses import dataclass
 from typing import Dict, List
 
-from . import config
+from . import ascension, config
 from .errors import InvalidAction
 from .registry import Registry
 from .resources import ResourceManager
@@ -60,6 +60,12 @@ register_building(Building("barracks", "Barracks", "🏕️", 5,
 register_building(Building("armory", "Armory", "🛠️", 5,
                            "Forges gear. Higher levels stock better equipment tiers.", _costs(70, 10)))
 
+register_building(Building("chamber", "Destruction Chamber", "🔥", 5,
+                           "Breaks slimes down into gel and ascension stones. Higher levels yield more.", _costs(90, 12)))
+
+register_building(Building("alchemy", "Alchemy Lab", "⚗️", 5,
+                           "Slimes brew potions here. The lab level caps the potion grade (1-5).", _costs(85, 12)))
+
 REST_HEAL = [0.30, 0.45, 0.60, 0.80, 1.00]       # fraction of max HP healed per hour, by level
 
 
@@ -67,6 +73,7 @@ class BuildingManager:
     def __init__(self, wallet: ResourceManager):
         self.wallet = wallet
         self.levels: Dict[str, int] = {b.key: b.start_level for b in BUILDINGS}
+        self.discount = 0.0              # Keeper skill (Thrifty)
 
     # ---- generic ---------------------------------------------------------------
     def level(self, key: str) -> int:
@@ -74,7 +81,9 @@ class BuildingManager:
 
     def next_cost(self, key: str):
         b, lv = BUILDINGS.get(key), self.level(key)
-        return None if lv >= b.max_level else dict(b.upgrade_costs[lv - 1])
+        if lv >= b.max_level:
+            return None
+        return {k: max(1, int(v * (1 - self.discount))) for k, v in b.upgrade_costs[lv - 1].items()}
 
     def upgrade(self, key: str) -> str:
         b = BUILDINGS.get(key)
@@ -93,6 +102,8 @@ class BuildingManager:
             "library": lambda: (f"study x{self.study_mult(lv):.2f}, research +{int(self.research_bonus(lv) * 100)}%, "
                                 f"{config.MAX_SPELLS + self.extra_spell_slots(lv)} spell slots"
                                 f"{', Restricted Section open' if self.tier3_open(lv) else ''}"),
+            "chamber": lambda: f"destroyed slimes yield x{ascension.chamber_factor(lv):.1f}",
+            "alchemy": lambda: f"brews potions up to grade {lv}",
             "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",
             "barracks": lambda: (f"morale +{self.morale_target_bonus(lv)}, drift {self.morale_drift(lv):.2f}/h, "
                                  f"bonds x{self.bond_mult(lv):.2f}, synergy x{self.synergy_mult(lv):.2f}"),

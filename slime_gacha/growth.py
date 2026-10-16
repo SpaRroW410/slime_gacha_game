@@ -2,6 +2,7 @@
 from typing import List
 
 from . import config
+from .ascension import absorb
 from .abilities import get_ability
 from .errors import InvalidAction
 from .resources import ResourceManager
@@ -77,11 +78,8 @@ def evolve(slime, wallet: ResourceManager) -> List[str]:
 
 
 def merge_gain(target, donor, compat: int = 0) -> int:
-    """XP the target receives. Percentage of donor lifetime XP plus a flat rarity value, x1.25 for the same
-    class, and swung +/-25% by how compatible the two slimes are (-100..100)."""
-    gain = (donor.total_xp * config.MERGE_XP_RATIO + config.MERGE_RARITY_XP[donor.rarity])
-    if target.archetype == donor.archetype:
-        gain *= config.MERGE_SAME_CLASS_BONUS
+    """XP the target receives: only what the donor collected, swung +/-25% by how compatible the two are."""
+    gain = donor.total_xp * config.MERGE_XP_RATIO
     gain *= 1 + config.MERGE_COMPAT_SWING * max(-100, min(100, compat)) / 100.0
     return int(gain)
 
@@ -95,8 +93,9 @@ def merge(target, donor, compat: int = 0) -> List[str]:
             raise InvalidAction(f"{s.name} is away ({s.state}).")
     gain = merge_gain(target, donor, compat)
     target.merged += 1
-    log = [f"🫧 {donor.name} melts into {target.name}, who absorbs {gain} XP "
-           f"({int(config.MERGE_XP_RATIO * 100)}% of memories + essence)."]
+    stats = absorb(target, donor)
+    log = [f"🫧 {donor.name} melts into {target.name}, who absorbs {gain} XP (what {donor.name} had collected) and "
+           + ", ".join(f"+{v:g} {k}" for k, v in stats.items() if v) + "."]
     log += add_xp(target, gain)
     if target.level >= target.level_cap:
         log.append(f"   {target.name} is at the level cap - consider evolving.")

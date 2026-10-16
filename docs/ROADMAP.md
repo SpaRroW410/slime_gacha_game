@@ -136,24 +136,24 @@ Legend: `[x]` done · `[ ]` todo
 - [ ] More spec paths (three-way hybrids, evolution of specs), outlook-driven behaviours (slimes ask for jobs)
 - [ ] Rescue parties for scouts that are overdue
 - [ ] Construction time for upgrades; more buildings (Pantry, Hatchery)
-- [ ] Rivalries and mentorships as explicit relationships; couples -> new slimes
+- [x] Rivalries and mentorships as explicit relationships; couples -> new slimes (M18)
 - [ ] Enemy resistances beyond one element; elemental dungeon floors
 - [ ] Spell mutation / evolving fused spells with mastery
 - [ ] Hybrid class abilities (e.g. Barbarian fire-axe imbue as a status)
 - [ ] Named dungeon registry (add dungeons as data)
-- [ ] Gear crafting / enchanting, set bonuses
+- [~] Gear crafting / enchanting done (relic forge, mods); set bonuses still todo
 - [ ] Several delves at once (one party per dungeon) with rescue parties
 - [ ] Floor modifiers (poison fog, darkness) and shops between floors
 - [ ] Retreat / checkpoint mid-descent
 - [ ] Real-clock daily free pull (wall-time) as an option
 - [ ] Resurrection items / Necromancer "revive" ability
-- [ ] Star-up by merging duplicates
+- [x] Star-up (done as stone-based star ascension, M16)
 - [ ] Formations and front/back rows
 - [ ] Offline progress by wall-clock time
 - [ ] More classes: Bard, Paladin, Alchemist, Druid (via registry)
-- [ ] Equipment / items
+- [x] Equipment / items (relics, M15)
 - [ ] Campaign chapters from `STORY.md`
-- [ ] Slime relationships tree (best friends, rivals, couples → "budding" new slimes)
+- [x] Slime relationships tree (best friends, rivals, couples -> budding) (M18)
 - [ ] Art pass: sprite sheets / animated slimes instead of CSS blobs, sound effects
 - [ ] PWA manifest + service worker for installable offline play
 - [ ] Web worker for Pyodide so long Pit sessions never block the UI
@@ -169,3 +169,43 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Daily-changing Gloop Pit (terrain + featured families)
 - [x] Web UI: terrain/title per floor, Today's Pit panel, victory banner
 - [ ] Art & sound (after floor 50, as planned)
+
+## M15 — Relics & the Wayfarer's Rift
+- [x] Adventure dungeon: 1-5 slimes, monsters at party average + 1
+- [x] Relic drops with harsh rarity odds, stars, mods
+- [x] Durability, repair, shatter into materials
+- [x] Levelling, star ascension (Lv10), rarity ascension with a new mod (5 stars, Lv10)
+- [x] Slime-relic compatibility
+- [x] Salvage: higher level = better materials
+- [x] Ego relics (5-star legendary relic + 5-star legendary slime)
+- [x] Web Rift tab, CLI menu [w], tests
+
+## M16 — Slime ascension & economy
+- [x] Uncommon rarity (five rarities)
+- [x] Rarity ascension with white gel (10 / 100 / 1000 / 10000)
+- [x] Star ascension with ascension stones (10 / 100 / 1000 / 10000), stones merge 100 > 1
+- [x] Starfall Quarry, side drops, boss hoards
+- [x] Merge rework: collected XP + diminishing stat share (20% > 1%)
+- [x] Destruction Chamber building
+- [x] Stamina attribute, star attributes per class
+- [x] Rarity skills per class (Moon Slash, Aura Blade, ...)
+- [x] Weapon proficiency, three-family memory, favourite weapon, named weapons, slimes repairing gear
+- [x] Potions: Alchemy Lab, grades 1-5, temporary boosts, stamina potion, herbs
+- [x] Four coloured herbs, combination potions, terrain-driven herb drops
+- [x] Slime autonomy: 66% of stocks usable without asking
+
+## M17 — Emotions & awakening
+- [x] Thirteen emotions with battle effects (anger +ATK -DEF, sadness -SPD ...)
+- [x] Events, needs and traits drive feelings; they fade; own RNG
+- [x] 5-star legendaries awaken: they realise they are code (accept / despair)
+- [x] Autonomy covers relics, gear and brewing
+- [ ] Art & sound (after floor 50)
+
+## M18 — Relationships, budding & the Keeper
+- [x] Explicit ties: friend, best friend, rival, mentor/mentee, couple (daily review)
+- [x] Ties affect synergy, pre-battle feelings, mentee XP and grief
+- [x] Budding: couples have children; lineage and family tree
+- [x] Keeper levels, XP sources with daily caps
+- [x] 16 Keeper skills in 4 branches, 4 daily abilities
+- [x] Web Bonds and Keeper tabs, CLI [y] and [h]
+- [ ] Keeper achievements / titles, skill respec

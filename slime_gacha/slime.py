@@ -6,6 +6,8 @@ from . import config
 from .abilities import get_ability
 from .archetypes import STAT_KEYS, Archetype, get_archetype
 from .equipment import gear_bonus
+from . import attributes, potions
+from .items import Item, item_bonus
 from .specialization import SPECS, apply_shifts
 
 STAGE_TITLES = ["", "Greater ", "Prime "]
@@ -82,6 +84,19 @@ class Slime:
         self.spec = ""                            # hybrid class key (see specialization.py)
         self.spec_disc = ""                       # the secondary discipline that made it (style affinity)
         self.gear: Dict[str, str] = {}            # slot -> gear key (see equipment.py)
+        self.items: Dict[str, Item] = {}          # slot -> equipped relic (see items.py)
+        self.emotions: Dict[str, float] = {}      # feeling -> intensity 0..100 (see emotions.py)
+        self.emotion_floor: Dict[str, float] = {} # permanent undercurrents (see awakening.py)
+        self.awareness = 0.0                      # 5-star legendaries realise they are code (see awakening.py)
+        self.temperament = ""                     # how an awakened slime took it: accept | despair
+        self.parents: List[int] = []              # lineage: ids of the two parents (budding)
+        self.parent_names: List[str] = []
+        self.generation = 0
+        self.stamina_frac = 1.0                   # stamina as a fraction of max (see attributes.py)
+        self.buffs: List[dict] = []               # potion effects: {kind, grade, bonus, hours}
+        self.proficiency: Dict[str, int] = {}     # weapon family -> uses (see items.FAMILIES)
+        self.weapon_memory: List[str] = []        # up to config.WEAPON_MEMORY families kept in mind
+        self.merge_bonus: Dict[str, float] = {}   # flat stats absorbed from merged donors (see ascension.py)
         self.in_dungeon: str = ""                 # "main" / "grind" / "scout" while committed to a dungeon
         self.style_xp: Dict[str, float] = {}      # fighting-style xp per discipline (see sparring.py)
         self.morale: float = config.MORALE_START  # fight readiness 0-100 (see social.py)
@@ -107,19 +122,36 @@ class Slime:
     def level_cap(self) -> int:
         return config.LEVEL_CAPS[min(self.stage, len(config.LEVEL_CAPS) - 1)]
 
-    def max_stats(self) -> Dict[str, float]:
+    def core_stats(self) -> Dict[str, float]:
+        """Class x level x rarity x star x stage x variance - no gear, relics or merge bonus."""
         a = self.arch
-        bonus = gear_bonus(self.gear)
         mult = config.RARITY_STAT_MULT[self.rarity] * config.STAR_STAT_MULT[self.stars - 1] * config.STAGE_STAT_MULT[
             min(self.stage, len(config.STAGE_STAT_MULT) - 1)]
-        out = {k: round((a.base_stats[k] + a.growth[k] * (self.level - 1))
-                         * mult * self.variance.get(k, 1.0) + bonus.get(k, 0.0), 1)
+        return {k: (a.base_stats[k] + a.growth[k] * (self.level - 1)) * mult * self.variance.get(k, 1.0)
                 for k in STAT_KEYS}
+
+    def max_stats(self) -> Dict[str, float]:
+        bonus = dict(gear_bonus(self.gear))
+        for k, v in item_bonus(self).items():
+            bonus[k] = bonus.get(k, 0.0) + v
+        for k, v in self.merge_bonus.items():
+            bonus[k] = bonus.get(k, 0.0) + v
+        core = self.core_stats()
+        out = {k: round((core[k] + bonus.get(k, 0.0)) * potions.stat_mult(self.buffs, k), 1)
+               for k in STAT_KEYS}
         return apply_shifts(out, self.spec) if self.spec else out
 
     @property
     def max_hp(self) -> int:
         return max(1, int(self.max_stats()["hp"]))
+
+    @property
+    def max_stamina(self) -> float:
+        return attributes.max_stamina(self)
+
+    @property
+    def stamina(self) -> float:
+        return round(self.stamina_frac * self.max_stamina, 1)
 
     def mood(self) -> float:
         act = self.needs.active()
@@ -140,6 +172,7 @@ class Slime:
         keys += [k for st, k in sorted(a.evolve_abilities.items()) if st <= self.stage]
         if self.spec in SPECS and SPECS[self.spec].ability not in keys:
             keys.append(SPECS[self.spec].ability)
+        keys += [k for k in attributes.rarity_skills(self) if k not in keys]
         return keys + [k for k in self.spells if k not in keys]
 
     def title(self) -> str:
@@ -178,7 +211,10 @@ class Slime:
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
                     merged=self.merged, grounded=self.grounded, style_xp=self.style_xp, morale=self.morale,
-                    gear=self.gear, in_dungeon=self.in_dungeon, progress=self.progress, exp=self.exp, spec=self.spec, spec_disc=self.spec_disc,
+                    gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, buffs=self.buffs, parents=self.parents, parent_names=self.parent_names,
+                    generation=self.generation, emotions=self.emotions,
+                    emotion_floor=self.emotion_floor, awareness=self.awareness, temperament=self.temperament,
+                    proficiency=self.proficiency, weapon_memory=self.weapon_memory, in_dungeon=self.in_dungeon, progress=self.progress, exp=self.exp, spec=self.spec, spec_disc=self.spec_disc,
                     attuned=self.attuned, mastery_xp=self.mastery_xp, spells=self.spells,
                     task=self.task)
 
@@ -187,9 +223,10 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task"):
+                  "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task"):
             if k in d:
                 setattr(s, k, d[k])
+        s.items = {k: Item.from_dict(v) for k, v in (d.get("items") or {}).items()}
         s.needs = Needs(d.get("needs"))
         s.hunt = HuntAssignment(**d["hunt"]) if d.get("hunt") else None
         return s

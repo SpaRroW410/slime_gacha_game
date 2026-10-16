@@ -52,8 +52,10 @@ class TestGacha(unittest.TestCase):
         for k in ("barbarian", "mage", "medic", "rogue", "ranger", "necromancer"):
             self.assertIn(k, ARCHETYPES)
 
-    def test_rates_are_90_9_point9_point09(self):
-        self.assertEqual(config.RARITY_RATES, {"common": 90, "rare": 9, "epic": 0.9, "legendary": 0.09})
+    def test_rarity_rates(self):
+        self.assertEqual(config.RARITY_RATES,
+                         {"common": 90, "uncommon": 8, "rare": 1.9, "epic": 0.09, "legendary": 0.01})
+        self.assertAlmostEqual(sum(config.RARITY_RATES.values()), 100)
 
     def test_rarity_distribution(self):
         g = fresh(1)
@@ -61,8 +63,9 @@ class TestGacha(unittest.TestCase):
         for _ in range(20000):
             counts[g.gacha.roll_rarity()] += 1
         self.assertGreater(counts["common"], 17500)
-        self.assertTrue(1400 < counts["rare"] < 2200)
-        self.assertLess(counts["legendary"], 40)
+        self.assertTrue(1300 < counts["uncommon"] < 1900)
+        self.assertTrue(250 < counts["rare"] < 520)
+        self.assertLess(counts["legendary"], 15)
 
     def test_purple_gel_boosts_rare_odds(self):
         g = fresh(2)

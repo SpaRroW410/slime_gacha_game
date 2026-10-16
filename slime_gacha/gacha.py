@@ -29,6 +29,8 @@ class GachaSystem:
         self.total_pulls = 0
         self.next_id = 1
         self.last_free_day = -1          # game day of the last free pull
+        self.luck = 1.0                  # Keeper skill: multiplies the non-common weights
+        self.favor = False               # Keeper active: the next pull has double rare odds
 
     # ---- probabilities (pure functions, handy for tests/UI) --------------------
     @staticmethod
@@ -52,6 +54,8 @@ class GachaSystem:
             return self.rng.choices(["epic", "legendary"],
                                     [config.RARITY_RATES["epic"], config.RARITY_RATES["legendary"]])[0]
         w = self.rarity_weights(purple)
+        boost = self.luck * (2.0 if self.favor else 1.0)
+        w = {r: v * (boost if r != "common" else 1.0) for r, v in w.items()}
         return self.rng.choices(config.RARITIES, [w[r] for r in config.RARITIES])[0]
 
     def roll_stars(self, rarity: str) -> int:

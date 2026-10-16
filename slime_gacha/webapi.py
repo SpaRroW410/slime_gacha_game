@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import config, dungeon, elements, equipment, outlook, sparring, spells, specialization
+from . import ascension, attributes, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -45,7 +45,31 @@ def slime_view(g: Game, s) -> dict:
         mastery={b: elements.basic_level(s, b) for b in s.attuned},
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
-        gear=dict(s.gear), task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
+        feelings=[dict(key=k, name=emotions.EMOTIONS[k].name, emoji=emotions.EMOTIONS[k].emoji,
+                       value=round(v), kind=emotions.EMOTIONS[k].kind) for k, v in
+                  sorted(s.emotions.items(), key=lambda kv: -kv[1]) if v >= 3],
+        feeling_effects={k: round(100 * (m - 1)) for k, m in emotions.modifiers(s)[0].items() if abs(m - 1) >= 0.01},
+        awareness=(dict(stage=awakening.stage(s), name=awakening.STAGE_NAME[awakening.stage(s)],
+                        points=round(s.awareness, 1), temperament=s.temperament) if awakening.candidate(s) else None),
+        relations=[dict(other=r["other"], kind=r["kind"], since=r["since"], mentor=r.get("mentor"))
+                   for r in g.relations.of(s.id)],
+        parents=list(s.parents), parent_names=list(s.parent_names), generation=s.generation,
+        merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
+        stamina=s.stamina, max_stamina=s.max_stamina, buffs=[dict(b) for b in s.buffs],
+        star_attrs=attributes.star_attributes(s),
+        next_star_attr=next(({"star": i + 2, "label": attributes.ATTR_LABEL[k], "value": v}
+                             for i, (k, v) in enumerate(attributes.STAR_ATTRS.get(s.archetype, []))
+                             if s.stars < i + 2), None),
+        rarity_skills=[dict(key=k, name=get_ability(k).name, desc=get_ability(k).description)
+                       for k in attributes.rarity_skills(s)],
+        next_rarity_skill=(get_ability(attributes.RARITY_SKILLS[s.archetype][config.RARITIES.index(s.rarity)]).name
+                           if s.rarity != "legendary" and s.archetype in attributes.RARITY_SKILLS else None),
+        weapons=dict(memory=list(s.weapon_memory), slots=config.WEAPON_MEMORY, favourite=items_mod.favourite_family(s),
+                     proficiency={f: dict(uses=s.proficiency.get(f, 0), level=items_mod.proficiency_level(s, f))
+                                  for f in items_mod.FAMILIES if s.proficiency.get(f, 0) or f in s.weapon_memory}),
+        ascend=dict(next_rarity=ascension.next_rarity(s.rarity), rarity_cost=ascension.rarity_cost(s),
+                    star_cost=ascension.star_cost(s), chamber=ascension.chamber_yield(s, g.buildings.level("chamber"))),
+        gear=dict(s.gear), items={k: _item_view(v, s) for k, v in s.items.items()}, task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
         party=(party.id if party else None), can_evolve=can_evolve(s),
         evolve_cost=(evolve_cost(s) if can_evolve(s) else None), discipline=a.discipline,
         progress=s.progress, exp=dict(s.exp), outlook=_outlook_view(s),
@@ -55,6 +79,21 @@ def slime_view(g: Game, s) -> dict:
                            ability=get_ability(r["spec"].ability).name, ok=r["ok"], reason=r["reason"],
                            level=r["level"], desc=r["spec"].description) for r in specialization.options(s)],
     )
+
+
+def _item_view(it, holder=None) -> dict:
+    return dict(uid=it.uid, base=it.base, name=it.name, emoji=it.spec.emoji, slot=it.slot, rarity=it.rarity,
+                stars=it.stars, level=it.level, family=it.spec.family, title=it.title, durability=(None if it.unbreakable else it.durability),
+                max_durability=(None if it.unbreakable else it.max_durability), ego=it.ego,
+                stats=(it.stats_for(holder) if holder else it.base_stats()),
+                mods=[it.mod_text(m) for m in it.mods], bond=it.bond,
+                compat=(it.compat(holder) if holder else None), fits=list(it.spec.fits),
+                level_cost=(it.level_cost() if it.level < config.ITEM_MAX_LEVEL else None),
+                star_cost=(it.star_cost() if it.level >= config.ITEM_MAX_LEVEL and it.stars < config.MAX_STARS else None),
+                rarity_cost=(it.rarity_cost() if it.stars >= config.MAX_STARS and it.level >= config.ITEM_MAX_LEVEL
+                             and items_mod.next_rarity(it.rarity) and not it.ego else None),
+                repair_cost=it.repair_cost(), salvage=(None if it.ego else it.salvage_yield()),
+                holder=(holder.id if holder else None))
 
 
 def _pit_view(g: Game) -> dict:
@@ -99,6 +138,33 @@ def snapshot(g: Game) -> dict:
     return dict(
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
+        potions=dict(stock=[dict(kind=k.split(':')[0], grade=int(k.split(':')[1]), n=n) for k, n in sorted(g.potions.items())],
+                     kinds=[dict(key=p.key, name=p.name, emoji=p.emoji, effect=p.effect, herbs=list(p.herbs),
+                                 costs=[potions_mod.cost(p.key, i + 1) for i in range(5)])
+                            for p in potions_mod.KINDS.values()],
+                     lab=g.buildings.level("alchemy"),
+                     grades=[dict(grade=i + 1, bonus=potions_mod.bonus(i + 1), hours=potions_mod.hours(i + 1),
+                                  brew_hours=potions_mod.brew_hours(i + 1)) for i in range(5)],
+                     herbs={c: g.wallet.get(potions_mod.herb_key(c)) for c in config.HERBS},
+                     autonomy=g.autonomy, autonomy_share=config.AUTONOMY_SHARE),
+        keeper=dict(level=g.keeper.level, xp=g.keeper.xp, xp_next=keeper_mod.xp_to_next(g.keeper.level),
+                    title=keeper_mod.title(g.keeper.level), points=g.keeper.points, max_level=config.KEEPER_MAX_LEVEL,
+                    branches={k: dict(name=v[0], emoji=v[1]) for k, v in keeper_mod.BRANCHES.items()},
+                    skills=[dict(key=sk.key, branch=sk.branch, name=sk.name, emoji=sk.emoji, level=sk.level,
+                                 per_rank=sk.per_rank, max_rank=sk.max_rank, rank=g.keeper.rank(sk.key),
+                                 why_not=g.keeper.why_not(sk.key)) for sk in keeper_mod.SKILLS.values()],
+                    actives=[dict(key=a.key, branch=a.branch, name=a.name, emoji=a.emoji, desc=a.desc,
+                                  cooldown_days=a.cooldown_days, needs=keeper_mod.SKILLS[a.needs].name,
+                                  unlocked=g.keeper.unlocked(a.key), ready=g.keeper.ready(a.key, g.day))
+                             for a in keeper_mod.ACTIVES.values()]),
+        family=dict(g.family_tree(), kinds={k: dict(label=relationships.LABEL[k], emoji=relationships.EMOJI[k])
+                                            for k in relationships.KINDS},
+                    bud_cost=config.BUD_COST),
+        ascension=dict(stones={r: g.wallet.get(ascension.stone_key(r)) for r in config.RARITIES},
+                       total=ascension.stone_total(g.wallet), values={r: ascension.stone_value(r) for r in config.RARITIES},
+                       rarity_gel=config.RARITY_ASCEND_GEL, star_stones=config.STAR_ASCEND_STONES,
+                       rates=config.STONE_RATES, merge=config.STONE_MERGE, max_party=config.ADV_MAX_PARTY,
+                       max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
@@ -122,7 +188,12 @@ def snapshot(g: Game) -> dict:
                              stats=x.stats, cost=x.cost) for x in g.gear_shop()],
                   all=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier, stats=x.stats,
                             cost=x.cost) for x in equipment.GEAR],
-                  inventory=dict(g.inventory.items), pit_lost=list(g.pit_lost)),
+                  inventory=dict(g.inventory.items), pit_lost=list(g.pit_lost),
+                  vault=[_item_view(i) for i in sorted(g.vault.values(), key=lambda i: -i.uid)],
+                  materials={m: g.wallet.get(m) for m in config.MATERIAL_OF.values()},
+                  adventure=dict(max_party=config.ADV_MAX_PARTY, max_runs=config.ADV_MAX_RUNS,
+                                 lure_cost=config.ADV_LURE_COST, rates=config.ITEM_RARITY_RATES,
+                                 armory=g.buildings.level("armory"))),
         zones=[dict(key=z.key, name=z.name, duration=z.duration, danger=z.danger, desc=z.description,
                     rewards=z.rewards, purple=z.purple_chance) for z in ZONES],
         disciplines=[dict(key=d.key, name=d.name, emoji=d.emoji, style=d.style, perk=d.perk,
@@ -345,6 +416,118 @@ def _equip(g, a):
 @command("unequip")
 def _unequip(g, a):
     return _msg(g.unequip(_i(a, "id"), a.get("slot", "")))
+
+
+@command("equip_item")
+def _equip_item(g, a):
+    return _msg(g.equip_item(_i(a, "id"), _i(a, "uid")))
+
+
+@command("unequip_item")
+def _unequip_item(g, a):
+    return _msg(g.unequip_item(_i(a, "id"), a.get("slot", "")))
+
+
+@command("level_item")
+def _level_item(g, a):
+    return _msg(g.level_item(_i(a, "uid")))
+
+
+@command("ascend_star")
+def _ascend_star(g, a):
+    return _msg(g.ascend_star(_i(a, "uid")))
+
+
+@command("ascend_rarity")
+def _ascend_rarity(g, a):
+    return _msg(g.ascend_rarity(_i(a, "uid")))
+
+
+@command("repair_item")
+def _repair_item(g, a):
+    return _msg(g.repair_item(_i(a, "uid")))
+
+
+@command("salvage_item")
+def _salvage_item(g, a):
+    return _msg(g.salvage_item(_i(a, "uid")))
+
+
+@command("fuse_ego")
+def _fuse_ego(g, a):
+    return g.fuse_ego(_i(a, "uid"), _i(a, "id")), {}
+
+
+@command("adventure")
+def _adventure(g, a):
+    r = g.adventure([int(x) for x in a.get("ids", [])], _i(a, "runs", 1), bool(a.get("lure")))
+    return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
+@command("slime_rarity")
+def _slime_rarity(g, a):
+    return _msg(g.ascend_slime_rarity(_i(a, "id")))
+
+
+@command("slime_star")
+def _slime_star(g, a):
+    return _msg(g.ascend_slime_star(_i(a, "id")))
+
+
+@command("merge_stones")
+def _merge_stones(g, a):
+    return _msg(g.merge_stone_rarity(a.get("rarity", "")))
+
+
+@command("destroy_slime")
+def _destroy_slime(g, a):
+    return g.destroy_slime(_i(a, "id")), {}
+
+
+@command("quarry")
+def _quarry(g, a):
+    r = g.quarry([int(x) for x in a.get("ids", [])], _i(a, "runs", 1))
+    return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
+@command("keeper_learn")
+def _keeper_learn(g, a):
+    return _msg(g.keeper_learn(a.get("key", "")))
+
+
+@command("keeper_use")
+def _keeper_use(g, a):
+    return _msg(g.keeper_use(a.get("key", "")))
+
+
+@command("bud")
+def _bud(g, a):
+    return g.bud(_i(a, "a"), _i(a, "b")), {}
+
+
+@command("talk")
+def _talk(g, a):
+    return _msg(g.talk(_i(a, "id")))
+
+
+@command("autonomy")
+def _autonomy(g, a):
+    return _msg(g.set_autonomy(bool(a.get("on", True))))
+
+
+@command("brew")
+def _brew(g, a):
+    return g.brew(_i(a, "id"), a.get("kind", ""), _i(a, "grade", 1)), {}
+
+
+@command("use_potion")
+def _use_potion(g, a):
+    return _msg(g.use_potion(_i(a, "id"), a.get("kind", ""), _i(a, "grade", 1)))
+
+
+@command("slime_repair")
+def _slime_repair(g, a):
+    return g.slime_repair(_i(a, "id")), {}
 
 
 @command("mediate")

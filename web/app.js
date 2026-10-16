@@ -3,11 +3,13 @@
 
 const LS_KEY = 'slimegacha.save.v1';
 const CLASS_COLORS = { barbarian: '#e5604d', mage: '#8a7cff', medic: '#4cc38a', rogue: '#aab2c0', ranger: '#e0b341', necromancer: '#a56bd1' };
-const RES = { white_gel: ['⚪', 'White gel'], purple_gel: ['🟣', 'Purple gel'], food: ['🍖', 'Food'], essence: ['✨', 'Essence'] };
+const RES = { white_gel: ['⚪', 'White gel'], purple_gel: ['🟣', 'Purple gel'], food: ['🍖', 'Food'], essence: ['✨', 'Essence'], herb_green: ['🟢🌿', 'Green herb (health)'], herb_red: ['🔴🌿', 'Red herb (strength)'], herb_blue: ['🔵🌿', 'Blue herb (armor)'], herb_yellow: ['🟡🌿', 'Yellow herb (stamina)'], scrap: ['🔩', 'Scrap'], alloy: ['🪙', 'Alloy'], crystal: ['💠', 'Crystal'], stardust: ['🌟', 'Stardust'], voidglass: ['🕳️', 'Voidglass'],
+  stone_common: ['⚪💎', 'Common stone'], stone_uncommon: ['🟢💎', 'Uncommon stone'], stone_rare: ['🔵💎', 'Rare stone'], stone_epic: ['🟣💎', 'Epic stone'], stone_legendary: ['🟡💎', 'Legendary stone'] };
+const CORE_RES = ['white_gel', 'purple_gel', 'food', 'essence'];
 const NEED_NAME = { energy: 'Energy', food: 'Food', safety: 'Safety', belonging: 'Belonging', esteem: 'Esteem' };
 const WISH = { energy: 'needs sleep', food: 'is hungry', safety: 'feels unsafe (hurt)', belonging: 'feels lonely', esteem: 'wants to prove itself' };
-const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'],
-  ['academy', '📚 Academy'], ['town', '🏠 Town'], ['council', '⚖️ Council'], ['records', '🪦 Records']];
+const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'], ['rift', '🧭 Rift'],
+  ['academy', '📚 Academy'], ['bonds', '💞 Bonds'], ['keeper', '🧙 Keeper'], ['town', '🏠 Town'], ['council', '⚖️ Council'], ['records', '🪦 Records']];
 
 let backend = null;
 const S = { state: null, tab: 'colony', sel: null, sort: 'power', filter: 'all', feed: [], modal: null, pull: null,
@@ -102,7 +104,7 @@ function render() {
   app.innerHTML = `
   <header class="top">
     <div class="logo"><span class="dot"></span>Slime Gacha</div>
-    <div class="res">${Object.entries(st.wallet).map(([k, v]) => chip(`${RES[k]?.[0] || ''} <b>${v}</b>`, k === 'white_gel' ? 'white' : k === 'purple_gel' ? 'purple' : '')).join('')}</div>
+    <div class="res">${Object.entries(st.wallet).filter(([k, v]) => v > 0 || CORE_RES.includes(k)).map(([k, v]) => chip(`${RES[k]?.[0] || ''} <b>${v}</b>`, k === 'white_gel' ? 'white' : k === 'purple_gel' ? 'purple' : '')).join('')}</div>
     ${chip(`Day <b>${st.day + 1}</b> · ${String(st.tick % 24).padStart(2, '0')}:00`)}
     ${fp.available ? chip('🎁 free pull ready', 'ok') : chip(`🎁 free pull in ${fp.hours}h`)}
     ${st.stress >= 0.1 ? chip(`😖 sacrifice stress ${st.stress}`, 'bad') : ''}
@@ -130,7 +132,7 @@ function tabBadge(k) {
   return '';
 }
 function tabContent() {
-  return { colony, gacha, parties, dungeons, academy, town, council, records }[S.tab]();
+  return { colony, gacha, parties, dungeons, rift, academy, bonds, keeper, town, council, records }[S.tab]();
 }
 
 function welcome() {
@@ -154,7 +156,7 @@ function welcome() {
 function colony() {
   const st = S.state;
   if (!st.slimes.length) return `<div class="panel well"><h2>The colony is empty</h2><p>Visit the Gacha tab and claim your free pull.</p><button class="btn primary" data-act="tab" data-t="gacha">🎰 Go to the Well</button></div>`;
-  const rar = { common: 0, rare: 1, epic: 2, legendary: 3 };
+  const rar = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
   const sorters = { power: (a, b) => b.power - a.power, level: (a, b) => b.level - a.level || b.power - a.power,
     stars: (a, b) => b.stars - a.stars || rar[b.rarity] - rar[a.rarity], rarity: (a, b) => rar[b.rarity] - rar[a.rarity] || b.stars - a.stars,
     hp: (a, b) => a.hp / a.max_hp - b.hp / b.max_hp, name: (a, b) => a.name.localeCompare(b.name), morale: (a, b) => a.morale - b.morale };
@@ -178,6 +180,7 @@ function card(s) {
   if (s.hp < s.max_hp * 0.4) b.push(badge('wounded', 'warn'));
   if (s.grounded) b.push(badge('grounded', 'bad'));
   if (s.dominant && !s.busy) b.push(badge(WISH[s.dominant], 'warn'));
+  if (s.feelings.length && s.feelings[0].value >= 40) b.push(badge(`${s.feelings[0].emoji} ${esc(s.feelings[0].name)}`, s.feelings[0].kind === 'bad' ? 'warn' : 'ok'));
   if (s.morale_label === 'broken') b.push(badge('broken morale', 'bad'));
   if (s.outlook) b.push(badge(`${s.outlook.emoji} ${s.outlook.name}`, 'info'));
   return `<div class="scard ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">
@@ -200,7 +203,7 @@ function drawer(s) {
     return `<div class="row between"><span>${sl}: ${cur ? `<b>${cur.emoji} ${esc(cur.name)}</b>` : '<span class="mute">empty</span>'}</span>
       <span class="row">${opts.length ? `<select data-ui="eq_${sl}">${opts.map((g) => `<option value="${g.key}">${g.emoji} ${esc(g.name)} ×${st.gear.inventory[g.key]}</option>`).join('')}</select><button class="btn small" data-act="equip" data-slot="${sl}" ${free ? '' : 'disabled'}>Equip</button>` : ''}
       ${cur ? `<button class="btn small" data-act="unequip" data-slot="${sl}" ${free ? '' : 'disabled'}>Remove</button>` : ''}</span></div>`;
-  }).join('');
+  }).join('') + Object.values(s.items).map((it) => `<div class="row between"><span>${it.emoji} <b>${esc(it.name)}</b> ${chip(it.rarity, RARITY_CLS[it.rarity])} ${stars(it.stars)} Lv${it.level} <small class="mute">💞${it.compat}%</small></span><button class="btn small" data-act="item_unequip" data-id="${s.id}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Remove</button></div>`).join('');
   const el = (b) => {
     const e = st.elements.list.find((x) => x.key === b);
     const lv = s.mastery[b];
@@ -231,6 +234,32 @@ function drawer(s) {
       <button class="btn small" data-act="do" data-c="rest" ${free && s.state !== 'resting' ? '' : 'disabled'}>🛏️ Rest Area</button>
       ${s.can_evolve ? `<button class="btn small primary" data-act="do" data-c="evolve" ${free ? '' : 'disabled'}>🌟 Evolve (${s.evolve_cost} ✨)</button>` : ''}
     </div>
+    <div style="margin:6px 0">${bar(s.stamina, s.max_stamina, 'know', `⚡ Stamina ${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}
+      ${s.buffs.length ? `<div class="row">${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}</div>
+    <h4>Attributes & skills</h4>
+    <div class="stack" style="gap:4px">
+      ${s.star_attrs.map((a) => `<div>${stars(a.star)} <b>${esc(a.label)}</b> +${Math.round(a.value * 100)}%</div>`).join('') || '<small class="mute">No star attributes yet.</small>'}
+      ${s.next_star_attr ? `<small class="mute">Next at ${s.next_star_attr.star}★: ${esc(s.next_star_attr.label)} +${Math.round(s.next_star_attr.value * 100)}%</small>` : ''}
+      ${s.rarity_skills.map((k) => `<div>✨ <b>${esc(k.name)}</b> <small class="mute">${esc(k.desc)}</small></div>`).join('')}
+      ${s.next_rarity_skill ? `<small class="mute">Next rarity unlocks: ${esc(s.next_rarity_skill)}</small>` : ''}</div>
+    <h4>Weapons</h4>
+    <div class="stack" style="gap:4px"><small class="mute">Favourite: ${s.weapons.favourite} · remembers ${s.weapons.memory.length}/${s.weapons.slots} families</small>
+      ${Object.entries(s.weapons.proficiency).map(([f, p]) => `<div>${f}${s.weapons.memory.includes(f) ? '' : ' <small class="mute">(forgotten)</small>'} <b>Lv${p.level}</b> <small class="mute">${p.uses} uses</small></div>`).join('')}
+      <div class="row"><button class="btn small" data-act="slime_repair" ${free && Object.keys(s.items).length ? '' : 'disabled'}>🔧 Repair own gear (scrap)</button></div></div>
+    ${st.potions.stock.length ? `<div class="row" style="margin-top:6px"><select data-ui="pot_sel">${st.potions.stock.map((p) => `<option value="${p.kind}:${p.grade}">${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}</option>`).join('')}</select><button class="btn small" data-act="use_potion">Drink</button></div>` : ''}
+    ${(s.relations.length || s.parents.length) ? `<div class="stack" style="gap:2px;margin:6px 0"><h4>Relationships</h4>${s.relations.map((r) => { const o = slimeById(r.other); if (!o) return ''; const em = { couple: '💘 Partner', best_friend: '💞 Best friend', friend: '🤝 Friend', rival: '⚔️ Rival', mentor: r.mentor === s.id ? '🎓 Mentee' : '🎓 Mentor' }[r.kind]; return `<div>${em}: <b>${esc(o.name)}</b></div>`; }).join('')}
+      ${s.parents.length ? `<div>🥚 Child of <b>${s.parent_names.map(esc).join(' & ')}</b> · generation ${s.generation}</div>` : ''}</div>` : ''}
+    <h4>Feelings</h4>
+    <div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value))).join('') : '<small class="mute">Calm and unremarkable.</small>'}
+      ${Object.keys(s.feeling_effects).length ? `<small class="mute">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
+      ${s.awareness ? `<div>🧩 <b>Awareness: ${esc(s.awareness.name)}</b> <small class="mute">${s.awareness.points} / 100${s.awareness.temperament ? ' · ' + (s.awareness.temperament === 'accept' ? 'at peace' : 'in despair') : ''}</small></div>` : ''}
+      <div class="row"><button class="btn small" data-act="talk">💬 Talk</button></div></div>
+    <h4>Ascension</h4>
+    <div class="row">
+      <button class="btn small ${s.ascend.next_rarity && st.wallet.white_gel >= s.ascend.rarity_cost ? 'primary' : ''}" data-act="slime_rarity" ${free && s.ascend.next_rarity && st.wallet.white_gel >= s.ascend.rarity_cost ? '' : 'disabled'}>✨ ${s.ascend.next_rarity ? `to ${s.ascend.next_rarity} · ${s.ascend.rarity_cost} ⚪` : 'Legendary'}</button>
+      <button class="btn small ${s.ascend.star_cost && st.ascension.total >= s.ascend.star_cost ? 'primary' : ''}" data-act="slime_star" ${free && s.ascend.star_cost && st.ascension.total >= s.ascend.star_cost ? '' : 'disabled'}>🌟 ${s.ascend.star_cost ? `to ${s.stars + 1}★ · ${s.ascend.star_cost} 💎` : 'Max stars'}</button></div>
+    ${Object.keys(s.merge_bonus).length ? `<small class="mute">Merged-in stats: ${Object.entries(s.merge_bonus).filter(([, v]) => v).map(([k, v]) => `+${v} ${k}`).join(' ')}</small>` : ''}
+    <div class="row" style="margin-top:6px"><button class="btn small danger" data-act="destroy_slime" data-id="${s.id}" data-n="${esc(s.name)}" data-y="${esc(cost(s.ascend.chamber))}" ${free ? '' : 'disabled'}>🔥 Destroy → ${cost(s.ascend.chamber)}</button></div>
     <div class="row" style="margin-top:8px"><label class="f">Stance <select data-act-change="stance">${st.stances.map((x) => `<option ${x === s.behavior ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>
     <div class="row" style="margin-top:8px"><select data-ui="zone">${st.zones.map((z) => `<option value="${z.key}" ${z.key === zone ? 'selected' : ''}>${esc(z.name)} (${z.duration}h)</option>`).join('')}</select>
       <button class="btn small" data-act="hunt" ${free && s.state === 'idle' ? '' : 'disabled'}>🏞 Send hunting</button>
@@ -415,6 +444,87 @@ function academy() {
   </div>`;
 }
 
+/* ---------------------------------------------------------------- rift (adventure dungeon & relics) */
+const RARITY_CLS = { common: '', uncommon: 'uncommon', rare: 'rare', epic: 'epic', legendary: 'legendary' };
+function relicCard(it, holderId = null) {
+  const st = S.state, a = st.gear.adventure, free = holderId ? !slimeById(holderId)?.busy : true;
+  const stat = Object.entries(it.stats).map(([k, v]) => `+${v} ${k}`).join(' ');
+  const dur = it.durability === null ? '<span class="chip ok">unbreakable</span>' : `<div class="mute">Durability ${it.durability}/${it.max_durability}</div>${bar(it.durability, it.max_durability, it.durability < it.max_durability * 0.3 ? 'bad' : '')}`;
+  const act_ = (c, label, cs, cls = '') => `<button class="btn small ${cls}" data-act="item_cmd" data-c="${c}" data-uid="${it.uid}" ${cs && !affordable(cs) ? 'disabled' : ''} ${free ? '' : 'disabled'}>${label}${cs ? ' · ' + cost(cs) : ''}</button>`;
+  const slimeSel = holderId ? '' : `<select data-ui="ie_${it.uid}">${st.slimes.filter((s) => !s.busy).map((s) => `<option value="${s.id}" ${s.id == ui('ie_' + it.uid, st.slimes[0]?.id) ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)})</option>`).join('')}</select><button class="btn small primary" data-act="item_equip" data-uid="${it.uid}">Equip</button>`;
+  return `<div class="panel flat stack"><div class="row between"><b>${it.emoji} ${esc(it.name)}</b>${chip(it.rarity, RARITY_CLS[it.rarity])}</div>
+    <div>${stars(it.stars)} · Lv${it.level}/10 · ${stat}${it.compat !== null ? ` · 💞 compat ${it.compat}%` : ''}</div>
+    ${it.mods.length ? `<div>${it.mods.map((m) => chip(esc(m), 'info')).join(' ')}</div>` : ''}
+    ${it.ego ? `<div class="mute">👁️ Soul of ${esc(it.ego.name)} (Lv${it.ego.level}) — only 5★ legendaries may wield it.</div>` : `<small class="mute">${it.family ? it.family + ' · ' : ''}fits: ${it.fits.join(', ')}</small>`}
+    ${dur}
+    <div class="row">${slimeSel}
+      ${it.level_cost ? act_('level_item', '⬆ Level', it.level_cost) : ''}${it.star_cost ? act_('ascend_star', '🌟 Ascend ★', it.star_cost) : ''}${it.rarity_cost ? act_('ascend_rarity', '💎 Raise rarity', it.rarity_cost) : ''}
+      ${it.repair_cost ? act_('repair_item', '🛠 Repair', { white_gel: it.repair_cost }) : ''}
+      ${it.salvage ? `<button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${it.uid}" data-ask="Break this relic down for ${cost(it.salvage)}?" ${free ? '' : 'disabled'}>♻ Salvage → ${cost(it.salvage)}</button>` : ''}
+      ${holderId ? `<button class="btn small" data-act="item_unequip" data-id="${holderId}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Remove</button>` : ''}
+      ${!it.ego && it.rarity === 'legendary' && it.stars === 5 ? `<button class="btn small danger" data-act="item_fuse" data-uid="${it.uid}">👁 Fuse ego…</button>` : ''}</div></div>`;
+}
+function rift() {
+  const st = S.state, a = st.gear.adventure;
+  const sel = new Set((ui('adv_ids', []) || []).map(num));
+  const equipped = st.slimes.flatMap((s) => Object.values(s.items).map((it) => ({ it, s })));
+  const rates = Object.entries(a.rates).map(([k, v]) => `${k} ${v}%`).join(' · ');
+  return `<div class="grid cols2">
+  <div class="panel stack"><h2>🧭 The Wayfarer's Rift</h2>
+    <p class="mute">An adventure dungeon for <b>relics</b>. Any <b>1–${a.max_party}</b> slimes may go; monsters are <b>one level above</b> the party average (a smaller party meets fewer). Nobody dies, but a knocked-out slime loses morale and its relics are battered. Every win may drop a relic — odds are far harsher than the gacha: ${rates}. A <b>lure</b> (${a.lure_cost} 🟣 per run) multiplies the rare odds.</p>
+    <div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>
+    <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" style="width:70px"></label>
+      <button class="btn small ${ui('adv_lure', false) ? 'primary' : ''}" data-act="adv_lure">${ui('adv_lure', false) ? '✔ ' : ''}Lure (🟣)</button>
+      <button class="btn primary" data-act="adventure" ${sel.size ? '' : 'disabled'}>🧭 Rift (${sel.size}/${a.max_party})</button>
+      <button class="btn" data-act="quarry" ${sel.size ? '' : 'disabled'} title="Starfall Quarry: ascension stones instead of relics">💎 Quarry</button></div>
+    <h4>💎 Ascension stones</h4>
+    <div class="row">${Object.entries(st.ascension.stones).map(([r, n]) => `<span class="chip ${r}">${RES['stone_' + r][0]} ${n}${n >= st.ascension.merge && r !== 'legendary' ? ` <button class="btn small" data-act="merge_stones" data-r="${r}">merge ${st.ascension.merge} → 1</button>` : ''}</span>`).join('')}</div>
+    <small class="mute">Total worth ${st.ascension.total} common stones. Stars cost ${Object.entries(st.ascension.star_stones).map(([k, v]) => `${k - 1}→${k}★: ${v}`).join(' · ')}. 100 stones of a rarity merge into 1 of the next. The 💎 <b>Starfall Quarry</b> drops stones (${Object.entries(st.ascension.rates).map(([k, v]) => `${k} ${v}%`).join(', ')}); other dungeons hide the odd common stone and boss hoards hold more. Destroying slimes in the 🔥 Chamber also yields stones.</small>
+    <h4>Materials</h4><div class="row">${Object.entries(a.materials || st.gear.materials).map(([k, v]) => chip(`${RES[k][0]} ${RES[k][1]}: ${v}`)).join('')}</div>
+    <small class="mute">Salvaging relics gives materials of their tier; the higher the level and stars, the more — and a better tier. Levelling needs materials of the relic's own tier. Star ascension (level 10) also needs Armory level ≥ the current star count; raising rarity needs ★5 Lv10 and Armory level 5.</small></div>
+  <div class="stack"><div class="panel stack"><h2>🎒 Relic vault <small class="mute">(${st.gear.vault.length})</small></h2>
+    ${st.gear.vault.map((it) => relicCard(it)).join('') || '<p class="mute">No relics yet. Venture into the Rift.</p>'}</div>
+    <div class="panel stack"><h2>⚔ Worn relics</h2>
+    ${equipped.map(({ it, s }) => `<div><small class="mute">${esc(s.name)}</small>${relicCard(it, s.id)}</div>`).join('') || '<p class="mute">Nothing worn.</p>'}</div></div></div>`;
+}
+
+/* ---------------------------------------------------------------- bonds (relationship tree) */
+function famUnit(u, depth = 0) {
+  const pad = depth * 20;
+  return `<div style="margin-left:${pad}px">👪 ${u.names.map((n, i) => `${u.alive[i] ? '' : '🪦 '}<b>${esc(n)}</b>`).join(' & ')}</div>
+    ${u.children.map((c) => `<div style="margin-left:${pad + 20}px">└ ${c.alive ? '' : '🪦 '}${esc(c.name)}</div>${c.families.map((f) => famUnit(f, depth + 2)).join('')}`).join('')}`;
+}
+function bonds() {
+  const st = S.state, f = st.family;
+  const ties = (k) => f.ties[k].map((t) => {
+    const aS = slimeById(t.a), bS = slimeById(t.b);
+    const extra = k === 'mentor' ? ` <small class="mute">(${esc(t.mentor === t.a ? t.a_name : t.b_name)} teaches)</small>` : '';
+    const bud = k === 'couple' ? `<button class="btn small ${t.bud_in === 0 ? 'primary' : ''}" data-act="bud" data-a="${t.a}" data-b="${t.b}" ${t.bud_in === 0 && aS && bS && !aS.busy && !bS.busy && affordable(f.bud_cost) ? '' : 'disabled'}>🥚 Have a child · ${cost(f.bud_cost)}</button>${t.bud_in ? `<small class="mute"> in ${t.bud_in}d</small>` : ''}` : '';
+    return `<div class="row between panel flat" style="margin:4px 0"><span>${esc(t.a_name)} ${f.kinds[k].emoji} ${esc(t.b_name)}${extra} <small class="mute">bond ${t.bond}</small></span>${bud}</div>`;
+  }).join('') || '<small class="mute">None yet.</small>';
+  return `<div class="grid cols2">
+  <div class="stack">${['couple', 'best_friend', 'friend', 'mentor', 'rival'].map((k) => `<div class="panel stack"><h3>${f.kinds[k].emoji} ${esc(f.kinds[k].label)} <small class="mute">(${f.ties[k].length})</small></h3>${ties(k)}</div>`).join('')}</div>
+  <div class="stack"><div class="panel stack"><h2>🌳 Family trees</h2>
+    <p class="mute">Slimes who bond become friends and best friends; quarrels breed rivals; veterans take younger slimes under their wing; and two slimes who truly love each other can have a child — a new slime with traits, class and rarity drawn from both parents. Ties help parties (synergy, feelings) and hurt when someone is lost.</p>
+    ${f.families.length ? f.families.map((r) => `<div class="panel flat">${famUnit(r)}</div>`).join('') : '<p class="mute">No children yet.</p>'}</div></div></div>`;
+}
+
+/* ---------------------------------------------------------------- keeper (the player's skills) */
+function keeper() {
+  const k = S.state.keeper;
+  const pips = (r, m) => '●'.repeat(r) + '○'.repeat(m - r);
+  return `<div class="panel stack"><div class="row between"><h2>🧙 ${esc(k.title)} <small class="mute">level ${k.level}/${k.max_level}</small></h2>${chip(`${k.points} skill point${k.points === 1 ? '' : 's'}`, k.points ? 'ok' : '')}</div>
+    ${bar(k.xp, k.xp_next, 'know', `XP ${k.xp}/${k.xp_next}`)}
+    <p class="mute">You earn Keeper XP by tending slimes, pulling, winning fights, clearing floors, scouting, mediating, forging, brewing and by seeing families grow. Each level gives a skill point (a bonus one every 5 levels).</p></div>
+  <div class="grid cols2" style="margin-top:12px">${Object.entries(k.branches).map(([b, br]) => `<div class="panel stack"><h3>${br.emoji} ${esc(br.name)}</h3>
+    ${k.skills.filter((s) => s.branch === b).map((s) => `<div class="panel flat"><div class="row between"><b>${s.emoji} ${esc(s.name)}</b><span>${pips(s.rank, s.max_rank)}</span></div>
+      <small class="mute">${esc(s.per_rank)} (per rank) · Keeper level ${s.level}+</small>
+      <div class="row" style="margin-top:4px"><button class="btn small ${!s.why_not ? 'primary' : ''}" data-act="keeper_learn" data-key="${s.key}" ${s.why_not ? 'disabled' : ''} title="${esc(s.why_not || '')}">${s.rank >= s.max_rank ? 'Mastered' : 'Learn'}</button>${s.why_not && s.rank < s.max_rank ? `<small class="mute">${esc(s.why_not)}</small>` : ''}</div></div>`).join('')}
+    ${k.actives.filter((a) => a.branch === b).map((a) => `<div class="panel flat" style="border-left:3px solid var(--accent)"><div class="row between"><b>${a.emoji} ${esc(a.name)}</b><small class="mute">every ${a.cooldown_days} day${a.cooldown_days > 1 ? 's' : ''}</small></div>
+      <small class="mute">${esc(a.desc)}${a.unlocked ? '' : ` Unlocked by ${esc(a.needs)}.`}</small>
+      <div class="row" style="margin-top:4px"><button class="btn small ${a.ready ? 'primary' : ''}" data-act="keeper_use" data-key="${a.key}" ${a.ready ? '' : 'disabled'}>${a.unlocked ? (a.ready ? 'Use' : 'Recovering') : 'Locked'}</button></div></div>`).join('')}</div>`).join('')}</div>`;
+}
+
 /* ---------------------------------------------------------------- town */
 function town() {
   const st = S.state;
@@ -424,6 +534,18 @@ function town() {
   return `<div class="grid cols3">${st.buildings.map((b) => `<div class="panel stack"><h3>${b.emoji} ${esc(b.name)} <small class="mute">L${b.level}/${b.max}</small></h3>
       ${bar(b.level, b.max)}<p>${esc(b.now)}</p>
       ${b.cost ? `<p class="mute">Next: ${esc(b.nxt)}</p><button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="${b.key}" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade · ${cost(b.cost)}</button>` : '<p class="chip ok">Max level</p>'}</div>`).join('')}</div>
+  <div class="panel stack" style="margin-top:12px"><h2>⚗️ Alchemy Lab <small class="mute">(level ${st.potions.lab}: brews up to grade ${st.potions.lab})</small></h2>
+    <p class="mute">A slime brews potions from coloured herbs: 🟢 <b>green</b> = health, 🔴 <b>red</b> = strength, 🔵 <b>blue</b> = armor, 🟡 <b>yellow</b> = stamina. Each makes its basic potion; <b>two different herbs combine</b> into a further attribute (lifesteal, guard, regeneration, magic, crit, speed & evasion). The daily Pit's terrain decides which herb is plentiful; other dungeons drop a few. A magical brewer (medics and necromancers have a knack) and a roomy lab improve the odds; failures lose the gel and half the herbs.</p>
+    <div class="row">${Object.entries(st.potions.herbs).map(([c, n]) => chip(`${RES['herb_' + c][0]} ${n}`)).join('')}</div>
+    <div class="row"><label class="f">Brewer <select data-ui="brewer">${st.slimes.filter((x) => !x.busy).map((x) => `<option value="${x.id}">${esc(x.name)} (${esc(x.class_name)})</option>`).join('')}</select></label>
+      <label class="f">Potion <select data-ui="brew_kind" data-rerender="1">${st.potions.kinds.map((k) => `<option value="${k.key}" ${k.key === ui('brew_kind', 'stamina') ? 'selected' : ''}>${k.emoji} ${esc(k.name)} — ${esc(k.effect)}</option>`).join('')}</select></label>
+      <label class="f">Grade <select data-ui="brew_grade" data-rerender="1">${st.potions.grades.map((g) => `<option value="${g.grade}" ${g.grade == ui('brew_grade', 1) ? 'selected' : ''} ${g.grade > st.potions.lab ? 'disabled' : ''}>${g.grade}</option>`).join('')}</select></label>
+      ${(() => { const k = st.potions.kinds.find((x) => x.key === ui('brew_kind', 'stamina')) || st.potions.kinds[0]; const gr = num(ui('brew_grade', 1), 1); const c = k.costs[gr - 1];
+        return `<button class="btn primary" data-act="brew" ${affordable(c) && gr <= st.potions.lab ? '' : 'disabled'}>Brew · ${cost(c)} · ${st.potions.grades[gr - 1].brew_hours}h</button>`; })()}</div>
+    <small class="mute">Grades: ${st.potions.grades.map((g) => `${g.grade}: +${Math.round(g.bonus * 100)}% for ${g.hours}h`).join(' · ')}</small>
+    <div class="row">${st.potions.stock.map((p) => chip(`${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}`, 'info')).join('') || '<small class="mute">No potions yet.</small>'}</div>
+    <div class="row"><button class="btn small ${st.potions.autonomy ? 'primary' : ''}" data-act="autonomy">🤖 Slime autonomy: ${st.potions.autonomy ? 'on' : 'off'}</button>
+      <small class="mute">When on, slimes help themselves to up to ${Math.round(st.potions.autonomy_share * 100)}% of your stocks without asking: they drink potions (tired ones stamina, hurt ones vigor, class-suited ones before a trip), mend worn gear, dress themselves from the relic vault and armory, and brew potions the colony is short of — the rest is yours.</small></div></div>
   <div class="grid cols2" style="margin-top:12px">
     <div class="panel stack"><h2>🛠️ Armory</h2><p class="mute">Gear is usable by any class. The Armory level limits which tier it sells. Gear also drops in dungeons — but a fallen slime's gear can be lost.</p>
       <table><tbody>${st.gear.shop.map((g) => `<tr><td>${g.emoji} <b>${esc(g.name)}</b><br><small class="mute">T${g.tier} ${g.slot} · ${stat(g.stats)}</small></td><td>${cost(g.cost)}</td>
@@ -510,6 +632,30 @@ const A = {
   hunt: () => act('hunt', { id: S.sel, zone: ui('zone', S.state.zones[0].key) }),
   equip: (d) => act('equip', { id: S.sel, key: ui('eq_' + d.slot, Object.keys(S.state.gear.inventory).find((k) => S.state.gear.all.find((g) => g.key === k).slot === d.slot)) }),
   unequip: (d) => act('unequip', { id: S.sel, slot: d.slot }),
+  slime_rarity: () => act('slime_rarity', { id: S.sel }),
+  slime_star: () => act('slime_star', { id: S.sel }),
+  merge_stones: (d) => act('merge_stones', { rarity: d.r }),
+  destroy_slime: (d) => confirmThen(`Destroy ${d.n} in the Destruction Chamber?\n\nYou receive ${d.y}. ${d.n} is gone forever and the colony will mourn (sacrifice stress).`, () => act('destroy_slime', { id: num(d.id) }).then(() => { S.sel = null; render(); })),
+  quarry: () => { const ids = (ui('adv_ids', []) || []).map(num); act('quarry', { ids, runs: num(ui('adv_runs', 5), 5) }, { title: 'The Starfall Quarry', slow: true }).then(() => { S.ui.adv_ids = []; render(); }); },
+  brew: () => act('brew', { id: num(ui('brewer', S.state.slimes.find((x) => !x.busy)?.id)), kind: ui('brew_kind', 'stamina'), grade: num(ui('brew_grade', 1), 1) }, { slow: true }),
+  use_potion: () => { const [kind, grade] = String(ui('pot_sel', S.state.potions.stock[0] ? S.state.potions.stock[0].kind + ':' + S.state.potions.stock[0].grade : ':')).split(':'); act('use_potion', { id: S.sel, kind, grade: num(grade) }); },
+  slime_repair: () => act('slime_repair', { id: S.sel }),
+  talk: () => act('talk', { id: S.sel }),
+  keeper_learn: (d) => act('keeper_learn', { key: d.key }),
+  keeper_use: (d) => act('keeper_use', { key: d.key }),
+  bud: (d) => confirmThen('Have a child? It costs ' + cost(S.state.family.bud_cost) + '.', () => act('bud', { a: num(d.a), b: num(d.b) })),
+  autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
+  adv_lure: () => { S.ui.adv_lure = !ui('adv_lure', false); render(); },
+  adv_toggle: (d) => { const ids = new Set((ui('adv_ids', []) || []).map(num)); const id = num(d.id); ids.has(id) ? ids.delete(id) : ids.add(id); S.ui.adv_ids = [...ids].slice(0, S.state.gear.adventure.max_party); render(); },
+  adventure: () => { const ids = (ui('adv_ids', []) || []).map(num); const runs = num(ui('adv_runs', 5), 5);
+    act('adventure', { ids, runs, lure: !!ui('adv_lure', false) }, { title: "The Wayfarer's Rift", slow: true }).then(() => { S.ui.adv_ids = []; render(); }); },
+  item_equip: (d) => act('equip_item', { id: num(ui('ie_' + d.uid, S.state.slimes[0]?.id)), uid: num(d.uid) }),
+  item_unequip: (d) => act('unequip_item', { id: num(d.id), slot: d.slot }),
+  item_cmd: (d) => d.ask ? confirmThen(d.ask, () => act(d.c, { uid: num(d.uid) })) : act(d.c, { uid: num(d.uid) }),
+  item_fuse: (d) => { const souls = S.state.slimes.filter((s) => !s.busy && s.rarity === 'legendary' && s.stars === 5);
+    if (!souls.length) return toast('You need a free 5★ legendary slime to be the soul.', true);
+    const best = souls.reduce((a, b) => (b.level > a.level ? b : a));
+    confirmThen(`Sacrifice ${best.name} (Lv${best.level} ${best.class_name}) into this relic?\n\nIt becomes an EGO relic (stronger with the soul's level). ${best.name} is gone forever and the colony will mourn.`, () => act('fuse_ego', { uid: num(d.uid), id: best.id })); },
   study: (d) => act('study', { id: S.sel, element: d.el }),
   study_lib: (d) => act('study', { id: num(d.id), element: d.el }),
   pull: (d) => { S.pull = null; return act('pull', { n: num(d.n), pay: d.pay }); },
