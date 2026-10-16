@@ -164,6 +164,7 @@ ELEMENT_DISADVANTAGE = 0.7
 # it cannot leave until the segment's boss is beaten or the whole party is dead. The Gloop Pit is a committed
 # session of N runs: also no leaving until finished or the whole party is knocked out.
 CAMP_HEAL_HOURS_MAX = 24
+CAMP_HEAL_PER_HOUR = 0.08       # share of max HP a sleeping party recovers per hour of camp
 CAMP_AMBUSH_BASE = 0.10         # per hour of camping inside the Descent (scaled by floor, cut by intel)
 CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
 SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 240
@@ -218,7 +219,7 @@ OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 13
+SAVE_VERSION = 14
 DEFAULT_SAVE = "savegame.json"
 
 
@@ -328,3 +329,12 @@ KEEPER_MAX_LEVEL = 30
 KEEPER_XP = {"pull": 2, "care": 1, "win": 3, "boss": 12, "mediate": 4, "brew": 3, "forge": 2, "ascend": 6,
              "relation": 5, "bud": 25, "floor": 4, "scout": 10, "merge": 2, "quarry": 2}
 KEEPER_DAILY_CAP = {"care": 10, "win": 45, "pull": 12, "forge": 10}
+
+# ---- time: turn-based or LIVE (wall-clock) with dilation (game.py: sync) ------------------------------------------------------------
+CLEAR_BASE_HOURS = 1.5           # game hours to clear floor 0 ...
+CLEAR_HOURS_PER_FLOOR = 0.08     # ... plus this per floor (floor 50: ~5.5h before level and knowledge)
+CLEAR_KNOWLEDGE_CUT = 0.40       # a fully scouted floor is cleared 40% faster
+LIVE_LOBBY_RATE = 1.0            # game hours per REAL hour at home (study, hunts ... take wall-clock time)
+LIVE_DUNGEON_RATE = 3.0          # game hours per real hour while any party is in a dungeon
+LIVE_SCALES = (1, 6, 60)         # speed presets multiplying both rates
+LIVE_CATCHUP_MAX_HOURS = 48      # offline progress is capped (game hours)

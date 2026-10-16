@@ -4,6 +4,7 @@ One `tick()` = one game hour. Everything time-based (needs, hunts, conflicts) ad
 """
 import json
 import math
+import time
 import random
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -85,6 +86,13 @@ class Game:
         self.pit_lost: List[str] = []                  # gear left behind in the Gloop Pit
         self.potions: Dict[str, int] = {}              # 'kind:grade' -> count
         self.potion_peak: Dict[str, int] = {}          # most of each ever held: slimes leave 34% of it alone
+        self.time_mode = "turn"                        # 'turn' (you decide when time passes) | 'live' (wall-clock with dilation)
+        self.time_scale = 1.0
+        self.wall_last: Optional[float] = None
+        self.wall_frac = 0.0
+        self.expeditions: List[dict] = []              # live mode: parties away until a game tick
+        self._owed = 0.0                               # hours the current session still has to pay (live mode)
+        self.clock_fn = time.time
         self.keeper = keeper_mod.Keeper()
         self.relations = relationships.RelationshipEngine()
         self.emotions_mod = emotions
@@ -194,6 +202,98 @@ class Game:
         self._xp("pull", config.KEEPER_XP["pull"] * len(new))
         return new
 
+    # ---- time: turn-based or live (wall clock, dilated) ----------------------------------------------------
+    @property
+    def live(self) -> bool:
+        return self.time_mode == "live"
+
+    def set_time_mode(self, mode: str, scale: float = None) -> str:
+        if mode not in ("turn", "live"):
+            raise InvalidAction("Time mode must be 'turn' or 'live'.")
+        if scale is not None:
+            if scale not in config.LIVE_SCALES:
+                raise InvalidAction(f"Speed must be one of {', '.join(str(x) + 'x' for x in config.LIVE_SCALES)}.")
+            self.time_scale = float(scale)
+        if mode == "live" and not self.live:
+            self.wall_last, self.wall_frac = self.clock_fn(), 0.0
+        self.time_mode = mode
+        if mode == "turn":
+            self.expeditions_flush()
+            return "Turn-based time: time passes when you say so."
+        return (f"Live time: {config.LIVE_LOBBY_RATE * self.time_scale:g} game hour(s) per real hour at home, "
+                f"{config.LIVE_DUNGEON_RATE * self.time_scale:g} while a party is in a dungeon.")
+
+    def expeditions_flush(self) -> None:
+        """Leaving live mode: everyone who was away comes home at once."""
+        for e in self.expeditions:
+            self._clear_flag([self.roster[i] for i in e["ids"] if i in self.roster])
+        self.expeditions = []
+        for d in self.delves.values():
+            d.pop("ready_tick", None)
+
+    def clock_rate(self) -> float:
+        """Game hours per real hour right now: faster while a party is away in a dungeon."""
+        busy = bool(self.expeditions or self.delves)
+        return (config.LIVE_DUNGEON_RATE if busy else config.LIVE_LOBBY_RATE) * self.time_scale
+
+    def sync(self) -> List[str]:
+        """Live mode: turn elapsed wall-clock time into game hours (at most a capped catch-up). No-op in turn mode."""
+        if not self.live:
+            return []
+        now = self.clock_fn()
+        if self.wall_last is None:
+            self.wall_last = now
+        dt = max(0.0, now - self.wall_last)
+        self.wall_last = now
+        self.wall_frac += dt / 3600.0 * self.clock_rate()
+        n = int(self.wall_frac + 1e-9)
+        self.wall_frac = max(0.0, self.wall_frac - n)
+        n = min(n, config.LIVE_CATCHUP_MAX_HOURS)
+        events: List[str] = []
+        for _ in range(n):                       # hour by hour so parties return, tasks finish and the rate can change
+            events.extend(self.tick(1))
+        return events
+
+    def _spend(self, hours: float) -> List[str]:
+        """Pay the time a dungeon activity takes: turn mode ticks the colony now; live mode keeps the party away
+        and lets the wall clock bring the colony forward."""
+        if not self.live:
+            return self.tick(int(hours)) if hours >= 1 else []
+        self._owed += hours
+        return []
+
+    def _occupy(self, slimes, hours: float, kind: str) -> List[str]:
+        """A home activity that takes time: turn mode lets the colony live those hours now; live mode keeps the
+        slimes busy until the wall clock has paid for them."""
+        if not self.live:
+            return self.tick(int(hours))
+        self._set_flag(slimes, kind)
+        self._owed = hours
+        self._release(slimes)
+        return []
+
+    def _release(self, party) -> None:
+        """End of a session: free the party now (turn mode) or when its time has been paid (live mode)."""
+        owed, self._owed = int(math.ceil(self._owed)), 0.0
+        alive = [s for s in party if s.id in self.roster]
+        if self.live and owed > 0 and alive:
+            self.expeditions.append(dict(ids=[s.id for s in alive], until=self.tick_count + owed, hours=owed))
+        else:
+            self._clear_flag(party)
+
+    def _return_expeditions(self, events: List[str]) -> None:
+        for e in list(self.expeditions):
+            if self.tick_count >= e["until"]:
+                self.expeditions.remove(e)
+                back = [self.roster[i] for i in e["ids"] if i in self.roster]
+                self._clear_flag(back)
+                if back:
+                    events.append("🏠 " + ", ".join(s.name for s in back[:5]) + (" and friends" if len(back) > 5 else "")
+                                  + " return from the dungeon.")
+
+    def remaining_hours(self, ready_tick: int) -> float:
+        return max(0.0, ready_tick - self.tick_count - self.wall_frac)
+
     # ---- time ------------------------------------------------------------------
     def tick(self, n: int = 1) -> List[str]:
         """Advance n hours. Returns the event log for those hours."""
@@ -212,6 +312,7 @@ class Game:
             self._healer_aura(self.slimes(), events)
             self.conflicts.tick(self.slimes(), events)
             self._reap(events)
+            self._return_expeditions(events)
             self._stamina_tick()
             self._emotion_tick(events)
             if self.tick_count % 24 == config.RELATIONS_HOUR:
@@ -232,7 +333,7 @@ class Game:
 
     def talk(self, sid: int) -> str:
         """Ask a slime how it feels. Aware legendaries may say something unsettling."""
-        s = self.slime(sid)
+        s = self._tend(sid)
         line = awakening.thought(s, self.mood_rng) if awakening.stage(s) and self.mood_rng.random() < 0.6 else None
         line = line or emotions.say(s, self.mood_rng)
         top = emotions.dominant(s, 1)
@@ -407,8 +508,15 @@ class Game:
                 events.append(f"💚 {h.name} tends to {t.name}.")
 
     # ---- care ------------------------------------------------------------------
-    def feed(self, sid: int) -> str:
+    def _tend(self, sid: int) -> Slime:
+        """Care (feeding, petting, sleeping, talking, potions) is impossible while a slime is inside a dungeon."""
         s = self.slime(sid)
+        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry"):
+            raise InvalidAction(f"{s.name} is inside a dungeon - you cannot tend to them until they are back.")
+        return s
+
+    def feed(self, sid: int) -> str:
+        s = self._tend(sid)
         self.wallet.spend("food", 1)
         s.needs.add("food", config.FOOD_NUTRITION)
         s.needs.add("belonging", 3)
@@ -419,14 +527,14 @@ class Game:
         return f"{s.name} nibbles happily (food {int(s.needs.get('food'))})."
 
     def sleep(self, sid: int) -> str:
-        s = self.slime(sid)
+        s = self._tend(sid)
         if s.busy:
             raise InvalidAction(f"{s.name} is away ({s.state}).")
         s.state = "sleeping"
         return f"{s.name} dozes off."
 
     def wake(self, sid: int) -> str:
-        s = self.slime(sid)
+        s = self._tend(sid)
         if s.state in ("sleeping", "resting"):
             s.state = "idle"
         return f"{s.name} wakes up."
@@ -439,7 +547,7 @@ class Game:
         return f"{s.name} will now {stance}."
 
     def pet(self, sid: int) -> str:
-        s = self.slime(sid)
+        s = self._tend(sid)
         s.needs.add("belonging", 15)
         s.needs.add("esteem", 5)
         gh = 1 + 0.5 * self.keeper.rank("gentle_hands")
@@ -523,7 +631,8 @@ class Game:
             res.summary.append(f"{d.emoji} {dummy_slime.name} drills on a training dummy")
             reward(dummy_slime, None, dummy=True)
             dummy_slime.needs.add("energy", -4)
-        events = self.tick(config.SPAR_TICKS)
+        who = {x for pr in pairs for x in pr} | ({dummy_slime} if dummy_slime else set())
+        events = self._occupy([x for x in who if x.id in self.roster], config.SPAR_TICKS, "train")
         res.summary.extend("   " + e for e in events if "died" in e)
         self.journal.extend(events)
         return res
@@ -849,7 +958,7 @@ class Game:
         self._after_battle(party, report)
         self._reap(events)
         if hours:
-            events.extend(self.tick(hours))
+            events.extend(self._spend(hours))
         report.log.extend(events)
         self.journal.extend(events)
         return report
@@ -1193,11 +1302,7 @@ class Game:
         ok = self.rng.random() < chance
         crit = ok and grade < 5 and grade + 1 <= lab and self.rng.random() < config.BREW_CRIT
         if wait:
-            self._set_flag([s], "lab")
-            try:
-                self.tick(potions.brew_hours(grade))
-            finally:
-                self._clear_flag([s])
+            self._occupy([s], potions.brew_hours(grade), "lab")
         pk = potions.KINDS[kind]
         if not ok:
             self.wallet.add_many({k: v // 2 for k, v in c.items() if k.startswith("herb_")})
@@ -1212,7 +1317,7 @@ class Game:
         return [f"{pk.emoji} {s.name} brews a grade {g} {pk.name}" + (" - a masterwork!" if crit else ".")]
 
     def use_potion(self, sid: int, kind: str, grade: int) -> str:
-        s = self.slime(sid)
+        s = self._tend(sid)
         k = potions.key(kind, grade)
         if self.potions.get(k, 0) <= 0 or kind not in potions.KINDS:
             raise InvalidAction("You have no such potion.")
@@ -1258,11 +1363,7 @@ class Game:
         self.wallet.spend_many(need)
         for it in worn:
             it.durability = it.max_durability
-        self._set_flag([s], "lab")
-        try:
-            self.tick(config.SLIME_REPAIR_HOURS)
-        finally:
-            self._clear_flag([s])
+        self._occupy([s], config.SLIME_REPAIR_HOURS, "lab")
         self.social.shift_morale(s, 3)
         s.needs.add("esteem", 6)
         return [f"🔧 {s.name} repairs " + ", ".join(it.label() for it in worn) + " (" +
@@ -1484,6 +1585,7 @@ class Game:
         pre: List[str] = []
         self._autonomy_prepare(party, pre)
         res.summary.extend("   " + x for x in pre)
+        self._owed = 0.0
         self._set_flag(party, kind)
         try:
             for n in range(1, runs + 1):
@@ -1536,7 +1638,7 @@ class Game:
                             it = self.new_item(lure)
                             events.append(f"🎁 Found {it.label()}"
                                           + (" - " + ", ".join(it.mod_text(m) for m in it.mods) if it.mods else "") + "!")
-                events.extend(self.tick(config.ADV_TICKS))
+                events.extend(self._spend(config.ADV_TICKS))
                 rep.log.extend(events)
                 res.runs.append(rep)
                 tag = "Victory" if rep.victory else "Defeat" if rep.winner == "foes" else "Draw"
@@ -1553,7 +1655,7 @@ class Game:
             else:
                 res.stop_reason = "finished all requested runs"
         finally:
-            self._clear_flag(party)
+            self._release(party)
         return res
 
     # ---- dungeons (common) ---------------------------------------------------------------------
@@ -1654,10 +1756,19 @@ class Game:
             self.enter_dungeon(pid, floor)
         return self.delve_next(pid)
 
+    def _delve_wait(self, d: dict) -> None:
+        """Live mode: a party that has just cleared a floor (or camped) is busy until the clock catches up."""
+        left = d.get("ready_tick", 0) - self.tick_count
+        if self.live and left > 0:
+            real_min = left / max(1e-9, self.clock_rate()) * 60
+            raise InvalidAction(f"The party is still busy: about {left} game hour(s), roughly "
+                                f"{real_min:.0f} real minute(s) at the current speed.")
+
     def delve_next(self, pid: int) -> BattleReport:
         d = self.delves.get(pid)
         if not d:
             raise InvalidAction("That party has not entered the dungeon (enter_dungeon first).")
+        self._delve_wait(d)
         party = self._members_in("main", pid)
         for s in party:
             if s.state == "sleeping":
@@ -1667,6 +1778,7 @@ class Game:
             raise InvalidAction("The Hollow Descent ends here: there is nothing deeper than floor "
                                 f"{dungeon.MAX_FLOOR}. Climb out.")
         k = self._knowledge(floor)
+        avg_level = sum(s.level for s in party) / max(1, len(party))
         info = dungeon.floor_info(self.dungeon_seed, floor, self.parties.size)
         enemies = info.enemies
         delver_share = sum(outlook.has(s, "delve") for s in party) / max(1, len(party))
@@ -1714,9 +1826,13 @@ class Game:
             events.append("☠ The whole party has fallen in the Hollow Descent.")
             self.delves.pop(pid, None)
         self._reap(events)
-        events.extend(self.tick(config.MAIN_FLOOR_TICKS))
+        spent = dungeon.clear_hours(floor, avg_level, k, len(party))
+        self._owed = 0.0
+        events.extend(self._spend(spent))
         if pid in self.delves:
-            self.delves[pid]["hours"] += config.MAIN_FLOOR_TICKS
+            self.delves[pid]["hours"] += spent
+            if self.live:
+                self.delves[pid]["ready_tick"] = self.tick_count + spent
             if not self._members_in("main", pid):          # everyone starved / died in the meantime
                 self.delves.pop(pid, None)
         report.log.extend(events)
@@ -1728,8 +1844,10 @@ class Game:
         d = self.delves.get(pid)
         if not d:
             raise InvalidAction("That party is not inside the dungeon.")
+        self._delve_wait(d)
         hours = max(1, min(config.CAMP_HEAL_HOURS_MAX, int(hours)))
         out: List[str] = []
+        self._owed = 0.0
         for _ in range(hours):
             party = self._members_in("main", pid)
             if not party:
@@ -1737,7 +1855,7 @@ class Game:
             for s in party:
                 if s.state == "idle":
                     s.state = "sleeping"
-            events = self.tick(1)
+            events = self._camp_hour(party)
             out.extend(e for e in events if "died" in e or "starv" in e)
             d["hours"] += 1
             party = self._members_in("main", pid)
@@ -1760,6 +1878,9 @@ class Game:
         for s in self._members_in("main", pid):
             if s.state == "sleeping":
                 s.state = "idle"
+        if self.live and pid in self.delves:
+            self.delves[pid]["ready_tick"] = self.tick_count + int(math.ceil(self._owed))
+        self._owed = 0.0
         self.journal.extend(out)
         return out
 
@@ -1808,13 +1929,14 @@ class Game:
         res = ScoutResult(first=first, last=last, hours=hours, required=round(total, 1), before=before, after=before)
         res.log.append(f"🔭 Scouting floors {first}-{last} with a budget of {hours}h (skill x{skill:.2f}): the party must "
                        f"finish everything or it is lost.")
+        self._owed = 0.0
         self._set_flag(party, "scout")
         elapsed = 0
         for h in range(hours):
             members = self._members_in("scout", pid)
             if not members or elapsed >= total:
                 break
-            events = self.tick(1)
+            events = self._spend(1)
             elapsed += 1
             res.log.extend("   " + e for e in events if "died" in e)
             members = self._members_in("scout", pid)
@@ -1850,7 +1972,7 @@ class Game:
             for s in survivors:
                 outlook.bump(s, "scout")
                 self.social.shift_morale(s, 3)
-            self._clear_flag(survivors)
+            self._release(survivors)
             res.log.append(f"✅ Floors {first}-{last} fully explored in {elapsed}h. The party returns with everything.")
         else:
             cum = 0.0                                  # what they had learned becomes a half-finished note
@@ -1901,6 +2023,7 @@ class Game:
         pre: List[str] = []
         self._autonomy_prepare(party, pre)
         res.summary.extend("   " + x for x in pre)
+        self._owed = 0.0
         self._set_flag(party, "grind")
         try:
             for n in range(1, max(1, runs) + 1):
@@ -1951,7 +2074,7 @@ class Game:
                     self._stone_side_drop("grind", len(enemies), events)
                     self._herb_drop("grind", len(enemies), events, theme.terrain)
                     self._recover_pit_gear(members, events)
-                events.extend(self.tick(config.GRIND_TICKS))
+                events.extend(self._spend(config.GRIND_TICKS))
                 rep.log.extend(events)
                 res.runs.append(rep)
                 tag = "Victory" if rep.victory else "Defeat" if rep.winner == "foes" else "Draw"
@@ -1971,8 +2094,19 @@ class Game:
             else:
                 res.stop_reason = "finished all requested runs"
         finally:
-            self._clear_flag(party)
+            self._release(party)
         return res
+
+    def _camp_hour(self, members) -> List[str]:
+        """One hour of rest in the field. Turn mode lets the colony live that hour; live mode applies the rest to
+        the party directly (the colony only moves with the wall clock) and charges the hour to the session."""
+        if not self.live:
+            return self.tick(1)
+        for s in members:
+            if s.id in self.roster:
+                s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR))
+                s.stamina_frac = min(1.0, s.stamina_frac + 0.1 * config.STAMINA_SLEEP_MULT)
+        return self._spend(1)
 
     def _camp(self, members, max_hours: int = 24) -> int:
         """Inside a dungeon: sleep (no Rest Area) until everyone is >= 85% HP."""
@@ -1984,7 +2118,7 @@ class Game:
             for s in members:
                 if s.state == "idle":
                     s.state = "sleeping"
-            self.tick(1)
+            self._camp_hour(members)
             hours += 1
             fm = 0.04 * self.keeper.rank("field_medic")
             if fm:
@@ -2023,7 +2157,8 @@ class Game:
                     delves={str(k): v for k, v in self.delves.items()},
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
-                    vault=[i.to_dict() for i in self.vault.values()], keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
+                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -2080,6 +2215,8 @@ class Game:
         for k, v in g.potions.items():
             g.potion_peak[k] = max(g.potion_peak.get(k, 0), v)
         g.autonomy = d.get("autonomy", True)
+        g.time_mode, g.time_scale = d.get("time_mode", "turn"), d.get("time_scale", 1.0)
+        g.wall_last, g.wall_frac = d.get("wall_last"), d.get("wall_frac", 0.0)
         g.keeper.load(d.get("keeper"))
         g._apply_keeper()
         g.vault_peak = d.get("vault_peak", 0)
@@ -2116,6 +2253,8 @@ class Game:
             st = d["rng_state"]
             g.rng.setstate((3, tuple(st[0]), st[1]))
         g.relations.load(d.get("relations"), set(g.roster))
+        g.expeditions = [dict(e, ids=[i for i in e["ids"] if i in g.roster]) for e in d.get("expeditions", [])]
+        g.expeditions = [e for e in g.expeditions if e["ids"]]
         g.journal = d.get("journal", [])
         g.journal.extend(awakening.load_notes(g.slimes(), g.mood_rng))
         return g

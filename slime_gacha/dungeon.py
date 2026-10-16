@@ -315,6 +315,17 @@ def intel_view(seed: int, floors, knowledge: dict, party_size: int) -> List[dict
 
 
 # ---- scouting: how long does a floor take to explore completely? ------------------------------
+def clear_hours(floor: int, avg_level: float, knowledge: float = 0.0, size: int = 5) -> int:
+    """Game hours a party needs to clear one floor: deeper floors take longer; a party stronger than the floor (and
+    one that already knows it from scouting) is faster, a weaker one slower."""
+    base = config.CLEAR_BASE_HOURS + config.CLEAR_HOURS_PER_FLOOR * floor
+    ratio = max(0.2, avg_level) / max(1.0, floor)
+    lvl = max(0.6, min(1.4, 1.3 - 0.3 * ratio))
+    know = 1 - config.CLEAR_KNOWLEDGE_CUT * max(0.0, min(100.0, knowledge)) / 100
+    team = 1 + 0.02 * (size - 5)                  # bigger parties move slower, small ones lighter
+    return max(1, int(round(base * lvl * know * team)))
+
+
 def floor_hours(seed: int, floor: int, skill: float = 1.0):
     """(nominal hours, actual hours) to scout one floor to 100%. The actual figure hides a seeded 0.85-1.20x
     factor, so an estimate is never exact - budget a margin or the party is lost."""

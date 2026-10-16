@@ -69,6 +69,36 @@ TRAIT_GAIN = dict(
 CAP = 0.35
 
 
+TRIGGERS = {          # what raises / lowers each feeling (shown in the in-game guide)
+    "joy": ("Winning a fight, being petted or fed, making up after a quarrel, a child being born, everything going well.",
+            "Sadness is quieted by it; it fades by 5 per hour."),
+    "anger": ("Hunger, quarrels and brawls, defeat, a friend's death, being a grumpy slime, rivals fighting side by side.",
+              "Calm, petting, eating when hungry and making up soothe it; it fades by 6 per hour."),
+    "sadness": ("Defeat, a friend's or partner's death, a split-up, exhaustion, broken morale.",
+                "Joy and affection quiet it; it fades slowly (3 per hour)."),
+    "fear": ("Danger (low safety), defeat, seeing someone die or be sacrificed; timid slimes feel it more.",
+             "Determination and victories ease it; it fades fast (7 per hour)."),
+    "pride": ("Victories (boss kills most), levelling, a mentee's success, high esteem; proud slimes feel it more.",
+              "Guilt dampens it; it fades by 3 per hour."),
+    "calm": ("A happy, rested, well-fed colony; resolving a quarrel; sleeping.",
+             "Anger dampens it; it fades by 3 per hour."),
+    "anxiety": ("Low safety, a lost fight, a new awareness of being 'code', sacrifices in the colony.",
+                "Victories and petting ease it; it fades by 4 per hour."),
+    "loneliness": ("Low belonging, losing a friend or partner.",
+                   "Petting, friends, parties and affection lift it; it lingers (1.5 per hour)."),
+    "determination": ("Losing a fight, a friend falling, rivals beside you, a mentor's pupil, a Rally.",
+                      "Fear is quieted by it; it fades by 3 per hour."),
+    "affection": ("Petting, fighting beside a partner or best friend, spending days with a friend, reconciliation.",
+                  "Loneliness is quieted by it; it fades slowly (2 per hour)."),
+    "guilt": ("Being the one a merge or chamber spared, a brawl, a rival's death.",
+              "Pride dampens it; it fades by 2.5 per hour."),
+    "dread": ("A 5-star legendary realising it is only code (permanent undercurrent while in despair).",
+              "Wonder quiets it; kindness (petting, friends) slowly wears the undercurrent away."),
+    "wonder": ("Awakening with acceptance (permanent undercurrent), a legendary seeing the world's patterns.",
+               "Dread dampens it; it fades by 2 per hour above its undercurrent."),
+}
+
+
 def level(slime, key: str) -> float:
     return slime.emotions.get(key, 0.0)
 

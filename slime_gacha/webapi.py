@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import ascension, attributes, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -178,11 +178,20 @@ def snapshot(g: Game) -> dict:
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
                                    boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
                                    knowledge=g._knowledge(d["floor"]),
+                                   ready_in=(max(0, d.get("ready_tick", 0) - g.tick_count) if g.live else 0),
+                                   next_hours=dungeon.clear_hours(d["floor"], sum(s.level for s in g._members_in("main", pid)) / max(1, len(g._members_in("main", pid))), g._knowledge(d["floor"]), max(1, len(g._members_in("main", pid)))),
                                    members=[m.id for m in g._members_in("main", pid)])
                     for pid, d in g.delves.items()},
             grind_depths=config.GRIND_DEPTHS, scout_hours=[config.SCOUT_MIN_HOURS, config.SCOUT_MAX_HOURS],
             scout_max_floors=config.SCOUT_MAX_FLOORS, scout_food=config.SCOUT_FOOD_PER_HOUR,
         ),
+        clock=dict(mode=g.time_mode, scale=g.time_scale, scales=list(config.LIVE_SCALES),
+                   lobby_rate=config.LIVE_LOBBY_RATE * g.time_scale, dungeon_rate=config.LIVE_DUNGEON_RATE * g.time_scale,
+                   rate_now=(g.clock_rate() if g.live else None),
+                   expeditions=[dict(names=[g.roster[i].name for i in e["ids"] if i in g.roster],
+                                     hours=max(0, e["until"] - g.tick_count),
+                                     real_min=round(max(0, e["until"] - g.tick_count) / max(1e-9, g.clock_rate()) * 60))
+                                for e in g.expeditions] if g.live else []),
         stress=round(g.sacrifice_stress, 2),
         gear=dict(shop=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier,
                              stats=x.stats, cost=x.cost) for x in g.gear_shop()],
@@ -302,8 +311,25 @@ def _party_hunt(g, a):
     return g.party_hunt(_i(a, "pid"), a.get("zone", "")), {}
 
 
+@command("guide")
+def _guide(g, a):
+    return [], dict(sections=guide_mod.build())
+
+
+@command("sync")
+def _sync(g, a):
+    return [], {}
+
+
+@command("set_time")
+def _set_time(g, a):
+    return _msg(g.set_time_mode(a.get("mode", "turn"), a.get("scale")))
+
+
 @command("wait")
 def _wait(g, a):
+    if g.live:
+        raise InvalidAction("Time passes by itself in live mode (switch to turn-based in the menu to skip ahead).")
     hours = max(1, min(72, _i(a, "hours", 1)))
     ev = g.tick(hours)
     return [f"{hours} hour(s) pass."] + ev, {}
@@ -649,8 +675,9 @@ class Session:
                 return dict(ok=False, error="No game in progress.", log=[], result={}, state=None, save=None)
             if cmd not in HANDLERS:
                 raise InvalidAction(f"Unknown command '{cmd}'.")
+            woke = self.game.sync()                    # live mode: the wall clock moves the colony forward first
             log, result = HANDLERS[cmd](self.game, args)
-            return self._ok(log, result)
+            return self._ok(woke + log, result)
         except GameError as e:
             return self._fail(str(e))
         except KeyError as e:                         # unknown zone / class / spell keys from the client

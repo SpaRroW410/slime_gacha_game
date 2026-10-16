@@ -145,3 +145,25 @@ th { color: var(--mute); font-weight: 600; font-size: .78rem; text-transform: up
 @keyframes spin { to { transform: rotate(360deg); } }
 .welcome { max-width: 520px; margin: 8vh auto; text-align: center; }
 @media (max-width: 640px) { main { padding: 10px; } .drawer { width: 100vw; } header.top { padding: 6px 10px; } .modal { width: 98vw; max-height: 92vh; } }
+
+/* ---- calmer UI: info tooltips, segmented controls, popovers, live bar, guide ---- */
+.info { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 8px; padding: 0; border-radius: 50%; border: 1px solid var(--mute); background: transparent; color: var(--mute); font: italic 700 .72rem/1 Georgia, serif; cursor: help; vertical-align: middle; }
+.info:hover, .info:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+#tip { position: fixed; z-index: 90; display: none; padding: 10px 12px; border-radius: 10px; background: var(--card); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: .85rem; line-height: 1.4; pointer-events: none; }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--card2); border: 1px solid var(--line); margin: 0 0 12px; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; color: var(--mute); padding: 6px 12px; border-radius: 8px; cursor: pointer; font: inherit; font-size: .88rem; }
+.seg button.on { background: var(--accent); color: #07281a; font-weight: 600; }
+.seg.small { margin: 0; } .seg.small button { padding: 4px 9px; font-size: .8rem; }
+.seg.dtabs { display: flex; margin-bottom: 8px; } .seg.dtabs button { flex: 1; }
+.popover { position: sticky; top: 56px; z-index: 40; margin: 0 auto; max-width: 1280px; padding: 8px 16px; background: var(--card); border-bottom: 1px solid var(--line); }
+.chipbtn { cursor: pointer; background: transparent; font: inherit; }
+.livebar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 6px 16px; max-width: 1280px; margin: 0 auto; font-size: .82rem; color: var(--mute); }
+.deathline { display: inline-block; margin: -2px 0 6px; padding: 2px 10px; border-radius: 999px; font-size: .78rem; border: 1px solid; }
+.deathline.bad { color: var(--bad); border-color: var(--bad); } .deathline.ok { color: var(--good); border-color: var(--good); }
+.dsec { margin: 0 0 4px; padding: 6px 0; border-top: 1px solid var(--line); } .dsec:first-of-type { border-top: 0; }
+.dsec h4 { margin: 4px 0 6px; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); }
+.guide { margin-top: 10px; } .guide summary { cursor: pointer; padding: 2px 0; } .guide dl { margin: 8px 0 0; display: grid; grid-template-columns: minmax(120px, 190px) 1fr; gap: 8px 14px; }
+.guide dt { font-weight: 600; } .guide dd { margin: 0; color: var(--text); opacity: .9; line-height: 1.45; }
+@media (max-width: 640px) { .guide dl { grid-template-columns: 1fr; gap: 2px; } .guide dd { margin-bottom: 8px; } }
+header.top { gap: 8px; } header.top .res { display: flex; gap: 6px; flex-wrap: wrap; }
+main h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }

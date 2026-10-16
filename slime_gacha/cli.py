@@ -568,6 +568,9 @@ def handle(g: Game, choice: str) -> bool:
             sid = _int("slime id: ")
             print("  " + g.hunt(sid, pick_zone()))
     elif choice == "7":
+        if g.live:
+            print("  Live time is on: time passes by itself while this save is open (use the browser menu to switch).")
+            return True
         n = _int("hours to wait (1-72): ")
         show_events(g.tick(max(1, min(72, n))))
     elif choice == "8":
@@ -637,6 +640,9 @@ def run_interactive(seed, save_path: str, party_size: int = config.PARTY_SIZE) -
         print("Welcome, Keeper. The Last Gacha Well hums. Claim your free daily pull (menu 3 -> f)!\n"
               "Beware: slimes that starve, hunt badly or fall in battle are gone for good.")
     while True:
+        woke = g.sync()
+        if woke:
+            show_events(woke)
         show_status(g)
         print(MENU)
         choice = _ask("> ").lower()
