@@ -415,7 +415,8 @@ function partyOptions(key, fullOnly = true, includeDelve = false) {
   const home = (p) => p.members.every((id) => { const m = slimeById(id); return m && !m.busy; });
   const list = st.parties.filter((p) => (includeDelve ? true : !p.in_delve && home(p)) && (!fullOnly || p.full));
   let cur = ui(key, list[0]?.id);
-  if (!list.some((p) => p.id == cur)) { cur = list[0]?.id; S.ui[key] = cur; }
+  if (!list.some((p) => p.id == cur)) cur = list[0]?.id;
+  S.ui[key] = cur;
   return list.length ? `<select data-ui="${key}" data-rerender="1">${list.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''}>${esc(p.name)} (${p.members.length}/${st.party_size})</option>`).join('')}</select>`
     : '<small class="mute">No party is free (full and at home). Make one in the Parties tab or wait for them to return.</small>';
 }
@@ -529,7 +530,8 @@ function academy() {
   const slimeSel = (key, filter = () => true, extra = '', idx = 0) => {
     const list = st.slimes.filter(filter);
     let cur = ui(key, list[Math.min(idx, list.length - 1)]?.id);
-    if (!list.some((s) => s.id == cur)) { cur = list[Math.min(idx, list.length - 1)]?.id; S.ui[key] = cur; }   // a slime that left is no longer chosen
+    if (!list.some((s) => s.id == cur)) cur = list[Math.min(idx, list.length - 1)]?.id;   // a slime that left is no longer chosen
+    S.ui[key] = cur;   // what the dropdown shows is what the action uses
     if (!list.length) return '<small class="mute">nobody is free</small>';
     return `<select data-ui="${key}" ${extra}>${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} Lv${s.level} ${s.stars}★)</option>`).join('')}</select>`;
   };
@@ -537,7 +539,8 @@ function academy() {
   const lib = st.library;
   const scholars = st.slimes.filter((s) => s.can_master && avail(s));
   let lsid = num(ui('lib_s', scholars[0]?.id));
-  if (!scholars.some((s) => s.id === lsid)) { lsid = scholars[0]?.id; S.ui.lib_s = lsid; }
+  if (!scholars.some((s) => s.id === lsid)) lsid = scholars[0]?.id;
+  S.ui.lib_s = lsid;
   const ls = slimeById(lsid);
   const away = st.slimes.filter((s) => !avail(s)).length;
   const known = ls ? ls.spells : [];
