@@ -216,3 +216,10 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Dungeon activities keep parties away on the wall clock; floor clear time from depth, level and knowledge
 - [x] (i) tooltips, death-only dungeon subheadings, eight tabs with sub-tabs, tabbed slime card
 - [x] Guide tab (booklet of attributes, with what raises / lowers them)
+
+## M20 — Manual battles
+- [x] Steppable battle engine; each party slime acts on its own turn
+- [x] Hollow Descent, Gloop Pit and skirmishes (not Rift / Quarry / sparring)
+- [x] Switch between manual and auto at any time (whole fight, one turn, later Pit runs)
+- [x] Mini battle arena in the browser (text; renderer isolated for later animation)
+- [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

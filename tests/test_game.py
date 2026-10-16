@@ -311,7 +311,7 @@ class TestBattle(unittest.TestCase):
 
     def test_necromancer_summons(self):
         g = fresh(8)
-        pid = full_party(g, "necromancer", "epic", 2000)
+        pid = full_party(g, "necromancer", "epic", 20000)
         rep = g.battle(pid, 1)
         self.assertTrue(any("Bone Pal" in l for l in rep.log))
 

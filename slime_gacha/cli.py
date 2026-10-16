@@ -63,7 +63,7 @@ def show_status(g: Game) -> None:
 def show_slime(s) -> None:
     st = s.max_stats()
     print(f"\n{s.arch.emoji} {s.name} - {s.title()} ({s.rarity}, {s.star_str()}) Lv{s.level}/{s.level_cap}  "
-          f"XP {s.xp}/{config.xp_to_next(s.level)}  stage {s.stage}  merged x{s.merged}")
+          f"XP {s.xp}/{s.xp_needed(s.level)}  stage {s.stage}  merged x{s.merged}")
     print(f"  HP {s.hp}/{s.max_hp}  ATK {st['atk']}  DEF {st['defense']}  MAG {st['mag']}  SPD {st['spd']}")
     print(f"  traits: {', '.join(s.traits)}  | stance: {s.behavior}  | state: {s.state}"
           + (f" ({s.hunt.zone}, {s.hunt.ticks_left}h left)" if s.hunt else ""))

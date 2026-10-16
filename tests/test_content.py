@@ -82,7 +82,7 @@ class TestBestiary(unittest.TestCase):
         c = bestiary.player_curve
         self.assertEqual(c(1), 1.0)
         self.assertGreater(c(11), c(10) * 1.4)              # evolving to stage 1
-        self.assertGreater(c(26), c(25) * 1.3)              # evolving to stage 2
+        self.assertGreater(c(31), c(30) * 1.3)              # evolving to stage 2
         self.assertEqual(bestiary.difficulty(1), 1.0)
         self.assertAlmostEqual(bestiary.difficulty(8), 1.65)
         self.assertEqual(bestiary.difficulty(30, pit=True), 1.0)

@@ -380,7 +380,7 @@ class TestPitPenalties(unittest.TestCase):
         g = rich()
         s = g.gacha.make_slime("common", "barbarian")
         s.level, s.xp, s.total_xp = 5, 100, 1000
-        need = config.xp_to_next(5)
+        need = s.xp_needed(5)
         lost = lose_xp(s, 0.4)
         self.assertEqual(lost, int(need * 0.4))
         self.assertEqual(s.total_xp, 1000 - lost)

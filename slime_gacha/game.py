@@ -67,6 +67,7 @@ class Game:
         self.conflicts = ConflictEngine(self.rng)
         self.hunts = HuntSystem(self.wallet, self.rng)
         self.battles = BattleSystem(self.rng, self.wallet)
+        self.flow = None                       # the manual-capable battle in progress (memory only, never saved)
         self.buildings = BuildingManager(self.wallet)
         self.library = Library(self.wallet, self.buildings)
         self.academy = AcademySystem(self.wallet, self.rng, self.library, self.buildings)
@@ -879,13 +880,16 @@ class Game:
                                 f"parties must be full.")
 
     # ---- battle -----------------------------------------------------------------
-    def battle(self, pid: int, tier: int = 1) -> BattleReport:
+    def battle(self, pid: int, tier: int = 1, manual: bool = False):
         """A full party fights a wave of tier-N enemies (one foe per party slot; tier 4 = boss).
-        Fallen slimes are gone for good."""
+        Fallen slimes are gone for good. With manual=True it pauses for orders (returns None until it ends)."""
+        return self._play(self._skirmish_gen(pid, tier), "skirmish", manual)
+
+    def _skirmish_gen(self, pid: int, tier: int):
         self._require_full(pid)
         party = self._ready_party(pid)
         enemies = self.battles.generate_enemies(tier, self.parties.size)
-        return self._fight(party, enemies, 0)
+        return (yield from self._fight_gen(party, enemies, 0))
 
     def _ready_party(self, pid: int) -> List[Slime]:
         self._require_full(pid)
@@ -897,8 +901,9 @@ class Game:
                 raise InvalidAction(f"{s.name} is grounded after a brawl.")
         return party
 
-    def _run_battle(self, party, enemies, intel: float = 1.0, **opts) -> BattleReport:
-        """BattleSystem.run with party synergy (compatibility) and scouting intel applied."""
+    def _battle_gen(self, party, enemies, intel: float = 1.0, allow_manual: bool = True, **opts):
+        """One fight as a generator: party synergy (compatibility) and scouting intel applied. Under a manual flow it
+        yields at every party slime's turn; the generator returns the BattleReport."""
         syn = self.social.synergy(party) * intel * (1 + self.relations.synergy_delta(party))
         self.relations.prebattle(party, emotions)
         bc = 6 * self.keeper.rank("battle_cry")
@@ -906,11 +911,90 @@ class Game:
             for s in party:
                 emotions.feel(s, "determination", bc)
                 emotions.feel(s, "pride", bc)
-        report = self.battles.run(party, enemies, synergy=syn, **opts)
-        report.log.insert(1, f"🤝 Party synergy {syn - 1:+.1%} (avg compatibility "
-                             f"{self.social.avg_compat(party):+.0f}"
-                             + (f", scouting intel {intel - 1:+.0%}" if intel != 1.0 else "") + ")")
-        return report
+        flow = self.flow if allow_manual else None
+        run = self.battles.start(party, enemies, synergy=syn, manual=bool(flow and flow["manual"]), **opts)
+        run.log.insert(1, f"🤝 Party synergy {syn - 1:+.1%} (avg compatibility "
+                          f"{self.social.avg_compat(party):+.0f}"
+                          + (f", scouting intel {intel - 1:+.0%}" if intel != 1.0 else "") + ")")
+        if flow is not None:
+            flow["run"] = run
+        run.advance()
+        while not run.done:
+            yield run
+        if flow is not None:
+            flow["run"] = None
+        return run.report
+
+    def _run_battle(self, party, enemies, intel: float = 1.0, **opts) -> BattleReport:
+        """An automatic fight (no pausing): used by the activities that cannot be commanded by hand."""
+        gen = self._battle_gen(party, enemies, intel, allow_manual=False, **opts)
+        try:
+            next(gen)
+        except StopIteration as stop:
+            return stop.value
+        raise RuntimeError("an automatic battle paused")
+
+    # ---- manual battles ("take command") -------------------------------------------------------------
+    # Only the Hollow Descent, the Gloop Pit and skirmishes can be fought by hand. Each is a generator that yields
+    # whenever a party slime must choose; `flow` is the one battle in progress (kept in memory, never saved: the
+    # slimes' HP is only written back when the fight ends, so an abandoned battle simply never happened).
+    def _play(self, gen, kind: str, manual: bool):
+        if self.flow is not None:
+            raise InvalidAction("A battle is already under way - finish it first.")
+        self.flow = dict(kind=kind, gen=gen, manual=bool(manual), run=None)
+        return self._pump()
+
+    def _pump(self):
+        """Resume the current flow. Returns its result when it finishes, or None while it waits for orders."""
+        f = self.flow
+        try:
+            next(f["gen"])
+            return None
+        except StopIteration as stop:
+            self.flow = None
+            return stop.value
+        except BaseException:
+            self.flow = None
+            raise
+
+    def battle_run(self):
+        """The BattleRun waiting for orders, or None."""
+        f = self.flow
+        return f["run"] if f and f["run"] is not None and not f["run"].done else None
+
+    def battle_act(self, ability: str, target=None):
+        run = self.battle_run()
+        if run is None or run.waiting is None:
+            raise InvalidAction("No slime is waiting for orders.")
+        try:
+            run.act(ability, target)
+        except ValueError as e:
+            raise InvalidAction(str(e))
+        return self._pump()
+
+    def battle_auto_turn(self):
+        run = self.battle_run()
+        if run is None or run.waiting is None:
+            raise InvalidAction("No slime is waiting for orders.")
+        run.auto_turn()
+        return self._pump()
+
+    def battle_set_manual(self, manual: bool):
+        """Switch between commanding by hand and letting the slimes fight on their own - for the rest of this
+        session (every later fight of a Pit session too)."""
+        if self.flow is None:
+            raise InvalidAction("There is no battle to take command of.")
+        self.flow["manual"] = bool(manual)
+        run = self.battle_run()
+        if run is not None:
+            run.set_manual(manual)
+        return self._pump()
+
+    def abandon_battle(self) -> None:
+        """Drop a battle nobody will finish (a session restore): no HP was written, so nothing happened."""
+        f, self.flow = self.flow, None
+        if f:
+            f["gen"].close()
 
     def _after_battle(self, party, report: BattleReport, boss: bool = False, scale: float = 1.0) -> None:
         """Morale and bonds react to the outcome (deaths are handled when the dead are reaped)."""
@@ -951,9 +1035,9 @@ class Game:
             for s in alive:
                 self.social.shift_morale(s, scale * config.MORALE_LOSS)
 
-    def _fight(self, party, enemies, hours: int, **opts) -> BattleReport:
+    def _fight_gen(self, party, enemies, hours: int, **opts):
         """Run a battle, bury the fallen, then let `hours` pass (the colony keeps living)."""
-        report = self._run_battle(party, enemies, **opts)
+        report = yield from self._battle_gen(party, enemies, **opts)
         events: List[str] = []
         self._after_battle(party, report)
         self._reap(events)
@@ -1065,11 +1149,13 @@ class Game:
         self.wallet.spend("white_gel", ascension.rarity_cost(s))
         old = s.max_hp
         s.rarity = up
-        s.hp += s.max_hp - old
+        s.stars = 1                              # a new rarity starts again at one star; star attributes are locked until re-earned
+        s.hp = max(1, min(s.max_hp, s.hp + s.max_hp - old))
         s.needs.add("esteem", 20)
         self.social.shift_morale(s, 10)
         self._xp("ascend", config.KEEPER_XP["ascend"])
-        return f"✨ {s.name} ascends to {up}! (stats x{config.RARITY_STAT_MULT[up]})"
+        return (f"✨ {s.name} ascends to {up}! (stats x{config.RARITY_STAT_MULT[up]}) Stars reset to 1: the star attributes "
+                f"are locked until it climbs again.")
 
     def ascend_slime_star(self, sid: int) -> str:
         """Add a star, paid in ascension stones (10 / 100 / 1000 / 10000 common-stone equivalents)."""
@@ -1077,6 +1163,9 @@ class Game:
         need = ascension.star_cost(s)
         if need is None:
             raise InvalidAction(f"{s.name} already has {config.MAX_STARS} stars.")
+        lv = ascension.star_level(s)
+        if s.level < lv:
+            raise InvalidAction(f"{s.name} must reach level {lv} to ascend to {s.stars + 1} stars (now level {s.level}).")
         ascension.pay_stones(self.wallet, need)
         old = s.max_hp
         s.stars += 1
@@ -1764,7 +1853,11 @@ class Game:
             raise InvalidAction(f"The party is still busy: about {left} game hour(s), roughly "
                                 f"{real_min:.0f} real minute(s) at the current speed.")
 
-    def delve_next(self, pid: int) -> BattleReport:
+    def delve_next(self, pid: int, manual: bool = False):
+        """Fight the next floor. With manual=True the fight pauses for orders (returns None until it ends)."""
+        return self._play(self._delve_gen(pid), "delve", manual)
+
+    def _delve_gen(self, pid: int):
         d = self.delves.get(pid)
         if not d:
             raise InvalidAction("That party has not entered the dungeon (enter_dungeon first).")
@@ -1782,8 +1875,8 @@ class Game:
         info = dungeon.floor_info(self.dungeon_seed, floor, self.parties.size)
         enemies = info.enemies
         delver_share = sum(outlook.has(s, "delve") for s in party) / max(1, len(party))
-        report = self._run_battle(party, enemies, intel=(1 + config.INTEL_POWER_BONUS * k / 100)
-                                  * (1 + config.OUTLOOK_DELVER_POWER * delver_share), terrain=info.terrain)
+        report = yield from self._battle_gen(party, enemies, intel=(1 + config.INTEL_POWER_BONUS * k / 100)
+                                             * (1 + config.OUTLOOK_DELVER_POWER * delver_share), terrain=info.terrain)
         boss = dungeon.is_boss_floor(floor)
         report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}{' (BOSS)' if boss else ''}: {info.title} "
                              f"[knowledge {k:.0f}%]")
@@ -2007,7 +2100,12 @@ class Game:
                 f"{get_ability(spec.ability).name}. {spec.description}")
 
     # ---- grinding dungeon: The Gloop Pit (committed session of N runs) -----------------------------
-    def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True) -> GrindResult:
+    def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True, manual: bool = False):
+        """Commit the party to a Pit session (see _grind_gen). With manual=True it pauses for orders in every
+        fight (returns None until the whole session ends); you can hand it back to the slimes at any time."""
+        return self._play(self._grind_gen(pid, depth, runs), "pit", manual)
+
+    def _grind_gen(self, pid: int, depth: int = 3, runs: int = 1):
         """Commit the party to `runs` Pit fights at `depth` (enemy level = party average + depth - 3).
         Once in, they only leave when all runs are done or the whole party is knocked out; they camp (sleep,
         eat) between runs when hurt. A slime that goes down is not dead, but loses XP and morale and DROPS ITS
@@ -2044,8 +2142,8 @@ class Game:
                 avg = sum(s.level for s in members) / len(members)
                 theme = dungeon.pit_theme(self.dungeon_seed, self.day)
                 enemies = dungeon.grind_wave(avg, depth, self.parties.size, self.rng, theme)
-                rep = self._run_battle(members, enemies, permadeath=False, split_xp=False,
-                                       xp_mult=config.GRIND_XP_MULT, terrain=theme.terrain)
+                rep = yield from self._battle_gen(members, enemies, permadeath=False, split_xp=False,
+                                                  xp_mult=config.GRIND_XP_MULT, terrain=theme.terrain)
                 rep.log.insert(0, f"🕳 The Gloop Pit - depth {depth} (enemy lvl ~{dungeon.grind_level(avg, depth)}) - "
                                   f"today: {theme.title}")
                 if n == 1 or theme.day != last_day:
@@ -2257,4 +2355,8 @@ class Game:
         g.expeditions = [e for e in g.expeditions if e["ids"]]
         g.journal = d.get("journal", [])
         g.journal.extend(awakening.load_notes(g.slimes(), g.mood_rng))
+        away = {i for e in g.expeditions for i in e["ids"]}      # a battle that was open when the game was saved is gone:
+        for sl in g.slimes():                                     # free its party (the Descent keeps its own delve flags)
+            if sl.in_dungeon in ("grind", "scout", "adventure", "quarry") and sl.id not in away:
+                sl.in_dungeon = ""
         return g

@@ -69,9 +69,9 @@ STAR_ATTRS = {                       # class -> attributes gained at 2, 3, 4, 5 
 
 
 def star_attributes(slime) -> List[dict]:
-    """Attributes unlocked by stars (value grows a little with rarity)."""
+    """Attributes unlocked by stars; the higher the rarity, the harder they hit (x1 common ... x3 legendary)."""
     out = []
-    boost = 1 + 0.1 * (config.RARITIES.index(slime.rarity))
+    boost = config.STAR_ATTR_RARITY_BOOST[slime.rarity]
     for i, (key, v) in enumerate(STAR_ATTRS.get(slime.archetype, [])):
         if slime.stars >= i + 2:
             out.append(dict(key=key, label=ATTR_LABEL[key], value=round(v * boost, 3), star=i + 2))

@@ -118,6 +118,10 @@ class Slime:
     def arch(self) -> Archetype:
         return get_archetype(self.archetype)
 
+    def xp_needed(self, level: int) -> int:
+        """XP to go from `level` to the next, for this slime's rarity and stars."""
+        return config.xp_to_next(level, self.rarity, self.stars)
+
     @property
     def level_cap(self) -> int:
         return config.LEVEL_CAPS[min(self.stage, len(config.LEVEL_CAPS) - 1)]

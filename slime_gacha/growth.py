@@ -16,8 +16,8 @@ def add_xp(slime, amount: int) -> List[str]:
         return log
     slime.total_xp += amount
     slime.xp += amount
-    while slime.level < slime.level_cap and slime.xp >= config.xp_to_next(slime.level):
-        slime.xp -= config.xp_to_next(slime.level)
+    while slime.level < slime.level_cap and slime.xp >= slime.xp_needed(slime.level):
+        slime.xp -= slime.xp_needed(slime.level)
         old_max = slime.max_hp
         slime.level += 1
         slime.hp += slime.max_hp - old_max            # gain the new max HP
@@ -27,14 +27,14 @@ def add_xp(slime, amount: int) -> List[str]:
             if lvl == slime.level:
                 log.append(f"   {slime.name} learned {get_ability(key).name}!")
     if slime.level >= slime.level_cap:
-        slime.xp = min(slime.xp, config.xp_to_next(slime.level) - 1)   # parked at cap
+        slime.xp = min(slime.xp, slime.xp_needed(slime.level) - 1)   # parked at cap
     return log
 
 
 def lose_xp(slime, fraction: float) -> int:
     """Lose `fraction` of the xp needed for the next level. Can drop one level (never below 1) but not further.
     Returns the xp actually lost (lifetime xp shrinks too)."""
-    want = int(config.xp_to_next(slime.level) * fraction)
+    want = int(slime.xp_needed(slime.level) * fraction)
     lost = 0
     if slime.xp >= want:
         slime.xp -= want
@@ -42,7 +42,7 @@ def lose_xp(slime, fraction: float) -> int:
     elif slime.level > 1:                       # slide back into the previous level
         lost = slime.xp
         slime.level -= 1
-        slime.xp = max(0, config.xp_to_next(slime.level) - (want - lost))
+        slime.xp = max(0, slime.xp_needed(slime.level) - (want - lost))
         lost = want
         slime.hp = min(slime.hp, slime.max_hp)
     else:

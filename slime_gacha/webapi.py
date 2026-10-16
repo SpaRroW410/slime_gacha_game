@@ -32,7 +32,7 @@ def slime_view(g: Game, s) -> dict:
     return dict(
         id=s.id, name=s.name, archetype=s.archetype, class_name=a.name, emoji=a.emoji, title=s.title(),
         rarity=s.rarity, stars=s.stars, level=s.level, level_cap=s.level_cap, stage=s.stage,
-        xp=s.xp, xp_next=config.xp_to_next(s.level), total_xp=s.total_xp,
+        xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
         hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
@@ -68,7 +68,7 @@ def slime_view(g: Game, s) -> dict:
                      proficiency={f: dict(uses=s.proficiency.get(f, 0), level=items_mod.proficiency_level(s, f))
                                   for f in items_mod.FAMILIES if s.proficiency.get(f, 0) or f in s.weapon_memory}),
         ascend=dict(next_rarity=ascension.next_rarity(s.rarity), rarity_cost=ascension.rarity_cost(s),
-                    star_cost=ascension.star_cost(s), chamber=ascension.chamber_yield(s, g.buildings.level("chamber"))),
+                    star_cost=ascension.star_cost(s), star_level=ascension.star_level(s), chamber=ascension.chamber_yield(s, g.buildings.level("chamber"))),
         gear=dict(s.gear), items={k: _item_view(v, s) for k, v in s.items.items()}, task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
         party=(party.id if party else None), can_evolve=can_evolve(s),
         evolve_cost=(evolve_cost(s) if can_evolve(s) else None), discipline=a.discipline,
@@ -135,7 +135,9 @@ def snapshot(g: Game) -> dict:
                     entry=(g.entry_options(p.id) if p.members else [1]),
                     min_progress=min((g.slime(i).progress for i in p.members), default=0))
                for p in g.parties.parties.values()]
+    run = g.battle_run()
     return dict(
+        battle=(dict(run.view(), kind=g.flow["kind"]) if run else None),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
         potions=dict(stock=[dict(kind=k.split(':')[0], grade=int(k.split(':')[1]), n=n) for k, n in sorted(g.potions.items())],
@@ -614,11 +616,57 @@ def _scout_plan(g, a):
     return [], g.scout_plan(_i(a, "pid"), _i(a, "first"), _i(a, "last"))
 
 
-@command("delve_next")
-def _delve_next(g, a):
-    r = g.delve_next(_i(a, "pid"))
+def _finish_delve(r):
     return [r.log[0]] + [l for l in r.log if "cleared" in l or "fallen" in l or "bounty" in l
                          or "found" in l or "carries" in l or "lost in" in l], dict(battle=[_battle(r)])
+
+
+def _finish_grind(r):
+    return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
+def _finish_skirmish(r):
+    return [r.log[-1]], dict(battle=[_battle(r)])
+
+
+_FINISH = dict(delve=_finish_delve, pit=_finish_grind, skirmish=_finish_skirmish)
+
+
+def _flow_result(g, kind, r):
+    """A command that may have paused for orders: `pending` while a battle waits, the usual result once it ends."""
+    if r is None:
+        run = g.battle_run()
+        return ([], dict(pending=True)) if run else ([], dict(pending=False))
+    log, result = _FINISH[kind](r)
+    return log, dict(result, pending=False)
+
+
+def _manual(a) -> bool:
+    return bool(a.get("manual"))
+
+
+@command("delve_next")
+def _delve_next(g, a):
+    return _flow_result(g, "delve", g.delve_next(_i(a, "pid"), _manual(a)))
+
+
+@command("battle_act")
+def _battle_act(g, a):
+    kind = g.flow["kind"] if g.flow else None
+    t = a.get("target")
+    return _flow_result(g, kind, g.battle_act(str(a.get("ability", "")), None if t is None else int(t)))
+
+
+@command("battle_auto_turn")
+def _battle_auto_turn(g, a):
+    kind = g.flow["kind"] if g.flow else None
+    return _flow_result(g, kind, g.battle_auto_turn())
+
+
+@command("battle_manual")
+def _battle_manual(g, a):
+    kind = g.flow["kind"] if g.flow else None
+    return _flow_result(g, kind, g.battle_set_manual(bool(a.get("manual"))))
 
 
 @command("delve_camp")
@@ -642,17 +690,18 @@ def _scout(g, a):
 
 @command("grind")
 def _grind(g, a):
-    r = g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)))
-    return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+    return _flow_result(g, "pit", g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)), manual=_manual(a)))
 
 
 @command("skirmish")
 def _skirmish(g, a):
-    r = g.battle(_i(a, "pid"), _i(a, "tier", 1))
-    return [r.log[-1]], dict(battle=[_battle(r)])
+    return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a)))
 
 
 # ---- session -----------------------------------------------------------------------------------------------
+BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual"}
+
+
 class Session:
     """Holds one Game. `call` is the only method transports need."""
 
@@ -675,7 +724,12 @@ class Session:
                 return dict(ok=False, error="No game in progress.", log=[], result={}, state=None, save=None)
             if cmd not in HANDLERS:
                 raise InvalidAction(f"Unknown command '{cmd}'.")
-            woke = self.game.sync()                    # live mode: the wall clock moves the colony forward first
+            if self.game.flow is not None:             # a battle is under way: only battle orders (and reads) are allowed
+                if cmd not in BATTLE_CMDS:
+                    raise InvalidAction("A battle is under way - finish it first (or press Auto to let the slimes finish it).")
+                woke = []
+            else:
+                woke = self.game.sync()                # live mode: the wall clock moves the colony forward first
             log, result = HANDLERS[cmd](self.game, args)
             return self._ok(woke + log, result)
         except GameError as e:

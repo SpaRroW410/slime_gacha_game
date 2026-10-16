@@ -38,7 +38,13 @@ def rarity_cost(slime) -> Optional[int]:
 
 
 def star_cost(slime) -> Optional[int]:
-    return config.STAR_ASCEND_STONES.get(slime.stars + 1)
+    base = config.STAR_ASCEND_STONES.get(slime.stars + 1)
+    return None if base is None else int(base * config.STAR_STONE_MULT[slime.rarity])
+
+
+def star_level(slime) -> Optional[int]:
+    """Level the slime must have reached to gain its next star (depends on rarity)."""
+    return config.STAR_LEVELS[slime.rarity][slime.stars - 1] if slime.stars < config.MAX_STARS else None
 
 
 def stones_invested(stars: int) -> int:

@@ -50,16 +50,23 @@ CONFLICT_ESCALATE_TICKS = 8
 BRAWL_HP_LOSS = 0.08       # brawls can kill an already wounded slime
 
 # ---- Growth ---------------------------------------------------------------
-LEVEL_CAPS = [10, 25, 50]           # per evolution stage
+LEVEL_CAPS = [10, 30, 100]          # per evolution stage
 STAGE_STAT_MULT = [1.0, 1.5, 2.1]
 EVOLVE_ESSENCE_BASE = 50            # * (stage + 1)
 MERGE_XP_RATIO = 1.0              # a merge hands over the XP the donor collected (no more, no less)
 MERGE_SAME_CLASS_BONUS = 1.25
 MERGE_RARITY_XP = {"common": 10, "uncommon": 20, "rare": 30, "epic": 80, "legendary": 200}   # (unused: a merge gives only the XP earned)
 
-def xp_to_next(level: int) -> int:
-    """XP needed to go from `level` to `level + 1`."""
-    return int(20 * level ** 1.5)
+XP_RARITY_MULT = {"common": 1, "uncommon": 2, "rare": 4, "epic": 8, "legendary": 16}   # doubles with every rarity
+STAR_LEVELS = {                                   # level needed to ascend to 2 / 3 / 4 / 5 stars: rarer slimes level slower, so they need fewer
+    "common": [10, 30, 60, 100], "uncommon": [10, 25, 50, 80], "rare": [10, 20, 40, 65],
+    "epic": [10, 15, 30, 50], "legendary": [10, 12, 22, 35]}
+STAR_STONE_MULT = {"common": 1, "uncommon": 1.5, "rare": 2, "epic": 3, "legendary": 4}   # stones for a star scale with rarity
+STAR_ATTR_RARITY_BOOST = {"common": 1.0, "uncommon": 1.3, "rare": 1.7, "epic": 2.2, "legendary": 3.0}   # star attributes hit harder
+
+def xp_to_next(level: int, rarity: str = "common", stars: int = 1) -> int:
+    """XP needed to go from `level` to `level + 1`: doubles with each rarity (common 1x ... legendary 16x). Stars do not change it."""
+    return int(20 * level ** 1.5 * XP_RARITY_MULT.get(rarity, 1))
 
 # ---- Battle ---------------------------------------------------------------
 CRIT_CHANCE = 0.08
