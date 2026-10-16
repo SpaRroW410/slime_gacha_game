@@ -159,3 +159,24 @@ class TestXpCurve(unittest.TestCase):
         self.assertEqual(config.xp_to_next(10, "common", 1), base)
         self.assertEqual([config.xp_to_next(1, r) for r in config.RARITIES], [20, 40, 80, 160, 320])
         self.assertEqual(config.xp_to_next(10, "common", 5), base)       # stars do not change it
+
+
+class TestLevelHundredBalance(unittest.TestCase):
+    def test_stat_growth_slows_above_fifty_and_pit_xp_keeps_pace(self):
+        from slime_gacha import config
+        self.assertEqual(config.stat_level(50), 50)
+        self.assertAlmostEqual(config.stat_level(100), 80)
+        self.assertEqual(config.pit_xp_boost(10), 1.0)
+        self.assertGreater(config.pit_xp_boost(100), config.pit_xp_boost(60))
+        self.assertGreater(config.pit_xp_boost(100), 3.0)
+
+    def test_a_level_hundred_party_still_beats_the_pit_and_levels_in_reasonable_runs(self):
+        from slime_gacha import config
+        g = rich(3)
+        pid = party(g, strong=False)
+        for s in members(g, pid):
+            s.stage, s.level = 2, 99
+            s.hp = s.max_hp
+        rep = g.grind(pid, 3, 1).runs[0]
+        self.assertTrue(rep.victory)
+        self.assertLess(config.xp_to_next(99) / max(1, rep.xp), 20)      # common: well under 20 Pit runs per level

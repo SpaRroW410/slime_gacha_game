@@ -2143,7 +2143,7 @@ class Game:
                 theme = dungeon.pit_theme(self.dungeon_seed, self.day)
                 enemies = dungeon.grind_wave(avg, depth, self.parties.size, self.rng, theme)
                 rep = yield from self._battle_gen(members, enemies, permadeath=False, split_xp=False,
-                                                  xp_mult=config.GRIND_XP_MULT, terrain=theme.terrain)
+                                                  xp_mult=config.GRIND_XP_MULT * config.pit_xp_boost(avg), terrain=theme.terrain)
                 rep.log.insert(0, f"🕳 The Gloop Pit - depth {depth} (enemy lvl ~{dungeon.grind_level(avg, depth)}) - "
                                   f"today: {theme.title}")
                 if n == 1 or theme.day != last_day:

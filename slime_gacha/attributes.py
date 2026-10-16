@@ -16,7 +16,7 @@ STAMINA_GROWTH = dict(barbarian=2.5, rogue=2.2, ranger=2.2, medic=2.0, mage=1.8,
 
 
 def max_stamina(slime) -> float:
-    base = STAMINA_BASE.get(slime.archetype, 80) + STAMINA_GROWTH.get(slime.archetype, 2.0) * (slime.level - 1)
+    base = STAMINA_BASE.get(slime.archetype, 80) + STAMINA_GROWTH.get(slime.archetype, 2.0) * (config.stat_level(slime.level) - 1)
     mult = 0.6 + 0.4 * config.RARITY_STAT_MULT[slime.rarity] * config.STAR_STAT_MULT[slime.stars - 1]
     return round(base * mult * (1 + buff_value(slime, "stamina")), 1)
 

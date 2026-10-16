@@ -268,7 +268,8 @@ def player_curve(level: float) -> float:
     caps (10 / 25), so the dungeon steps up where evolution lets the player step up."""
     stage = 0 if level <= config.LEVEL_CAPS[0] else 1 if level <= config.LEVEL_CAPS[1] else 2
     sm = config.STAGE_STAT_MULT[stage]
-    atk, hp = (9 + 2 * (level - 1)) * sm, (40 + 6 * (level - 1)) * sm
+    lv = config.stat_level(level)                      # same diminishing growth above level 50 as the slimes
+    atk, hp = (9 + 2 * (lv - 1)) * sm, (40 + 6 * (lv - 1)) * sm
     return (atk / 9 + hp / 40) / 2
 
 
