@@ -293,7 +293,7 @@ function dOverview(s, { st, free, inDun }) {
     ${bar(s.hp, s.max_hp, 'hp', 'HP')}${bar(s.xp, s.xp_next, 'xp', 'XP', s.level >= s.level_cap ? 'level cap' : `${s.xp}/${s.xp_next}`)}
     ${bar(s.morale, 100, 'morale', `Morale — ${s.morale_label}`, `power ×${s.morale_factor}`)}
     ${bar(s.stamina, s.max_stamina, 'know', `⚡ Stamina`, `${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}
-    ${s.buffs.length ? `<div class="row">${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}
+    ${s.buffs.length ? `<div class="row"><small class="mute">potion slots ${s.buffs.length}/${s.potion_slots}</small>${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}
     ${sect(`Needs ${s.dominant ? badge(WISH[s.dominant], 'warn') : badge('content', 'ok')}`, 'Needs fall over time. Unmet needs lower mood and morale, stir bad feelings and, at zero, hurt the slime. See the Guide tab for details.', Object.entries(s.needs).map(([k, v]) => bar(v, 100, 'need', NEED_NAME[k], v)).join(''))}
     ${sect('Care', inDun ? 'This slime is inside a dungeon: feeding, petting, sleeping and potions are not possible until it is back.' : 'Feeding, petting and rest. Not possible while a slime is inside a dungeon.', `<div class="row">
       ${care('feed', '🍖 Feed', st.wallet.food > 0 ? '' : 'x')}${care('pet', '🤗 Pet')}
@@ -449,7 +449,8 @@ function dungeonsAll() {
       <div class="row" style="margin-top:6px"><button class="btn primary" data-act="delve_next" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight floor ${v.floor}</button>${cmdToggle()}
         <input type="number" min="1" max="24" value="${camp}" data-ui="camp_h" style="width:70px"><button class="btn" data-act="delve_camp" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⛺ Camp (h)</button>
         <button class="btn ${v.can_leave ? 'primary' : ''}" data-act="leave_dungeon" data-pid="${pid}" ${v.can_leave ? '' : 'disabled'} title="${v.can_leave ? 'Climb out' : 'Only possible at a checkpoint'}">🚪 Leave</button></div>
-      ${v.can_leave ? '' : `<small class="mute">No way out until the boss of floor ${v.boss_floor} falls.</small>`}</div>`; }).join('')}
+      ${v.can_leave ? '' : `<small class="mute">No way out until the boss of floor ${v.boss_floor} falls.</small>`}
+      ${giftPanel(+pid)}</div>`; }).join('')}
     <div class="row">${partyOptions('dpid')}
       ${entryParty ? `<label class="f">Start at floor <select data-ui="dstart">${entry.map((f) => `<option value="${f}" ${f === dstart ? 'selected' : ''}>${f}</option>`).join('')}</select></label>` : ''}
       <button class="btn danger" data-act="enter_dungeon">Enter</button></div>
@@ -698,7 +699,39 @@ function sacrificeView() {
       <p class="mute">The Destruction Chamber breaks a slime into white gel and ascension stones (more for higher rarity, stars and chamber level). It is gone forever and the colony mourns (sacrifice stress).</p>
       <div class="row">${ds}</div>
       ${ssl ? `<div class="panel flat">${esc(ssl.name)} (${esc(ssl.rarity)} ${ssl.stars}★ Lv${ssl.level}) would give: <b>${esc(cost(ssl.ascend.chamber))}</b></div>` : ''}
-      <button class="btn danger" data-act="destroy_slime" data-id="${sid}" data-n="${esc(ssl?.name)}" data-y="${esc(ssl ? cost(ssl.ascend.chamber) : '')}" ${ssl ? '' : 'disabled'}>🔥 Destroy</button></div></div>`;
+      <button class="btn danger" data-act="destroy_slime" data-id="${sid}" data-n="${esc(ssl?.name)}" data-y="${esc(ssl ? cost(ssl.ascend.chamber) : '')}" ${ssl ? '' : 'disabled'}>🔥 Destroy</button></div></div>
+  ${relicGearSection()}`;
+}
+function relicGearSection() {
+  const st = S.state, gf = st.gift;
+  const vault = st.gear.vault.filter((i) => !i.ego);
+  const rname = (i) => `${i.emoji} ${i.name} [${i.rarity}] ${i.stars}★ Lv${i.level} (${i.slot})`;
+  const sel = (key, idx) => {
+    let cur = ui(key, vault[Math.min(idx, vault.length - 1)]?.uid);
+    if (!vault.some((i) => i.uid == cur)) cur = vault[Math.min(idx, vault.length - 1)]?.uid;
+    S.ui[key] = cur;
+    return `<select data-ui="${key}" data-rerender="1">${vault.map((i) => `<option value="${i.uid}" ${i.uid == cur ? 'selected' : ''}>${esc(rname(i))}</option>`).join('')}</select>`;
+  };
+  const t = vault.find((i) => i.uid == S.ui.rt), d = vault.find((i) => i.uid == S.ui.rd);
+  const okR = vault.length >= 2 && t && d && t.uid !== d.uid && t.slot === d.slot;
+  const inv = Object.entries(st.gear.inventory).filter(([, n]) => n > 0);
+  const defs = Object.fromEntries(st.gear.all.map((x) => [x.key, x]));
+  return `<div class="grid cols2" style="margin-top:12px">
+    <div class="panel stack"><h2>🗡️ Relics: merge &amp; destroy</h2>
+      <p class="mute">Only relics in the vault (not worn). <b>Merge</b>: the donor is consumed; the target gains levels, is fully mended and may inherit a mod. Both must be the same slot. <b>Destroy</b> breaks one into materials.</p>
+      ${vault.length ? `<div class="row"><label class="f">Target ${sel('rt', 0)}</label><label class="f">Donor ${sel('rd', 1)}</label></div>
+        ${t && d && t.slot !== d.slot ? '<small class="mute">Choose two relics of the same slot.</small>' : ''}
+        <button class="btn danger" data-act="merge_relic" ${okR ? '' : 'disabled'}>🫧 Merge relics</button>
+        <h4>Destroy a relic</h4>
+        ${vault.map((i) => `<div class="row between"><span>${esc(rname(i))}</span><button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${i.uid}" data-ask="Break this relic down for ${esc(cost(i.salvage))}?">♻️ ${esc(cost(i.salvage))}</button></div>`).join('')}` : '<p class="mute">The vault is empty. Relics come from the Wayfarer\'s Rift.</p>'}</div>
+    <div class="panel stack"><h2>⚔️ Gear: scrap &amp; merge</h2>
+      <p class="mute">Spare gear only (not worn). <b>Scrap</b> returns ${Math.round(gf.scrap * 100)}% of its price. <b>Merge</b> ${gf.merge_gear} identical pieces into one of the next tier (same slot).</p>
+      ${inv.length ? inv.map(([k, n]) => { const x = defs[k]; if (!x) return '';
+        const ups = st.gear.all.filter((y) => y.slot === x.slot && y.tier === x.tier + 1);
+        const back = cost(Object.fromEntries(Object.entries(x.cost).map(([a, v]) => [a, Math.max(1, Math.floor(v * gf.scrap))])));
+        return `<div class="panel flat stack"><div class="row between"><span>${x.emoji} <b>${esc(x.name)}</b> ×${n} <small class="mute">tier ${x.tier} ${x.slot}</small></span>
+          <button class="btn small danger" data-act="scrap_gear" data-key="${k}" data-n="${esc(x.name)}" data-y="${esc(back)}">♻️ Scrap one (${esc(back)})</button></div>
+          ${ups.length ? `<div class="row">${ups.map((u) => `<button class="btn small" data-act="merge_gear" data-key="${k}" data-into="${u.key}" data-c="${gf.merge_gear}" data-n="${esc(x.name)}" data-in_n="${esc(u.name)}" ${n >= gf.merge_gear ? '' : 'disabled'}>🫧 ${gf.merge_gear} → ${u.emoji} ${esc(u.name)}</button>`).join('')}</div>` : '<small class="mute">Top tier.</small>'}</div>`; }).join('') : '<p class="mute">No spare gear. Buy some in the Armory or find it in dungeons.</p>'}</div></div>`;
 }
 
 /* ---------------------------------------------------------------- town */
@@ -760,6 +793,27 @@ function records() {
     <div class="panel"><h2>📜 Journal</h2><div class="feed" style="max-height:60vh">${st.journal.slice().reverse().map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Quiet so far.</small>'}</div></div></div>`;
 }
 
+/* The commander's gifts: purple gel is the one way to reach a party inside the Descent (or fighting a skirmish). */
+function giftPanel(pid) {
+  const st = S.state, p = partyById(pid);
+  if (!p) return '';
+  const gf = st.gift, purple = st.wallet.purple_gel || 0;
+  const mem = p.members.map(slimeById).filter(Boolean);
+  const kinds = st.potions.kinds;
+  const gs = ui('gift_s_' + pid, mem[0]?.id), gk = ui('gift_k', kinds[0]?.key), gg = num(ui('gift_g', 1), 1);
+  S.ui['gift_s_' + pid] = mem.some((s) => s.id == gs) ? gs : mem[0]?.id; S.ui.gift_k = gk; S.ui.gift_g = gg;
+  const price = gf.potion[gg - 1];
+  const quarrel = st.conflicts.some((c) => p.members.includes(c.a) && p.members.includes(c.b));
+  return `<details class="gifts" ${S.ui.giftOpen ? 'open' : ''}><summary><b>🎁 Commander's gifts</b> <small class="mute">(purple gel ${purple} — the only way to reach them in here)</small></summary>
+    <div class="row" style="margin:6px 0"><button class="btn small" data-act="gift" data-pid="${pid}" data-k="morale" ${purple >= gf.morale ? '' : 'disabled'} title="Raise the whole party's morale">💜 Morale +${gf.morale_gain} (${gf.morale})</button>
+      <button class="btn small" data-act="gift" data-pid="${pid}" data-k="peace" ${purple >= gf.peace && quarrel ? '' : 'disabled'} title="Settle quarrels inside the party">🤝 Settle quarrels (${gf.peace})</button></div>
+    <div class="row"><select data-ui="gift_s_${pid}">${mem.map((s) => `<option value="${s.id}" ${s.id == S.ui['gift_s_' + pid] ? 'selected' : ''}>${esc(s.name)} (${s.buffs.length}/${s.potion_slots})</option>`).join('')}</select>
+      <select data-ui="gift_k">${kinds.map((k) => `<option value="${k.key}" ${k.key === gk ? 'selected' : ''}>${k.emoji} ${esc(k.name)}</option>`).join('')}</select>
+      <select data-ui="gift_g" data-rerender="1">${[1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${n === gg ? 'selected' : ''}>grade ${n}</option>`).join('')}</select>
+      <button class="btn small" data-act="gift" data-pid="${pid}" data-k="potion" ${purple >= price ? '' : 'disabled'}>🧪 Buy &amp; give (${price} 💜)</button></div>
+    <small class="mute">Each slime holds 2 (1★) to 6 (5★) potions at once.</small></details>`;
+}
+
 /* ---------------------------------------------------------------- battle arena
    ARENA.render(view) turns the server's battle view into markup. It is the ONLY place that knows how a fight looks, so
    an animated arena (sprites, tweens) can replace it later without touching the rules or the commands.
@@ -797,6 +851,7 @@ const ARENA = {
         <div class="row">${abil}</div>` : '<div class="mute">The slimes are fighting on their own…</div>'}
         <div class="row" style="margin-top:6px">${w ? '<button class="btn small" data-act="battle_auto_turn" title="Let the slime decide this one turn">⏩ Auto this turn</button>' : ''}
           <button class="btn small" data-act="battle_manual" data-on="0" title="Let the slimes finish this fight (and later Pit runs) on their own">🤖 Hand over to auto</button></div></div>
+      ${b.pid && (b.kind === 'skirmish' || b.kind === 'delve') ? giftPanel(b.pid) : ''}
       <div class="log arena-log">${logHtml(b.log.slice(-14))}</div></div></div>`;
   },
 };
@@ -906,6 +961,12 @@ const A = {
     const r = await backend.call('scout_plan', { pid, first, last });
     if (r.ok) { S.plan = { ...r.result, first, last }; render(); } else toast(r.error, true); },
   use_safe: (d) => { S.ui.shours = num(d.h); render(); },
+  gift: (d) => { const pid = num(d.pid), k = d.k; const args = { pid, kind: k };
+    if (k === 'potion') Object.assign(args, { id: num(S.ui['gift_s_' + pid]), potion: S.ui.gift_k, grade: num(S.ui.gift_g, 1) });
+    return act('commander_gift', args); },
+  merge_relic: () => confirmThen('Feed the donor relic to the target? The donor is consumed for good.', () => act('merge_items', { target: num(S.ui.rt), donor: num(S.ui.rd) })),
+  scrap_gear: (d) => confirmThen(`Scrap one ${d.n} for ${d.y}?`, () => act('destroy_gear', { key: d.key, n: 1 })),
+  merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   toggle_manual: () => { S.ui.manual = !manualOn(); render(); },
   delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn() }, { title: 'The Hollow Descent' }),
   battle_pick: (d) => { const b = S.state.battle; const ab = b?.abilities.find((a) => a.key === d.key); if (!ab) return;
@@ -981,6 +1042,7 @@ document.addEventListener('change', async (e) => {
   }
 });
 document.addEventListener('input', (e) => { const t = e.target; if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); } });
+document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('gifts')) S.ui.giftOpen = e.target.open; }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.modal) A.closemodal(); else if (S.sel) A.closesel(); } });
 
 /* ---------------------------------------------------------------- boot */

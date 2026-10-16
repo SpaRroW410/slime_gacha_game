@@ -215,8 +215,10 @@ class BattleSystem:
             note = emotions.battle_note(s_)
             if note:
                 log.append(note)
-        return BattleRun(self, party, mine, enemies, everyone, log, terrain, manual,
-                         dict(permadeath=permadeath, split_xp=split_xp, xp_mult=xp_mult))
+        run = BattleRun(self, party, mine, enemies, everyone, log, terrain, manual,
+                        dict(permadeath=permadeath, split_xp=split_xp, xp_mult=xp_mult))
+        run.synergy = synergy
+        return run
 
     def _simulate(self, everyone, log, cap: int = config.ROUND_CAP):
         """Round loop shared by battles and duels. Returns (rounds, winner)."""
@@ -633,6 +635,18 @@ class BattleRun:
         bs._finish(self.party, self.mine, self.enemies, report, **self.opts)
         self.report = report
         self.waiting = None
+
+    def refresh(self, slime) -> None:
+        """A potion or a morale gift changed this slime mid-fight: rebuild its stats, keeping its current HP."""
+        c = next((c for c in self.mine if c.source is slime), None)
+        if c is None or not c.alive:
+            return
+        n = self.bs.from_slime(slime, getattr(self, "synergy", 1.0))
+        old_max = c.max_hp
+        c.stats, c.mods, c.power_mult, c.morale = n.stats, n.mods, n.power_mult, n.morale
+        c.hp = min(c.max_hp, c.hp + max(0.0, c.max_hp - old_max))
+        c.stamina_max, c.sta_regen = n.stamina_max, n.sta_regen
+        c.stamina = min(c.stamina_max, c.stamina)
 
     def set_manual(self, manual: bool) -> None:
         self.manual = manual

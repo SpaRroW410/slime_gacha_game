@@ -224,4 +224,6 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Mini battle arena in the browser (text; renderer isolated for later animation)
 - [x] Town > Merge & destroy: manual merge of any two free slimes (with preview) and the Destruction Chamber
 - [x] No mediation for quarrels involving a slime that is away
+- [x] Commander's gifts (purple gel) for Descent and skirmish parties; potion slots 2-6 by stars
+- [x] Relic merge, gear scrap and gear merge in Town > Merge & destroy
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

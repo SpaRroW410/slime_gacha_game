@@ -144,6 +144,11 @@ def build() -> list:
             dict(name="Scouting", text="Reach 100% of every targeted floor within the hour budget or the whole party is lost."),
             dict(name="Quarrels away from home", text="While either slime is in a dungeon, hunting or studying, you cannot mediate (no talk, no snack): the quarrel "
                                                        "keeps growing and is out of your hands until they return."),
+            dict(name="Commander's gifts", text="Purple gel is the one way to reach a party inside the Hollow Descent or fighting a skirmish: "
+                                                f"{c.GIFT_MORALE_COST} gel raises the whole party's morale by {c.GIFT_MORALE_GAIN}, {c.GIFT_PEACE_COST} gel settles quarrels inside the party, "
+                                                f"and potions are bought and drunk at once for {'/'.join(map(str, c.GIFT_POTION_PURPLE))} gel (grades 1-5). "
+                                                "In a manual battle the effect applies to the live fight."),
+            dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),
         dict(title="Time", icon="⏳", blurb="Two ways time can pass.", items=[

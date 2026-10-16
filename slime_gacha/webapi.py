@@ -55,7 +55,7 @@ def slime_view(g: Game, s) -> dict:
                    for r in g.relations.of(s.id)],
         parents=list(s.parents), parent_names=list(s.parent_names), generation=s.generation,
         merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
-        stamina=s.stamina, max_stamina=s.max_stamina, buffs=[dict(b) for b in s.buffs],
+        stamina=s.stamina, max_stamina=s.max_stamina, buffs=[dict(b) for b in s.buffs], potion_slots=attributes.potion_slots(s),
         star_attrs=attributes.star_attributes(s),
         next_star_attr=next(({"star": i + 2, "label": attributes.ATTR_LABEL[k], "value": v}
                              for i, (k, v) in enumerate(attributes.STAR_ATTRS.get(s.archetype, []))
@@ -137,7 +137,7 @@ def snapshot(g: Game) -> dict:
                for p in g.parties.parties.values()]
     run = g.battle_run()
     return dict(
-        battle=(dict(run.view(), kind=g.flow["kind"]) if run else None),
+        battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid")) if run else None),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
         potions=dict(stock=[dict(kind=k.split(':')[0], grade=int(k.split(':')[1]), n=n) for k, n in sorted(g.potions.items())],
@@ -196,6 +196,8 @@ def snapshot(g: Game) -> dict:
                                      real_min=round(max(0, e["until"] - g.tick_count) / max(1e-9, g.clock_rate()) * 60))
                                 for e in g.expeditions] if g.live else []),
         stress=round(g.sacrifice_stress, 2),
+        gift=dict(morale=config.GIFT_MORALE_COST, morale_gain=config.GIFT_MORALE_GAIN, peace=config.GIFT_PEACE_COST,
+                  potion=config.GIFT_POTION_PURPLE, merge_gear=config.GEAR_MERGE_COUNT, scrap=config.GEAR_SCRAP_REFUND),
         gear=dict(shop=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier,
                              stats=x.stats, cost=x.cost) for x in g.gear_shop()],
                   all=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier, stats=x.stats,
@@ -646,6 +648,27 @@ def _manual(a) -> bool:
     return bool(a.get("manual"))
 
 
+@command("commander_gift")
+def _commander_gift(g, a):
+    return g.commander_gift(_i(a, "pid"), str(a.get("kind", "")), (None if a.get("id") is None else _i(a, "id")),
+                            str(a.get("potion", "")), _i(a, "grade", 1)), {}
+
+
+@command("merge_items")
+def _merge_items(g, a):
+    return [g.merge_items(_i(a, "target"), _i(a, "donor"))], {}
+
+
+@command("destroy_gear")
+def _destroy_gear(g, a):
+    return [g.destroy_gear(str(a.get("key", "")), _i(a, "n", 1))], {}
+
+
+@command("merge_gear")
+def _merge_gear(g, a):
+    return [g.merge_gear(str(a.get("key", "")), str(a.get("into", "")))], {}
+
+
 @command("delve_next")
 def _delve_next(g, a):
     return _flow_result(g, "delve", g.delve_next(_i(a, "pid"), _manual(a)))
@@ -700,7 +723,7 @@ def _skirmish(g, a):
 
 
 # ---- session -----------------------------------------------------------------------------------------------
-BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual"}
+BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift"}
 
 
 class Session:

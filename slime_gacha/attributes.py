@@ -50,6 +50,11 @@ def action_cost(ability) -> float:
 
 
 # ---- buffs (potions) --------------------------------------------------------------------------------------------------------
+def potion_slots(slime) -> int:
+    """How many potions a slime can have active at once: 2 at one star up to 6 at five."""
+    return config.POTION_SLOTS_BASE + slime.stars
+
+
 def buff_value(slime, kind: str) -> float:
     return sum(b["bonus"] for b in getattr(slime, "buffs", []) if b["kind"] == kind)
 

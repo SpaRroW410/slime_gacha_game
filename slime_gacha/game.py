@@ -54,6 +54,10 @@ class GrindResult:
     stop_reason: str = ""
 
 
+def ids_of(slimes) -> set:
+    return {s.id for s in slimes}
+
+
 class Game:
     def __init__(self, seed: Optional[int] = None, party_size: int = config.PARTY_SIZE):
         load_plugins()
@@ -821,6 +825,55 @@ class Game:
                     grief=self.social.grief(d, self.slimes(), amp), stress=round(self.sacrifice_stress, 2),
                     away=[s.name for s in (t, d) if s.busy])
 
+    # ---- the commander's gifts (purple gel) ---------------------------------------------------------
+    def gift_party(self, pid: Optional[int] = None) -> Optional[int]:
+        """The party the commander may send gifts to right now: one inside the Descent, or in an open Descent /
+        skirmish battle. (Care is otherwise refused for slimes that are away; purple gel is the way in.)"""
+        f = self.flow
+        if f and f["kind"] in ("delve", "skirmish") and f.get("pid") is not None and pid in (None, f["pid"]):
+            return f["pid"]
+        if pid is not None and pid in self.delves:
+            return pid
+        return None
+
+    def commander_gift(self, pid: int, kind: str, sid: Optional[int] = None, potion: str = "", grade: int = 1) -> List[str]:
+        """kind: 'morale' (+morale for the whole party), 'peace' (settle the party's quarrels) or 'potion'
+        (a bought potion drunk by slime `sid`). Paid in purple gel; only for a Descent party or a skirmish."""
+        if self.gift_party(pid) != pid:
+            raise InvalidAction("Gifts can only reach a party inside the Hollow Descent, or fighting a skirmish.")
+        party = self.party_members(pid)
+        run = self.battle_run()
+        if kind == "morale":
+            self.wallet.spend("purple_gel", config.GIFT_MORALE_COST)
+            for s in party:
+                self.social.shift_morale(s, config.GIFT_MORALE_GAIN)
+                emotions.feel(s, "joy", 8)
+                if run:
+                    run.refresh(s)
+            return [f"🎁 The commander's gift lifts the party's spirits (+{config.GIFT_MORALE_GAIN} morale)."]
+        if kind == "peace":
+            ids = {s.id for s in party}
+            qs = [c for c in self.conflicts.conflicts if c.a in ids and c.b in ids]
+            if not qs:
+                raise InvalidAction("There is no quarrel inside this party.")
+            self.wallet.spend("purple_gel", config.GIFT_PEACE_COST)
+            for c in qs:
+                self.conflicts.resolve(c, self.roster, True)
+            return [f"🎁 A gift settles {len(qs)} quarrel{'s' if len(qs) > 1 else ''} in the party."]
+        if kind == "potion":
+            if sid not in ids_of(party):
+                raise InvalidAction("That slime is not in this party.")
+            s = self.slime(sid)
+            if potion not in potions.KINDS or not 1 <= grade <= 5:
+                raise InvalidAction("Unknown potion or grade.")
+            self._check_potion_slot(s, potion)
+            self.wallet.spend("purple_gel", config.GIFT_POTION_PURPLE[grade - 1])
+            msg = self._drink(s, potion, grade)
+            if run:
+                run.refresh(s)
+            return ["🎁 " + msg]
+        raise InvalidAction("Gift must be 'morale', 'peace' or 'potion'.")
+
     # ---- conflict -----------------------------------------------------------------
     def mediate(self, cid: int, method: str = "talk") -> str:
         c = self.conflicts.get(cid)
@@ -898,7 +951,7 @@ class Game:
     def battle(self, pid: int, tier: int = 1, manual: bool = False):
         """A full party fights a wave of tier-N enemies (one foe per party slot; tier 4 = boss).
         Fallen slimes are gone for good. With manual=True it pauses for orders (returns None until it ends)."""
-        return self._play(self._skirmish_gen(pid, tier), "skirmish", manual)
+        return self._play(self._skirmish_gen(pid, tier), "skirmish", manual, pid)
 
     def _skirmish_gen(self, pid: int, tier: int):
         self._require_full(pid)
@@ -953,10 +1006,10 @@ class Game:
     # Only the Hollow Descent, the Gloop Pit and skirmishes can be fought by hand. Each is a generator that yields
     # whenever a party slime must choose; `flow` is the one battle in progress (kept in memory, never saved: the
     # slimes' HP is only written back when the fight ends, so an abandoned battle simply never happened).
-    def _play(self, gen, kind: str, manual: bool):
+    def _play(self, gen, kind: str, manual: bool, pid: Optional[int] = None):
         if self.flow is not None:
             raise InvalidAction("A battle is already under way - finish it first.")
-        self.flow = dict(kind=kind, gen=gen, manual=bool(manual), run=None)
+        self.flow = dict(kind=kind, gen=gen, manual=bool(manual), run=None, pid=pid)
         return self._pump()
 
     def _pump(self):
@@ -1271,7 +1324,7 @@ class Game:
         return stock > math.ceil(peak * (1 - self.share))
 
     def _auto_drink(self, s: Slime, kind: str, log: List[str]) -> bool:
-        if any(b["kind"] == kind for b in s.buffs):
+        if any(b["kind"] == kind for b in s.buffs) or len(s.buffs) >= attributes.potion_slots(s):
             return False
         grades = sorted(g for (kk, g) in ((k.split(":")[0], int(k.split(":")[1])) for k in self.potions) if kk == kind)
         for g in grades:                                     # the humblest grade that is free to take
@@ -1425,9 +1478,19 @@ class Game:
         k = potions.key(kind, grade)
         if self.potions.get(k, 0) <= 0 or kind not in potions.KINDS:
             raise InvalidAction("You have no such potion.")
+        self._check_potion_slot(s, kind)
         self.potions[k] -= 1
         if not self.potions[k]:
             del self.potions[k]
+        return self._drink(s, kind, grade)
+
+    @staticmethod
+    def _check_potion_slot(s: Slime, kind: str) -> None:
+        if not any(b["kind"] == kind for b in s.buffs) and len(s.buffs) >= attributes.potion_slots(s):
+            raise InvalidAction(f"{s.name} can only have {attributes.potion_slots(s)} potion(s) active at once "
+                                f"({s.stars}-star). Wait for one to wear off.")
+
+    def _drink(self, s: Slime, kind: str, grade: int) -> str:
         s.buffs = [b for b in s.buffs if b["kind"] != kind]
         s.buffs.append(dict(kind=kind, grade=grade, bonus=potions.bonus(grade), hours=potions.hours(grade)))
         pk = potions.KINDS[kind]
@@ -1604,6 +1667,61 @@ class Game:
             del self.vault[uid]
         self.wallet.add_many(y)
         return f"♻️ {it.label()} is broken down: " + ", ".join(f"{v} {k}" for k, v in y.items()) + "."
+
+    def merge_items(self, target_uid: int, donor_uid: int) -> str:
+        """Feed one relic to another of the same kind of slot: the donor is consumed, the target gains levels
+        (its star and rarity are untouched), is fully mended, and may inherit one of the donor's mods."""
+        if target_uid == donor_uid:
+            raise InvalidAction("A relic can't merge with itself.")
+        t, th = self._item_ready(target_uid)
+        d, dh = self._item_ready(donor_uid)
+        if t.ego or d.ego:
+            raise InvalidAction("An ego relic holds a soul - it cannot be merged.")
+        if t.slot != d.slot:
+            raise InvalidAction(f"Only relics of the same slot merge ({t.slot} vs {d.slot}).")
+        gain = max(1, d.grade() // 3)
+        before = t.level
+        t.level = min(config.ITEM_MAX_LEVEL, t.level + gain)
+        t.durability = t.max_durability
+        have = {m["kind"] for m in t.mods}
+        extra = [m for m in d.mods if m["kind"] not in have]
+        note = ""
+        if extra and len(t.mods) < items_mod.RARITIES.index(t.rarity) + 1 and self.rng.random() < config.RELIC_MERGE_MOD_CHANCE:
+            m = dict(self.rng.choice(extra))
+            t.mods.append(m)
+            note = f" It inherits {t.mod_text(m)}."
+        if dh is not None:
+            dh.items.pop(d.slot, None)
+            dh.hp = min(dh.hp, dh.max_hp)
+        else:
+            del self.vault[donor_uid]
+        self._xp("forge", config.KEEPER_XP["forge"])
+        return (f"🫧 {d.label()} melts into {t.label()}: level {before} -> {t.level}, fully mended.{note}")
+
+    def destroy_gear(self, key: str, n: int = 1) -> str:
+        """Scrap spare gear (not equipped) for half of its price."""
+        g = equipment.GEAR.get(key)
+        n = max(1, int(n))
+        if self.inventory.items[key] < n:
+            raise InvalidAction(f"You do not have {n} spare {g.name}.")
+        for _ in range(n):
+            self.inventory.take(key)
+        back = {k: max(1, int(v * config.GEAR_SCRAP_REFUND)) * n for k, v in g.cost.items()}
+        self.wallet.add_many(back)
+        return f"♻️ {n} x {g.emoji}{g.name} scrapped: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in back.items()) + "."
+
+    def merge_gear(self, key: str, into: str) -> str:
+        """Merge GEAR_MERGE_COUNT identical spare gear into one piece of the next tier (same slot)."""
+        g, up = equipment.GEAR.get(key), equipment.GEAR.get(into)
+        if up.slot != g.slot or up.tier != g.tier + 1:
+            raise InvalidAction(f"{g.name} can only merge into a tier {g.tier + 1} {g.slot}.")
+        n = config.GEAR_MERGE_COUNT
+        if self.inventory.items[key] < n:
+            raise InvalidAction(f"Merging needs {n} spare {g.name} (you have {self.inventory.items[key]}).")
+        for _ in range(n):
+            self.inventory.take(key)
+        self.inventory.add(into)
+        return f"🫧 {n} x {g.emoji}{g.name} fuse into {up.emoji}{up.name}!"
 
     def fuse_ego(self, uid: int, sid: int) -> List[str]:
         """Sacrifice a 5-star legendary slime into a 5-star legendary relic: it becomes an EGO relic, wieldable only
@@ -1870,7 +1988,7 @@ class Game:
 
     def delve_next(self, pid: int, manual: bool = False):
         """Fight the next floor. With manual=True the fight pauses for orders (returns None until it ends)."""
-        return self._play(self._delve_gen(pid), "delve", manual)
+        return self._play(self._delve_gen(pid), "delve", manual, pid)
 
     def _delve_gen(self, pid: int):
         d = self.delves.get(pid)
@@ -2118,7 +2236,7 @@ class Game:
     def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True, manual: bool = False):
         """Commit the party to a Pit session (see _grind_gen). With manual=True it pauses for orders in every
         fight (returns None until the whole session ends); you can hand it back to the slimes at any time."""
-        return self._play(self._grind_gen(pid, depth, runs), "pit", manual)
+        return self._play(self._grind_gen(pid, depth, runs), "pit", manual, pid)
 
     def _grind_gen(self, pid: int, depth: int = 3, runs: int = 1):
         """Commit the party to `runs` Pit fights at `depth` (enemy level = party average + depth - 3).

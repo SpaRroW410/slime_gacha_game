@@ -26,6 +26,15 @@ PURPLE_RARITY_BOOST = 5.0 # multiplies rare/epic/legendary weights when paying w
 DAY_TICKS = 24          # one game day; one free pull per day
 FOOD_NUTRITION = 50     # food need restored per Food item
 MEDIATE_SNACK_COST = 2
+# Commander's gifts (purple gel): the only way to reach a party that is inside the Descent, or in a skirmish
+GIFT_MORALE_COST = 1
+GIFT_MORALE_GAIN = 12
+GIFT_PEACE_COST = 1
+GIFT_POTION_PURPLE = [1, 2, 3, 5, 8]          # purple gel for a grade 1-5 potion, bought and drunk on the spot
+POTION_SLOTS_BASE = 1                          # potion slots a slime can have active at once = this + stars (2 to 6)
+GEAR_SCRAP_REFUND = 0.5                        # share of a gear's price returned when it is destroyed
+GEAR_MERGE_COUNT = 3                           # identical gear that merge into one of the next tier
+RELIC_MERGE_MOD_CHANCE = 0.35                  # chance a merged relic inherits one of the donor's mods it lacks
 
 # ---- Needs (Maslow) -------------------------------------------------------
 # Order matters: lowest tier first. Higher tiers are suppressed while a lower one is unmet.
