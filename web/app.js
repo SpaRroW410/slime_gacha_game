@@ -412,10 +412,12 @@ function parties() {
 /* ---------------------------------------------------------------- dungeons */
 function partyOptions(key, fullOnly = true, includeDelve = false) {
   const st = S.state;
-  const list = st.parties.filter((p) => (includeDelve ? true : !p.in_delve) && (!fullOnly || p.full));
-  const cur = ui(key, list[0]?.id);
+  const home = (p) => p.members.every((id) => { const m = slimeById(id); return m && !m.busy; });
+  const list = st.parties.filter((p) => (includeDelve ? true : !p.in_delve && home(p)) && (!fullOnly || p.full));
+  let cur = ui(key, list[0]?.id);
+  if (!list.some((p) => p.id == cur)) { cur = list[0]?.id; S.ui[key] = cur; }
   return list.length ? `<select data-ui="${key}" data-rerender="1">${list.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''}>${esc(p.name)} (${p.members.length}/${st.party_size})</option>`).join('')}</select>`
-    : '<small class="mute">No full party available. Make one in the Parties tab.</small>';
+    : '<small class="mute">No party is free (full and at home). Make one in the Parties tab or wait for them to return.</small>';
 }
 function dungeonsAll() {
   const st = S.state, d = st.dungeon;
@@ -526,13 +528,18 @@ function academy() {
   const arena = ui('arena', 'sword');
   const slimeSel = (key, filter = () => true, extra = '', idx = 0) => {
     const list = st.slimes.filter(filter);
-    const cur = ui(key, list[Math.min(idx, list.length - 1)]?.id);
+    let cur = ui(key, list[Math.min(idx, list.length - 1)]?.id);
+    if (!list.some((s) => s.id == cur)) { cur = list[Math.min(idx, list.length - 1)]?.id; S.ui[key] = cur; }   // a slime that left is no longer chosen
+    if (!list.length) return '<small class="mute">nobody is free</small>';
     return `<select data-ui="${key}" ${extra}>${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} Lv${s.level} ${s.stars}★)</option>`).join('')}</select>`;
   };
-  const avail = (s) => !s.busy && s.state !== 'hunting';
+  const avail = (s) => !s.busy && s.state !== 'hunting' && s.state !== 'studying';
   const lib = st.library;
-  const lsid = num(ui('lib_s', st.slimes.find((s) => s.can_master)?.id));
+  const scholars = st.slimes.filter((s) => s.can_master && avail(s));
+  let lsid = num(ui('lib_s', scholars[0]?.id));
+  if (!scholars.some((s) => s.id === lsid)) { lsid = scholars[0]?.id; S.ui.lib_s = lsid; }
   const ls = slimeById(lsid);
+  const away = st.slimes.filter((s) => !avail(s)).length;
   const known = ls ? ls.spells : [];
   const ra = ui('res_a', known[0]), rb = ui('res_b', known[1]);
   const nameOf = (k) => st.spell_defs[k]?.name || k;
@@ -542,11 +549,12 @@ function academy() {
     <p class="mute">Training is not for XP. Slimes duel each other (non-lethal; the loser is left at <b>1 HP</b> — heal them at the Rest Area) to develop a <b>fighting style</b> with permanent combat perks. Costs ${cost(st.mercy.spar_cost)} per duel and ${st.mercy.train_ticks}h. Training Grounds L${tg.level}: ${esc(tg.now)}.</p>
     <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${arena === d.key ? 'sel' : ''}" data-act="arena" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><div class="sub">${esc(d.style)}</div><small class="mute">${esc(d.perk)}</small></div>`).join('')}</div>
     <div class="row"><b>Duel:</b> ${slimeSel('spa', avail)} vs ${slimeSel('spb', (s) => avail(s), '', 1)}<button class="btn primary" data-act="spar">Spar</button></div>
+    ${away ? `<small class="mute">${away} slime${away > 1 ? 's are' : ' is'} away (dungeon, hunt or study) and not listed.</small>` : ''}
     <div class="row"><b>Party:</b> ${partyOptions('sppid')}<button class="btn" data-act="spar_party">Everyone spars</button></div></div>
 
   <div class="panel stack"><h2>📚 Library</h2>
     <p class="mute">Elemental mastery unlocks at <b>3★ for any class</b> (mages get an extra element slot and study faster). Library spell slots: <b>${lib.slots}</b>${lib.tier3 ? '' : ' · Restricted Section (tier-3) needs Library L3'}.</p>
-    <div class="row"><label class="f">Scholar ${slimeSel('lib_s', (s) => s.can_master, 'data-rerender="1"') || ''}</label></div>
+    <div class="row"><label class="f">Scholar ${slimeSel('lib_s', (s) => s.can_master && avail(s), 'data-rerender="1"') || ''}</label></div>
     ${ls ? `<div class="stack">${st.elements.basics.map((b) => {
       const e = st.elements.list.find((x) => x.key === b), lv = ls.mastery[b];
       return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${ls.mastery_cap}</b>` : '<span class="mute">not attuned</span>'}</span>
