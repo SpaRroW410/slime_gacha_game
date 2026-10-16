@@ -170,7 +170,8 @@ def snapshot(g: Game) -> dict:
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
-        conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason)
+        conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason,
+                        away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
                    for c in g.conflicts.conflicts],
         graveyard=list(g.graveyard)[-50:], journal=list(g.journal)[-60:],
         dungeon=dict(
@@ -566,7 +567,7 @@ def _mediate(g, a):
 @command("merge_preview")
 def _merge_preview(g, a):
     t, d = _i(a, "target"), _i(a, "donor")
-    return [], dict(xp=g.merge_preview(t, d), compat=g.compat(t, d))
+    return [], dict(g.sacrifice_preview(t, d), parts=g.compat(t, d))
 
 
 @command("merge")

@@ -12,7 +12,7 @@ const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '�
   ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide']];
 const SUBS = {
   dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit'], ['rift', 'Rift & Quarry']],
-  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy']],
+  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['sacrifice', 'Merge & destroy']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry'];
@@ -503,6 +503,7 @@ function town() {
   const all = townAll();
   const alch = '<div class="panel stack" style="margin-top:12px"><h2>⚗️', armory = '<div class="grid cols2" style="margin-top:12px">\n    <div class="panel stack"><h2>🛠️ Armory';
   let body;
+  if (v === 'sacrifice') return subnav('town') + sacrificeView();
   if (v === 'buildings') body = cut(all, null, alch);
   else if (v === 'alchemy') body = cut(all, alch, armory).replace('margin-top:12px', 'margin-top:0');
   else {
@@ -668,6 +669,38 @@ function keeper() {
       <div class="row" style="margin-top:4px"><button class="btn small ${a.ready ? 'primary' : ''}" data-act="keeper_use" data-key="${a.key}" ${a.ready ? '' : 'disabled'}>${a.unlocked ? (a.ready ? 'Use' : 'Recovering') : 'Locked'}</button></div></div>`).join('')}</div>`).join('')}</div>`;
 }
 
+/* ---------------------------------------------------------------- merge & destroy */
+function sacrificeView() {
+  const st = S.state;
+  const free = st.slimes.filter((s) => !s.busy);
+  const pick = (key, idx) => {
+    let cur = ui(key, free[Math.min(idx, free.length - 1)]?.id);
+    if (!free.some((s) => s.id == cur)) cur = free[Math.min(idx, free.length - 1)]?.id;
+    S.ui[key] = cur;
+    return free.length ? `<select data-ui="${key}" data-rerender="1">${free.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} ${esc(s.rarity)} Lv${s.level} ${s.stars}★)</option>`).join('')}</select>` : '<small class="mute">nobody is free</small>';
+  };
+  const away = st.slimes.length - free.length;
+  const t = pick('mt', 0), d = pick('md', 1), ds = pick('ds', 0);
+  const tid = num(S.ui.mt), did = num(S.ui.md), sid = num(S.ui.ds);
+  const tsl = slimeById(tid), dsl = slimeById(did), ssl = slimeById(sid);
+  const pv = S.mprev && S.mprev.t === tid && S.mprev.d === did ? S.mprev : null;
+  const ok = free.length >= 2 && tid !== did;
+  return `<div class="grid cols2">
+    <div class="panel stack"><h2>🫧 Merge two slimes</h2>
+      <p class="mute">The <b>donor</b> is consumed: its collected XP and a share of its stats go to the <b>target</b>. It lowers the whole colony's morale, and <b>sacrifices compound</b> (stress now <b>${st.stress}</b>; it fades by 1 per day). Slimes away from the colony cannot be chosen${away ? ` (${away} away now)` : ''}. The Council tab still suggests good pairs.</p>
+      ${bar(Math.min(st.stress, 5), 5, 'morale', 'Sacrifice stress', st.stress)}
+      <div class="row"><label class="f">Target (keeps living) ${t}</label><label class="f">Donor (consumed) ${d}</label></div>
+      ${tid === did && free.length >= 2 ? '<small class="mute">Choose two different slimes.</small>' : ''}
+      ${pv ? `<div class="panel flat"><b>${esc(dsl?.name)} → ${esc(tsl?.name)}</b>: +${pv.xp} XP · compatibility ${pv.compat >= 0 ? '+' : ''}${pv.compat} (${esc(pv.label)}) · colony morale cost about ${pv.grief}</div>` : '<small class="mute">Press Preview to see the XP, compatibility and morale cost.</small>'}
+      <div class="row"><button class="btn" data-act="merge_preview" ${ok ? '' : 'disabled'}>🔍 Preview</button>
+        <button class="btn danger" data-act="merge" data-t="${tid}" data-d="${did}" data-tn="${esc(tsl?.name)}" data-dn="${esc(dsl?.name)}" data-xp="${pv ? pv.xp : '?'}" data-g="${pv ? pv.grief : '?'}" ${ok ? '' : 'disabled'}>Merge</button></div></div>
+    <div class="panel stack"><h2>🔥 Destroy a slime</h2>
+      <p class="mute">The Destruction Chamber breaks a slime into white gel and ascension stones (more for higher rarity, stars and chamber level). It is gone forever and the colony mourns (sacrifice stress).</p>
+      <div class="row">${ds}</div>
+      ${ssl ? `<div class="panel flat">${esc(ssl.name)} (${esc(ssl.rarity)} ${ssl.stars}★ Lv${ssl.level}) would give: <b>${esc(cost(ssl.ascend.chamber))}</b></div>` : ''}
+      <button class="btn danger" data-act="destroy_slime" data-id="${sid}" data-n="${esc(ssl?.name)}" data-y="${esc(ssl ? cost(ssl.ascend.chamber) : '')}" ${ssl ? '' : 'disabled'}>🔥 Destroy</button></div></div>`;
+}
+
 /* ---------------------------------------------------------------- town */
 function townAll() {
   const st = S.state;
@@ -716,7 +749,7 @@ function council() {
       <div class="panel stack"><h3>Compatibility</h3><div class="row">${sel('ca')} & ${sel('cb', 1)}<button class="btn" data-act="compat">Check</button></div>
         ${comp ? `<p><b>${comp.total >= 0 ? '+' : ''}${comp.total}</b> (${comp.label}) — ${Object.entries(comp.parts).filter(([, v]) => v).map(([k, v]) => `${k} ${v >= 0 ? '+' : ''}${v}`).join(', ')}</p>` : ''}</div>
       <div class="panel stack"><h3>Quarrels</h3>${st.conflicts.length ? st.conflicts.map((q) => `<div class="row between panel flat"><span>${esc(slimeById(q.a)?.name)} vs ${esc(slimeById(q.b)?.name)}<br><small class="mute">${esc(q.reason)} · severity ${q.severity}</small></span>
-        <span class="row"><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="talk">Talk</button><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="snack" ${st.wallet.food >= 2 ? '' : 'disabled'}>Snack (2🍖)</button></span></div>`).join('') : '<p class="mute">The colony is peaceful.</p>'}</div>
+        ${q.away.length ? `<small class="mute">${esc(q.away.join(' & '))} away — out of your hands</small>` : `<span class="row"><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="talk">Talk</button><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="snack" ${st.wallet.food >= 2 ? '' : 'disabled'}>Snack (2🍖)</button></span>`}</div>`).join('') : '<p class="mute">The colony is peaceful.</p>'}</div>
     </div></div>`;
 }
 
@@ -910,7 +943,12 @@ const A = {
   mediate: (d) => act('mediate', { cid: num(d.cid), method: d.m }),
   compat: async () => { const r = await backend.call('compat', { a: num(ui('ca', S.state.slimes[0]?.id)), b: num(ui('cb', S.state.slimes[1]?.id)) });
     if (r.ok) { S.compat = r.result; render(); } else toast(r.error, true); },
-  merge: (d) => confirmThen(`Sacrifice ${d.dn} to feed ${d.tn}?\n\n${d.dn} is consumed for good (+${d.xp} XP for ${d.tn}).\nThe colony's morale will fall (about ${d.g} points in total), and repeated sacrifices compound.`,
+  merge_preview: async () => { const t = num(S.ui.mt), d = num(S.ui.md); const r = await backend.call('merge_preview', { target: t, donor: d });
+    if (r.ok) { S.mprev = { t, d, ...r.result }; render(); } else toast(r.error, true); },
+  merge: async (d) => { if (d.xp === '?') { const r = await backend.call('merge_preview', { target: num(d.t), donor: num(d.d) });   // no preview yet: fetch it so the confirmation is exact
+      if (!r.ok) return toast(r.error, true); d = { ...d, xp: r.result.xp, g: r.result.grief }; }
+    return A.merge_go(d); },
+  merge_go: (d) => confirmThen(`Sacrifice ${d.dn} to feed ${d.tn}?\n\n${d.dn} is consumed for good (+${d.xp} XP for ${d.tn}).\nThe colony's morale will fall (about ${d.g} points in total), and repeated sacrifices compound.`,
     () => act('merge', { target: num(d.t), donor: num(d.d) })),
   newgame: () => act('new_game', { seed: ui('seed') ? num(ui('seed')) : null, party_size: num(ui('psize', 5), 5) }).then(() => { S.tab = 'colony'; S.sel = null; S.pull = null; render(); }),
   newgame2: () => confirmThen('Abandon this colony and start over? The current save will be overwritten.', () => { S.modal = null; S.state = null; S.feed = []; render(); }),

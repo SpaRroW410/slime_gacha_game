@@ -142,6 +142,8 @@ def build() -> list:
                                            "(pick the ability, then the target). Switch to auto, for one turn or the rest of the fight, whenever you like. "
                                            "Rift, Quarry and sparring are always automatic."),
             dict(name="Scouting", text="Reach 100% of every targeted floor within the hour budget or the whole party is lost."),
+            dict(name="Quarrels away from home", text="While either slime is in a dungeon, hunting or studying, you cannot mediate (no talk, no snack): the quarrel "
+                                                       "keeps growing and is out of your hands until they return."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),
         dict(title="Time", icon="⏳", blurb="Two ways time can pass.", items=[

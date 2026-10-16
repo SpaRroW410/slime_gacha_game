@@ -222,4 +222,6 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Hollow Descent, Gloop Pit and skirmishes (not Rift / Quarry / sparring)
 - [x] Switch between manual and auto at any time (whole fight, one turn, later Pit runs)
 - [x] Mini battle arena in the browser (text; renderer isolated for later animation)
+- [x] Town > Merge & destroy: manual merge of any two free slimes (with preview) and the Destruction Chamber
+- [x] No mediation for quarrels involving a slime that is away
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

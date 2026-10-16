@@ -810,12 +810,27 @@ class Game:
         t, d = self.slime(target_id), self.slime(donor_id)
         return merge_gain(t, d, self.social.compat(t, d))
 
+    def sacrifice_preview(self, target_id: int, donor_id: int) -> dict:
+        """What a manual merge would cost and give, before the player commits."""
+        t, d = self.slime(target_id), self.slime(donor_id)
+        if t.id == d.id:
+            raise InvalidAction("A slime can't merge with itself.")
+        compat = self.social.compat(t, d)
+        amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
+        return dict(xp=merge_gain(t, d, compat), compat=compat, label=self.social.compat_label(compat),
+                    grief=self.social.grief(d, self.slimes(), amp), stress=round(self.sacrifice_stress, 2),
+                    away=[s.name for s in (t, d) if s.busy])
+
     # ---- conflict -----------------------------------------------------------------
     def mediate(self, cid: int, method: str = "talk") -> str:
         c = self.conflicts.get(cid)
         if not c:
             raise InvalidAction(f"No conflict #{cid}.")
         a, b = self.slime(c.a), self.slime(c.b)
+        for s in (a, b):
+            if s.busy:                         # in a dungeon, out hunting or studying: the Keeper cannot reach them
+                raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}) - this quarrel is out of your hands "
+                                    f"until they are home.")
         if method == "snack":
             self.wallet.spend("food", config.MEDIATE_SNACK_COST)
             ok = True

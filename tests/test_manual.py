@@ -180,3 +180,41 @@ class TestLevelHundredBalance(unittest.TestCase):
         rep = g.grind(pid, 3, 1).runs[0]
         self.assertTrue(rep.victory)
         self.assertLess(config.xp_to_next(99) / max(1, rep.xp), 20)      # common: well under 20 Pit runs per level
+
+
+class TestMergeAndMediate(unittest.TestCase):
+    def test_keeper_cannot_mediate_for_slimes_away_from_the_colony(self):
+        g = rich(21)
+        a, b = (g.gacha.make_slime("common", "barbarian") for _ in range(2))
+        for s in (a, b):
+            g.roster[s.id] = s
+        from slime_gacha.ai import Conflict
+        c = Conflict(id=1, a=a.id, b=b.id, severity=1, age=0, reason="test")
+        g.conflicts.conflicts.append(c)
+        a.in_dungeon = "grind"
+        with self.assertRaises(InvalidAction):
+            g.mediate(1, "talk")
+        with self.assertRaises(InvalidAction):
+            g.mediate(1, "snack")
+        a.in_dungeon = ""
+        self.assertIn("make up", g.mediate(1, "snack"))
+
+    def test_manual_merge_preview_and_merge_of_any_two_free_slimes(self):
+        se = Session()
+        se.new_game(5)
+        g = se.game
+        ids = [g.gacha.make_slime("common", "barbarian") for _ in range(2)]
+        for s in ids:
+            g.roster[s.id] = s
+        t, d = ids
+        d.total_xp = 500
+        pv = se.call("merge_preview", dict(target=t.id, donor=d.id))
+        self.assertTrue(pv["ok"] and pv["result"]["xp"] > 0 and "grief" in pv["result"])
+        self.assertFalse(se.call("merge_preview", dict(target=t.id, donor=t.id))["ok"])
+        r = se.call("merge", dict(target=t.id, donor=d.id))
+        self.assertTrue(r["ok"])
+        self.assertNotIn(d.id, g.roster)
+        d2 = g.gacha.make_slime("common", "mage")
+        g.roster[d2.id] = d2
+        d2.in_dungeon = "grind"
+        self.assertFalse(se.call("merge", dict(target=t.id, donor=d2.id))["ok"])
