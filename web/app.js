@@ -625,7 +625,7 @@ const A = {
   closemodal: () => { S.modal = null; render(); },
   battle_nav: (d) => { const m = S.modal; m.i = Math.max(0, Math.min(m.battles.length - 1, (m.i ?? m.battles.length - 1) + num(d.d))); render(); },
   menu: () => { S.modal = { type: 'menu' }; render(); },
-  wait: (d) => act('wait', { hours: num(d.h) }),
+  wait: (d) => act('wait', { hours: num(d.h) }, { slow: num(d.h) >= 24 }),
   autocare: () => act('auto_care', { on: !S.state.auto_care }),
   arena: (d) => { S.ui.arena = d.k; render(); },
   do: (d) => act(d.c, { id: S.sel }),

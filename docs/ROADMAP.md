@@ -156,7 +156,7 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Slime relationships tree (best friends, rivals, couples -> budding) (M18)
 - [ ] Art pass: sprite sheets / animated slimes instead of CSS blobs, sound effects
 - [ ] PWA manifest + service worker for installable offline play
-- [ ] Web worker for Pyodide so long Pit sessions never block the UI
+- [x] Web worker for Pyodide so long Pit sessions never block the UI
 - [ ] Balance pass with simulation harness
 - [ ] Localisation
 - [ ] Mod loader (`plugins/`) with docs

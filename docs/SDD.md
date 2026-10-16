@@ -298,6 +298,7 @@ in-browser Pyodide build all call `Game`.
 * **UI**: vanilla JS/CSS without a build step. One `render()` rebuilds the page from `S.state`; actions are
   `data-act` attributes dispatched through a table (`A`), so adding a button is one table entry plus the API verb.
   Dangerous actions (merge, enter the Descent, scout, Pit commitment) ask for confirmation and spell out the rules.
+- **Web worker**: the static build runs Pyodide in a Web Worker (`web/pyodide-worker.js`, `WorkerBackend` in `backend.js`) so long Pit, Rift, Quarry, scouting and wait sessions never freeze the page (measured: a 5 s workload leaves 300 animation frames instead of none). It falls back to the main thread if workers are unavailable or with `?noworker`.
 
 ### 5.17 Specialization & outlook (`specialization.py`, `outlook.py`)
 **Hybrid classes.** Every archetype has a primary discipline (sword / archery / magic). Training (sparring) in a
