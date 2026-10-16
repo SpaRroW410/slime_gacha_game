@@ -1,10 +1,63 @@
 """The in-game booklet: plain-language descriptions of every attribute and system, with what raises and lowers
 them. Built from the live constants so the numbers never go stale."""
-from . import attributes, config, emotions, keeper, potions, relationships
+from . import config, elements, emotions, specialization, sparring
+from .abilities import get_ability
 
 
 def _pct(x: float) -> str:
     return f"{x * 100:+.0f}%"
+
+
+def _el(key: str) -> str:
+    e = elements.get(key)
+    return f"{e.emoji}{e.name}"
+
+
+def _elements_section() -> dict:
+    c = config
+    basics = [e for e in elements.ELEMENTS if e.tier == 1]
+    rec = []
+    for pair, res in elements.RECIPES.items():
+        a, b = sorted(pair)
+        r = elements.get(res)
+        rec.append(dict(name=f"{_el(a)} + {_el(b)} = {_el(res)}",
+                        text=f"Tier {r.tier} element. Needs effective mastery {c.SPELL_TIER_MASTERY[r.tier]} to cast; made of "
+                             + ", ".join(sorted(r.components)) + "."))
+    return dict(title="Elements and spells", icon="🔮", blurb="Four basic elements, their wheel and what they fuse into.", items=[
+        dict(name="Basic elements", text=", ".join(f"{e.emoji}{e.name}" for e in basics) + ". Elemental mastery unlocks at "
+             f"{c.MASTERY_MIN_STARS} stars for any class (mages get an extra element slot and study faster). Study an element in the "
+             "Academy's Library to attune to it and raise its mastery."),
+        dict(name="The wheel", text=" · ".join(f"{_el(a)} beats {_el(d)}" for a, d in elements.BEATS.items()) +
+             f". Winning matchups deal x{c.ELEMENT_ADVANTAGE} damage, the reverse x{c.ELEMENT_DISADVANTAGE}. Fused elements count "
+             "through their components."),
+        dict(name="Mastery", text=f"Each effective mastery level adds {c.MASTERY_SPELL_BONUS:.0%} spell power. Casting an element builds "
+             "its mastery. Attuned or native elements are immune to a terrain's hazard of that element."),
+        dict(name="Spells", text=f"Learn spells in the Library (tier 1-3, costs rise with tier). A slime keeps {c.MAX_SPELLS} spells (more "
+             "with Library levels). The Restricted Section (tier 3) opens at Library level 3."),
+        dict(name="Spell lab", text="Fuse two learned spells of different elements into a brand-new spell. It costs essence, takes hours, can "
+             "fizzle and backfire (never fatal), and discovered spells join the Library for everyone."),
+    ] + rec)
+
+
+def _specialization_section() -> dict:
+    c = config
+    items = [
+        dict(name="How it works", text=f"Cross-training builds new classes: a swordslime that trains hard in magic can become a Battlemage. "
+             f"Reach style level {c.SPEC_MIN_STYLE} in a discipline outside the class (Sparring in the Academy) and level {c.SPEC_MIN_LEVEL}, "
+             f"then specialize for " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in c.SPEC_COST.items()) +
+             f". It is permanent, shifts stats (the new skill lends {c.SPEC_STAT_RATIO:.0%} of its stat), grants a signature ability and "
+             "doubles affinity in both styles. Specialize from the slime card's Fight tab or the Academy."),
+    ]
+    disc = {d.key: d for d in sparring.DISCIPLINES}
+    for (a, b), key in specialization.BY_PAIR.items():
+        sp = specialization.SPECS[key]
+        items.append(dict(name=f"{sp.emoji} {sp.name}", text=f"{disc[a].style}-type classes + {disc[b].style} training. Signature: "
+                          f"{get_ability(sp.ability).name}. {sp.description}"))
+    for (a, b), key in specialization.BY_CLASS.items():
+        sp = specialization.SPECS[key]
+        items.append(dict(name=f"{sp.emoji} {sp.name}", text=f"{a.capitalize()} + {disc[b].style} training. Signature: "
+                          f"{get_ability(sp.ability).name}. {sp.description}"))
+    return dict(title="Specialization (hybrid classes)", icon="🧬", blurb="Which cross-training makes which hybrid.", items=items)
 
 
 def build() -> list:
@@ -42,6 +95,8 @@ def build() -> list:
                                f"Rises with: {emotions.TRIGGERS[e.key][0]} {emotions.TRIGGERS[e.key][1]}")) for e in emotions.EMOTIONS.values()]
              + [dict(name="Traits", text="Grumpy slimes anger easily, timid ones fear more, brave ones less, kind ones feel more "
                                          "affection, proud ones more pride, chatty ones get lonely faster.")]),
+        _elements_section(),
+        _specialization_section(),
         dict(title="Stats and combat", icon="⚔️", blurb="What the numbers mean.", items=[
             dict(name="HP", text="Health. At zero a slime is knocked out (Pit, Rift, Quarry) or dies (Hollow Descent)."),
             dict(name="ATK", text="Strength: scales physical moves. Anger raises it, fear and sadness lower it."),

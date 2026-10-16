@@ -574,17 +574,11 @@ function academy() {
         <button class="btn primary" data-act="research" data-id="${ls.id}">Start the experiment</button></div>` : ''}`
       : '<p class="mute">The scholar needs at least two learned spells of different elements.</p>'}</div>
 
-  <div class="panel stack"><h2>🧬 Specialization — hybrid classes</h2>
-    <p class="mute">Cross-training builds new classes: a swordslime that trains hard in magic can become a <b>Battlemage</b>. Reach style level <b>${st.spec.style}</b> in a discipline outside your class (Sparring) and level <b>${st.spec.level}</b>, then specialize for ${cost(st.spec.cost)}. Permanent. It shifts stats (the new skill lends strength), adds a signature ability, and gives class affinity in both disciplines.</p>
-    <table><thead><tr><th>Hybrid</th><th>From</th><th>Signature</th></tr></thead><tbody>${st.spec.table.map((r) => `<tr><td>${r.emoji} <b>${esc(r.name)}</b></td><td class="mute">${r.kind === 'class' ? esc(r.primary) : esc(r.primary) + '-type'} + ${esc(r.secondary)} training</td><td class="mute">${esc(r.ability)}</td></tr>`).join('')}</tbody></table>
-    <h4>Ready to specialize</h4>
+  <div class="panel stack"><h2>🧬 Specialization</h2>
+    <p class="mute">Cross-training builds hybrid classes; the full list of hybrids and what each needs is in the <b>Guide</b> tab (Specialization). Reach style level <b>${st.spec.style}</b> in a discipline outside your class and level <b>${st.spec.level}</b>, then specialize for ${cost(st.spec.cost)}.</p>
+        <h4>Ready to specialize</h4>
     ${st.slimes.flatMap((s) => s.spec_options.filter((o) => o.ok && !s.busy).map((o) => `<div class="row between panel flat"><span>${avatar(s, 'sm')} <b>${esc(s.name)}</b> → ${o.emoji} ${esc(o.name)}</span>
       <button class="btn small primary" data-act="specialize" data-id="${s.id}" data-disc="${o.discipline}" data-n="${esc(s.name)}" data-spec="${esc(o.name)}" data-cost="${esc(cost(st.spec.cost))}" ${affordable(st.spec.cost) ? '' : 'disabled'}>Specialize</button></div>`)).join('') || '<small class="mute">Nobody qualifies yet. Spar in an arena that is not your class\'s own.</small>'}</div>
-
-  <div class="panel stack"><h2>🔮 Elements</h2>
-    <div class="row">${st.elements.list.filter((e) => e.tier === 1).map((e) => chip(`${e.emoji} ${e.name}`)).join('')}</div>
-    <p class="mute">Wheel: ${Object.entries(st.elements.beats).map(([a, d]) => `${elName(a)} › ${elName(d)}`).join(' · ')} (×1.5 damage, ×0.7 the other way)</p>
-    <table><tbody>${st.elements.recipes.map((r) => `<tr><td>${elName(r.a)} + ${elName(r.b)}</td><td>= <b>${elName(r.result)}</b></td><td class="mute">tier ${st.elements.list.find((e) => e.key === r.result).tier} · mastery ${lib.tier_mastery[st.elements.list.find((e) => e.key === r.result).tier]}</td></tr>`).join('')}</tbody></table></div>
   </div>`;
 }
 
