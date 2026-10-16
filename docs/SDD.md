@@ -342,6 +342,8 @@ idea.
 - **Destruction Chamber** (building, 5 levels): destroys a slime for white gel (5 x 10^rarity x star factor) and stones (scaled by rarity and the stones its stars cost); a sacrifice with morale cost and sacrifice stress. Its relics return to the vault.
 - Not yet built: star attributes, rarity skills, weapon proficiency, potions (see ROADMAP M16).
 
+> **Update (stars & XP)**: a slime may ascend to 2/3/4/5 stars only at level 10/30/60/100 (`config.STAR_LEVELS`; level caps per stage are now 10/30/100). Rising in rarity resets stars to 1 (star attributes are derived from stars, so they lock until re-earned). XP per level doubles with each rarity (20/40/80/160/320 at level 1); stars no longer affect it.
+
 ### 5.21 Stamina, star attributes, rarity skills, potions & weapons (`attributes.py`, `potions.py`, `items.py`)
 - **Stamina** is a base attribute of every slime (class base + growth per level, scaled by rarity/stars). Each battle action costs stamina (8 + 8 x ability power, x1.5 for area attacks; guards and heals cheaper). A slime out of stamina is *winded*: its damage is x0.6 for that action. Between rounds it catches its breath; between fights it refills 10%/hour (x2.5 asleep or resting). Pit, Rift and Quarry parties camp when anyone is under 35% stamina. Sparring ignores stamina.
 - **Star attributes**: every extra star adds one class-specific attribute (e.g. Barbarian: crit damage, guard, regeneration, lifesteal; Mage: spell power, resist, crit rate, crit damage). They scale slightly with rarity and combine with relic mods in battle (evasion, guard, resist, regeneration and spell power are new combat hooks).

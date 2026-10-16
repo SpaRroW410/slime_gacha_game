@@ -21,7 +21,7 @@ class TestRarityAndStars(unittest.TestCase):
     def test_rarity_ladder_costs(self):
         g = mk()
         s = g.slimes()[0]
-        s.rarity = "common"
+        s.rarity, s.stars = "common", 1
         base = s.max_stats()["atk"]
         paid = []
         for want, cost in (("uncommon", 10), ("rare", 100), ("epic", 1000), ("legendary", 10000)):
@@ -57,7 +57,8 @@ class TestRarityAndStars(unittest.TestCase):
         g = mk()
         s = g.slimes()[0]
         s.stars = 1
-        for need in (10, 100, 1000, 10000):
+        for need, lv in ((10, 10), (100, 30), (1000, 60), (10000, 100)):
+            s.level = lv
             g.wallet.add("stone_common", need - 1)
             with self.assertRaises(InvalidAction):
                 g.ascend_slime_star(s.id)
@@ -71,7 +72,7 @@ class TestRarityAndStars(unittest.TestCase):
     def test_stone_change_and_merging(self):
         g = mk()
         s = g.slimes()[0]
-        s.stars = 2                                         # costs 100 equivalents
+        s.stars, s.level = 2, 100                           # costs 100 equivalents
         g.wallet.add("stone_uncommon", 1)                   # worth exactly 100 commons
         g.ascend_slime_star(s.id)
         self.assertEqual(ascension.stone_total(g.wallet), 0)
@@ -88,6 +89,23 @@ class TestRarityAndStars(unittest.TestCase):
         g.wallet.add("stone_uncommon", 97)
         g.merge_stone_rarity("uncommon")
         self.assertEqual(g.wallet.get("stone_rare"), 1)
+
+    def test_stars_need_their_level_and_rarity_resets_them(self):
+        g = mk()
+        s = g.slimes()[0]
+        s.rarity, s.stars, s.level = "common", 1, 9
+        g.wallet.add("stone_common", 20000)
+        for stars, lv in ((1, 10), (2, 30), (3, 60), (4, 100)):
+            s.stars, s.level = stars, lv - 1
+            with self.assertRaises(InvalidAction):
+                g.ascend_slime_star(s.id)
+            s.level = lv
+            g.ascend_slime_star(s.id)
+            self.assertEqual(s.stars, stars + 1)
+        self.assertEqual(s.stars, 5)
+        g.wallet.add("white_gel", 100)
+        g.ascend_slime_rarity(s.id)
+        self.assertEqual((s.rarity, s.stars), ("uncommon", 1))     # stars (and their attributes) start over
 
     def test_busy_slimes_cannot_ascend(self):
         g = mk()

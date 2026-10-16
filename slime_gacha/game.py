@@ -1149,11 +1149,13 @@ class Game:
         self.wallet.spend("white_gel", ascension.rarity_cost(s))
         old = s.max_hp
         s.rarity = up
-        s.hp += s.max_hp - old
+        s.stars = 1                              # a new rarity starts again at one star; star attributes are locked until re-earned
+        s.hp = max(1, min(s.max_hp, s.hp + s.max_hp - old))
         s.needs.add("esteem", 20)
         self.social.shift_morale(s, 10)
         self._xp("ascend", config.KEEPER_XP["ascend"])
-        return f"✨ {s.name} ascends to {up}! (stats x{config.RARITY_STAT_MULT[up]})"
+        return (f"✨ {s.name} ascends to {up}! (stats x{config.RARITY_STAT_MULT[up]}) Stars reset to 1: the star attributes "
+                f"are locked until it climbs again.")
 
     def ascend_slime_star(self, sid: int) -> str:
         """Add a star, paid in ascension stones (10 / 100 / 1000 / 10000 common-stone equivalents)."""
@@ -1161,6 +1163,9 @@ class Game:
         need = ascension.star_cost(s)
         if need is None:
             raise InvalidAction(f"{s.name} already has {config.MAX_STARS} stars.")
+        lv = config.STAR_LEVELS[s.stars + 1]
+        if s.level < lv:
+            raise InvalidAction(f"{s.name} must reach level {lv} to ascend to {s.stars + 1} stars (now level {s.level}).")
         ascension.pay_stones(self.wallet, need)
         old = s.max_hp
         s.stars += 1
