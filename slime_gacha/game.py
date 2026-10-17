@@ -345,13 +345,7 @@ class Game:
     def practise_discipline(s: Slime, discipline: str, own: float, other: float) -> None:
         """Training in a discipline: the class's own discipline feeds class proficiency, a hybrid's secondary one feeds
         its second proficiency, anything else is only a little general practice."""
-        if discipline == s.arch.discipline:
-            Game.practise(s, own)
-        elif s.spec and discipline == s.spec_disc:
-            s.spec_prof = min(100.0, s.spec_prof + own)
-            s.spec_idle = 0
-        elif other:
-            Game.practise(s, other)
+        attributes.practise(s, discipline, own, other)
 
     def _proficiency_day(self, events: List[str]) -> None:
         """A slime that stops practising its original discipline slowly loses its edge (and, in time, its pure capstones)."""
@@ -1062,6 +1056,19 @@ class Game:
                                      net=gain - 3 * grief))
             sugg.sort(key=lambda x: -x["net"])
         return dict(rows=rows, merges=sugg[:5])
+
+    def drill(self, sid: int, discipline: str) -> str:
+        """Send a slime to drill (sword / archery / magic) for proficiency. See AcademySystem.start_drill."""
+        return self.academy.start_drill(self.slime(sid), discipline)
+
+    def drill_party(self, pid: int, discipline: str) -> List[str]:
+        out = []
+        for s in self.party_members(pid):
+            try:
+                out.append(self.drill(s.id, discipline))
+            except InvalidAction as e:
+                out.append(f"✋ {e}")
+        return out
 
     def study(self, sid: int, element: str) -> str:
         """Attune to / study a basic element at the Library (3-star+ slimes of ANY class)."""

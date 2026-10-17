@@ -234,4 +234,5 @@ Legend: `[x]` done · `[ ]` todo.  The remaining work is tracked task by task in
 - [x] Party leaders; Vice Keeper organises multi-party hunts and leads the group; challenges for the post (Keeper approves, duel decides)
 - [x] Quarrels only between slimes that share a place (both home, or one party away together); they wait while one is away
 - [x] Big colonies: Colony shows the top 10 as cards and the rest as a compact searchable list
+- [x] Training facility (solo drills in the Blade Yard / Archery Range / Mana Pool for class proficiency, no star requirement); mages pulled at 3+ stars
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

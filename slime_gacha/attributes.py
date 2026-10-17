@@ -191,6 +191,23 @@ def capstones(slime) -> List[str]:
     return [first] if p >= config.PROF_ONE_CAPSTONE else []
 
 
+def practise(slime, discipline: str, own: float, other: float = 0.0) -> str:
+    """Training in a discipline: the class's own discipline raises class proficiency, a hybrid's secondary one raises
+    its second proficiency, anything else only a little general practice. Returns which one grew."""
+    if discipline == slime.arch.discipline:
+        slime.class_prof = min(100.0, slime.class_prof + own)
+        slime.prof_idle = 0
+        return "class"
+    if slime.spec and discipline == slime.spec_disc:
+        slime.spec_prof = min(100.0, slime.spec_prof + own)
+        slime.spec_idle = 0
+        return "spec"
+    if other:
+        slime.class_prof = min(100.0, slime.class_prof + other)
+        slime.prof_idle = 0
+    return "other"
+
+
 def hybrid_capstone(slime):
     """The hybrid capstone's key once a specialized slime is legendary 5-star, else None."""
     from .specialization import HYBRID_CAPSTONES

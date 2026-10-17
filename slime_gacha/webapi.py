@@ -64,7 +64,8 @@ def slime_view(g: Game, s) -> dict:
                        for k in attributes.rarity_skills(s)],
         next_rarity_skill=(get_ability(attributes.RARITY_SKILLS[s.archetype][config.RARITIES.index(s.rarity)]).name
                            if s.rarity != "legendary" and s.archetype in attributes.RARITY_SKILLS else None),
-        prof=dict(value=round(s.class_prof), idle=s.prof_idle, earned=attributes.pure_earned(s), floor=config.PROF_FLOOR,
+        prof=dict(value=round(s.class_prof), idle=s.prof_idle,
+                  drill={d.key: g.academy.drill_gain(s, d.key) for d in sparring.DISCIPLINES}, earned=attributes.pure_earned(s), floor=config.PROF_FLOOR,
                   both=config.PROF_BOTH_CAPSTONES, one=config.PROF_ONE_CAPSTONE,
                   capstones=[dict(key=a.key, name=a.name, desc=a.description, usable=a.key in attributes.capstones(s),
                                   need=(config.PROF_ONE_CAPSTONE if i == 0 else config.PROF_BOTH_CAPSTONES))
@@ -168,7 +169,7 @@ def away_view(g: Game) -> list:
         if s.task and s.state == "studying":
             tasks.setdefault((s.task.get("kind", "study"), s.task.get("ticks_left", 0)), []).append(s.id)
     for (kind, left), ids in tasks.items():
-        out.append(item("study", f"📚 {str(kind).replace('_', ' ').title()}", ids, left))
+        out.append(item("study", "🥋 Drilling" if kind == "drill" else f"📚 {str(kind).replace('_', ' ').title()}", ids, left))
     for e in g.expeditions:
         ids = [i for i in e["ids"] if i in g.roster]
         if ids:
@@ -273,7 +274,9 @@ def snapshot(g: Game) -> dict:
         zones=[dict(key=z.key, name=z.name, duration=z.duration, danger=z.danger, desc=z.description,
                     rewards=z.rewards, purple=z.purple_chance) for z in ZONES],
         disciplines=[dict(key=d.key, name=d.name, emoji=d.emoji, style=d.style, perk=d.perk,
-                          desc=d.description) for d in sparring.DISCIPLINES],
+                          desc=d.description, feeds=[a.name for a in all_archetypes() if a.discipline == d.key])
+                     for d in sparring.DISCIPLINES],
+        drill=dict(ticks=config.DRILL_TICKS, cost=config.DRILL_COST, base=config.PROF_DRILL),
         elements=dict(basics=list(elements.BASICS),
                       list=[dict(key=e.key, name=e.name, emoji=e.emoji, tier=e.tier,
                                  components=sorted(e.components)) for e in elements.ELEMENTS],
@@ -769,6 +772,16 @@ def _challenge_vice(g, a):
 @command("resolve_challenge")
 def _resolve_challenge(g, a):
     return g.resolve_challenge(bool(a.get("approve"))), {}
+
+
+@command("drill")
+def _drill(g, a):
+    return [g.drill(_i(a, "id"), str(a.get("discipline", "")))], {}
+
+
+@command("drill_party")
+def _drill_party(g, a):
+    return g.drill_party(_i(a, "pid"), str(a.get("discipline", ""))), {}
 
 
 @command("delve_next")

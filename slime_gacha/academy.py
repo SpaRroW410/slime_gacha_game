@@ -199,6 +199,36 @@ class AcademySystem:
             msg += f"Their spellbook is full ({self.library.spell_slots()}) - it is stored in the Library."
         events.append(msg)
 
+    # -- the training facility ---------------------------------------------------------------------
+    def start_drill(self, slime, discipline: str) -> str:
+        """A solo drill in the Sword Yard / Archery Range / Mage Sanctum. No star requirement: even a slime that has just
+        risen in rarity (and is back to one star) can sharpen its class proficiency here, though it learns nothing new."""
+        from . import sparring
+        d = sparring.DISCIPLINES.get(discipline)
+        self._check_free(slime)
+        self._begin(slime, "drill", config.DRILL_TICKS, config.DRILL_COST, discipline=d.key)
+        return f"{slime.name} heads to the {d.name} ({config.DRILL_TICKS}h)."
+
+    def drill_gain(self, slime, discipline: str) -> float:
+        """Proficiency a drill is worth now: shrinks as the slime nears mastery, grows with the Training Grounds."""
+        own = (slime.class_prof if discipline == slime.arch.discipline
+               else slime.spec_prof if slime.spec and discipline == slime.spec_disc else None)
+        if own is None:
+            return 0.0
+        return round(config.PROF_DRILL * self.buildings.style_mult() * max(0.1, 1 - own / 110.0), 2)
+
+    def _finish_drill(self, s, events: List[str]) -> None:
+        from . import attributes, sparring
+        d = sparring.DISCIPLINES.get(s.task["discipline"])
+        gain = self.drill_gain(s, d.key)
+        which = attributes.practise(s, d.key, gain, 0.5)
+        sparring.gain_style_xp(s, d.key, config.DRILL_STYLE_XP * self.buildings.style_mult(), self.buildings.style_cap())
+        s.needs.add("energy", -8)
+        s.needs.add("esteem", 4)
+        note = {"class": f"class proficiency now {s.class_prof:.0f}", "spec": f"second proficiency now {s.spec_prof:.0f}",
+                "other": "a little general practice (not their discipline)"}[which]
+        events.append(f"🥋 {s.name} finishes drilling at the {d.name}: {note}.")
+
     # -- time ---------------------------------------------------------------------------------
     def tick(self, slimes: List, events: List[str]) -> None:
         for s in slimes:
@@ -208,5 +238,5 @@ class AcademySystem:
             if s.task["ticks_left"] > 0:
                 continue
             kind = s.task["kind"]
-            {"study": self._finish_study, "research": self._finish_research}[kind](s, events)
+            {"study": self._finish_study, "research": self._finish_research, "drill": self._finish_drill}[kind](s, events)
             s.state, s.task = "idle", None

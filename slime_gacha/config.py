@@ -31,6 +31,12 @@ VICE_MIN_STARS = 3
 VICE_MEDIATE_CHANCE = 0.3        # per hour, for each quarrel the vice keeper can reach
 VICE_FEED_BELOW = 25             # feeds a reachable slime that is this hungry
 NAME_MAX = 24
+MAGE_MIN_STARS = 3               # a pulled mage is never below this (mages cannot study elements before 3 stars)
+# Training facility: solo drills in the Sword Yard, Archery Range or Mage Sanctum raise class proficiency
+DRILL_TICKS = 3
+DRILL_COST = {"white_gel": 1}
+PROF_DRILL = 6.0                 # base proficiency gain per drill; shrinks as proficiency nears 100
+DRILL_STYLE_XP = 4.0             # a little fighting-style XP too
 # Floor threat smoothing (tools/playtest.py found a few floors with 2-4x the threat of their neighbours)
 FLOOR_THREAT_TARGET = 6500.0      # (sum of enemy HP) x (sum of enemy damage) / growth(floor)^2, for a party of five
 FLOOR_THREAT_BAND = (0.8, 1.25)   # ordinary floors keep their flavour inside this band around the target
