@@ -1,6 +1,6 @@
 # Roadmap & Checklist
 
-Legend: `[x]` done · `[ ]` todo
+Legend: `[x]` done · `[ ]` todo.  The remaining work is tracked task by task in [`TASKS.md`](TASKS.md); the floor-50 playtest is in [`PLAYTEST_F50.md`](PLAYTEST_F50.md).
 
 ## M0 — Foundations (docs & scaffolding)
 - [x] README

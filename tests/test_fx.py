@@ -244,3 +244,16 @@ class TestUtilityAI(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSetupSkillsAI(unittest.TestCase):
+    def test_buffs_are_skipped_when_the_fight_will_be_over_fast_and_used_when_it_will_not(self):
+        bs = BattleSystem(random.Random(1))
+        focus = ab("t_focus", "utility", 0, "mag", "self", [("buff", "spell_power", 0.4, 3)], cooldown=4)
+        a = mk("A", "party", atk=300, abilities=("splat", "t_focus"))
+        weak = mk("W", "foes", hp=100.0)
+        bs._everyone = [a, weak]
+        self.assertEqual(bs.choose_ability(a, [a], [weak]).key, "splat")          # one more hit and it is over
+        tank = mk("T", "foes", hp=100000.0)
+        bs._everyone = [a, tank]
+        self.assertEqual(bs.choose_ability(a, [a], [tank]).key, "t_focus")        # a long fight: set up first

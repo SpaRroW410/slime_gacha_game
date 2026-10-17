@@ -736,10 +736,19 @@ KIND_HANDLERS: Dict[str, Callable] = {
 }
 
 
+def _rounds_to_win(allies, foes) -> float:
+    """Rough number of rounds the party needs to kill every foe (HP left over what the party hits for per round)."""
+    dps = sum(max(c.stat("atk"), 1.5 * c.stat("mag")) * 1.4 for c in allies if not c.minion) or 1.0
+    return sum(f.hp for f in foes) / dps
+
+
 def _utility_worth(bs, actor, ab, allies, foes) -> bool:
-    """Simple AI: is it worth spending this utility skill now?"""
+    """Simple AI: is it worth spending this utility skill now? Pure set-up skills (buffs, marks, debuffs) are skipped
+    when the fight will be over in a round or two: hitting is better than buffing."""
     t = ab.target
     names = {f[0] for f in ab.fx}
+    if names <= {"buff", "debuff", "mark", "rewrite", "oath"} and _rounds_to_win(allies, foes) < 2.5:
+        return False
     fallen = [c for c in bs._everyone if c.side == actor.side and not c.alive and not c.minion] if hasattr(bs, "_everyone") else []
     if "revive" in names:
         return bool(fallen)
