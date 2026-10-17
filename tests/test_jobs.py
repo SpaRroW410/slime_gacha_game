@@ -290,3 +290,38 @@ class TestHospital(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRefusals(unittest.TestCase):
+    def test_slimes_refuse_posts_and_expeditions_when_exhausted_hurt_or_bleak(self):
+        g = quiet(rich(92))
+        s = slime(g, "medic")
+        self.assertEqual(g.refusal(s, "job"), "")
+        s.needs.set("energy", 5)
+        self.assertIn("exhausted", g.refusal(s, "job"))
+        with self.assertRaises(InvalidAction):
+            g.assign_job(s.id, "doctor")
+        s.needs.set("energy", 80)
+        s.hp = s.max_hp * 0.3                                  # hurt enough for an expedition to be refused, not a post
+        self.assertEqual(g.refusal(s, "job"), "")
+        self.assertIn("hurt", g.refusal(s, "dungeon"))
+        with self.assertRaises(InvalidAction):
+            g.hunt(s.id, "pond")
+        s.hp = s.max_hp
+        s.emotions["anger"] = 90
+        self.assertIn("rage", g.refusal(s, "job"))
+
+    def test_a_sleeper_can_be_appointed_and_wake_all_spares_the_exhausted(self):
+        g = quiet(rich(93))
+        a, b, c = slime(g, "medic"), slime(g, "medic"), slime(g, "medic")
+        for s in (a, b, c):
+            s.state = "sleeping"
+        a.needs.set("energy", 80)
+        b.needs.set("energy", 5)
+        c.needs.set("energy", 30)
+        out = g.wake_all()
+        self.assertEqual((a.state, b.state, c.state), ("idle", "sleeping", "idle"))
+        self.assertTrue(any("under 10%" in l for l in out))
+        a.state = "sleeping"
+        g.assign_job(a.id, "doctor")
+        self.assertEqual(a.state, "working")

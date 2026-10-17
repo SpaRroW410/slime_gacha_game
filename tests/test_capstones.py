@@ -144,6 +144,7 @@ class TestCapstonesInAction(unittest.TestCase):
             pid = full_party(g, cls, "legendary", 300000)
             for s in members(g, pid):
                 s.stage, s.stars, s.class_prof = 2, 5, 100
+                s.hp = s.max_hp
             self.assertEqual(len(members(g, pid)[0].known_abilities()) > 0 and len(attributes.capstones(members(g, pid)[0])), 2)
             rep = g.battle(pid, 2)
             self.assertTrue(rep.log)

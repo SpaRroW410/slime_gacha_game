@@ -339,6 +339,7 @@ class TestScouting(unittest.TestCase):
         for s in members(g, pid):
             s.progress = 3
             s.hp = 1
+        g.refusal = lambda *a, **k: ""                  # (they would normally refuse so hurt)
         g.rng.random = lambda: 0.0
         res = g.scout(pid, 4, 4, 12)
         self.assertFalse(res.complete)

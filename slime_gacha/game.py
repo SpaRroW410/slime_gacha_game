@@ -961,6 +961,37 @@ class Game:
         s.state = "sleeping"
         return f"{s.name} dozes off."
 
+    def refusal(self, s: Slime, kind: str = "job") -> str:
+        """Why this slime would refuse a post (kind "job") or an expedition (kind "dungeon": the Descent, Pit, Rift, Quarry,
+        hunts, scouting, rescues) right now: exhaustion, injury, a bleak mood or a rage. "" = it agrees. Merging and
+        sacrifice are the keeper's call and never ask."""
+        if s.needs.get("energy") < config.REFUSE_ENERGY:
+            return "is exhausted and refuses"
+        if s.hp < s.max_hp * config.REFUSE_HP[kind]:
+            return "is too hurt and refuses"
+        if s.mood() < config.REFUSE_MOOD:
+            return "is in too bleak a mood and refuses"
+        if s.emotions.get("anger", 0) >= config.REFUSE_ANGER:
+            return "is in a rage and refuses"
+        return ""
+
+    def wake_all(self) -> List[str]:
+        """Wake every sleeper at home, except those below REFUSE_ENERGY (they need the sleep). Tired ones are grumpy."""
+        out = []
+        skipped = 0
+        for s in self.slimes():
+            if s.state != "sleeping" or s.in_dungeon:
+                continue
+            if s.needs.get("energy") < config.REFUSE_ENERGY:
+                skipped += 1
+                continue
+            out.append(self._rouse(s))
+        if skipped:
+            out.append(f"💤 {skipped} slime(s) with under {config.REFUSE_ENERGY}% energy were left asleep.")
+        if not out:
+            out.append("Nobody to wake.")
+        return out
+
     def _rouse(self, s: Slime) -> str:
         """Wake a sleeper. A slime that has already slept past half its energy wakes for free; one still tired is
         not pleased (mood cost)."""
@@ -1014,6 +1045,8 @@ class Game:
         s = self.slime(sid)
         ZONES.get(zone)
         self.hunts.check(s)
+        if (why := self.refusal(s, "dungeon")):
+            raise InvalidAction(f"{s.name} {why}.")
         notes = self._prepare_trainees([s])                     # a sleeper is woken (mood cost if still tired), a worker leaves the post
         self.hunts.start(s, zone)
         if group:
@@ -1536,6 +1569,8 @@ class Game:
                 raise InvalidAction(f"{s.name} is {s.in_dungeon and 'inside a dungeon' or s.state}.")
             if s.grounded:
                 raise InvalidAction(f"{s.name} is grounded after a brawl.")
+            if (why := self.refusal(s, "dungeon")):
+                raise InvalidAction(f"{s.name} {why}.")
         return party
 
     def _battle_gen(self, party, enemies, intel: float = 1.0, allow_manual: bool = True, **opts):
@@ -2973,14 +3008,15 @@ class Game:
             raise InvalidAction("Choose who goes: one slime is enough.")
         return self.party_members(pid)
 
-    @staticmethod
-    def _check_explorer(s: Slime) -> None:
+    def _check_explorer(self, s: Slime) -> None:
         if s.state != "idle" or s.in_dungeon:
             raise InvalidAction(f"{s.name} is {s.in_dungeon and 'inside a dungeon' or s.state}, not available.")
         if s.grounded:
             raise InvalidAction(f"{s.name} is grounded after a brawl.")
         if s.hp <= 0:
             raise InvalidAction(f"{s.name} is down.")
+        if (why := self.refusal(s, "dungeon")):
+            raise InvalidAction(f"{s.name} {why}.")
 
     def scout_plan(self, pid: Optional[int], first: int, last: int, ids: Optional[Sequence[int]] = None) -> dict:
         """Estimated hours to scout floors first..last to 100% (the true figure hides a 0.85-1.2x factor)."""

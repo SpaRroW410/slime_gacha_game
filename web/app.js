@@ -506,7 +506,8 @@ function partyOptions(key, fullOnly = true, includeDelve = false, exclude = null
   const st = S.state;
   const home = (p) => p.members.every((id) => { const m = slimeById(id); return m && !m.busy; });
   const parties = st.parties.filter((p) => p.id != exclude);
-  const why = (p) => (!includeDelve && p.in_delve ? 'in the Descent' : !includeDelve && !home(p) ? 'away' : fullOnly && !p.full ? `${p.members.length}/${st.party_size} members` : '');
+  const refuser = (p) => p.members.map(slimeById).find((m) => m && m.refuse_dungeon);
+  const why = (p) => (!includeDelve && p.in_delve ? 'in the Descent' : !includeDelve && !home(p) ? 'away' : fullOnly && !p.full ? `${p.members.length}/${st.party_size} members` : refuser(p) && fullOnly ? `${refuser(p).name} ${refuser(p).refuse_dungeon.replace(/^is /, '')}` : '');
   const okList = parties.filter((p) => !why(p));
   let cur = ui(key, okList[0]?.id);
   if (!okList.some((p) => p.id == cur)) cur = okList[0]?.id;
@@ -575,7 +576,7 @@ function dungeonsAll() {
   const scoutIds = (ui('scout_ids', []) || []).map(num);
   const rescueIds = (ui('rescue_ids', []) || []).map(num);
   const walkers = st.slimes.filter((s) => s.state === 'idle' && !s.in_dungeon && !s.grounded && s.hp > 0 && !s.is_vice);
-  const chips = (key, ids) => `<div class="row">${walkers.map((s) => `<button class="btn small ${ids.includes(s.id) ? 'primary' : ''}" data-act="pick_walker" data-k="${key}" data-id="${s.id}" title="has cleared floor ${s.progress}">${ids.includes(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level} · floor ${s.progress}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>`;
+  const chips = (key, ids) => `<div class="row">${walkers.map((s) => `<button class="btn small ${ids.includes(s.id) ? 'primary' : ''}" data-act="pick_walker" data-k="${key}" data-id="${s.id}" title="has cleared floor ${s.progress}" ${s.refuse_dungeon ? 'disabled' : ''}>${ids.includes(s.id) ? '✔ ' : ''}${s.refuse_dungeon ? '🚫 ' : ''}${esc(s.name)} · Lv${s.level} · floor ${s.progress}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>`;
   const stranded = st.stranded.length ? `<div class="panel stack warnbox"><h2>🆘 Overdue scouts</h2>
       <p class="mute">These scouts ran out of supplies. <b>One slime is enough</b> to go and bring them home, and <b>several parties can go together</b> (tap a party to add all its free members; a bigger force breaks through more easily). Floors that are already scouted are a known road: rescuers only have to have walked the <i>unscouted</i> floors on the way, and the trip is shorter. It takes hours and food, can be ambushed, and must arrive before the deadline.</p>
       ${st.stranded.map((e) => `<div class="panel flat"><b>${e.names.map(esc).join(', ')}</b><br><small class="mute">stuck on floor ${e.stuck} (scouting ${e.first}–${e.last}) · ${e.hours_left}h left · rescue takes ${e.rescue_hours}h and ${e.food} 🍖 · must have walked ${e.need ? 'floors up to ' + e.need : 'no floors (the way is scouted)'}</small>
@@ -655,7 +656,7 @@ function town() {
   if (v === 'sacrifice') return subnav('town') + sacrificeView();
   if (v === 'kitchen') return subnav('town') + kitchenView();
   if (v === 'hospital') return subnav('town') + hospitalView();
-  if (v === 'buildings') body = cut(all, null, alch);
+  if (v === 'buildings') body = wakePanel() + cut(all, null, alch);
   else if (v === 'alchemy') body = cut(all, alch, armory).replace('margin-top:12px', 'margin-top:0') + `<div class="panel stack" style="margin-top:12px"><h2>⚗️ Brewer</h2><p class="mute">An appointed brewer brews the basic potions the colony is shortest of from the herbs in the stores (never using more than 66% of a stock), one try per ${S.state.jobs.shift}-hour shift.</p>${postPanel('brewer')}</div>`;
   else {
     const rv = riftAll();
@@ -667,18 +668,43 @@ function town() {
   return subnav('town') + body;
 }
 /* ---------------------------------------------------------------- appointments: posts live in their own buildings */
-function canHold(s, j) {
-  if (s.is_vice || s.grounded || s.in_dungeon) return false;
-  if (s.job && s.job.key === j.key) return false;
-  if (s.stars < j.min_stars) return false;
-  if (j.classes.length && !j.classes.includes(s.archetype)) return false;
-  if (!['idle', 'working'].includes(s.state) && !(s.state === 'hunting' && s.job)) return false;
-  return true;
+/* Everyone who is in town (not away in a dungeon, hunt, scouting ...), whatever they are doing. */
+const inTown = (s) => !s.in_dungeon && (['idle', 'working', 'sleeping', 'resting'].includes(s.state) || (s.state === 'hunting' && !!s.job));
+/* Why this slime cannot take the post ('' = it can). */
+function holdWhy(s, j) {
+  if (s.is_vice) return 'Vice Keeper';
+  if (s.job && s.job.key === j.key) return 'already holds it';
+  if (s.grounded) return 'grounded';
+  if (s.stars < j.min_stars) return `needs ${j.min_stars}★`;
+  if (j.classes.length && !j.classes.includes(s.archetype)) return 'wrong class';
+  if (s.refuse_job) return s.refuse_job.replace(/^is /, '');
+  if (s.needs.energy < 25) return 'too tired';
+  return '';
+}
+/* Status tags shown next to a slime in pickers: asleep, at work, hurt, tired, refusing. */
+function statusTags(s) {
+  const t = [];
+  if (s.state === 'sleeping') t.push(`😴 asleep ${Math.round(s.needs.energy)}%`);
+  else if (s.state === 'resting') t.push('🛏️ resting');
+  else if (s.state === 'working') t.push(`👷 ${esc(s.job?.name || 'at work')}`);
+  else if (s.state === 'hunting') t.push(s.job ? '🧺 foraging' : '🏞 hunting');
+  else t.push('🏠 at home');
+  if (s.hp < s.max_hp * 0.5) t.push(s.hp <= 1 ? '🤕 downed' : '🤕 hurt');
+  if (s.needs.energy < 25 && s.state !== 'sleeping') t.push('⚡ tired');
+  if (s.grounded) t.push('🥊 grounded');
+  return t.join(' · ');
+}
+function wakePanel() {
+  const sleepers = S.state.slimes.filter((s) => s.state === 'sleeping' && !s.in_dungeon);
+  const ok = sleepers.filter((s) => s.needs.energy >= 10), tired = ok.filter((s) => s.needs.energy < 50);
+  return `<div class="panel flat row between"><span>😴 <b>${sleepers.length}</b> asleep in town${sleepers.length - ok.length ? ` · ${sleepers.length - ok.length} under 10% energy are left to sleep` : ''}${tired.length ? ` · ⚠ ${tired.length} would wake grumpy (under 50% energy)` : ''}</span>
+    <button class="btn" data-act="wake_all" ${ok.length ? '' : 'disabled'}>☀️ Wake everybody</button></div>`;
 }
 function postPanel(key, extra = '') {
   const st = S.state, j = st.jobs.posts.find((p) => p.key === key);
   const pick = 'post_' + key;
-  const cands = st.slimes.filter((s) => canHold(s, j));
+  const town = st.slimes.filter(inTown).filter((s) => !(s.job && s.job.key === j.key));
+  const cands = town.filter((s) => !holdWhy(s, j));
   let cur = ui(pick, cands[0]?.id);
   if (!cands.some((s) => s.id == cur)) cur = cands[0]?.id;
   S.ui[pick] = cur;
@@ -688,8 +714,8 @@ function postPanel(key, extra = '') {
     ${j.holders.map((h) => { const s = slimeById(h.id); return `<div class="row between panel flat"><span>${s ? avatar(s, 'sm') : ''} <b>${esc(h.name)}</b> <small class="mute">level ${h.level}${h.foraging ? ' · 🧺 foraging' : ' · at work'}</small></span>
       <span class="row">${h.foraging ? `<button class="btn small" data-act="do" data-c="recall" data-id="${h.id}">📞 Call back</button>` : ''}<button class="btn small danger" data-act="stop_job" data-id="${h.id}">Dismiss</button></span></div>`; }).join('') || '<small class="mute">Nobody appointed.</small>'}
     ${full ? '<small class="mute">All places are taken: dismiss someone or upgrade the building.</small>'
-      : cands.length ? `<div class="row"><select data-ui="${pick}">${cands.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} ${s.stars}★${s.job ? ' · ' + esc(s.job.name) : ''})${s.hp < s.max_hp * 0.5 ? ' 🤕' : ''}</option>`).join('')}</select>
-        <button class="btn primary" data-act="assign_job" data-job="${key}">Appoint</button></div>` : `<small class="mute">Nobody free qualifies${j.min_stars > 1 ? ` (${j.min_stars}★+)` : ''}${j.classes.length ? ' (' + j.classes.map(esc).join('/') + ' only)' : ''}.</small>`}
+      : town.length ? `<div class="row"><select data-ui="${pick}">${town.map((s) => { const w = holdWhy(s, j); return `<option value="${s.id}" ${s.id == cur ? 'selected' : ''} ${w ? 'disabled' : ''}>${esc(s.name)} (${esc(s.class_name)} ${s.stars}★) · ${statusTags(s)}${w ? ' · 🚫 ' + esc(w) : ''}</option>`; }).join('')}</select>
+        <button class="btn primary" data-act="assign_job" data-job="${key}" ${cands.length ? '' : 'disabled'}>Appoint</button></div>${cands.length ? '' : '<small class="mute">Nobody in town can take this post right now (see the tags).</small>'}` : `<small class="mute">Nobody free qualifies${j.min_stars > 1 ? ` (${j.min_stars}★+)` : ''}${j.classes.length ? ' (' + j.classes.map(esc).join('/') + ' only)' : ''}.</small>`}
     ${extra}</div>`;
 }
 function kitchenView() {
@@ -715,13 +741,13 @@ function hospitalView() {
     ${postPanel('doctor')}
     ${b.cost ? `<button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="hospital" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade the Hospital · ${cost(b.cost)}</button>` : ''}</div></div>`;
 }
-function pickSlime(key, filter, idx = 0) {
+function pickSlime(key, filter, idx = 0, expedition = false) {
   const list = S.state.slimes.filter(filter);
   let cur = ui(key, list[Math.min(idx, list.length - 1)]?.id);
   if (!list.some((s) => s.id == cur)) cur = list[Math.min(idx, list.length - 1)]?.id;
   S.ui[key] = cur;
   if (!list.length) return '<small class="mute">nobody is free</small>';
-  return `<select data-ui="${key}">${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} Lv${s.level} ${s.stars}★)${trainTags(s)}</option>`).join('')}</select>`;
+  return `<select data-ui="${key}">${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''} ${expedition && s.refuse_dungeon ? 'disabled' : ''}>${esc(s.name)} (${esc(s.class_name)} Lv${s.level} ${s.stars}★)${trainTags(s)}${expedition && s.refuse_dungeon ? ' · 🚫 ' + esc(s.refuse_dungeon.replace(/^is /, '')) : ''}</option>`).join('')}</select>`;
 }
 function huntsView() {
   const st = S.state, j = st.jobs;
@@ -730,7 +756,7 @@ function huntsView() {
   <div class="panel stack"><h2>🏞 Hunts & foraging ${info('Hunting sends slimes outside for white gel, food and essence (and a rare purple gel, plus now and then a herb, scrap or a common stone). A hunt also sharpens class proficiency. It costs no resources, only time and risk: a hurt or weak slime can be injured, and one that is too weak may come home with little. Foraging is the same thing done automatically.')}</h2>
     <p class="mute">Slimes can hunt in four zones (from a one-hour dip to the Crust Road). A hunt costs nothing but time and a little health; the better a slime's power against the zone's danger, the safer and richer the haul. Send slimes from their card (Colony tab), a whole party from the Parties tab, or let the Vice Keeper organise big hunts.</p>
     <div class="row"><label class="f">Zone <select data-ui="hz" data-rerender="1">${st.zones.map((z) => `<option value="${z.key}" ${z.key === ui('hz', st.zones[0].key) ? 'selected' : ''}>${esc(z.name)} (${z.duration}h)</option>`).join('')}</select></label>
-      ${pickSlime('hs', (s) => !s.in_dungeon && s.state !== 'hunting' && s.state !== 'studying' && !s.grounded)}<button class="btn primary" data-act="hunt_pick">🏞 Send hunting</button></div>
+      ${pickSlime('hs', (s) => !s.in_dungeon && s.state !== 'hunting' && s.state !== 'studying' && !s.grounded, 0, true)}<button class="btn primary" data-act="hunt_pick">🏞 Send hunting</button></div>
     <div class="row">${partyOptions('hpid')}<button class="btn" data-act="hunt_party_pick">🏞 Hunt together</button><small class="mute">A party that hunts together grows closer (synergy).</small></div>
     <small class="mute">Tags show who is asleep, hurt or at work: a sleeper wakes free if over half rested (else it costs mood); a worker leaves their post; a slime under 30% health cannot go.</small>
     <table><thead><tr><th>Zone</th><th>Time</th><th>Danger</th><th>Brings</th></tr></thead><tbody>${st.zones.map((z) => `<tr><td><b>${esc(z.name)}</b><br><small class="mute">${esc(z.desc)}</small></td><td>${z.duration}h</td><td>${z.danger}</td><td>${esc(Object.entries(z.rewards || {}).map(([k, v]) => `${(RES[k] || [k])[0]} ${Array.isArray(v) ? v.join('–') : v}`).join(' · '))}</td></tr>`).join('')}</tbody></table>
@@ -1300,6 +1326,7 @@ const A = {
   set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
   assign_job: (d) => { const id = num(S.ui['post_' + d.job]); if (id) act('assign_job', { id, job: d.job }); },
   forage: () => act('set_forage', { on: !S.state.jobs.forage }),
+  wake_all: () => confirmThen('Wake everybody asleep in town?\n\nSlimes under 10% energy are left to sleep. Those under 50% energy wake grumpy (a mood cost).', () => act('wake_all')),
   stop_job: (d) => act('stop_job', { id: num(d.id) }),
   unground: (d) => act('unground', { id: num(d.id) }),
   rename_party: (d) => { const n = window.prompt('New name for the party ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_party', { pid: num(d.pid), name: n }); },
