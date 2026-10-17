@@ -147,7 +147,8 @@ class HuntSystem:
             self.on_finish(s, ok, group)
         s.needs.add("esteem", 12 if ok else -8)
         outlook.bump(s, "hunt")
-        xp = int(zone.xp * (1.0 if ok else 0.4) * factor)
+        base_xp = max(zone.xp, s.xp_needed(s.level) * config.HUNT_XP_PER_HOUR * zone.duration)   # mild, but scales with what a level costs
+        xp = int(base_xp * (1.0 if ok else 0.4) * factor)
         lv = add_xp(s, xp)
         loot = ", ".join(f"{v} {k}" for k, v in gains.items()) or "nothing"
         verb = "returned early" if early else ("returned victorious" if ok else "limped back")

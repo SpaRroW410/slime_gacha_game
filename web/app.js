@@ -563,11 +563,11 @@ function dungeonsAll() {
     <h4>What the colony knows</h4>
     ${segs.map((seg, i) => `<details ${i === 0 || nowFloors[seg[0].floor] ? 'open' : ''}><summary><b>Floors ${seg[0].floor}–${seg[seg.length - 1].floor}</b> <small class="mute">${Math.round(seg.reduce((a, f) => a + f.knowledge, 0) / seg.length)}% known</small></summary>${seg.map(floorHtml).join('')}</details>`).join('')}
   </div>
-  <div class="stack">
-    ${st.stranded.length ? `<div class="panel stack warnbox"><h2>🆘 Overdue scouts</h2>
+<!--col-->  <div class="stack">
+    <!--s1-->${st.stranded.length ? `<div class="panel stack warnbox"><h2>🆘 Overdue scouts</h2>
       <p class="mute">These scouts ran out of supplies. A rescue party (full, with every member having cleared the floor above theirs) can still bring them home — but the trip takes time, costs food and can be ambushed, and it must arrive before the deadline.</p>
       ${st.stranded.map((e) => `<div class="panel flat"><b>${e.names.map(esc).join(', ')}</b><br><small class="mute">stuck on floor ${e.stuck} (scouting ${e.first}–${e.last}) · ${e.hours_left}h left · rescue takes ${e.rescue_hours}h and ${e.food} 🍖</small>
-        <div class="row">${partyOptions('rescpid')}<button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left ? 'disabled' : ''}>🛟 Send rescue</button></div></div>`).join('')}</div>` : ''}
+        <div class="row">${partyOptions('rescpid')}<button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left ? 'disabled' : ''}>🛟 Send rescue</button></div></div>`).join('')}</div>` : ''}<!--s2-->
     <div class="panel stack"><h2>🔭 Scouting</h2>
       <p class="mute">Send an exploration party to learn specific floors (1 to ${d.scout_max_floors} at a time, not only multiples of 5). Scouts must reach <b>100% of every targeted floor</b> before their time runs out — <b>otherwise the whole party is lost</b> (a half-finished note survives). Time needed grows with depth and is never exactly predictable. They must have cleared the floors above the first one. Supplies (${d.scout_food} 🍖 per budgeted hour) are paid up front, even if they finish early.</p>
       <div class="row">${partyOptions('spid')}<label class="f">Floors <input type="number" min="1" max="${d.max_floor}" value="${sfirst}" data-ui="sfirst" style="width:64px"> to <input type="number" min="1" max="${d.max_floor}" value="${slast}" data-ui="slast" style="width:64px"></label>
@@ -598,9 +598,10 @@ function cut(html, from, to) {
 function dungeons() {
   const all = dungeonsAll(), v = sub('dungeons');
   const scout = '<div class="panel stack"><h2>🔭 Scouting', pit = '<div class="panel stack"><h2>🫧 The Gloop Pit', skirm = '<div class="panel stack"><h2>⚔ Skirmish';
-  const left = cut(all, '<div class="panel stack"><h2>🕳', '  <div class="stack">\n    ' + scout);
+  const left = cut(all, '<div class="panel stack"><h2>🕳', '<!--col-->');
+  const stranded = cut(all, '<!--s1-->', '<!--s2-->').replace('<!--s1-->', '');
   const scoutHtml = cut(all, scout, pit), pitHtml = cut(all, pit, skirm), skHtml = cut(all, skirm, null).replace(/<\/div><\/div>\s*$/, '</div>');
-  const body = v === 'descent' ? `<div class="grid cols2"><div class="stack">${left}</div><div class="stack">${scoutHtml}${skHtml.endsWith('</div></div>') ? skHtml : skHtml + '</div>'}</div>`
+  const body = v === 'descent' ? `<div class="grid cols2"><div class="stack">${left}</div><div class="stack">${stranded}${scoutHtml}${skHtml.endsWith('</div></div>') ? skHtml : skHtml + '</div>'}</div>`
     : v === 'pit' ? `<div class="grid cols2">${pitHtml}</div>` : v === 'quarry' ? quarryView() : v === 'hunts' ? huntsView() : riftView();
   return subnav('dungeons') + body;
 }

@@ -322,6 +322,7 @@ OUTLOOK_SCHOLAR_RESEARCH = 0.05
 OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 
 HUNT_PROF_OWN, HUNT_BOND = 1.5, 1.5          # a hunt sharpens class proficiency (x0.4 if it went badly); hunters in one group grow this much closer per pair
+HUNT_XP_PER_HOUR = 0.017       # a hunt's XP is at least this share of the XP the hunter's next level costs, per hour of the hunt (mild, and it keeps up with level and rarity)
 HUNT_SIDE_CHANCE = 0.18        # chance a successful hunt also brings a little of another material (herbs, scrap, a common stone)
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
