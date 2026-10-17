@@ -2339,6 +2339,46 @@ class Game:
             self.social.shift_morale(s, 2)
         return f"{self.parties.get(pid).name} climbs out of the Hollow Descent after {d['hours']}h."
 
+    def retreat_cost(self, pid: int) -> int:
+        """Purple gel an emergency retreat costs: a base fee plus one per segment of depth."""
+        d = self.delves[pid]
+        return config.RETREAT_PURPLE_BASE + d["floor"] // config.MAIN_BOSS_EVERY
+
+    def retreat_ambush_chance(self, pid: int) -> float:
+        d = self.delves[pid]
+        return min(0.7, config.RETREAT_AMBUSH * (1 + 0.05 * d["floor"]) * (1 - 0.6 * self._knowledge(d["floor"]) / 100))
+
+    def retreat(self, pid: int) -> List[str]:
+        """Break off and flee mid-segment: the Descent's one costed way out (the checkpoint exit stays free).
+        Costs purple gel and morale, leaves the party shaken (stamina drained), and the flight can be ambushed -
+        deaths are permanent. Every floor the party cleared stays cleared for each slime; to go back down they must
+        enter again from a checkpoint (floor 1 or the floor after a boss)."""
+        d = self.delves.get(pid)
+        if not d:
+            raise InvalidAction("That party is not inside the dungeon.")
+        if self.can_leave(pid):
+            raise InvalidAction("The party stands at a checkpoint: it can simply leave for free.")
+        self._delve_wait(d)
+        party = self._members_in("main", pid)
+        cost = self.retreat_cost(pid)
+        self.wallet.spend("purple_gel", cost)
+        out = [f"🏃 {self.parties.get(pid).name} breaks off and flees the Hollow Descent from floor {d['floor']} ({cost} purple gel)."]
+        if self.rng.random() < self.retreat_ambush_chance(pid):
+            self._ambush_strike(pid, party, d["floor"], out, "Ambushed during the retreat!", "killed fleeing the Hollow Descent")
+        survivors = self._members_in("main", pid)
+        for s in survivors:
+            self.social.shift_morale(s, -config.RETREAT_MORALE)
+            s.needs.add("esteem", -10)
+            s.stamina_frac = min(s.stamina_frac, 0.3)
+        self._clear_flag(survivors)
+        self.delves.pop(pid, None)
+        if survivors:
+            out.append(f"   {len(survivors)} slime(s) stumble out, shaken and exhausted.")
+        else:
+            out.append("☠ Nobody made it out.")
+        self.journal.extend(out)
+        return out
+
     def delve_status(self, pid: int) -> dict:
         d = self.delves.get(pid)
         if not d:
@@ -2614,15 +2654,7 @@ class Game:
             p = min(0.7, config.CAMP_AMBUSH_BASE * (1 + 0.1 * d["floor"]) * (1 - 0.6 * self._knowledge(d["floor"]) / 100)
                     * (1 - config.CAMP_RELIEF_MAX * self.relief(pid)))
             if self.rng.random() < p:
-                v = self.rng.choice(party)
-                dmg = max(1, int(v.max_hp * self.rng.uniform(*config.CAMP_AMBUSH_DAMAGE) * (1 + 0.05 * d["floor"])))
-                v.hp -= dmg
-                out.append(f"⚠ An ambush at camp! {v.name} takes {dmg} damage.")
-                if v.hp <= 0:
-                    v.death_cause = "ambushed while camping in the Hollow Descent"
-                    self._drop_gear([v], [s for s in party if s is not v and s.hp > 0], party, "Hollow Descent", out)
-                    self._reap(out)
-                    self._shift_morale_party(self._members_in("main", pid), -6)
+                self._ambush_strike(pid, party, d["floor"], out, "An ambush at camp!", "ambushed while camping in the Hollow Descent")
         if not self._members_in("main", pid):
             out.append("☠ The whole party has fallen in the Hollow Descent.")
             self.delves.pop(pid, None)
@@ -2634,6 +2666,18 @@ class Game:
         self._owed = 0.0
         self.journal.extend(out)
         return out
+
+    def _ambush_strike(self, pid: int, party: List[Slime], floor: int, out: List[str], headline: str, cause: str) -> None:
+        """Something strikes one member of a party inside the Descent. It can be fatal (deaths are permanent)."""
+        v = self.rng.choice(party)
+        dmg = max(1, int(v.max_hp * self.rng.uniform(*config.CAMP_AMBUSH_DAMAGE) * (1 + 0.05 * floor)))
+        v.hp -= dmg
+        out.append(f"⚠ {headline} {v.name} takes {dmg} damage.")
+        if v.hp <= 0:
+            v.death_cause = cause
+            self._drop_gear([v], [s for s in party if s is not v and s.hp > 0], party, "Hollow Descent", out)
+            self._reap(out)
+            self._shift_morale_party(self._members_in("main", pid), -6)
 
     def _shift_morale_party(self, party, delta: float) -> None:
         for s in party:

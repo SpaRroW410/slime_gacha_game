@@ -335,6 +335,7 @@ def dungeon_menu(g: Game) -> None:
                   f"knowledge of this floor {st['knowledge']:.0f}%, party: "
                   + ", ".join(f"{s.name} {s.hp}/{s.max_hp}" for s in st["members"]))
             act = _ask("  [f]ight next floor / [c]amp / [i]ntel / " + ("[x] LEAVE (checkpoint) / " if st["can_leave"] else "")
+                       + ("[r]etreat (" + str(g.retreat_cost(pid)) + " purple gel, risky) / " if not st["can_leave"] else "")
                        + "[b]ack to menu (the party stays inside!): ").lower()[:1]
             if act == "f":
                 print("\n".join(g.delve_next(pid).log[-18:]))
@@ -344,6 +345,9 @@ def dungeon_menu(g: Game) -> None:
                 show_intel(g, st["floor"], st["floor"] + 4)
             elif act == "x":
                 print("  " + g.leave_dungeon(pid))
+                break
+            elif act == "r":
+                print("\n".join("  " + x for x in g.retreat(pid)))
                 break
             else:
                 break

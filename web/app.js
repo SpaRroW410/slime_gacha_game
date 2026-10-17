@@ -524,7 +524,7 @@ function dungeonsAll() {
   const plan = S.plan && S.plan.first === sfirst && S.plan.last === slast ? S.plan : null;
   return `<div class="grid cols2">
   <div class="panel stack"><h2>🕳 The Hollow Descent</h2>
-    <p class="mute">Rough, permanent death. Walk the floors <b>in order</b>. You may only <b>leave after a boss floor</b> (every ${d.boss_every}) — go home, train, study, come back stronger. <b>Each slime must have cleared the floors above</b> to enter a floor, so nobody can be carried; other parties may walk the same floors again. Best floor ever: <b>${d.best_floor}</b> of ${d.max_floor}.</p>
+    <p class="mute">Rough, permanent death. Walk the floors <b>in order</b>. You may only <b>leave for free after a boss floor</b> (every ${d.boss_every}) — go home, train, study, come back stronger. Mid-segment there is one costed escape: a risky <b>Retreat</b> (purple gel). <b>Each slime must have cleared the floors above</b> to enter a floor, so nobody can be carried; other parties may walk the same floors again. Best floor ever: <b>${d.best_floor}</b> of ${d.max_floor}.</p>
     ${d.cleared ? '<div class="panel flat">👑 <b>The Parched King has fallen.</b> The Descent is conquered — but the floors remain for training and scouting.</div>' : ''}
     ${delves.map(([pid, v]) => { const p = partyById(+pid); return `<div class="panel flat"><div class="row between"><b>${esc(p?.name)}</b>${chip(`floor ${v.floor} · exit after boss ${v.boss_floor}`, v.can_leave ? 'ok' : 'bad')}</div>
       <p class="mute">${v.hours}h inside · this floor ${v.knowledge.toFixed(0)}% known · clearing it takes ~${v.next_hours} game hour${v.next_hours === 1 ? '' : 's'}${S.state.clock.mode === 'live' ? ` (~${Math.max(1, Math.round(v.next_hours / S.state.clock.dungeon_rate * 60))} real min)` : ''}</p>
@@ -534,7 +534,8 @@ function dungeonsAll() {
         ${v.joinable.map((q) => `<button class="btn primary" data-act="delve_next" data-pid="${pid}" data-join="${q}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight together with ${esc(partyById(q)?.name)}</button>`).join('')}
         <input type="number" min="1" max="24" value="${camp}" data-ui="camp_h" style="width:70px"><button class="btn" data-act="delve_camp" data-pid="${pid}" ${v.ready_in > 0 || v.camp_left <= 0 ? 'disabled' : ''}>⛺ Camp (h)</button>
         <button class="btn ${v.can_leave ? 'primary' : ''}" data-act="leave_dungeon" data-pid="${pid}" ${v.can_leave ? '' : 'disabled'} title="${v.can_leave ? 'Climb out' : 'Only possible at a checkpoint'}">🚪 Leave</button></div>
-      ${v.can_leave ? '' : `<small class="mute">No way out until the boss of floor ${v.boss_floor} falls.</small>`}
+      ${v.can_leave ? '' : `<div class="row"><small class="mute">No free way out until the boss of floor ${v.boss_floor} falls.</small>
+        <button class="btn small danger" data-act="retreat" data-pid="${pid}" data-cost="${v.retreat.cost}" data-amb="${Math.round(v.retreat.ambush * 100)}" ${v.ready_in > 0 || S.state.wallet.purple_gel < v.retreat.cost ? 'disabled' : ''} title="Costs purple gel, morale, and the flight may be ambushed">🏃 Retreat · ${v.retreat.cost} 🟣</button></div>`}
       ${v.modifier ? `<div class="chip bad">${esc(S.state.modifiers[v.modifier].emoji)} ${esc(S.state.modifiers[v.modifier].name)}: ${esc(S.state.modifiers[v.modifier].desc)}</div>` : ''}
       ${v.stop ? stopPanel(+pid, v) : ''}
       <small class="mute" style="display:block">⛺ Camp time left on this floor: <b>${v.camp_left}h</b> of ${v.camp_limit}h (the floor number, stretched by how well it is scouted).${v.relief > 0 ? ` Ambushes are ${Math.round(v.relief * 50)}% less likely: another party is closing in from below.` : ''}</small>
@@ -1146,6 +1147,7 @@ const A = {
   enter_dungeon: () => { const pid = num(ui('dpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     const p = partyById(pid); const start = num(ui('dstart'), p.entry[p.entry.length - 1]);
     confirmThen(`Enter the Hollow Descent at floor ${start}?\n\nYou can only leave after a boss floor (every 5). Deaths are permanent.`, () => act('enter_dungeon', { pid, start: p.entry.includes(start) ? start : p.entry[p.entry.length - 1] })); },
+  retreat: (d) => confirmThen(`Break off and flee?\n\nIt costs ${d.cost} purple gel and morale, drains the party's stamina, and the flight can be ambushed (${d.amb}% chance of a hit that may be fatal). Cleared floors stay cleared, but you re-enter from a checkpoint.`, () => act('retreat', { pid: num(d.pid) })),
   leave_dungeon: (d) => act('leave_dungeon', { pid: num(d.pid) }),
   scout_plan: async () => { const pid = num(ui('spid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const first = num(ui('sfirst', 1), 1), last = num(ui('slast', first), first);
     if (!pid) return toast('You need a full party.', true);

@@ -152,3 +152,56 @@ class TestPitLure(unittest.TestCase):
         res = g.grind(pid, 3, 3, lure=True)
         self.assertEqual(g.wallet.get("purple_gel"), 0)
         self.assertTrue(any("out of purple gel" in l for l in res.summary))
+
+
+class TestRetreat(unittest.TestCase):
+    def setup(self, floor=8):
+        g, a, _ = two_parties()
+        g.enter_dungeon(a)
+        g.delves[a]["floor"] = floor
+        return g, a
+
+    def test_cost_grows_with_depth_and_checkpoint_exit_stays_free(self):
+        g, a = self.setup(8)
+        self.assertEqual(g.retreat_cost(a), config.RETREAT_PURPLE_BASE + 1)
+        g.delves[a]["floor"] = 24
+        self.assertEqual(g.retreat_cost(a), config.RETREAT_PURPLE_BASE + 4)
+        g.delves[a]["floor"] = 6                                    # right after a boss: simply leave
+        with self.assertRaises(InvalidAction):
+            g.retreat(a)
+        self.assertIn("climbs out", g.leave_dungeon(a))
+
+    def test_retreat_pays_gel_morale_and_stamina_and_ends_the_delve(self):
+        g, a = self.setup(8)
+        g.rng.random = lambda: 0.99                                  # no ambush
+        gel = g.wallet.get("purple_gel")
+        morale = {s.id: s.morale for s in members(g, a)}
+        out = g.retreat(a)
+        self.assertEqual(gel - g.wallet.get("purple_gel"), config.RETREAT_PURPLE_BASE + 1)
+        self.assertNotIn(a, g.delves)
+        for s in members(g, a):
+            self.assertEqual(s.in_dungeon, "")
+            self.assertLess(s.morale, morale[s.id])
+            self.assertLessEqual(s.stamina_frac, 0.3)
+        self.assertTrue(any("flees" in l for l in out))
+
+    def test_the_flight_can_be_ambushed_and_kill(self):
+        g, a = self.setup(8)
+        ids = [s.id for s in members(g, a)]
+        for s in members(g, a):
+            s.hp = 1                                                 # whoever is struck falls
+        g.rng.random = lambda: 0.0                                   # always ambushed
+        g.rng.uniform = lambda lo, hi: 50.0
+        out = g.retreat(a)
+        self.assertTrue(any("Ambushed during the retreat" in l for l in out))
+        self.assertEqual(sum(1 for i in ids if i not in g.roster), 1)
+
+    def test_needs_purple_gel_and_scouting_lowers_the_risk(self):
+        g, a = self.setup(8)
+        before = g.retreat_ambush_chance(a)
+        g.intel[8] = 100.0
+        self.assertLess(g.retreat_ambush_chance(a), before)
+        g.wallet.add("purple_gel", -g.wallet.get("purple_gel"))
+        with self.assertRaises(NotEnoughResources):
+            g.retreat(a)
+        self.assertIn(a, g.delves)

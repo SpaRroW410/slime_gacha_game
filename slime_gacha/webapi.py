@@ -260,6 +260,7 @@ def snapshot(g: Game) -> dict:
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
                                    boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
                                    knowledge=g._knowledge(d["floor"]),
+                                   retreat=dict(cost=g.retreat_cost(pid), ambush=round(g.retreat_ambush_chance(pid), 2)),
                                    stop=g.stop_view(pid), modifier=((dungeon.floor_modifier(g.dungeon_seed, d["floor"]) or None) if dungeon.intel_level(g._knowledge(d["floor"])) >= 2 else None),
                                    camp_left=g.camp_left(pid), camp_limit=g.camp_limit(pid), relief=round(g.relief(pid), 2),
                                    joinable=g.joinable(pid), callers=[s.id for s in g.callers(pid)], call_cost=g.call_cost(d["floor"]),
@@ -693,6 +694,11 @@ def _council(g, a):
 def _enter(g, a):
     start = a.get("start")
     return _msg(g.enter_dungeon(_i(a, "pid"), int(start) if start not in (None, "") else None))
+
+
+@command("retreat")
+def _retreat(g, a):
+    return g.retreat(_i(a, "pid")), {}
 
 
 @command("leave_dungeon")
