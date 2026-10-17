@@ -116,7 +116,7 @@ class TestSparring(unittest.TestCase):
         self.assertTrue(any("dummy" in l for l in res.summary))
         self.assertTrue(all(s.style_xp.get("magic", 0) > 0 for s in g.slimes()))
         self.assertEqual(sum(s.hp == 1 for s in g.slimes()), 2)     # two losers, nobody else hurt to 1
-        self.assertEqual(g.wallet.get("white_gel"), gel - 6)
+        self.assertEqual(g.wallet.get("white_gel"), gel - 3)       # a party session is a flat 3, not per pair
 
     def test_sparring_builds_bonds_and_morale(self):
         g = rich()

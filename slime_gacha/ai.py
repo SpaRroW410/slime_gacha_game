@@ -7,7 +7,7 @@ import random
 from dataclasses import dataclass
 from typing import Dict, List
 
-from . import config
+from . import config, emotions
 from .archetypes import get_archetype
 from .resources import ResourceManager
 
@@ -217,6 +217,8 @@ class ConflictEngine:
             if s.hp <= 0:
                 s.death_cause = f"died in a brawl with {by_id[c.b if sid == c.a else c.a].name}"
             s.needs.add("esteem", -10)
+            s.morale = max(0.0, s.morale - config.BRAWL_MORALE)            # a brawl leaves both sour
+            emotions.feel(s, "anger", config.BRAWL_ANGER)
             s.grounded = True
             if s.busy:                   # a brawl cuts a hunt / lesson short
                 s.state, s.hunt, s.task = "idle", None, None

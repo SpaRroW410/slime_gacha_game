@@ -939,11 +939,30 @@ class Game:
         s.state = "sleeping"
         return f"{s.name} dozes off."
 
+    def _rouse(self, s: Slime) -> str:
+        """Wake a sleeper: it is not pleased (mood cost)."""
+        s.state = "idle"
+        self.social.shift_morale(s, -config.WAKE_MORALE)
+        emotions.feel(s, "anger", config.WAKE_ANGER)
+        return f"😠 {s.name} is woken up and is grumpy about it (morale -{config.WAKE_MORALE})."
+
     def wake(self, sid: int) -> str:
         s = self._tend(sid)
-        if s.state in ("sleeping", "resting"):
+        if s.state == "sleeping":
+            return self._rouse(s)
+        if s.state == "resting":
             s.state = "idle"
         return f"{s.name} wakes up."
+
+    def _prepare_trainees(self, slimes: List[Slime]) -> List[str]:
+        """Before sparring or a drill: sleepers are woken (mood cost) and workers leave their job (the shift is lost)."""
+        out = []
+        for s in slimes:
+            if s.state == "sleeping":
+                out.append(self._rouse(s))
+            elif s.state == "working":
+                out.append(f"{s.name} leaves the {jobs.JOBS[s.job].name.lower() if s.job in jobs.JOBS else 'job'} for training. " + jobs.stop(self, s))
+        return out
 
     def set_behavior(self, sid: int, stance: str) -> str:
         if stance not in BEHAVIORS:
@@ -981,8 +1000,8 @@ class Game:
     # ---- sparring (fighting styles) -------------------------------------------------
     def spar(self, a_id: int, b_id: int, discipline: str) -> SparResult:
         """Two slimes duel non-lethally in the chosen arena (sword / archery / magic) to develop a fighting
-        STYLE. No XP; the loser is left at 1 HP (use the Rest Area). Costs 2 white gel and 3 hours."""
-        return self._spar_group([(self.slime(a_id), self.slime(b_id))], None, discipline)
+        STYLE. No XP; the loser is left at 1 HP (use the Rest Area). Costs 2 white gel and 3 hours (a whole party session is a flat 3)."""
+        return self._spar_group([(self.slime(a_id), self.slime(b_id))], None, discipline, config.SPAR_COST)
 
     def spar_party(self, pid: int, discipline: str) -> SparResult:
         """Everyone in a full party spars in random pairs; an odd slime out trains on a dummy."""
@@ -991,9 +1010,9 @@ class Game:
         self.rng.shuffle(members)
         pairs = [(members[i], members[i + 1]) for i in range(0, len(members) - 1, 2)]
         odd = members[-1] if len(members) % 2 else None
-        return self._spar_group(pairs, odd, discipline)
+        return self._spar_group(pairs, odd, discipline, config.SPAR_PARTY_COST)
 
-    def _spar_group(self, pairs, dummy_slime, discipline: str) -> SparResult:
+    def _spar_group(self, pairs, dummy_slime, discipline: str, cost: Dict[str, int]) -> SparResult:
         d = sparring.DISCIPLINES.get(discipline)
         cap = self.buildings.style_cap()
         everyone = [s for p in pairs for s in p] + ([dummy_slime] if dummy_slime else [])
@@ -1001,12 +1020,13 @@ class Game:
             raise InvalidAction("A slime can't spar with themselves.")
         for s in everyone:
             sparring.check_ready(s)
+        notes = self._prepare_trainees(everyone)
         if all(sparring.style_level(s, d.key) >= cap for s in everyone):
             raise InvalidAction(f"Everyone is already at the {d.style} ceiling (level {cap}) - upgrade the "
                                 f"Training Grounds.")
-        self.wallet.spend_many({k: v * (len(pairs) + (1 if dummy_slime else 0))
-                                for k, v in config.SPAR_COST.items()})
+        self.wallet.spend_many(cost)
         res = SparResult()
+        res.summary.extend(notes)
         mult = self.buildings.style_mult()
 
         def reward(s, won, dummy=False):
@@ -1165,7 +1185,12 @@ class Game:
 
     def drill(self, sid: int, discipline: str, tier: int = 1) -> str:
         """Send a slime to drill (sword / archery / magic) for proficiency. See AcademySystem.start_drill."""
-        return self.academy.start_drill(self.slime(sid), discipline, tier)
+        s = self.slime(sid)
+        sparring.check_ready_basic(s)
+        wound = config.WOUNDED_DRILL if s.hp < s.max_hp * config.WOUNDED_BELOW else 1.0
+        notes = self._prepare_trainees([s])
+        msg = self.academy.start_drill(s, discipline, tier, wound)
+        return " ".join(notes + [msg]) + (" (hurt: this drill is worth less)" if wound < 1.0 else "")
 
     def drill_party(self, pid: int, discipline: str, tier: int = 1) -> List[str]:
         self.academy.drill_tier(tier)                       # refuse early if the tier is locked
@@ -1738,6 +1763,18 @@ class Game:
         return [f"🔥 {name} ({label}) is destroyed in the chamber: " +
                 ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in y.items()) + ".",
                 f"   The colony mourns. Sacrifice stress is now {self.sacrifice_stress:.1f}."]
+
+    def _farm_loot(self, foes: int, log: List[str]) -> None:
+        """Every farming dungeon (Pit, Rift, Quarry) also hands out a little of the other resources, rarely."""
+        got: Dict[str, int] = {}
+        for _ in range(foes):
+            if self.rng.random() < config.FARM_LOOT_CHANCE:
+                key = self.rng.choice(list(config.FARM_LOOT))
+                lo, hi = config.FARM_LOOT[key]
+                got[key] = got.get(key, 0) + self.rng.randint(lo, hi)
+        if got:
+            self.wallet.add_many(got)
+            log.append("🎁 Also found " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in got.items()) + ".")
 
     def _stone_side_drop(self, where: str, foes: int, log: List[str]) -> None:
         """Other dungeons hide the odd common stone."""
@@ -2318,6 +2355,7 @@ class Game:
                                 f"{v} {k.replace('_', ' ')}" for k, v in got.items()) + "!")
                 if rep.victory:
                     self._herb_drop(kind, len(enemies), events, theme.terrain)
+                    self._farm_loot(len(enemies), events)
                 if rep.victory and kind != "quarry":
                     self._stone_side_drop("adventure", len(enemies), events)
                     for _ in enumerate(enemies):
@@ -2334,7 +2372,7 @@ class Game:
                     line += f", KO: {', '.join(rep.knocked_out)}"
                 res.summary.append(line)
                 res.summary.extend("   " + e for e in events if any(w in e for w in
-                                   ("Found", "Mined", "stone", "herb", "shatters", "knocked", "died")))
+                                   ("Found", "Mined", "stone", "herb", "shatters", "knocked", "died", "Also found")))
                 self.journal.extend(events)
                 if rep.winner == "foes":
                     res.stop_reason = "the whole party was knocked out"
@@ -2906,7 +2944,7 @@ class Game:
     def _grind_gen(self, pid: int, depth: int = 3, runs: int = 1, lure: bool = False):
         """Commit the party to `runs` Pit fights at `depth` (enemy level = party average + depth - 3).
         Once in, they only leave when all runs are done or the whole party is knocked out; they camp (sleep,
-        eat) between runs when hurt. A slime that goes down is not dead, but loses XP and morale and DROPS ITS
+        eat) between runs when hurt. A slime that goes down is not dead: it loses morale (never XP) and DROPS ITS
         GEAR: survivors may bring it back (chance from party synergy), else it stays in the Pit's lost-and-found
         until a later victory digs it up. (`auto_rest` is kept for compatibility: camping is always automatic.)"""
         if not 1 <= depth <= config.GRIND_DEPTHS:
@@ -2964,10 +3002,9 @@ class Game:
                 standing = [s for s in members if s not in downed]
                 for s in downed:
                     grinder = outlook.has(s, "pit")
-                    lost = lose_xp(s, config.GRIND_DEATH_XP_LOSS * (config.OUTLOOK_GRINDER_LOSS if grinder else 1))
                     mloss = config.GRIND_DEATH_MORALE * (config.OUTLOOK_GRINDER_MORALE if grinder else 1)
-                    self.social.shift_morale(s, mloss)
-                    events.append(f"💫 {s.name} was knocked out: -{lost} xp, morale {mloss:+.0f}.")
+                    self.social.shift_morale(s, mloss)                          # an XP farm: a knock-out costs morale, never XP
+                    events.append(f"💫 {s.name} was knocked out: morale {mloss:+.0f}.")
                 for s in members:                               # everyone who went in gains Pit experience
                     outlook.bump(s, "pit")
                 for s in standing:
@@ -2979,6 +3016,7 @@ class Game:
                     self._gear_drop(1 if depth <= 3 else 2, config.GEAR_DROP_PIT * (config.PIT_LURE_GEAR if lured else 1.0), events)
                     self._stone_side_drop("grind", len(enemies), events)
                     self._herb_drop("grind", len(enemies), events, theme.terrain)
+                    self._farm_loot(len(enemies), events)
                     self._recover_pit_gear(members, events)
                 events.extend(self._spend(config.GRIND_TICKS))
                 rep.log.extend(events)
@@ -2992,7 +3030,7 @@ class Game:
                 res.summary.append(line)
                 res.summary.extend("   " + l.strip() for l in rep.log if "reached level" in l or "learned" in l)
                 res.summary.extend("   " + e for e in events if any(w in e for w in
-                                   ("knocked", "carries", "left behind", "digs", "found", "died")))
+                                   ("knocked", "carries", "left behind", "digs", "found", "died", "Also found")))
                 self.journal.extend(events)
                 if rep.winner == "foes":
                     res.stop_reason = "the whole party was knocked out"

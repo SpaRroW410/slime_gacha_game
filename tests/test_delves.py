@@ -395,7 +395,7 @@ class TestPitPenalties(unittest.TestCase):
         self.assertEqual(lose_xp(s, 0.9), 5)            # never below level 1
         self.assertEqual((s.level, s.xp), (1, 0))
 
-    def test_knocked_out_slime_loses_xp_morale_and_gear_but_lives(self):
+    def test_knocked_out_slime_loses_morale_and_gear_but_never_xp(self):
         g = rich(13)
         pid = self._weak_party(g)
         ms = members(g, pid)
@@ -410,7 +410,7 @@ class TestPitPenalties(unittest.TestCase):
         self.assertEqual(g.graveyard, [])               # nobody died
         for s in ms:
             if s.name in res.runs[0].knocked_out:
-                self.assertLess(s.total_xp, before[s.id][0])
+                self.assertGreaterEqual(s.total_xp, before[s.id][0])      # an XP farm: no negative XP
                 self.assertLess(s.morale, before[s.id][1] - 15)
                 self.assertEqual(s.gear, {})
         self.assertTrue(g.pit_lost)                     # the gear stayed in the Pit

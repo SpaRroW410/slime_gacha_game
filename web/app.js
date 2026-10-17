@@ -351,7 +351,7 @@ function dOverview(s, { st, free, inDun }) {
     ${sect(`Needs ${s.dominant ? badge(WISH[s.dominant], 'warn') : badge('content', 'ok')}`, 'Needs fall over time. Unmet needs lower mood and morale, stir bad feelings and, at zero, hurt the slime. See the Guide tab for details.', Object.entries(s.needs).map(([k, v]) => bar(v, 100, 'need', NEED_NAME[k], v)).join(''))}
     ${sect('Care', inDun ? 'This slime is inside a dungeon: feeding, petting, sleeping and potions are not possible until it is back.' : 'Feeding, petting and rest. Not possible while a slime is inside a dungeon.', `<div class="row">
       ${care('feed', '🍖 Feed', st.wallet.food > 0 ? '' : 'x')}${care('pet', '🤗 Pet')}
-      ${s.state === 'sleeping' || s.state === 'resting' ? care('wake', '⏰ Wake') : care('sleep', '😴 Sleep', free ? '' : 'x')}
+      ${s.state === 'sleeping' || s.state === 'resting' ? care('wake', s.state === 'sleeping' ? '⏰ Wake (mood −)' : '⏰ Wake') : care('sleep', '😴 Sleep', free ? '' : 'x')}
       <button class="btn small" data-act="do" data-c="rest" ${!inDun && free && s.state !== 'resting' ? '' : 'disabled'}>🛏️ Rest Area</button>
       ${s.can_evolve ? `<button class="btn small primary" data-act="do" data-c="evolve" ${free ? '' : 'disabled'}>🌟 Evolve (${s.evolve_cost} ✨)</button>` : ''}</div>
       ${st.potions.stock.length ? `<div class="row"><select data-ui="pot_sel">${st.potions.stock.map((p) => `<option value="${p.kind}:${p.grade}">${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}</option>`).join('')}</select><button class="btn small" data-act="use_potion" ${inDun ? 'disabled' : ''}>Drink</button></div>` : ''}`)}
@@ -562,7 +562,7 @@ function dungeonsAll() {
         <button class="btn danger" data-act="scout">Send scouts</button></div></div>
     <div class="panel stack"><h2>🫧 The Gloop Pit</h2>
       ${d.pit ? `<div class="panel flat"><b>Today (day ${d.pit.day}): ${esc(d.pit.title)}</b><br><span class="mute">${d.pit.terrain.emoji} ${esc(d.pit.terrain.name)} — ${esc(d.pit.terrain.effects)}</span></div>` : ''}
-      <p class="mute">A <b>committed</b> XP-farming session. The party fights all the runs (camping when hurt) unless everyone goes down. Nobody dies here, but a downed slime <b>loses XP, morale and drops its gear</b> — survivors may carry it back (more likely with high party synergy); else it stays in the Pit's lost-and-found${st.gear.pit_lost.length ? ` (${st.gear.pit_lost.length} item(s) lost there now)` : ''}.</p>
+      <p class="mute">A <b>committed</b> XP-farming session. The party fights all the runs (camping when hurt) unless everyone goes down. Nobody dies here, but a downed slime <b>loses morale (never XP) and drops its gear</b> — survivors may carry it back (more likely with high party synergy); else it stays in the Pit's lost-and-found${st.gear.pit_lost.length ? ` (${st.gear.pit_lost.length} item(s) lost there now)` : ''}.</p>
       <div class="row">${partyOptions('gpid')}
         <label class="f">Depth <input type="range" min="1" max="${d.grind_depths}" value="${depth}" data-ui="depth" data-rerender="1"> <b>${depth}</b></label>
         <label class="f">Runs <input type="number" min="1" max="60" value="${runs}" data-ui="runs" style="width:70px"></label>
@@ -673,6 +673,14 @@ function mutationNotes(s) {
   });
   return rows.length ? `<details class="rosmore"><summary><b>Spell forms</b> <small class="mute">(fused spells change as mastery grows)</small></summary><small>${rows.join('')}</small></details>` : '';
 }
+/* What state a slime is in when picked for training: it changes what the training costs or gives. */
+function trainTags(s) {
+  const tags = [];
+  if (s.state === 'sleeping') tags.push('😴 asleep: woken at a mood cost');
+  if (s.state === 'working') tags.push('👷 at work: leaves the job');
+  if (s.hp < s.max_hp * 0.5) tags.push(s.hp <= 1 ? '🤕 downed' : '🤕 hurt: drills worth less');
+  return tags.length ? ' · ' + tags.join(' · ') : '';
+}
 function academy() {
   const st = S.state;
   const arena = ui('arena', 'sword');
@@ -682,9 +690,9 @@ function academy() {
     if (!list.some((s) => s.id == cur)) cur = list[Math.min(idx, list.length - 1)]?.id;   // a slime that left is no longer chosen
     S.ui[key] = cur;   // what the dropdown shows is what the action uses
     if (!list.length) return '<small class="mute">nobody is free</small>';
-    return `<select data-ui="${key}" ${extra}>${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} Lv${s.level} ${s.stars}★)</option>`).join('')}</select>`;
+    return `<select data-ui="${key}" ${extra}>${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} Lv${s.level} ${s.stars}★)${trainTags(s)}</option>`).join('')}</select>`;
   };
-  const avail = (s) => !s.busy && s.state !== 'hunting' && s.state !== 'studying';
+  const avail = (s) => !s.in_dungeon && s.state !== 'hunting' && s.state !== 'studying' && !s.grounded;
   const freeN = st.slimes.filter(avail).length;
   const duelA = slimeSel('spa', avail, 'data-rerender="1"');
   const duelB = slimeSel('spb', (s) => avail(s) && s.id != S.ui.spa, 'data-rerender="1"', 0);
@@ -717,12 +725,12 @@ function academy() {
     <div class="row"><b>Party:</b> ${partyOptions('dppid')}<button class="btn" data-act="drill_party">Everyone drills</button></div></div>`;
   return `<div class="grid cols2">
   ${trainingFacility}
-  <div class="panel stack"><h2>⚔ Sparring — fighting styles</h2>
+  <div class="panel stack"><h2>⚔ Sparring — fighting styles ${info('A duel costs 2 white gel. A whole-party session costs a flat 3 white gel (not per pair). Each takes 3 hours. A sleeping slime is woken first (mood cost: morale and a flash of anger); a slime at a job leaves it (that shift is lost); a slime below half health is too hurt to spar and drills for less. Check the tags in the pickers.')}</h2>
     <p class="mute">Training is not for XP. Slimes duel each other (non-lethal; the loser is left at <b>1 HP</b> — heal them at the Rest Area) to develop a <b>fighting style</b> with permanent combat perks. Costs ${cost(st.mercy.spar_cost)} per duel and ${st.mercy.train_ticks}h. Training Grounds L${tg.level}: ${esc(tg.now)}.</p>
     <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${arena === d.key ? 'sel' : ''}" data-act="arena" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><div class="sub">${esc(d.style)}</div><small class="mute">${esc(d.perk)}</small></div>`).join('')}</div>
-    <div class="row"><b>Duel:</b> ${duelA} vs ${duelB}<button class="btn primary" data-act="spar" ${duelOk ? '' : 'disabled'}>Spar</button></div>
+    <div class="row"><b>Duel:</b> ${duelA} vs ${duelB}<button class="btn primary" data-act="spar" ${duelOk ? '' : 'disabled'}>Spar · 2 ⚪</button></div>
     ${away ? `<small class="mute">${away} slime${away > 1 ? 's are' : ' is'} away (dungeon, hunt or study) and not listed.</small>` : ''}
-    <div class="row"><b>Party sparring:</b> ${partyOptions('sppid')}<button class="btn" data-act="spar_party" ${S.ui.sppid ? '' : 'disabled'}>Everyone spars</button></div>
+    <div class="row"><b>Party sparring:</b> ${partyOptions('sppid')}<button class="btn" data-act="spar_party" ${S.ui.sppid ? '' : 'disabled'}>Everyone spars · 3 ⚪</button>${info('One flat price of 3 white gel for the whole party, however many pairs spar (an odd slime out trains on a dummy).')}</div>
     <small class="mute">Party sparring: every member of a full, at-home party duels in pairs. One duel above is just two slimes.</small></div>
 
   <div class="panel stack"><h2>📚 Library</h2>
@@ -1203,7 +1211,7 @@ const A = {
   specialize: (d) => confirmThen(`Specialize ${d.n} as a ${d.spec}? This is permanent and costs ${d.cost}.`, () => act('specialize', { id: num(d.id), discipline: d.disc })),
   grind: () => { const pid = num(ui('gpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const depth = num(ui('depth', 3), 3), runs = num(ui('runs', 5), 5);
     if (!pid) return toast('You need a full party.', true);
-    confirmThen(`Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose XP, morale and gear.`, () => act('grind', { pid, depth, runs, manual: manualOn(), lure: !!ui('pit_lure', false) }, { slow: !manualOn(), title: 'The Gloop Pit' })); },
+    confirmThen(`Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose morale and drop their gear (no XP is lost).`, () => act('grind', { pid, depth, runs, manual: manualOn(), lure: !!ui('pit_lure', false) }, { slow: !manualOn(), title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     act('skirmish', { pid, tier: num(ui('tier', 1), 1), manual: manualOn() }, { title: 'Skirmish' }); },
   yard: (d) => { S.ui.yard = d.k; render(); },

@@ -307,7 +307,7 @@ def show_intel(g: Game, first: int = 1, last: int = None) -> None:
 def dungeon_menu(g: Game) -> None:
     th = dungeon.pit_theme(g.dungeon_seed, g.day)
     print("  [1] The Gloop Pit      - committed grinding session: no leaving until all runs are done or the whole party is down.\n"
-          "                           A downed slime loses XP + morale and drops its gear (survivors may bring it back).\n"
+          "                           A downed slime loses morale (not XP) and drops its gear (survivors may bring it back).\n"
           f"                           TODAY (day {g.day + 1}): {th.terrain.emoji} {th.title} - {terrain_mod.describe(th.terrain)}")
     print("  [2] The Hollow Descent - ROUGH, permadeath. Walk the floors in order; you may only leave after a BOSS floor\n"
           f"                           (every {config.MAIN_BOSS_EVERY}). Each slime must have cleared the floors above; other parties may re-walk them.")
@@ -757,7 +757,7 @@ def run_demo(seed: int) -> None:
     for c in list(g.conflicts.conflicts)[:2]:
         print("  " + g.mediate(c.id, "talk"))
 
-    print("\n== 6. GRINDING DUNGEON: a committed Gloop Pit session (downed slimes drop gear, lose XP + morale) ==")
+    print("\n== 6. GRINDING DUNGEON: a committed Gloop Pit session (downed slimes drop gear and lose morale) ==")
     g.conflicts.conflicts.clear()   # keep the demo uninterrupted by brawls
     g.wallet.add("food", 60)
     g.wallet.add("white_gel", 200)

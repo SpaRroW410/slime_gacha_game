@@ -161,7 +161,8 @@ GRIND_MIN_HP = 0.4              # auto-grind stops when anyone drops below this 
 # ---- Sparring (fighting styles), rest area, morale, bonds, buildings --------------------
 # Training is NOT for XP: slimes spar against each other to develop a fighting STYLE. Spars are non-lethal
 # (loser is left at 1 HP) and cost no XP; the Rest Area heals everybody back to full.
-SPAR_COST = {"white_gel": 2}
+SPAR_COST = {"white_gel": 2}          # one duel
+SPAR_PARTY_COST = {"white_gel": 3}    # a whole party session, flat (not per pair)
 SPAR_TICKS = 3
 SPAR_STYLE_XP = 15              # style xp per spar (winner x1.3, own-discipline x1.5, grounds level bonus)
 SPAR_WINNER_MULT = 1.3
@@ -209,6 +210,9 @@ REST_ENERGY_GAIN = 10
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
 # Library / mastery
 TASK_MIN_ENERGY = 25
+WAKE_MORALE, WAKE_ANGER = 6, 10       # waking a sleeping slime (to train, or on request) costs mood
+BRAWL_MORALE, BRAWL_ANGER = 15, 20    # a brawl leaves both fighters sour
+WOUNDED_BELOW, WOUNDED_DRILL = 0.5, 0.6   # a drill started below this share of max HP is worth this much
 
 # ---- Occupations (jobs.py) ------------------------------------------------------------------
 JOB_XP_STEP = 5                # rounds of work for level 2; level n needs JOB_XP_STEP * (n-1)^2
@@ -260,14 +264,16 @@ SCOUT_AMBUSH_BASE = 0.12        # per hour in the segment, vs party strength, cu
 DELVE_PASSIVE_INTEL = 1.5       # % knowledge gained per hour spent inside the dungeon
 INTEL_POWER_BONUS = 0.10        # fully scouted segment: +10% power and safer camps
 INTEL_LEVELS = [20, 40, 60, 80, 100]
-# Grinding-dungeon defeat: lose xp and morale, drop equipment (survivors may bring it back)
-GRIND_DEATH_XP_LOSS = 0.4       # fraction of the xp needed for the next level
+# Grinding-dungeon defeat: lose morale (never XP - it is an XP farm) and drop equipment (survivors may bring it back)
+GRIND_DEATH_XP_LOSS = 0.4       # (unused by the Pit now; kept for the lose_xp helper's tests)
 GRIND_DEATH_MORALE = -25
 GEAR_RECOVERY_BASE = 0.5
 GEAR_RECOVERY_SYNERGY_SLOPE = 5.0       # chance = 0.5 + 5 * (party synergy - 1) (+ friendship with the fallen)
 GEAR_RECOVERY_MIN, GEAR_RECOVERY_MAX = 0.10, 0.95
 PIT_LOST_RECOVER = 0.15         # a later Pit victory may find one item left behind earlier
 GEAR_DROP_PIT, GEAR_DROP_MAIN = 0.15, 0.30
+FARM_LOOT_CHANCE = 0.05          # per defeated foe in a farming dungeon (Pit, Rift, Quarry): a little of another resource
+FARM_LOOT = {"white_gel": (1, 3), "food": (1, 3), "essence": (1, 1), "scrap": (1, 2)}
 PIT_LURE_COST = 1               # purple gel per Pit run for a lure ...
 PIT_LURE_XP, PIT_LURE_GEAR = 1.5, 3.0    # ... which brings out richer prey: x XP and x gear-drop chance
 
