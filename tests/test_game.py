@@ -300,14 +300,26 @@ class TestBattle(unittest.TestCase):
         rep = g.battle(pid, 4)
         self.assertIn(rep.winner, ("foes", None))
 
-    def test_victory_pays_loot_and_xp(self):
+    def test_wave_simulation_trains_proficiency_and_pays_fixed_xp_without_loot(self):
         g = fresh(2)
         pid = full_party(g)
         white = g.wallet.get("white_gel")
+        profs = {s.id: s.class_prof for s in g.party_members(pid)}
         rep = g.battle(pid, 1)
         self.assertTrue(rep.victory)
-        self.assertGreaterEqual(g.wallet.get("white_gel"), white)
-        self.assertGreater(rep.xp, 0)
+        self.assertEqual(g.wallet.get("white_gel"), white)           # a simulation: no loot ...
+        self.assertGreater(rep.xp, 0)                                # ... but a fixed XP
+        self.assertTrue(all(s.class_prof > profs[s.id] for s in g.party_members(pid)))
+
+    def test_wave_levels_and_waves(self):
+        g = fresh(2)
+        pid = full_party(g)
+        lo = sum(e.xp for e in g.wave_enemies(1, 2, 2))
+        hi = sum(e.xp for e in g.wave_enemies(1, 30, 30))
+        self.assertGreater(hi, lo)                                   # deeper monsters are worth more
+        rep = g.battle(pid, 1, lo=1, hi=2, waves=3)
+        self.assertIn("Wave 3/3", "\n".join(rep.log))
+        self.assertTrue(all(s.hp >= 1 for s in g.party_members(pid)))
 
     def test_necromancer_summons(self):
         g = fresh(8)
@@ -483,19 +495,16 @@ class TestGrindDungeon(unittest.TestCase):
 
 
 class TestDeath(unittest.TestCase):
-    def test_fallen_in_battle_are_gone(self):
+    def test_nobody_dies_in_the_wave_simulation(self):
         g = fresh(11)
         pid = full_party(g, rarity="common", xp=0)
         for s in g.party_members(pid):
-            s.hp = 1                              # near death: someone will not make it
+            s.hp = 1                              # near death: in a real fight someone would not make it
         before = set(g.roster)
-        rep = g.battle(pid, 2)
-        self.assertTrue(rep.deaths)
-        self.assertEqual(len(g.graveyard), len(rep.deaths))
-        for d in g.graveyard:
-            self.assertNotIn(d["id"], g.roster)
-            self.assertNotIn(d["id"], g.parties.get(pid).members)
-        self.assertEqual(len(g.roster), len(before) - len(rep.deaths))
+        g.battle(pid, 2)
+        self.assertEqual(g.graveyard, [])
+        self.assertEqual(set(g.roster), before)
+        self.assertTrue(all(s.hp >= 1 for s in g.party_members(pid)))
 
     def test_starvation_kills(self):
         g = fresh(1, 1)

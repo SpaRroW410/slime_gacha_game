@@ -353,3 +353,9 @@ def pool_for(kind: str, floor: int, families: Optional[Tuple[str, ...]] = None, 
     if families:
         out = [m for m in out if m.family in families]
     return out
+
+
+def pool_for_any(level: int) -> List[Monster]:
+    """Monsters whose floor band is near `level`, of any habitat (the wave simulation); the nearest ones if none fit."""
+    out = [m for m in MONSTERS if m.lo - 4 <= level <= m.hi + 4]
+    return out or sorted(MONSTERS, key=lambda m: min(abs(m.lo - level), abs(m.hi - level)))[:5]

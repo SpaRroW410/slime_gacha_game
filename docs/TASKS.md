@@ -20,7 +20,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 - [x] **7. Several delves at once + rescue parties** — any number of parties can be in the Descent, a rescue or other expeditions at once, each with its own live timer (`tests/test_rescue.py::TestSeveralDelvesLive`); scouts that overrun their budget are stranded for 24h (`Game.stranded`) and a rescue party (`Game.rescue`, food + (4 + floor) hours, ambushable) can bring them home, else they are lost.  *Done when:* met.
 - [ ] **8. Formations and front/back rows** — positions affect targeting and damage.  *Done when:* AI and manual arena respect rows.
 - [ ] **9. New classes: Bard, Paladin, Alchemist, Druid** — four archetypes with 4 rarity skills, an evolution skill, 2 capstones and star attributes each.  *Done when:* all four pull, level, fight and appear in the Guide.
-- [ ] **10. Construction time; Pantry and Hatchery** — upgrades take game time; two new buildings.  *Done when:* upgrades show in the away bar and the buildings have effects.
+- [ ] **10. Construction time and the Hatchery** — upgrades take game time; a Hatchery building (the Pantry now lives in the Kitchen).  *Done when:* upgrades show in the away bar and the Hatchery has effects.
 - [ ] **11. Gear set bonuses** — bonuses for matching sets.  *Done when:* shown in Armory and slime card, balanced.
 - [ ] **12. Keeper achievements, titles and respec** — achievements list, titles, skill respec.  *Done when:* People > Keeper shows them and respec costs something.
 - [ ] **13. Imbue statuses and revival items** — e.g. Barbarian fire-axe imbue as a timed status; consumable resurrection.  *Done when:* both use fx and are tested.
@@ -37,7 +37,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 - [x] **27. Descent reinforcements and limited camping** — a party camping on floor N can be joined by another party that has cleared the floors below; they fight together. A 5-star mage proficient in two elements can instead *call* reinforcements straight to the floor for purple gel (cost +1 per 5 floors). Camping time is limited by the scout percentage and the floor (floor 3: 3 hours); there is always a chance of ambush while camping, and it drops when the floor below starts to clear (a reinforcing party is on the way).  *Done when:* a second party can reach a camping party and the two fight as one; the mage call works and costs gel; camp length and ambush chance follow floor and scout %; tests cover each rule.
 
 ## Interface
-- [ ] **18. CLI turn prompts for manual battles + optional flee** — terminal manual fights.  *Done when:* `main.py` can fight a skirmish by hand; flee decided and documented.
+- [ ] **18. CLI turn prompts for manual battles + optional flee** — terminal manual fights.  *Done when:* `main.py` can fight a wave simulation by hand; flee decided and documented.
 
 ## Quality
 - [ ] **21. Balance pass with a simulation harness** — extend `tools/playtest.py` to Pit depths, rarities, skills and capstones.  *Done when:* a report covers each system and numbers are tuned in `config.py`.

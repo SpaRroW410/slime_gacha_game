@@ -168,3 +168,22 @@ class TestFarmLoot(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHuntXp(unittest.TestCase):
+    def test_hunt_xp_scales_with_the_cost_of_a_level_but_not_with_stars(self):
+        def gain(rarity, stars, level):
+            g = rich(70)
+            g.needs.auto_care = False
+            s = g.gacha.make_slime(rarity, "barbarian", stars=stars)
+            g.roster[s.id] = s
+            s.stage, s.level, s.xp, s.total_xp = 2, level, 0, 0
+            s.hp = s.max_hp
+            g.rng.random = lambda: 0.0
+            g.hunt(s.id, "meadow")
+            g.tick(3)
+            return s.total_xp
+        low, high = gain("common", 1, 5), gain("common", 1, 60)
+        self.assertGreater(high, low * 5)                         # a deep level is no longer a rounding error
+        self.assertGreater(gain("rare", 1, 30), gain("common", 1, 30))   # rarer slimes pay more per level, so hunts give more
+        self.assertEqual(gain("common", 1, 30), gain("common", 5, 30))   # stars change nothing

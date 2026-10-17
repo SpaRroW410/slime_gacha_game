@@ -47,6 +47,13 @@ STANCE_LOOT = {"attack": {"white_gel": 1.25}, "explore": {"essence": 1.5},
 STANCE_INJURY = {"attack": 1.3, "explore": 1.0, "defend": 0.5, "heal": 0.8}
 
 
+def hunt_xp(slime, zone) -> float:
+    """XP a successful hunt pays: the XP a level costs spread over the hunts it should take (HUNT_RUNS_PER_LEVEL three-hour hunts for a
+    common slime, +50% per rarity step like the Pit), scaled by the zone's length. Rarer slimes' levels cost more, so they earn more."""
+    runs = config.HUNT_RUNS_PER_LEVEL * (1 + config.PIT_RARITY_RUNS * config.RARITIES.index(slime.rarity))
+    return slime.xp_needed(slime.level) / runs * zone.duration / 3.0
+
+
 class HuntSystem:
     def __init__(self, wallet: ResourceManager, rng: random.Random):
         self.wallet = wallet
@@ -147,7 +154,8 @@ class HuntSystem:
             self.on_finish(s, ok, group)
         s.needs.add("esteem", 12 if ok else -8)
         outlook.bump(s, "hunt")
-        xp = int(zone.xp * (1.0 if ok else 0.4) * factor)
+        base_xp = max(zone.xp, hunt_xp(s, zone))                  # mild, and tied to what a level costs, like the Gloop Pit
+        xp = int(base_xp * (1.0 if ok else 0.4) * factor)
         lv = add_xp(s, xp)
         loot = ", ".join(f"{v} {k}" for k, v in gains.items()) or "nothing"
         verb = "returned early" if early else ("returned victorious" if ok else "limped back")

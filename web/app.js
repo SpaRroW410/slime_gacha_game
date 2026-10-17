@@ -9,9 +9,9 @@ const CORE_RES = ['white_gel', 'purple_gel', 'food', 'essence'];
 const NEED_NAME = { energy: 'Energy', food: 'Food', safety: 'Safety', belonging: 'Belonging', esteem: 'Esteem' };
 const WISH = { energy: 'needs sleep', food: 'is hungry', safety: 'feels unsafe (hurt)', belonging: 'feels lonely', esteem: 'wants to prove itself' };
 const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'],
-  ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide']];
+  ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide'], ['about', 'ℹ️ About']];
 const SUBS = {
-  dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['hunts', 'Hunts & foraging']],
+  dungeons: [['descent', 'Hollow Descent'], ['scouting', 'Scouting'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['hunts', 'Hunts & foraging'], ['wave', 'Wave simulation']],
   town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
   academy: [['training', '🥋 Training & sparring'], ['library', '📚 Library & spells']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
@@ -20,7 +20,7 @@ const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'strande
 
 let backend = null;
 const S = { state: null, tab: 'colony', sel: null, sort: 'power', filter: 'all', feed: [], modal: null, pull: null,
-  council: null, pv: null, busy: false, ui: {}, backendName: '', sub: {}, dtab: 'overview', guide: null, stockOpen: false };
+  council: null, pv: null, busy: false, ui: {}, backendName: '', sub: {}, dtab: 'overview', guide: null, about: null, stockOpen: false };
 
 /* ---------------------------------------------------------------- helpers */
 const sub = (t) => (S.sub && S.sub[t]) || SUBS[t][0][0];
@@ -30,7 +30,7 @@ const onCouncil = () => S.tab === 'people' && sub('people') === 'council';
 
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ui = (k, d) => (S.ui[k] === undefined ? d : S.ui[k]);
-const kindTitle = () => ({ pit: 'The Gloop Pit', delve: 'The Hollow Descent', skirmish: 'Skirmish' })[S.state?.battle?.kind];
+const kindTitle = () => ({ pit: 'The Gloop Pit', delve: 'The Hollow Descent', skirmish: 'Wave simulation' })[S.state?.battle?.kind];
 /* The slime icon is the menu button: a slime body with three large dots in a triangle. */
 const SLIME_MENU = '<svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><defs><radialGradient id="sg" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#b9ffd9"/><stop offset="1" stop-color="#2fb878"/></radialGradient></defs><path d="M24 4C13 4 5 14 5 27c0 9 5 17 19 17s19-8 19-17C43 14 35 4 24 4z" fill="url(#sg)" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/><circle cx="24" cy="17" r="4.6" fill="#0d1f17"/><circle cx="16" cy="31" r="4.6" fill="#0d1f17"/><circle cx="32" cy="31" r="4.6" fill="#0d1f17"/></svg>';
 const manualOn = () => !!S.ui.manual;
@@ -105,6 +105,12 @@ async function act(cmd, args = {}, opt = {}) {
   if (onCouncil()) await loadCouncil(false);
   render();
   return res;
+}
+async function loadAbout() {
+  if (S.about) { render(); return; }
+  const r = await backend.call('about', {});
+  if (r.ok) S.about = r.result;
+  render();
 }
 async function loadGuide() {
   if (S.guide) { render(); return; }
@@ -181,7 +187,7 @@ function tabBadge(k) {
   return '';
 }
 function tabContent() {
-  return { colony, gacha, parties, dungeons, academy, town, people, guide }[S.tab]();
+  return { colony, gacha, parties, dungeons, academy, town, people, guide, about }[S.tab]();
 }
 
 /* Live time: countdowns for parties that are away (wall clock, dilated). */
@@ -492,12 +498,14 @@ function parties() {
 function partyOptions(key, fullOnly = true, includeDelve = false, exclude = null) {
   const st = S.state;
   const home = (p) => p.members.every((id) => { const m = slimeById(id); return m && !m.busy; });
-  const list = st.parties.filter((p) => (includeDelve ? true : !p.in_delve && home(p)) && (!fullOnly || p.full) && p.id != exclude);
-  let cur = ui(key, list[0]?.id);
-  if (!list.some((p) => p.id == cur)) cur = list[0]?.id;
+  const parties = st.parties.filter((p) => p.id != exclude);
+  const why = (p) => (!includeDelve && p.in_delve ? 'in the Descent' : !includeDelve && !home(p) ? 'away' : fullOnly && !p.full ? `${p.members.length}/${st.party_size} members` : '');
+  const okList = parties.filter((p) => !why(p));
+  let cur = ui(key, okList[0]?.id);
+  if (!okList.some((p) => p.id == cur)) cur = okList[0]?.id;
   S.ui[key] = cur;
-  return list.length ? `<select data-ui="${key}" data-rerender="1">${list.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''}>${esc(p.name)} (${p.members.length}/${st.party_size})</option>`).join('')}</select>`
-    : '<small class="mute">No party is free (full and at home). Make one in the Parties tab or wait for them to return.</small>';
+  if (!parties.length) return '<small class="mute">No parties yet: make one in the Parties tab.</small>';
+  return `<select data-ui="${key}" data-rerender="1">${parties.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''} ${why(p) ? 'disabled' : ''}>${esc(p.name)} (${p.members.length}/${st.party_size})${why(p) ? ' — ' + why(p) : ''}</option>`).join('')}</select>${okList.length ? '' : `<small class="mute"> No party is ready (needs a ${fullOnly ? 'full party ' : ''}at home).</small>`}`;
 }
 function stopPanel(pid, v) {
   const st = S.state, s = v.stop;
@@ -531,8 +539,8 @@ function dungeonsAll() {
   const dstart = entry.includes(num(ui('dstart'))) ? num(ui('dstart')) : entry[entry.length - 1];
   const sfirst = num(ui('sfirst', 1), 1), slast = num(ui('slast', sfirst), sfirst);
   const plan = S.plan && S.plan.first === sfirst && S.plan.last === slast ? S.plan : null;
-  return `<div class="grid cols2">
-  <div class="panel stack"><h2>🕳 The Hollow Descent</h2>
+  const descent = `  <div class="panel stack"><h2>🕳 The Hollow Descent</h2>
+    ${st.stranded.length ? `<div class="chip bad">🆘 ${st.stranded.length} group(s) of scouts are overdue — open the Scouting tab to send rescuers</div>` : ''}
     <p class="mute">Rough, permanent death. Walk the floors <b>in order</b>. You may only <b>leave for free after a boss floor</b> (every ${d.boss_every}) — go home, train, study, come back stronger. Mid-segment there is one costed escape: a risky <b>Retreat</b> (purple gel). <b>Each slime must have cleared the floors above</b> to enter a floor, so nobody can be carried; other parties may walk the same floors again. Best floor ever: <b>${d.best_floor}</b> of ${d.max_floor}.</p>
     ${d.cleared ? '<div class="panel flat">👑 <b>The Parched King has fallen.</b> The Descent is conquered — but the floors remain for training and scouting.</div>' : ''}
     ${delves.map(([pid, v]) => { const p = partyById(+pid); return `<div class="panel flat"><div class="row between"><b>${esc(p?.name)}</b>${chip(`floor ${v.floor} · exit after boss ${v.boss_floor}`, v.can_leave ? 'ok' : 'bad')}</div>
@@ -556,20 +564,26 @@ function dungeonsAll() {
     ${entryParty ? `<small class="mute">${esc(entryParty.name)}: least-travelled member has cleared floor ${entryParty.min_progress}.${entry.length === 1 ? ' They must start from floor 1.' : ''}</small>` : ''}
     <h4>What the colony knows</h4>
     ${segs.map((seg, i) => `<details ${i === 0 || nowFloors[seg[0].floor] ? 'open' : ''}><summary><b>Floors ${seg[0].floor}–${seg[seg.length - 1].floor}</b> <small class="mute">${Math.round(seg.reduce((a, f) => a + f.knowledge, 0) / seg.length)}% known</small></summary>${seg.map(floorHtml).join('')}</details>`).join('')}
-  </div>
-  <div class="stack">
-    ${st.stranded.length ? `<div class="panel stack warnbox"><h2>🆘 Overdue scouts</h2>
-      <p class="mute">These scouts ran out of supplies. A rescue party (full, with every member having cleared the floor above theirs) can still bring them home — but the trip takes time, costs food and can be ambushed, and it must arrive before the deadline.</p>
-      ${st.stranded.map((e) => `<div class="panel flat"><b>${e.names.map(esc).join(', ')}</b><br><small class="mute">stuck on floor ${e.stuck} (scouting ${e.first}–${e.last}) · ${e.hours_left}h left · rescue takes ${e.rescue_hours}h and ${e.food} 🍖</small>
-        <div class="row">${partyOptions('rescpid')}<button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left ? 'disabled' : ''}>🛟 Send rescue</button></div></div>`).join('')}</div>` : ''}
-    <div class="panel stack"><h2>🔭 Scouting</h2>
-      <p class="mute">Send an exploration party to learn specific floors (1 to ${d.scout_max_floors} at a time, not only multiples of 5). Scouts must reach <b>100% of every targeted floor</b> before their time runs out — <b>otherwise the whole party is lost</b> (a half-finished note survives). Time needed grows with depth and is never exactly predictable. They must have cleared the floors above the first one. Supplies (${d.scout_food} 🍖 per budgeted hour) are paid up front, even if they finish early.</p>
-      <div class="row">${partyOptions('spid')}<label class="f">Floors <input type="number" min="1" max="${d.max_floor}" value="${sfirst}" data-ui="sfirst" style="width:64px"> to <input type="number" min="1" max="${d.max_floor}" value="${slast}" data-ui="slast" style="width:64px"></label>
-        <button class="btn small" data-act="scout_plan">📏 Estimate</button></div>
-      ${plan ? `<div class="panel flat"><b>Estimate:</b> ~${plan.nominal}h (between ${plan.low}h and ${plan.high}h) · skill ×${plan.skill}<br>Safe budget: <b>${plan.safe}h</b> costs ${plan.food} 🍖 <button class="btn small" data-act="use_safe" data-h="${plan.safe}">use it</button></div>` : '<small class="mute">Press Estimate to see how long it should take.</small>'}
-      <div class="row"><label class="f">Hour budget <input type="number" min="${d.scout_hours[0]}" max="${d.scout_hours[1]}" value="${ui('shours', plan ? plan.safe : 8)}" data-ui="shours" style="width:72px"></label>
-        <button class="btn danger" data-act="scout">Send scouts</button></div></div>
-    <div class="panel stack"><h2>🫧 The Gloop Pit</h2>
+  </div>`;
+  const scoutIds = (ui('scout_ids', []) || []).map(num);
+  const rescueIds = (ui('rescue_ids', []) || []).map(num);
+  const walkers = st.slimes.filter((s) => s.state === 'idle' && !s.in_dungeon && !s.grounded && s.hp > 0 && !s.is_vice);
+  const chips = (key, ids) => `<div class="row">${walkers.map((s) => `<button class="btn small ${ids.includes(s.id) ? 'primary' : ''}" data-act="pick_walker" data-k="${key}" data-id="${s.id}" title="has cleared floor ${s.progress}">${ids.includes(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level} · floor ${s.progress}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>`;
+  const stranded = st.stranded.length ? `<div class="panel stack warnbox"><h2>🆘 Overdue scouts</h2>
+      <p class="mute">These scouts ran out of supplies. <b>One slime is enough</b> to go and bring them home, and <b>several parties can go together</b> (tap a party to add all its free members; a bigger force breaks through more easily). Floors that are already scouted are a known road: rescuers only have to have walked the <i>unscouted</i> floors on the way, and the trip is shorter. It takes hours and food, can be ambushed, and must arrive before the deadline.</p>
+      ${st.stranded.map((e) => `<div class="panel flat"><b>${e.names.map(esc).join(', ')}</b><br><small class="mute">stuck on floor ${e.stuck} (scouting ${e.first}–${e.last}) · ${e.hours_left}h left · rescue takes ${e.rescue_hours}h and ${e.food} 🍖 · must have walked ${e.need ? 'floors up to ' + e.need : 'no floors (the way is scouted)'}</small>
+        <div class="row">${st.parties.map((q) => `<button class="btn small" data-act="pick_party" data-k="rescue_ids" data-pid="${q.id}">👥 ${esc(q.name)}</button>`).join('')}</div>
+        ${chips('rescue_ids', rescueIds)}
+        <button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left || !rescueIds.length ? 'disabled' : ''}>🛟 Send rescue (${rescueIds.length})</button></div>`).join('')}</div>` : '';
+  const scouting = `<div class="panel stack"><h2>🔭 Scouting ${info('Scouts learn specific floors (any run of floors up to the limit, not only multiples of 5). They must reach 100% of every floor they were sent to within the hour budget; floors they finish stay known even if they run out of time. Leave the budget empty to use the safe budget from the estimate. One slime is enough; more only helps if they are good scouts.')}</h2>
+      <p class="mute">Send <b>one to ${st.party_size}</b> slimes (no party needed) to learn floors (1 to ${d.scout_max_floors} at a time). Scouts must reach <b>100% of every targeted floor</b> within the budget, or they are stranded until rescued. Each scout must have cleared the floor above the first one scouted.</p>
+      ${chips('scout_ids', scoutIds)}
+      <div class="row"><label class="f">Floors <input type="number" min="1" max="${d.max_floor}" value="${sfirst}" data-ui="sfirst" style="width:64px"> to <input type="number" min="1" max="${d.max_floor}" value="${slast}" data-ui="slast" style="width:64px"></label>
+        <button class="btn small" data-act="scout_plan" ${scoutIds.length ? '' : 'disabled'}>📏 Estimate</button></div>
+      ${plan ? `<div class="panel flat"><b>Estimate:</b> ~${plan.nominal}h (between ${plan.low}h and ${plan.high}h) · skill ×${plan.skill}<br>Safe budget: <b>${plan.safe}h</b> costs ${plan.food} 🍖 <button class="btn small" data-act="use_safe" data-h="${plan.safe}">use it</button></div>` : '<small class="mute">Pick the scouts and press Estimate to see how long it should take.</small>'}
+      <div class="row"><label class="f">Hour budget <input type="number" min="${d.scout_hours[0]}" max="${d.scout_hours[1]}" value="${ui('shours', '')}" placeholder="auto" data-ui="shours" style="width:80px"></label>
+        <button class="btn danger" data-act="scout" ${scoutIds.length ? '' : 'disabled'}>Send scouts (${scoutIds.length})</button></div></div>`;
+  const pit = `    <div class="panel stack"><h2>🫧 The Gloop Pit</h2>
       ${d.pit ? `<div class="panel flat"><b>Today (day ${d.pit.day}): ${esc(d.pit.title)}</b><br><span class="mute">${d.pit.terrain.emoji} ${esc(d.pit.terrain.name)} — ${esc(d.pit.terrain.effects)}</span></div>` : ''}
       <p class="mute">A <b>committed</b> XP-farming session. The party fights all the runs (camping when hurt) unless everyone goes down. Nobody dies here, but a downed slime <b>loses morale (never XP) and drops its gear</b> — survivors may carry it back (more likely with high party synergy); else it stays in the Pit's lost-and-found${st.gear.pit_lost.length ? ` (${st.gear.pit_lost.length} item(s) lost there now)` : ''}.</p>
       <div class="row">${partyOptions('gpid')}
@@ -577,10 +591,11 @@ function dungeonsAll() {
         <label class="f">Runs <input type="number" min="1" max="60" value="${runs}" data-ui="runs" style="width:70px"></label>
         <button class="btn small ${ui('pit_lure', false) ? 'primary' : ''}" data-act="pit_lure" title="Richer prey: x${d.pit.lure_xp} XP and x${d.pit.lure_gear} gear drops">${ui('pit_lure', false) ? '✔ ' : ''}Lure (${d.pit.lure_cost} 🟣/run)</button>
         <button class="btn primary" data-act="grind">Commit</button>${cmdToggle()}</div>
-      <small class="mute">Depth 3 = enemies at your party's average level; 1 is easier, 5 is harder and pays more XP. A <b>lure</b> (${d.pit.lure_cost} 🟣 per run) draws richer prey: <b>×${d.pit.lure_xp} XP</b> and <b>×${d.pit.lure_gear} chance of gear</b>; it stops when the purple gel runs out.</small></div>
-    <div class="panel stack"><h2>⚔ Skirmish</h2><p class="mute">One quick fight (permanent death applies). Tier 4 is a boss.</p>
-      <div class="row">${partyOptions('kpid')}<select data-ui="tier">${[1, 2, 3, 4].map((t) => `<option ${t == tier ? 'selected' : ''}>${t}</option>`).join('')}</select><button class="btn" data-act="skirmish">Fight</button>${cmdToggle()}</div></div>
-  </div></div>`;
+      <small class="mute">Depth 3 = enemies at your party's average level; 1 is easier, 5 is harder and pays more XP. A <b>lure</b> (${d.pit.lure_cost} 🟣 per run) draws richer prey: <b>×${d.pit.lure_xp} XP</b> and <b>×${d.pit.lure_gear} chance of gear</b>; it stops when the purple gel runs out.</small></div>`;
+  const wave = `<div class="panel stack"><h2>🧪 Wave simulation ${info('A training drill, not a real fight: a full party at home fights waves of monsters whose level lies between the minimum and maximum you set (1-50), and nobody can die. Each wave takes 2 hours. The XP is fixed by the monsters and their level (deeper monsters pay more, no luck or rarity involved, split between the members); there is no loot. It also trains battle (class) proficiency and builds teamwork. If the party loses a wave the simulation stops. You can take command of every turn, like any other fight.')}</h2>
+      <p class="mute">A full party fights a <b>wave of monsters</b> as a simulation: <b>nobody dies</b>, no loot. Pick the <b>monster level range</b> and the <b>number of waves</b>; the XP is fixed by the monsters and their level.</p>
+      <div class="row">${partyOptions('kpid')}<label>Min lvl <input type="number" data-ui="wlo" min="1" max="50" value="${num(ui('wlo', 1), 1)}" style="width:4.5em"></label><label>Max lvl <input type="number" data-ui="whi" min="1" max="50" value="${num(ui('whi', 5), 5)}" style="width:4.5em"></label><label>Waves <input type="number" data-ui="waves" min="1" max="5" value="${num(ui('waves', 1), 1)}" style="width:3.5em"></label><button class="btn primary" data-act="skirmish">Run the simulation</button>${cmdToggle()}</div></div>`;
+  return { descent, stranded, scouting, pit, wave };
 }
 
 
@@ -590,12 +605,16 @@ function cut(html, from, to) {
   return html.slice(Math.max(0, a), b < 0 ? html.length : b);
 }
 function dungeons() {
-  const all = dungeonsAll(), v = sub('dungeons');
-  const scout = '<div class="panel stack"><h2>🔭 Scouting', pit = '<div class="panel stack"><h2>🫧 The Gloop Pit', skirm = '<div class="panel stack"><h2>⚔ Skirmish';
-  const left = cut(all, '<div class="panel stack"><h2>🕳', '  <div class="stack">\n    ' + scout);
-  const scoutHtml = cut(all, scout, pit), pitHtml = cut(all, pit, skirm), skHtml = cut(all, skirm, null).replace(/<\/div><\/div>\s*$/, '</div>');
-  const body = v === 'descent' ? `<div class="grid cols2"><div class="stack">${left}</div><div class="stack">${scoutHtml}${skHtml.endsWith('</div></div>') ? skHtml : skHtml + '</div>'}</div>`
-    : v === 'pit' ? `<div class="grid cols2">${pitHtml}</div>` : v === 'quarry' ? quarryView() : v === 'hunts' ? huntsView() : riftView();
+  const v = sub('dungeons');
+  const p = dungeonsAll();
+  let body;
+  if (v === 'descent') body = `<div class="grid cols2">${p.descent}</div>`;
+  else if (v === 'scouting') body = `<div class="grid cols2">${p.stranded}${p.scouting}</div>`;
+  else if (v === 'pit') body = `<div class="grid cols2">${p.pit}</div>`;
+  else if (v === 'quarry') body = quarryView();
+  else if (v === 'hunts') body = huntsView();
+  else if (v === 'wave') body = `<div class="grid cols2">${p.wave}</div>`;
+  else body = riftView();
   return subnav('dungeons') + body;
 }
 function slimePickRow(a) {
@@ -719,6 +738,18 @@ function etaFor(id) { const a = (S.state.away || []).find((x) => x.ids.includes(
 function people() {
   const v = sub('people');
   return subnav('people') + { bonds, keeper, council, records }[v]();
+}
+function about() {
+  const a = S.about;
+  if (!a) return '<div class="panel"><p class="mute">Opening the notice board…</p></div>';
+  const groups = [...new Set(a.roadmap.map((r) => r.group))];
+  const chipFor = (s) => chip(s, s === 'in progress' ? 'warn' : s === 'later' ? 'info' : '');
+  return `<div class="panel stack"><div class="row between"><h2>ℹ️ ${esc(a.name)}</h2><span class="chip ok">version ${esc(a.version)}</span></div>
+    <p>${esc(a.summary)}</p>
+    <small class="mute">Saves are format ${a.save_version}. The Guide tab has the numbers behind every mechanic.</small></div>
+  ${a.sections.map((s) => `<details class="panel guide" open><summary><b>${s.icon} ${esc(s.title)}</b></summary><ul>${s.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></details>`).join('')}
+  <div class="panel stack"><h2>🗺 Still to come</h2><small class="mute">The remaining roadmap, in the order the work is planned.</small>
+    ${groups.map((g) => `<h4>${esc(g)}</h4>${a.roadmap.filter((r) => r.group === g).map((r) => `<div class="panel flat"><div class="row between"><b>${esc(r.title)}</b>${chipFor(r.status)}</div><small class="mute">${esc(r.text)}</small></div>`).join('')}`).join('')}</div>`;
 }
 function guide() {
   const g = S.guide;
@@ -1182,7 +1213,7 @@ function modalHtml() {
 /* ---------------------------------------------------------------- actions */
 const A = {
   tab: (d) => { S.tab = d.t; S.pull = d.t === 'gacha' ? S.pull : null; S.stockOpen = false;
-    if (d.t === 'guide') loadGuide(); if (onCouncil()) loadCouncil(); else render(); },
+    if (d.t === 'guide') loadGuide(); if (d.t === 'about') loadAbout(); if (onCouncil()) loadCouncil(); else render(); },
   sub: (d) => { S.sub[d.t] = d.s; if (onCouncil()) loadCouncil(); else render(); },
   stock: () => { S.stockOpen = !S.stockOpen; render(); },
   info: (d, el) => toggleTip(el),
@@ -1245,10 +1276,12 @@ const A = {
     confirmThen(`Enter the Hollow Descent at floor ${start}?\n\nYou can only leave after a boss floor (every 5). Deaths are permanent.`, () => act('enter_dungeon', { pid, start: p.entry.includes(start) ? start : p.entry[p.entry.length - 1] })); },
   retreat: (d) => confirmThen(`Break off and flee?\n\nIt costs ${d.cost} purple gel and morale, drains the party's stamina, and the flight can be ambushed (${d.amb}% chance of a hit that may be fatal). Cleared floors stay cleared, but you re-enter from a checkpoint.`, () => act('retreat', { pid: num(d.pid) })),
   leave_dungeon: (d) => act('leave_dungeon', { pid: num(d.pid) }),
-  scout_plan: async () => { const pid = num(ui('spid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const first = num(ui('sfirst', 1), 1), last = num(ui('slast', first), first);
-    if (!pid) return toast('You need a full party.', true);
-    const r = await backend.call('scout_plan', { pid, first, last });
+  scout_plan: async () => { const ids = (S.ui.scout_ids || []).map(num); const first = num(ui('sfirst', 1), 1), last = num(ui('slast', first), first);
+    if (!ids.length) return toast('Pick at least one scout.', true);
+    const r = await backend.call('scout_plan', { ids, first, last });
     if (r.ok) { S.plan = { ...r.result, first, last }; render(); } else toast(r.error, true); },
+  pick_walker: (d) => { const k = d.k, id = num(d.id), cur = (S.ui[k] || []).map(num); S.ui[k] = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id].slice(0, k === 'rescue_ids' ? 999 : S.state.party_size); render(); },
+  pick_party: (d) => { const k = d.k, p = partyById(num(d.pid)); const ok = (p?.members || []).filter((id) => { const s = S.state.slimes.find((x) => x.id === id); return s && s.state === 'idle' && !s.in_dungeon && !s.grounded && s.hp > 0; }); const cur = (S.ui[k] || []).map(num); S.ui[k] = ok.every((id) => cur.includes(id)) ? cur.filter((id) => !ok.includes(id)) : [...new Set([...cur, ...ok])]; render(); },
   use_safe: (d) => { S.ui.shours = num(d.h); render(); },
   gift: (d) => { const pid = num(d.pid), k = d.k; const args = { pid, kind: k };
     if (k === 'potion') Object.assign(args, { id: num(S.ui['gift_s_' + pid]), potion: S.ui.gift_k, grade: num(S.ui.gift_g, 1) });
@@ -1273,8 +1306,8 @@ const A = {
   delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn(), join: d.join ? [num(d.join)] : [] }, { title: 'The Hollow Descent' }),
   stop_rest: (d) => act('delve_stop_rest', { pid: num(d.pid) }),
   stop_buy: (d) => act('delve_stop_buy', { pid: num(d.pid), item: d.item }),
-  rescue: (d) => { const pid = num(ui('rescpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party at home.', true);
-    confirmThen('Send this party to rescue the stranded scouts?\n\nIt takes hours and food, can be ambushed (deaths are permanent), and may fail.', () => act('rescue', { pid, sid: num(d.sid) }, { slow: true })); },
+  rescue: (d) => { const ids = (S.ui.rescue_ids || []).map(num); if (!ids.length) return toast('Pick at least one rescuer.', true);
+    confirmThen('Send them to rescue the stranded scouts?\n\nIt takes hours and food, can be ambushed (deaths are permanent), and may fail.', () => act('rescue', { ids, sid: num(d.sid) }, { slow: true }).then(() => { S.ui.rescue_ids = []; render(); })); },
   call_reinforcements: (d) => { const rid = num(S.ui['rf_' + d.pid]); if (rid) act('call_reinforcements', { pid: num(d.pid), rid }); },
   battle_pick: (d) => { const b = S.state.battle; const ab = b?.abilities.find((a) => a.key === d.key); if (!ab) return;
     if (ab.target === 'enemy' || ab.target === 'ally') {
@@ -1288,16 +1321,17 @@ const A = {
   battle_auto_turn: () => { S.ui.pick = null; act('battle_auto_turn', {}, { title: kindTitle() }); },
   battle_manual: (d) => { S.ui.pick = null; S.ui.manual = d.on === '1'; act('battle_manual', { manual: d.on === '1' }, { slow: d.on !== '1', title: kindTitle() }); },
   delve_camp: (d) => act('delve_camp', { pid: num(d.pid), hours: num(ui('camp_h', 6), 6) }),
-  scout: () => { const pid = num(ui('spid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const h = num(ui('shours', 8), 8);
+  scout: () => { const ids = (S.ui.scout_ids || []).map(num); const h = num(ui('shours', ''), 0);
     const first = num(ui('sfirst', 1), 1), last = num(ui('slast', first), first);
-    if (!pid) return toast('You need a full party.', true);
-    confirmThen(`Scout floors ${first}-${last} with a ${h}-hour budget?\n\nIf they cannot finish ALL of it within the budget they are stranded — and lost unless a rescue party reaches them within a day. Ambushes can kill scouts too.`, () => act('scout', { pid, first, last, hours: h }, { slow: true })); },
+    if (!ids.length) return toast('Pick at least one scout.', true);
+    confirmThen(`Scout floors ${first}-${last} with ${ids.length} slime(s)${h ? ` and a ${h}-hour budget` : ' and the safe budget'}?\n\nIf they cannot finish ALL of it within the budget they are stranded until rescued (a day). Floors they do finish stay known. Ambushes can kill scouts.`, () => act('scout', { ids, first, last, hours: h }, { slow: true }).then(() => { S.ui.scout_ids = []; render(); })); },
   specialize: (d) => confirmThen(`Specialize ${d.n} as a ${d.spec}? This is permanent and costs ${d.cost}.`, () => act('specialize', { id: num(d.id), discipline: d.disc })),
   grind: () => { const pid = num(ui('gpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const depth = num(ui('depth', 3), 3), runs = num(ui('runs', 5), 5);
     if (!pid) return toast('You need a full party.', true);
     confirmThen(`Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose morale and drop their gear (no XP is lost).`, () => act('grind', { pid, depth, runs, manual: manualOn(), lure: !!ui('pit_lure', false) }, { slow: !manualOn(), title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
-    act('skirmish', { pid, tier: num(ui('tier', 1), 1), manual: manualOn() }, { title: 'Skirmish' }); },
+    const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
+    act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn() }, { title: 'Wave simulation' }); },
   yard: (d) => { S.ui.yard = d.k; render(); },
   drill: () => act('drill', { id: num(ui('dsl')), discipline: ui('yard', 'sword'), tier: num(ui('dtier', 1), 1) }),
   drill_party: () => { const pid = num(ui('dppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);

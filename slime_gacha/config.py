@@ -103,6 +103,14 @@ def stat_level(level: float) -> float:
 
 PIT_RUNS_PER_LEVEL = 3.5          # Pit runs a COMMON party needs per level (rarer slimes need more, see pit_xp_per_run)
 PIT_RARITY_RUNS = 0.5            # each rarity step adds this share of PIT_RUNS_PER_LEVEL (legendary: x3)
+
+
+def rarity_xp_factor(rarity: str) -> float:
+    """Multiplier on a fixed XP reward for a slime of this rarity: its level costs XP_RARITY_MULT times as much, and it is allowed
+    (1 + PIT_RARITY_RUNS per step) times as many fights per level, exactly like the Gloop Pit. common 1, uncommon 1.33, rare 2,
+    epic 3.2, legendary 5.33."""
+    idx = RARITIES.index(rarity) if rarity in RARITIES else 0
+    return XP_RARITY_MULT.get(rarity, 1) / (1 + PIT_RARITY_RUNS * idx)
 PIT_DEPTH_XP = {1: 0.6, 2: 0.8, 3: 1.0, 4: 1.3, 5: 1.7}   # deeper Pit depths pay more
 
 def pit_xp_per_run(mean_need: float, mean_rarity_index: float, depth: int) -> float:
@@ -170,6 +178,8 @@ SPAR_WINNER_MULT = 1.3
 SPAR_DUMMY_MULT = 0.5           # odd slime out trains on a dummy at half rate (no HP loss)
 SPAR_MIN_HP = 0.4
 SPAR_BOND = 3
+WAVE_PROF, WAVE_BOND, WAVE_TICKS = 2.0, 1.0, 2
+WAVE_MAX_LEVEL, WAVE_MAX_WAVES, WAVE_XP_MULT = 50, 5, 1.0   # wave simulation: top monster level, most waves, XP vs the monsters' worth   # wave simulation: class proficiency per member (x(1+0.5 per tier above 1)), bond per pair, hours
 SPAR_PARTY_BOND = 4             # every pair inside a party that spars as a team grows this much closer
 STYLE_AFFINITY_MULT = 1.5       # practising the discipline that matches your class
 STYLE_XP = [30, 80, 150, 250, 400, 600, 850, 1150, 1500, 2000]   # cumulative xp for style level 1..10
@@ -267,7 +277,8 @@ CAMP_RELIEF_REACH = 3          # ... starting this many floors below
 STOP_REST_HEAL, STOP_REST_HOURS = 0.5, 3   # a wayside stop's safe rest: share of max HP healed, hours taken
 RETREAT_PURPLE_BASE, RETREAT_AMBUSH, RETREAT_MORALE = 2, 0.35, 12   # emergency retreat: purple gel base fee (+1 per 5 floors), ambush chance, morale lost
 CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
-RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35   # overdue scouts wait this long; trip = base + floor hours; base success chance
+RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35
+RESCUE_KNOWN_FLOOR_HOURS = 0.25     # a floor that is already scouted costs rescuers only this many hours to cross   # overdue scouts wait this long; trip = base + floor hours; base success chance
 SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 240
 SCOUT_RATE = 0.10               # knowledge: k' = 100 - (100 - k) * exp(-RATE * skill * hours)
 SCOUT_AMBUSH_BASE = 0.12        # per hour in the segment, vs party strength, cut by what is already known
@@ -322,11 +333,13 @@ OUTLOOK_SCHOLAR_RESEARCH = 0.05
 OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 
 HUNT_PROF_OWN, HUNT_BOND = 1.5, 1.5          # a hunt sharpens class proficiency (x0.4 if it went badly); hunters in one group grow this much closer per pair
+HUNT_RUNS_PER_LEVEL = 20.0     # three-hour hunts a COMMON slime needs per level (mild); rarer slimes need more, as in the Pit
 HUNT_SIDE_CHANCE = 0.18        # chance a successful hunt also brings a little of another material (herbs, scrap, a common stone)
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 15
+VERSION = "1.001"               # the game's version, shown on the About page
+SAVE_VERSION = 16
 DEFAULT_SAVE = "savegame.json"
 
 

@@ -60,7 +60,7 @@ No dependencies, no network. Saves go to `savegame.json` next to `main.py`
 | Stamina, stars & skills | Every slime has **stamina** (actions cost it, it refills by the hour; exhausted slimes hit weaker). Each **star** adds a class attribute (crit, guard, evasion, regen, spell power...), each **rarity** a class skill (Moon Slash, Aura Blade...). **Potions** (Alchemy Lab, grades 1-5) from four coloured herbs - green health, red strength, blue armor, yellow stamina - and their combinations (lifesteal, guard, regen, crit, speed...). **Slime autonomy**: slimes may use up to 66% of your potions and scrap on their own. Weapons come in six families with proficiency, a three-family memory and a favourite; slimes repair their own gear |
 | Emotions | Slimes have **13 feelings** (anger, sadness, fear, joy, pride, calm, anxiety, loneliness, determination, affection, guilt, dread, wonder) stirred by victories, defeats, deaths, quarrels, hunger and kindness. They change battle stats: anger +ATK -DEF, sadness -SPD, fear +evasion -ATK... A **5-star legendary** slowly realises it is just code, and either finds peace or despairs. Slime autonomy now also covers relics, gear and brewing |
 | Bonds & Keeper | Slimes form **friendships, best friends, rivalries, mentorships and couples**; a couple can have a **child** (traits, class and rarity from both parents) and the **family tree** grows. **You** level up as the Keeper and spend skill points in four branches (Caretaker, Tactician, Fortune, Matchmaker) and use daily abilities like Rally and Bond Night |
-| Battles | Automatic by default. Switch **🎮 Take command** on (Hollow Descent, Gloop Pit, skirmishes) to play turn by turn: every slime acts on its own turn in a battle arena, and you can hand the fight back to the slimes at any moment |
+| Battles | Automatic by default. Switch **🎮 Take command** on (Hollow Descent, Gloop Pit, wave simulations) to play turn by turn: every slime acts on its own turn in a battle arena, and you can hand the fight back to the slimes at any moment |
 | Time | Two modes: **turn-based** (you decide when time passes) and **live** (the wall clock moves the colony: x1 at home so study and hunts take real time, x3 while a party is in a dungeon; speed presets). Clearing a floor takes game time that depends on depth, party level and scouting. Slimes inside a dungeon cannot be fed, petted or given potions. The **Guide** tab is an in-game booklet of every attribute |
 | Scouting | An **exploration party** scouts any 1–10 floors (not only multiples of 5). It must reach **100% knowledge of every targeted floor within its hour budget or the whole party is lost** (a half-finished note survives). Time needed grows with depth, hides a 0.85–1.2× factor (an estimate is never exact), and supplies are paid up front. Scouts must have cleared the floors above. Knowledge reveals more per floor: counts → types → boss → abilities → weaknesses; a fully known floor gives +10 % power |
 | Specialization | Cross-training makes **hybrid classes**: a swordslime who trains in magic becomes a **Battlemage** (also Spellknight, Arcane Archer, Hexshot, Swashbuckler, Battle Medic, Death Knight, Shadowcaster …). Style level 3 in a discipline outside your class + level 5, then specialize: stat shift, signature ability, affinity in both disciplines. Permanent |
@@ -148,6 +148,10 @@ register_archetype(Archetype(
 ```
 
 The gacha pool, UI, hunting and battle all discover it automatically. See `docs/SDD.md` §6.
+
+## Version
+
+The current version is **1.001** (shown on the in-game **About** tab, which also summarises the game and lists the remaining roadmap).
 
 ## Documentation
 

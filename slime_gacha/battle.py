@@ -233,7 +233,7 @@ class BattleSystem:
 
     def start(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
               xp_mult: float = 1.0, synergy: float = 1.0, terrain=None, manual: bool = False,
-              modifier=None, boons=()) -> "BattleRun":
+              modifier=None, boons=(), rarity_xp: bool = False, loot: bool = True) -> "BattleRun":
         """Set a battle up and return it un-advanced; BattleRun.advance() plays it until a manual slime must choose."""
         totals: Dict[str, int] = {}
         for e in enemies:
@@ -265,7 +265,7 @@ class BattleSystem:
             if note:
                 log.append(note)
         run = BattleRun(self, party, mine, enemies, everyone, log, terrain, manual,
-                        dict(permadeath=permadeath, split_xp=split_xp, xp_mult=xp_mult))
+                        dict(permadeath=permadeath, split_xp=split_xp, xp_mult=xp_mult, rarity_xp=rarity_xp, loot=loot))
         run.synergy = synergy
         return run
 
@@ -567,7 +567,7 @@ class BattleSystem:
 
     # -- aftermath: write HP back, grant XP and loot ---------------------------
     def _finish(self, party, mine, enemies, report: BattleReport, permadeath: bool = True,
-                split_xp: bool = True, xp_mult: float = 1.0) -> None:
+                split_xp: bool = True, xp_mult: float = 1.0, rarity_xp: bool = False, loot: bool = True) -> None:
         win = report.winner == "party"
         survivors = []
         for s, c in zip(party, mine):
@@ -602,7 +602,7 @@ class BattleSystem:
             report.log.append(f"☠ {name} has fallen and will not rise again.")
         if win:
             report.xp = int(sum(e.xp for e in enemies) * xp_mult)
-            for e in enemies:
+            for e in (enemies if loot else []):
                 for res, (lo, hi) in e.loot.items():
                     n = self.rng.randint(lo, hi)
                     if n:
@@ -614,7 +614,7 @@ class BattleSystem:
             share = max(1, report.xp // max(1, len(survivors))) if split_xp else report.xp
             for s in survivors:
                 s.wins += 1
-                report.log.extend(add_xp(s, share))
+                report.log.extend(add_xp(s, int(share * (config.rarity_xp_factor(s.rarity) if rarity_xp else 1.0))))
             report.log.append(f"Rewards: +{report.xp} XP total, loot: "
                               + (", ".join(f"{v} {k}" for k, v in report.loot.items()) or "none"))
 
