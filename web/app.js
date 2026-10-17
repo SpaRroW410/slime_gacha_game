@@ -9,7 +9,7 @@ const CORE_RES = ['white_gel', 'purple_gel', 'food', 'essence'];
 const NEED_NAME = { energy: 'Energy', food: 'Food', safety: 'Safety', belonging: 'Belonging', esteem: 'Esteem' };
 const WISH = { energy: 'needs sleep', food: 'is hungry', safety: 'feels unsafe (hurt)', belonging: 'feels lonely', esteem: 'wants to prove itself' };
 const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'],
-  ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide']];
+  ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide'], ['about', 'ℹ️ About']];
 const SUBS = {
   dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['hunts', 'Hunts & foraging']],
   town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
@@ -20,7 +20,7 @@ const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'strande
 
 let backend = null;
 const S = { state: null, tab: 'colony', sel: null, sort: 'power', filter: 'all', feed: [], modal: null, pull: null,
-  council: null, pv: null, busy: false, ui: {}, backendName: '', sub: {}, dtab: 'overview', guide: null, stockOpen: false };
+  council: null, pv: null, busy: false, ui: {}, backendName: '', sub: {}, dtab: 'overview', guide: null, about: null, stockOpen: false };
 
 /* ---------------------------------------------------------------- helpers */
 const sub = (t) => (S.sub && S.sub[t]) || SUBS[t][0][0];
@@ -106,6 +106,12 @@ async function act(cmd, args = {}, opt = {}) {
   render();
   return res;
 }
+async function loadAbout() {
+  if (S.about) { render(); return; }
+  const r = await backend.call('about', {});
+  if (r.ok) S.about = r.result;
+  render();
+}
 async function loadGuide() {
   if (S.guide) { render(); return; }
   const r = await backend.call('guide', {});
@@ -181,7 +187,7 @@ function tabBadge(k) {
   return '';
 }
 function tabContent() {
-  return { colony, gacha, parties, dungeons, academy, town, people, guide }[S.tab]();
+  return { colony, gacha, parties, dungeons, academy, town, people, guide, about }[S.tab]();
 }
 
 /* Live time: countdowns for parties that are away (wall clock, dilated). */
@@ -720,6 +726,18 @@ function people() {
   const v = sub('people');
   return subnav('people') + { bonds, keeper, council, records }[v]();
 }
+function about() {
+  const a = S.about;
+  if (!a) return '<div class="panel"><p class="mute">Opening the notice board…</p></div>';
+  const groups = [...new Set(a.roadmap.map((r) => r.group))];
+  const chipFor = (s) => chip(s, s === 'in progress' ? 'warn' : s === 'later' ? 'info' : '');
+  return `<div class="panel stack"><div class="row between"><h2>ℹ️ ${esc(a.name)}</h2><span class="chip ok">version ${esc(a.version)}</span></div>
+    <p>${esc(a.summary)}</p>
+    <small class="mute">Saves are format ${a.save_version}. The Guide tab has the numbers behind every mechanic.</small></div>
+  ${a.sections.map((s) => `<details class="panel guide" open><summary><b>${s.icon} ${esc(s.title)}</b></summary><ul>${s.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></details>`).join('')}
+  <div class="panel stack"><h2>🗺 Still to come</h2><small class="mute">The remaining roadmap, in the order the work is planned.</small>
+    ${groups.map((g) => `<h4>${esc(g)}</h4>${a.roadmap.filter((r) => r.group === g).map((r) => `<div class="panel flat"><div class="row between"><b>${esc(r.title)}</b>${chipFor(r.status)}</div><small class="mute">${esc(r.text)}</small></div>`).join('')}`).join('')}</div>`;
+}
 function guide() {
   const g = S.guide;
   if (!g) return '<div class="panel"><p class="mute">Opening the booklet…</p></div>';
@@ -1182,7 +1200,7 @@ function modalHtml() {
 /* ---------------------------------------------------------------- actions */
 const A = {
   tab: (d) => { S.tab = d.t; S.pull = d.t === 'gacha' ? S.pull : null; S.stockOpen = false;
-    if (d.t === 'guide') loadGuide(); if (onCouncil()) loadCouncil(); else render(); },
+    if (d.t === 'guide') loadGuide(); if (d.t === 'about') loadAbout(); if (onCouncil()) loadCouncil(); else render(); },
   sub: (d) => { S.sub[d.t] = d.s; if (onCouncil()) loadCouncil(); else render(); },
   stock: () => { S.stockOpen = !S.stockOpen; render(); },
   info: (d, el) => toggleTip(el),

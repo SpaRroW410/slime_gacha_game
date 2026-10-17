@@ -149,6 +149,10 @@ register_archetype(Archetype(
 
 The gacha pool, UI, hunting and battle all discover it automatically. See `docs/SDD.md` §6.
 
+## Version
+
+The current version is **1.001** (shown on the in-game **About** tab, which also summarises the game and lists the remaining roadmap).
+
 ## Documentation
 
 - [`docs/STORY.md`](docs/STORY.md) – the world of Gloop Hollow

@@ -326,6 +326,7 @@ HUNT_SIDE_CHANCE = 0.18        # chance a successful hunt also brings a little o
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
+VERSION = "1.001"               # the game's version, shown on the About page
 SAVE_VERSION = 15
 DEFAULT_SAVE = "savegame.json"
 
