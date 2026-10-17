@@ -90,7 +90,8 @@ def build() -> list:
         dict(title="Needs and mood", icon="🫧", blurb="The five needs decide how a slime feels, whether it asks for care, "
              "and how well it fights.", items=[dict(name=n, text=t) for n, t in need_rows] + [
             dict(name="Mood", text=f"Mood is the weighted average of the needs that currently matter (the first unmet tier and "
-                                   f"below). It scales battle power from x{c.MOOD_POWER_MIN} (miserable) to x{c.MOOD_POWER_MAX} (ecstatic).")]),
+                                   f"below). It scales battle power from x{c.MOOD_POWER_MIN} (miserable) to x{c.MOOD_POWER_MAX} (ecstatic)."),
+            dict(name="Faces", text="Every slime shows its mood on its face: from a wide grin (ecstatic) to a tearful frown (miserable), eyes shut when asleep. A strong feeling (50 or more) takes over the face: angry brows, wide-eyed fear, a smug smirk, blushing affection, a calm smile and so on.")]),
         dict(title="Morale", icon="🎖️", blurb="'Fight readiness' of a slime, 0-100.", items=[
             dict(name="What it does", text=f"Scales battle power from x{c.MORALE_POWER_MIN} to x{c.MORALE_POWER_MAX}. Below {c.MORALE_BROKEN} "
                                            f"a slime is broken and may freeze in battle ({c.MORALE_FREEZE_CHANCE:.0%} per turn)."),

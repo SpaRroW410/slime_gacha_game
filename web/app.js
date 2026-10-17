@@ -52,10 +52,17 @@ const elName = (k) => { const e = S.state.elements.list.find((x) => x.key === k)
 const chip = (t, c = '') => `<span class="chip ${c}">${t}</span>`;
 const badge = (t, c = '') => `<span class="badge ${c}">${t}</span>`;
 
+/* The face: asleep, else a strong feeling (>= 50) if there is one, else the mood label. */
+function faceClass(s) {
+  if (s.state === 'sleeping' || s.state === 'resting') return 'm-sleeping';
+  const f = (s.feelings || [])[0];
+  if (f && f.value >= 50) return 'f-' + f.key;
+  return s.mood ? 'm-' + s.mood : 'm-okay';
+}
 function avatar(s, cls = '') {
   const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
-  return `<div class="blob ${s.rarity} ${st} ${cls}" style="--c:${c}"><div class="body"><i></i><i></i></div><span class="em">${s.emoji}</span></div>`;
+  return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)}" style="--c:${c}"><div class="body"><i></i><i></i></div><div class="mouth"></div><span class="em">${s.emoji}</span></div>`;
 }
 /* The three-digit power tag (001-999) shown beside a slime's figure; the full number and parts are on its card. */
 const ptag = (s) => `<span class="ptag t${Math.min(4, Math.floor(s.power_tag / 250) + 1)}" title="Total power ${s.power}">⚡${String(s.power_tag).padStart(3, '0')}</span>`;
