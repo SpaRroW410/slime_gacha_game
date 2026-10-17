@@ -33,6 +33,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 - [ ] **16. Daily free pull on the real clock** — in both time modes, with offline catch-up.  *Done when:* the pull resets by wall clock everywhere.
 - [ ] **20. PWA manifest and service worker** — installable offline play.  *Done when:* installs on iPhone and Windows and works with no network.
 - [ ] **23. Mod loader (`plugins/`) with docs** — documented plugin API with an example.  *Done when:* an example plugin adds a class, a skill and an enemy.
+- [ ] **26. Occupations (jobs for slimes at home)** — slimes take a non-combat job in town: Chef (cooks meals that fill needs or give temporary buffs), Blacksmith (repairs, upgrades and forges gear), Trainer (coaches others' proficiency and sparring style), plus room for more (Herbalist, Scout, Librarian). Jobs run on the away clock, use the slime's stats and gain their own job levels; a working slime is not free for the Descent. Open design points: one job per slime or switchable, which buildings host each job, wages/costs, and whether job skill decays like proficiency.  *Done when:* at least Chef, Blacksmith and Trainer can be assigned in the web UI, show in the away bar, produce their output, persist in saves and are covered by tests and the Guide.
 
 ## Interface
 - [ ] **18. CLI turn prompts for manual battles + optional flee** — terminal manual fights.  *Done when:* `main.py` can fight a skirmish by hand; flee decided and documented.
