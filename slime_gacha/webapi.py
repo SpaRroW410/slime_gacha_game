@@ -43,7 +43,8 @@ def slime_view(g: Game, s) -> dict:
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
         abilities=[dict(key=k, name=get_ability(k).name, element=get_ability(k).element,
                         kind=get_ability(k).kind) for k in s.known_abilities()],
-        spells=list(s.spells), attuned=list(s.attuned),
+        spells=list(s.spells), spell_stage={k: spells.mutation_stage(get_ability(k), elements.slime_mastery(s, get_ability(k).element)) for k in s.spells if get_ability(k).element},
+        attuned=list(s.attuned),
         mastery={b: elements.basic_level(s, b) for b in s.attuned},
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         mastery_paused=(elements.stars_to_resume(s) if elements.mastery_paused(s) else None),
@@ -141,7 +142,7 @@ def _outlook_view(s):
 
 def ability_view(a) -> dict:
     return dict(key=a.key, name=a.name, kind=a.kind, power=a.power, target=a.target, cooldown=a.cooldown,
-                element=a.element, tier=a.tier, creator=a.creator, description=a.description)
+                element=a.element, tier=a.tier, creator=a.creator, description=a.description, forms=spells.mutation_view(a))
 
 
 _AWAY_PLACE = dict(grind="🫧 Gloop Pit", adventure="🧭 Wayfarer's Rift", quarry="💎 Starfall Quarry", scout="🔭 Scouting",

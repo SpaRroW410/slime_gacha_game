@@ -11,7 +11,7 @@ from typing import Callable, Dict, List, Optional
 from . import config
 from .abilities import Ability, get_ability
 from . import attributes, elements, emotions, fx, items as items_mod, terrain as terrain_mod
-from . import sparring
+from . import sparring, spells
 from .archetypes import STAT_KEYS
 from .growth import add_xp
 from .registry import Registry
@@ -440,6 +440,8 @@ class BattleSystem:
         sc = actor.cap_scale.get(ability.key) or (actor.cap_scale.get(orig_key) if orig_key in actor.cap_scale else None)
         if sc:
             ability = fx.scale(ability, sc)
+        if ability.element and ability.tier >= 2:
+            ability = spells.mutate(ability, elements.effective_mastery(actor.mastery, ability.element))
         actor.last_ability = ability.key
         if orig_key in actor.hybrid:
             actor.spec_uses += 1

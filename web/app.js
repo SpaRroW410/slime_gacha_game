@@ -368,7 +368,7 @@ function dFight(s, { st, free }) {
     return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${Math.max(s.mastery_cap, lv)}</b>` : '<span class="mute">not attuned</span>'}</span>
       <button class="btn small" data-act="study" data-el="${b}" ${free && s.can_master && (lv === undefined ? s.attuned.length < s.element_slots : lv < s.mastery_cap) ? '' : 'disabled'}>Study (${cost(st.library.study_cost)})</button></div>`;
   };
-  const sp = s.spells.map((k) => { const d = st.spell_defs[k]; return d ? badge(`${elName(d.element)} ${esc(d.name)}`, 'info') : ''; }).join(' ');
+  const sp = s.spells.map((k) => { const d = st.spell_defs[k]; const g = (s.spell_stage || {})[k] || 0; return d ? badge(`${elName(d.element)} ${esc(d.name)}${g ? ' ' + '✦'.repeat(g) : ''}`, 'info') : ''; }).join(' ');
   return `${sect('Skills', 'Abilities come from the class (by level), evolution, specialization, rarity and learned spells.', `<p>${s.abilities.map((a) => badge((a.element ? elName(a.element) + ' ' : '') + esc(a.name), 'info')).join(' ')}</p>`)}
     ${sect('Attributes', 'Each extra star adds a class attribute; each rarity step adds a class skill.', `<div class="stack" style="gap:3px">
       ${s.star_attrs.map((a) => `<div>${stars(a.star)} <b>${esc(a.label)}</b> +${Math.round(a.value * 100)}%</div>`).join('') || '<small class="mute">No star attributes yet.</small>'}
@@ -652,6 +652,14 @@ function guide() {
 }
 
 /* ---------------------------------------------------------------- academy */
+function mutationNotes(s) {
+  const defs = S.state.spell_defs;
+  const rows = s.spells.map((k) => defs[k]).filter((d) => d && d.forms && d.forms.length).map((d) => {
+    const cur = (s.spell_stage || {})[d.key] || 0;
+    return `<div><b>${esc(d.name)}</b>: ${d.forms.map((f) => `<span class="${f.stage <= cur ? '' : 'mute'}">${'✦'.repeat(f.stage)} at mastery ${f.mastery}: ${esc(f.desc)}</span>`).join(' · ')}</div>`;
+  });
+  return rows.length ? `<details class="rosmore"><summary><b>Spell forms</b> <small class="mute">(fused spells change as mastery grows)</small></summary><small>${rows.join('')}</small></details>` : '';
+}
 function academy() {
   const st = S.state;
   const arena = ui('arena', 'sword');
@@ -711,7 +719,8 @@ function academy() {
       const e = st.elements.list.find((x) => x.key === b), lv = ls.mastery[b];
       return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${ls.mastery_cap}</b>` : '<span class="mute">not attuned</span>'}</span>
         <button class="btn small" data-act="study_lib" data-id="${ls.id}" data-el="${b}" ${avail(ls) ? '' : 'disabled'}>Study (${cost(lib.study_cost)}, 4h)</button></div>`; }).join('')}
-      <p>Spells (${ls.spells.length}/${lib.slots}): ${ls.spells.map((k) => `${badge(esc(nameOf(k)), 'info')} <button class="btn small" data-act="forget" data-id="${ls.id}" data-spell="${k}">forget</button>`).join(' ') || '<span class="mute">none</span>'}</p></div>` : '<p class="mute">Pull a 3★+ slime to use the Library.</p>'}
+      <p>Spells (${ls.spells.length}/${lib.slots}): ${ls.spells.map((k) => `${badge(esc(nameOf(k)) + ((ls.spell_stage || {})[k] ? ' ' + '✦'.repeat(ls.spell_stage[k]) : ''), 'info')} <button class="btn small" data-act="forget" data-id="${ls.id}" data-spell="${k}">forget</button>`).join(' ') || '<span class="mute">none</span>'}</p>
+      ${mutationNotes(ls)}</div>` : '<p class="mute">Pull a 3★+ slime to use the Library.</p>'}
     <h4>Spell catalogue</h4>
     <table><thead><tr><th>Spell</th><th>Tier</th><th>Effect</th><th>Cost</th><th></th></tr></thead><tbody>${lib.catalog.map((a) => `<tr><td>${elName(a.element)} <b>${esc(a.name)}</b>${a.creator ? `<br><small class="mute">by ${esc(a.creator)}</small>` : ''}</td><td>T${a.tier}</td>
       <td>${a.kind} ×${a.power}<br><small class="mute">${a.target.replace('_', ' ')} · cd ${a.cooldown}</small></td><td>${cost(lib.learn_cost[a.tier])}</td>

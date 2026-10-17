@@ -13,7 +13,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 
 ## Gameplay
 - [x] **2. More specialization paths** — three new class paths into archery, each with a signature skill and a capstone: Medic+archery = Dawn Archer, Necromancer+archery = Plague Archer, Rogue+archery = Nightstalker (12 hybrids now). Three-way hybrids, evolving specializations and slimes asking for jobs are left as later ideas.  *Done when:* met; `tests/test_hybrids.py` covers resolution, skills and capstones.
-- [ ] **3. Spell mutation** — fused spells evolve with mastery (effects from `fx.py`).  *Done when:* a researched spell changes form at set mastery levels, with UI.
+- [x] **3. Spell mutation** — fused spells change form at set mastery levels (`spells.MUTATIONS`, effects from `fx.py`): stage 1 at required mastery +1, stage 2 at +3; heal/guard fusions share purifying forms. Academy lists the forms; the slime card marks the stage with ✦.  *Done when:* met; `tests/test_mutation.py`.
 - [ ] **4. Enemy resistances and elemental floors** — several resistances per enemy; floors that favour specific elements.  *Done when:* bestiary, intel text and Guide show them; elemental floors playable.
 - [ ] **5. Floor modifiers and shops between floors** — poison fog, darkness, a shop or rest stop between floors.  *Done when:* modifiers use fx statuses and scouting reveals them.
 - [ ] **6. Retreat or checkpoint mid-descent** — a costed way out that keeps the no-exit identity.  *Done when:* rule, UI and tests agree.
