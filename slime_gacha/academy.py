@@ -198,29 +198,43 @@ class AcademySystem:
         events.append(msg)
 
     # -- the training facility ---------------------------------------------------------------------
-    def start_drill(self, slime, discipline: str) -> str:
-        """A solo drill in the Sword Yard / Archery Range / Mage Sanctum. No star requirement: even a slime that has just
-        risen in rarity (and is back to one star) can sharpen its class proficiency here, though it learns nothing new."""
+    def drill_tier(self, tier: int):
+        if not 1 <= tier <= len(config.DRILL_TIERS):
+            raise InvalidAction(f"Drill tier must be 1-{len(config.DRILL_TIERS)}.")
+        name, need, ticks, cost, mult, style = config.DRILL_TIERS[tier - 1]
+        have = self.buildings.level("training_grounds")
+        if have < need:
+            raise InvalidAction(f"The {name} needs the Training Grounds at level {need} (it is level {have}).")
+        return name, ticks, cost, mult, style
+
+    def start_drill(self, slime, discipline: str, tier: int = 1) -> str:
+        """A solo drill in the Blade Yard / Archery Range / Mana Pool. No star requirement: even a slime that has just
+        risen in rarity (and is back to one star) can sharpen its class proficiency here, though it learns nothing new.
+        Higher tiers (Advanced, Master) unlock with the Training Grounds and give far more, for more time and cost."""
         from . import sparring
         d = sparring.DISCIPLINES.get(discipline)
+        name, ticks, cost, _, _ = self.drill_tier(tier)
         self._check_free(slime)
-        self._begin(slime, "drill", config.DRILL_TICKS, config.DRILL_COST, discipline=d.key)
-        return f"{slime.name} heads to the {d.name} ({config.DRILL_TICKS}h)."
+        self._begin(slime, "drill", ticks, cost, discipline=d.key, tier=tier)
+        return f"{slime.name} heads to the {d.name} for the {name.lower()} ({ticks}h)."
 
-    def drill_gain(self, slime, discipline: str) -> float:
-        """Proficiency a drill is worth now: shrinks as the slime nears mastery, grows with the Training Grounds."""
+    def drill_gain(self, slime, discipline: str, tier: int = 1) -> float:
+        """Proficiency a drill is worth now: shrinks as the slime nears mastery, grows with the Training Grounds and the tier."""
         own = (slime.class_prof if discipline == slime.arch.discipline
                else slime.spec_prof if slime.spec and discipline == slime.spec_disc else None)
         if own is None:
             return 0.0
-        return round(config.PROF_DRILL * self.buildings.style_mult() * max(0.1, 1 - own / 110.0), 2)
+        mult = config.DRILL_TIERS[tier - 1][4]
+        return round(config.PROF_DRILL * mult * self.buildings.style_mult() * max(0.1, 1 - own / 110.0), 2)
 
     def _finish_drill(self, s, events: List[str]) -> None:
         from . import attributes, sparring
         d = sparring.DISCIPLINES.get(s.task["discipline"])
-        gain = self.drill_gain(s, d.key)
+        tier = s.task.get("tier", 1)
+        gain = self.drill_gain(s, d.key, tier)
         which = attributes.practise(s, d.key, gain, 0.5)
-        sparring.gain_style_xp(s, d.key, config.DRILL_STYLE_XP * self.buildings.style_mult(), self.buildings.style_cap())
+        sparring.gain_style_xp(s, d.key, config.DRILL_STYLE_XP * config.DRILL_TIERS[tier - 1][5] * self.buildings.style_mult(),
+                               self.buildings.style_cap())
         s.needs.add("energy", -8)
         s.needs.add("esteem", 4)
         note = {"class": f"class proficiency now {s.class_prof:.0f}", "spec": f"second proficiency now {s.spec_prof:.0f}",

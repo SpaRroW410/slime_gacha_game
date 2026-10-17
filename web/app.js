@@ -616,11 +616,16 @@ function academy() {
   const dsl = slimeById(num(ui('dsl', st.slimes.find(avail)?.id)));
   const yard = ui('yard', dsl?.discipline || 'sword');
   const yd = st.disciplines.find((d) => d.key === yard) || st.disciplines[0];
-  const dgain = dsl?.prof?.drill?.[yd.key] || 0;
+  const tiers = st.drill.tiers;
+  const tier = Math.min(num(ui('dtier', 1), 1), tiers.filter((t) => t.unlocked).length) || 1;
+  S.ui.dtier = tier;
+  const tr = tiers[tier - 1];
+  const dgain = dsl?.prof?.drill?.[yd.key]?.[tier - 1] || 0;
   const trainingFacility = `<div class="panel stack"><h2>🥋 Training facility — proficiency</h2>
-    <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable) in the yard of its own discipline: the <b>Blade Yard</b> for sword classes, the <b>Archery Range</b> for rangers, the <b>Mana Pool</b> for casters. A drill takes ${st.drill.ticks}h and costs ${esc(cost(st.drill.cost))}; the Training Grounds level boosts it, and it is worth less as a slime nears mastery. <b>No stars needed</b>: a slime that has just risen in rarity (back to one star) cannot study new elements at the Library, but it can still drill here.</p>
+    <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable) in the yard of its own discipline: the <b>Blade Yard</b> for sword classes, the <b>Archery Range</b> for rangers, the <b>Mana Pool</b> for casters. The Training Grounds level boosts it and unlocks stronger drills (Advanced at level 3, Master at level 5); a drill is worth less as a slime nears mastery. <b>No stars needed</b>: a slime that has just risen in rarity (back to one star) cannot study new elements at the Library, but it can still drill here.</p>
     <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${yard === d.key ? 'sel' : ''}" data-act="yard" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><small class="mute" style="display:block">${esc(d.feeds.join(', '))}</small></div>`).join('')}</div>
-    <div class="row"><b>Slime:</b> ${slimeSel('dsl', avail)}<button class="btn primary" data-act="drill" ${dsl ? '' : 'disabled'}>Drill (${st.drill.ticks}h)</button></div>
+    <div class="row"><label class="f">Drill <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)} · ${t.ticks}h · ${esc(cost(t.cost))}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select></label></div>
+    <div class="row"><b>Slime:</b> ${slimeSel('dsl', avail)}<button class="btn primary" data-act="drill" ${dsl ? '' : 'disabled'}>${esc(tr.name)} (${tr.ticks}h)</button></div>
     ${dsl ? `<small class="mute">${esc(dsl.name)}: ${dsl.prof ? `proficiency ${dsl.prof.value}` : ''} · ${dgain > 0 ? `this drill is worth about +${dgain}` : `the ${esc(yd.name)} is not their discipline: only a little general practice`}</small>` : ''}
     <div class="row"><b>Party:</b> ${partyOptions('dppid')}<button class="btn" data-act="drill_party">Everyone drills</button></div></div>`;
   return `<div class="grid cols2">
@@ -1105,9 +1110,9 @@ const A = {
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     act('skirmish', { pid, tier: num(ui('tier', 1), 1), manual: manualOn() }, { title: 'Skirmish' }); },
   yard: (d) => { S.ui.yard = d.k; render(); },
-  drill: () => act('drill', { id: num(ui('dsl')), discipline: ui('yard', 'sword') }),
+  drill: () => act('drill', { id: num(ui('dsl')), discipline: ui('yard', 'sword'), tier: num(ui('dtier', 1), 1) }),
   drill_party: () => { const pid = num(ui('dppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
-    act('drill_party', { pid, discipline: ui('yard', 'sword') }); },
+    act('drill_party', { pid, discipline: ui('yard', 'sword'), tier: num(ui('dtier', 1), 1) }); },
   spar: () => { const a = num(ui('spa', S.state.slimes[0]?.id)), b = num(ui('spb', S.state.slimes[1]?.id)); act('spar', { a, b, discipline: ui('arena', 'sword') }, { title: 'Sparring match' }); },
   spar_party: () => { const pid = num(ui('sppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     act('spar_party', { pid, discipline: ui('arena', 'sword') }, { title: 'Sparring session', slow: true }); },

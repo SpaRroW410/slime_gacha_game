@@ -102,13 +102,73 @@ class TestTrainingFacility(unittest.TestCase):
         r = se.call("drill", dict(id=s.id, discipline="magic"))
         self.assertTrue(r["ok"])
         self.assertIn("Drilling", [a["label"] for a in r["state"]["away"]][0])
-        self.assertTrue(r["state"]["drill"]["ticks"])
+        self.assertEqual([x["unlocked"] for x in r["state"]["drill"]["tiers"]], [True, False, False])
         self.assertIn("Mage", " ".join(next(d for d in r["state"]["disciplines"] if d["key"] == "magic")["feeds"]))
         self.assertFalse(se.call("drill", dict(id=s.id, discipline="nope"))["ok"])
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDrillTiers(unittest.TestCase):
+    def mk(self):
+        g = rich(121)
+        s = g.gacha.make_slime("common", "mage", stars=1)
+        g.roster[s.id] = s
+        s.class_prof = 40.0
+        g.wallet.add_many({"white_gel": 500, "essence": 50})
+        return g, s
+
+    def test_higher_tiers_need_the_training_grounds(self):
+        g, s = self.mk()
+        for tier in (2, 3):
+            with self.assertRaises(InvalidAction):
+                g.drill(s.id, "magic", tier)
+        with self.assertRaises(InvalidAction):
+            g.drill(s.id, "magic", 4)
+        g.buildings.levels["training_grounds"] = 3
+        g.drill(s.id, "magic", 2)
+        self.assertEqual((s.task["tier"], s.task["ticks_left"]), (2, 4))
+
+    def test_tiers_pay_more_cost_more_and_take_longer(self):
+        g, s = self.mk()
+        g.buildings.levels["training_grounds"] = 5
+        gains = [g.academy.drill_gain(s, "magic", t) for t in (1, 2, 3)]
+        self.assertLess(gains[0], gains[1])
+        self.assertLess(gains[1], gains[2])
+        essence = g.wallet.get("essence")
+        g.drill(s.id, "magic", 3)
+        self.assertEqual(g.wallet.get("essence"), essence - 3)
+        for _ in range(6):
+            g.tick(1)
+        self.assertEqual(s.state, "idle")
+        self.assertAlmostEqual(s.class_prof, 40 + gains[2], places=1)
+
+    def test_party_drill_refuses_a_locked_tier_up_front(self):
+        g, s = self.mk()
+        pid = party(g)
+        with self.assertRaises(InvalidAction):
+            g.drill_party(pid, "sword", 3)
+        for m in members(g, pid):
+            self.assertEqual(m.state, "idle")
+
+    def test_pace_a_dozen_basic_drills_win_the_second_capstone_and_higher_tiers_need_far_fewer(self):
+        def sessions(tier):
+            g, s = self.mk()
+            g.buildings.levels["training_grounds"] = 5
+            s.class_prof, n = 30.0, 0
+            while s.class_prof < config.PROF_BOTH_CAPSTONES and n < 100:
+                s.needs.set("energy", 100)                 # (a rested slime; real slimes sleep between sessions)
+                g.drill(s.id, "magic", tier)
+                for _ in range(config.DRILL_TIERS[tier - 1][2]):
+                    g.tick(1)
+                n += 1
+            return n
+        basic, advanced, master = sessions(1), sessions(2), sessions(3)
+        self.assertTrue(5 <= basic <= 20, basic)
+        self.assertLess(advanced, basic)
+        self.assertLess(master, advanced)
 
 
 class TestScholarsAndPausedMastery(unittest.TestCase):

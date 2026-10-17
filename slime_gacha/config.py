@@ -36,6 +36,10 @@ SCHOLAR_MIN_STARS = 3            # a pulled mage, medic or necromancer is never 
 # Training facility: solo drills in the Sword Yard, Archery Range or Mage Sanctum raise class proficiency
 DRILL_TICKS = 3
 DRILL_COST = {"white_gel": 1}
+# Higher-tier drills unlock with the Training Grounds level: (name, grounds level needed, hours, cost, proficiency x, style XP x)
+DRILL_TIERS = [("Basic drill", 1, 3, {"white_gel": 1}, 1.0, 1.0),
+               ("Advanced drill", 3, 4, {"white_gel": 3, "essence": 1}, 1.8, 2.0),
+               ("Master drill", 5, 6, {"white_gel": 8, "essence": 3}, 3.0, 4.0)]
 PROF_DRILL = 6.0                 # base proficiency gain per drill; shrinks as proficiency nears 100
 DRILL_STYLE_XP = 4.0             # a little fighting-style XP too
 # Floor threat smoothing (tools/playtest.py found a few floors with 2-4x the threat of their neighbours)

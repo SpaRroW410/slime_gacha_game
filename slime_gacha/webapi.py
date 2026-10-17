@@ -66,7 +66,8 @@ def slime_view(g: Game, s) -> dict:
         next_rarity_skill=(get_ability(attributes.RARITY_SKILLS[s.archetype][config.RARITIES.index(s.rarity)]).name
                            if s.rarity != "legendary" and s.archetype in attributes.RARITY_SKILLS else None),
         prof=dict(value=round(s.class_prof), idle=s.prof_idle,
-                  drill={d.key: g.academy.drill_gain(s, d.key) for d in sparring.DISCIPLINES}, earned=attributes.pure_earned(s), floor=config.PROF_FLOOR,
+                  drill={d.key: [g.academy.drill_gain(s, d.key, i + 1) for i in range(len(config.DRILL_TIERS))]
+                         for d in sparring.DISCIPLINES}, earned=attributes.pure_earned(s), floor=config.PROF_FLOOR,
                   both=config.PROF_BOTH_CAPSTONES, one=config.PROF_ONE_CAPSTONE,
                   capstones=[dict(key=a.key, name=a.name, desc=a.description, usable=a.key in attributes.capstones(s),
                                   need=(config.PROF_ONE_CAPSTONE if i == 0 else config.PROF_BOTH_CAPSTONES))
@@ -277,7 +278,9 @@ def snapshot(g: Game) -> dict:
         disciplines=[dict(key=d.key, name=d.name, emoji=d.emoji, style=d.style, perk=d.perk,
                           desc=d.description, feeds=[a.name for a in all_archetypes() if a.discipline == d.key])
                      for d in sparring.DISCIPLINES],
-        drill=dict(ticks=config.DRILL_TICKS, cost=config.DRILL_COST, base=config.PROF_DRILL),
+        drill=dict(base=config.PROF_DRILL, grounds=g.buildings.level("training_grounds"),
+                   tiers=[dict(tier=i + 1, name=t[0], needs=t[1], ticks=t[2], cost=t[3], mult=t[4], unlocked=g.buildings.level("training_grounds") >= t[1])
+                          for i, t in enumerate(config.DRILL_TIERS)]),
         elements=dict(basics=list(elements.BASICS),
                       list=[dict(key=e.key, name=e.name, emoji=e.emoji, tier=e.tier,
                                  components=sorted(e.components)) for e in elements.ELEMENTS],
@@ -777,12 +780,12 @@ def _resolve_challenge(g, a):
 
 @command("drill")
 def _drill(g, a):
-    return [g.drill(_i(a, "id"), str(a.get("discipline", "")))], {}
+    return [g.drill(_i(a, "id"), str(a.get("discipline", "")), _i(a, "tier", 1))], {}
 
 
 @command("drill_party")
 def _drill_party(g, a):
-    return g.drill_party(_i(a, "pid"), str(a.get("discipline", ""))), {}
+    return g.drill_party(_i(a, "pid"), str(a.get("discipline", "")), _i(a, "tier", 1)), {}
 
 
 @command("delve_next")

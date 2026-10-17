@@ -1057,15 +1057,16 @@ class Game:
             sugg.sort(key=lambda x: -x["net"])
         return dict(rows=rows, merges=sugg[:5])
 
-    def drill(self, sid: int, discipline: str) -> str:
+    def drill(self, sid: int, discipline: str, tier: int = 1) -> str:
         """Send a slime to drill (sword / archery / magic) for proficiency. See AcademySystem.start_drill."""
-        return self.academy.start_drill(self.slime(sid), discipline)
+        return self.academy.start_drill(self.slime(sid), discipline, tier)
 
-    def drill_party(self, pid: int, discipline: str) -> List[str]:
+    def drill_party(self, pid: int, discipline: str, tier: int = 1) -> List[str]:
+        self.academy.drill_tier(tier)                       # refuse early if the tier is locked
         out = []
         for s in self.party_members(pid):
             try:
-                out.append(self.drill(s.id, discipline))
+                out.append(self.drill(s.id, discipline, tier))
             except InvalidAction as e:
                 out.append(f"✋ {e}")
         return out

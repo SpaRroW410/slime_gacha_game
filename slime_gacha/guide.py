@@ -181,8 +181,9 @@ def build() -> list:
             dict(name="Vice Keeper hunts and challenges", text=f"The Vice Keeper can organise a hunt: it forms up to {c.VICE_HUNT_MAX_PARTIES} full parties from free, rested slimes, joins and leads the first, "
                                                               "and acts for every party in that hunt. The parties disband when the hunt ends. Any 3-star slime can challenge the Vice Keeper "
                                                               "for the post (a proud, stronger slime may ask by itself); you approve or reject, and an approved challenge is settled in a friendly duel."),
-            dict(name="Training facility", text=f"Academy > Training facility: solo drills in the Blade Yard, Archery Range or Mana Pool ({c.DRILL_TICKS}h, {c.DRILL_COST['white_gel']} white gel) raise a slime's class proficiency "
-                                                f"(base +{c.PROF_DRILL:g}, less near mastery, more with the Training Grounds). No stars are needed, so a slime that has just risen in rarity "
+            dict(name="Training facility", text=f"Academy > Training facility: solo drills in the Blade Yard, Archery Range or Mana Pool raise a slime's class proficiency "
+                                                f"(base +{c.PROF_DRILL:g}, less near mastery, more with the Training Grounds). Tiers unlock with the Training Grounds: "
+                                                + "; ".join(f"{t[0]} (level {t[1]}, {t[2]}h, x{t[4]:g})" for t in c.DRILL_TIERS) + ". No stars are needed, so a slime that has just risen in rarity "
                                                 "and is back to one star can still drill (it just cannot study new elements until it has three stars again). Mages, Medics and Necromancers are always pulled at 3 stars or more, and a rarity ascension keeps their earned elemental mastery (it simply cannot grow until the stars catch up)."),
             dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
