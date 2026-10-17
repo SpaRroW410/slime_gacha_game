@@ -637,6 +637,7 @@ def run_interactive(seed, save_path: str, party_size: int = config.PARTY_SIZE) -
         g = Game.load(save_path)
     else:
         g = Game(seed, party_size)
+        g.forage = True
         print("Welcome, Keeper. The Last Gacha Well hums. Claim your free daily pull (menu 3 -> f)!\n"
               "Beware: slimes that starve, hunt badly or fall in battle are gone for good.")
     while True:

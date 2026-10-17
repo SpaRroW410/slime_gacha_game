@@ -106,6 +106,7 @@ class Game:
         self.mood_rng = random.Random(((seed or 0) ^ 0xE70) & 0xFFFFFFFF)   # feelings never disturb the main dice
         self.vault_peak = 0                            # relics: slimes leave 34% of the most ever held
         self.gear_peak: Dict[str, int] = {}
+        self.forage = False                            # slimes with no party and nothing to do go foraging (a new web/CLI game turns it on)
         self.autonomy = True                           # slimes may use up to 66% of the stock by themselves
         self.vice: Optional[int] = None                # id of the Vice Keeper, if one is appointed
         self.vice_challenge: Optional[dict] = None     # {"challenger": id} waiting for the Keeper's approval
@@ -331,6 +332,7 @@ class Game:
                 self._proficiency_day(events)
                 self._vice_challenge_day(events)
             self._autonomy_tick(events)
+            self._forage_tick()
             self._leaders_tick(events)
             self._vice_tick(events)
         self.journal.extend(events)
@@ -1791,6 +1793,26 @@ class Game:
                 it.durability = it.max_durability
                 log.append(f"🔧 {s.name} mends {it.label()} by itself ({need} {m}).")
 
+    def set_forage(self, on: bool) -> str:
+        self.forage = bool(on)
+        return ("Slimes with no party and nothing to do will go foraging on their own." if on else
+                "Slimes will wait at home until you send them out.")
+
+    def _forage_tick(self) -> None:
+        """Idle slimes that belong to no party go and gather resources by themselves, in the most rewarding zone they can
+        clear comfortably. Only rested, fed, healthy slimes set out; they come home to sleep when tired."""
+        if not self.forage:
+            return
+        zones = sorted(ZONES, key=lambda z: -z.duration)
+        for s in self.slimes():
+            if (s.state != "idle" or s.in_dungeon or s.grounded or s.id == self.vice or s.hp <= 0
+                    or self.parties.party_of(s.id) or s.hp < s.max_hp * config.FORAGE_MIN_HP
+                    or s.needs.get("energy") < config.FORAGE_MIN_ENERGY or s.needs.get("food") < config.FORAGE_MIN_FOOD):
+                continue
+            zone = next((z for z in zones if s.power_rating() >= z.danger * config.FORAGE_SAFETY), None)
+            if zone:
+                self.hunts.start(s, zone.key)
+
     def set_autonomy(self, on: bool) -> str:
         self.autonomy = bool(on)
         return "Slimes will help themselves to up to 66% of potions, relics, gear and materials - and brew on their own." if on else \
@@ -2823,7 +2845,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -2880,6 +2902,7 @@ class Game:
         for k, v in g.potions.items():
             g.potion_peak[k] = max(g.potion_peak.get(k, 0), v)
         g.autonomy = d.get("autonomy", True)
+        g.forage = d.get("forage", True)
         g.vice = d.get("vice")
         g.vice_challenge = d.get("vice_challenge")                # checked when resolved (the roster loads below)
         g.hunt_group = d.get("hunt_group", 0)

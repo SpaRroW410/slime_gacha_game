@@ -12,7 +12,7 @@ const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '�
   ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide']];
 const SUBS = {
   dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit'], ['rift', 'Rift & Quarry']],
-  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['workshops', 'Workshops'], ['sacrifice', 'Merge & destroy']],
+  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['workshops', 'Jobs'], ['sacrifice', 'Merge & destroy']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry'];
@@ -597,26 +597,24 @@ function town() {
 }
 function workshopsView() {
   const st = S.state, j = st.jobs;
-  const workers = st.slimes.filter((s) => s.job);
   const free = st.slimes.filter((s) => !s.busy && s.state !== 'sleeping' && !s.grounded && !s.is_vice);
   let cur = ui('job_sl', free[0]?.id);
   if (!free.some((s) => s.id == cur)) cur = free[0]?.id;
   S.ui.job_sl = cur;
-  const jk = ui('job_k', j.list[0].key);
-  const full = j.used >= j.slots;
-  return `<div class="grid cols2">
-  <div class="panel stack"><h2>🧰 Workshops</h2>
-    <p class="mute">Not every slime is a fighter. Put gentle ones to work in town: no wages, just a useful colony. A working slime stays home (you can still feed and pet it) but is not free for parties, hunts or drills until you stop it; switching job is free, and each trade keeps its own level. Places: <b>${j.used}/${j.slots}</b> (upgrade the Workshops in Buildings).</p>
-    ${j.list.map((x) => `<div class="panel flat"><b>${x.emoji} ${esc(x.name)}</b> <small class="mute">a round every ${x.cycle}h · natural talent: ${x.talents.map(esc).join(', ')}</small><br><small>${esc(x.desc)}</small></div>`).join('')}
-    <div class="row">${free.length ? `<select data-ui="job_sl">${free.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)})</option>`).join('')}</select>
-      <select data-ui="job_k" data-rerender="1">${j.list.map((x) => `<option value="${x.key}" ${x.key === jk ? 'selected' : ''}>${x.emoji} ${esc(x.name)}</option>`).join('')}</select>
-      <button class="btn primary" data-act="assign_job" ${full ? 'disabled' : ''}>Put to work</button>` : '<small class="mute">Nobody is free.</small>'}</div>
-    ${full ? '<small class="mute">All places are taken: stop a worker or upgrade the Workshops.</small>' : ''}</div>
-  <div class="panel stack"><h2>👷 At work</h2>
-    ${workers.length ? workers.map((s) => `<div class="row between panel flat"><span>${avatar(s, 'sm')} <b>${esc(s.name)}</b> <small class="mute">${s.job.emoji} ${esc(s.job.name)} · level ${s.job_levels[s.job.key]}</small></span>
-      <span class="row"><select data-ui="jw_${s.id}">${j.list.map((x) => `<option value="${x.key}" ${x.key === s.job.key ? 'selected' : ''}>${x.emoji} ${esc(x.name)}</option>`).join('')}</select>
-      <button class="btn small" data-act="switch_job" data-id="${s.id}">Switch</button><button class="btn small danger" data-act="stop_job" data-id="${s.id}">Stop</button></span></div>`).join('') : '<p class="mute">Nobody works yet.</p>'}
-    <small class="mute">A worker who grows too tired leaves the job to sleep. Food is taken from the stores for the Chef's cooking and a worker's own meals.</small></div></div>`;
+  return `<div class="panel stack"><h2>👷 Jobs</h2>
+    <p class="mute">Not every slime is a fighter. Each trade works in its own building: the building's level sets how many slimes can work there (one per level) and how well (+10% per level). No wages. A working slime stays home (you can still feed and pet it) but is not free for parties, hunts or drills until you stop it; switching is free and every trade keeps its own level. Upgrade the buildings in Town > Buildings.</p>
+    <div class="row">${free.length ? `<label class="f">Slime <select data-ui="job_sl">${free.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)})</option>`).join('')}</select></label>` : '<small class="mute">Nobody is free to start a job.</small>'}</div>
+    <div class="row"><button class="btn small ${j.forage ? 'primary' : ''}" data-act="forage">🧺 Foraging: ${j.forage ? 'on' : 'off'}</button>
+      <small class="mute">When on, slimes that belong to no party and have nothing to do go hunting by themselves in the best zone they can clear safely, and bring back gel, food and essence. Rested and fed slimes only; they come home to sleep. Turn it off to keep them at home (for merging, gear or care).</small></div></div>
+  <div class="grid cols2" style="margin-top:12px">${j.list.map((x) => {
+    const workers = st.slimes.filter((s) => s.job && s.job.key === x.key);
+    const full = x.used >= x.slots;
+    return `<div class="panel stack"><h3>${x.emoji} ${esc(x.name)} <small class="mute">${x.bemoji} ${esc(x.building)} L${x.blevel} · ${x.used}/${x.slots} places · x${x.mult}</small></h3>
+      <small>${esc(x.desc)} <span class="mute">A round every ${x.cycle}h · natural talent: ${x.talents.map(esc).join(', ')}.</span></small>
+      ${workers.map((s) => `<div class="row between panel flat"><span>${avatar(s, 'sm')} <b>${esc(s.name)}</b> <small class="mute">level ${s.job_levels[x.key]}</small></span>
+        <button class="btn small danger" data-act="stop_job" data-id="${s.id}">Stop</button></div>`).join('') || '<small class="mute">Nobody works here yet.</small>'}
+      <button class="btn ${full ? '' : 'primary'}" data-act="assign_job" data-job="${x.key}" ${full || !free.length ? 'disabled' : ''}>${full ? 'All places taken' : 'Put the chosen slime to work'}</button></div>`;
+  }).join('')}</div>`;
 }
 function people() {
   const v = sub('people');
@@ -1128,8 +1126,8 @@ const A = {
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
   set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
-  assign_job: () => { const id = num(S.ui.job_sl); if (id) act('assign_job', { id, job: S.ui.job_k || S.state.jobs.list[0].key }); },
-  switch_job: (d) => act('assign_job', { id: num(d.id), job: S.ui['jw_' + d.id] }),
+  assign_job: (d) => { const id = num(S.ui.job_sl); if (id) act('assign_job', { id, job: d.job }); },
+  forage: () => act('set_forage', { on: !S.state.jobs.forage }),
   stop_job: (d) => act('stop_job', { id: num(d.id) }),
   unground: (d) => act('unground', { id: num(d.id) }),
   rename_party: (d) => { const n = window.prompt('New name for the party ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_party', { pid: num(d.pid), name: n }); },

@@ -18,23 +18,23 @@ def slime(g, cls="medic"):
 
 
 class TestJobs(unittest.TestCase):
-    def test_assign_switch_stop_and_slots(self):
+    def test_each_trade_has_a_building_with_places_by_level(self):
         g = rich(91)
         a, b, c = slime(g), slime(g), slime(g)
         g.assign_job(a.id, "chef")
         self.assertEqual(a.state, "working")
         self.assertTrue(a.busy)
-        g.assign_job(a.id, "trainer")                       # switching is free
-        self.assertEqual(a.job, "trainer")
-        g.assign_job(b.id, "chef")
         with self.assertRaises(InvalidAction):
-            g.assign_job(c.id, "blacksmith")                # only two places at Workshops level 1
-        g.buildings.levels["workshops"] = 2
-        g.assign_job(c.id, "blacksmith")
+            g.assign_job(b.id, "chef")                      # Kitchen level 1: one place
+        g.assign_job(b.id, "trainer")                       # a different building has its own places
+        g.buildings.levels["kitchen"] = 2
+        g.assign_job(b.id, "chef")                          # switching is free
+        self.assertEqual(b.job, "chef")
         g.stop_job(a.id)
         self.assertEqual((a.state, a.job), ("idle", ""))
         with self.assertRaises(InvalidAction):
             g.assign_job(a.id, "juggler")
+        self.assertEqual({j.building for j in jobs.JOBS.values()}, {"kitchen", "armory", "library", "training_grounds"})
 
     def test_working_slimes_cannot_be_merged_or_sent_away(self):
         g = rich(92)
@@ -76,6 +76,53 @@ class TestJobs(unittest.TestCase):
         g.needs.auto_care = False
         g.tick(jobs.JOBS["trainer"].cycle)
         self.assertGreater(pupil.class_prof, 30.0)
+
+    def test_librarian_hurries_students_and_teaches(self):
+        g = rich(99)
+        lib, student, scholar = slime(g, "mage"), slime(g, "mage"), slime(g, "mage")
+        scholar.attuned, scholar.stars = ["fire"], 3
+        student.attuned, student.stars = ["fire"], 3
+        g.assign_job(lib.id, "librarian")
+        student.state, student.task = "studying", dict(kind="study", ticks_left=20, total=20, element="fire")
+        g.needs.auto_care = False
+        g.tick(jobs.JOBS["librarian"].cycle)
+        self.assertLess(student.task["ticks_left"], 20 - jobs.JOBS["librarian"].cycle)      # an extra hour or more off
+        self.assertGreater(scholar.mastery_xp.get("fire", 0), 0)
+
+    def test_idle_slimes_without_a_party_forage(self):
+        g = rich(100)
+        s = slime(g, "barbarian")
+        s.stage = 2
+        from slime_gacha.growth import add_xp
+        add_xp(s, 10 ** 6)
+        s.hp = s.max_hp
+        g.forage = False
+        g.tick(1)
+        self.assertEqual(s.state, "idle")
+        g.forage = True
+        g.needs.auto_care = False
+        g.tick(1)
+        self.assertEqual(s.state, "hunting")
+
+    def test_party_members_and_workers_do_not_forage(self):
+        g = rich(101)
+        p = g.create_party("P")
+        member, worker = slime(g, "barbarian"), slime(g, "barbarian")
+        g.parties.add(p.id, member.id)
+        g.assign_job(worker.id, "trainer")
+        for s in (member, worker):
+            s.stage = 2
+            s.hp = s.max_hp
+        g.forage = True
+        g.needs.auto_care = False
+        g.tick(1)
+        self.assertEqual(member.state, "idle")
+        self.assertEqual(worker.state, "working")
+
+    def test_forage_setting_is_saved(self):
+        g = rich(102)
+        g.set_forage(True)
+        self.assertTrue(Game.from_dict(g.to_dict()).forage)
 
     def test_levels_and_talent(self):
         g = rich(96)

@@ -1,19 +1,23 @@
 """Occupations: non-combat work for slimes in town (no wages; it is what makes a gentle slime useful).
 
 A slime with a job is "working": it stays in town (it can still be fed and petted) but is not free for parties,
-hunts, drills or merging until you stop it - jobs are switchable at any time. The Workshops building sets how many
-slimes can work at once. Every `cycle` hours a worker finishes one round; its output grows with its job level
+hunts, drills or merging until you stop it - jobs are switchable at any time. Every trade is hosted by a building,
+whose level sets how many slimes can work there (one per level) and how well (+10% per level above 1). Every `cycle` hours a worker finishes one round; its output grows with its job level
 (earned per round, per job, and kept when it switches) and with a natural talent for the trade.
 
-  Chef        cooks for the colony: one Food item stretches into hearty meals for the hungriest slimes at home
-  Blacksmith  mends worn gear of slimes at home, no materials needed
-  Trainer     coaches idle slimes at home in their own discipline, no Training Grounds drill needed
+  Chef        (Kitchen)          one Food item stretches into hearty meals for the hungriest slimes at home
+  Blacksmith  (Armory)           mends worn gear of slimes at home, no materials needed
+  Librarian   (Library)          speeds up students and catalogues lore for attuned slimes
+  Trainer     (Training Grounds) coaches idle slimes at home in their own discipline, no drill needed
+
+Slimes with no party and nothing to do go foraging on their own (see Game._forage_tick).
 """
 import math
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
-from . import attributes, config, emotions
+from . import attributes, config, elements, emotions
+from .buildings import BUILDINGS
 from .errors import InvalidAction
 
 
@@ -25,15 +29,18 @@ class Job:
     cycle: int                      # hours per round of work
     description: str
     talents: Tuple[str, ...]        # classes with a natural knack (+25%)
+    building: str = ""              # the building that hosts the trade
 
 
 JOBS: Dict[str, Job] = {j.key: j for j in (
     Job("chef", "Chef", "🍳", 4, "Turns one Food item per round into hearty meals for the hungriest slimes at home.",
-        ("medic", "mage")),
+        ("medic", "mage"), "kitchen"),
     Job("blacksmith", "Blacksmith", "🔨", 6, "Mends worn gear carried by slimes at home - no materials needed.",
-        ("barbarian", "ranger")),
+        ("barbarian", "ranger"), "armory"),
+    Job("librarian", "Librarian", "📚", 6, "Hurries students along and catalogues lore: attuned slimes at home gain mastery.",
+        ("mage", "necromancer"), "library"),
     Job("trainer", "Trainer", "📣", 6, "Coaches idle slimes at home in their own discipline (class proficiency), no drill needed.",
-        ("rogue", "necromancer")),
+        ("rogue", "ranger"), "training_grounds"),
 )}
 
 
@@ -53,18 +60,19 @@ def level(slime, key: str) -> int:
     return min(config.JOB_MAX_LEVEL, 1 + int(math.sqrt(xp / config.JOB_XP_STEP)))
 
 
-def power(slime, key: str) -> float:
-    """Output multiplier: 1.0 at level 1, +12% per level, +25% for a natural talent."""
+def power(slime, key: str, game=None) -> float:
+    """Output multiplier: 1.0 at level 1, +12% per level, +25% for a natural talent, +10% per building level above 1."""
     p = 1 + 0.12 * (level(slime, key) - 1)
-    return p * (1.25 if slime.archetype in JOBS[key].talents else 1.0)
+    p *= 1.25 if slime.archetype in JOBS[key].talents else 1.0
+    return p * (game.buildings.job_mult(JOBS[key].building) if game else 1.0)
 
 
-def slots(game) -> int:
-    return game.buildings.job_slots()
+def slots(game, key: str) -> int:
+    return game.buildings.job_slots(JOBS[key].building)
 
 
-def workers(game) -> List:
-    return [s for s in game.slimes() if s.job and s.state == "working"]
+def workers(game, key: str = "") -> List:
+    return [s for s in game.slimes() if s.job and s.state == "working" and (not key or s.job == key)]
 
 
 def assign(game, slime, key: str) -> str:
@@ -79,8 +87,9 @@ def assign(game, slime, key: str) -> str:
         raise InvalidAction(f"{slime.name} is the Vice Keeper and has no time for a trade.")
     if slime.needs.get("energy") < config.TASK_MIN_ENERGY:
         raise InvalidAction(f"{slime.name} is too tired.")
-    if len(workers(game)) >= slots(game):
-        raise InvalidAction(f"All {slots(game)} workshop places are taken. Upgrade the Workshops or free one up.")
+    if len(workers(game, key)) >= slots(game, key):
+        raise InvalidAction(f"All {slots(game, key)} place(s) at the {BUILDINGS.get(job.building).name} are taken. "
+                            f"Upgrade it or free one up.")
     if game.parties.party_of(slime.id) and game.parties.party_of(slime.id).id in game.delves:
         raise InvalidAction(f"{slime.name}'s party is in the Descent.")
     slime.job, slime.job_clock, slime.state = key, 0, "working"
@@ -106,7 +115,7 @@ def tick(game, events: List[str]) -> None:
         if s.job_clock < JOBS[s.job].cycle:
             continue
         s.job_clock = 0
-        done = {"chef": _cook, "blacksmith": _mend, "trainer": _coach}[s.job](game, s, events)
+        done = {"chef": _cook, "blacksmith": _mend, "librarian": _lore, "trainer": _coach}[s.job](game, s, events)
         if done:
             s.job_xp[s.job] = s.job_xp.get(s.job, 0) + 1
             s.needs.add("esteem", 2)
@@ -134,7 +143,7 @@ def _cook(game, chef, events: List[str]) -> bool:
     if not guests:
         return False
     game.wallet.spend("food", 1)
-    meal = config.FOOD_NUTRITION * config.CHEF_MEAL_SHARE * power(chef, "chef")
+    meal = config.FOOD_NUTRITION * config.CHEF_MEAL_SHARE * power(chef, "chef", game)
     for o in guests:
         o.needs.add("food", meal)
         o.needs.add("belonging", 2)
@@ -144,7 +153,7 @@ def _cook(game, chef, events: List[str]) -> bool:
 
 
 def _mend(game, smith, events: List[str]) -> bool:
-    share = config.SMITH_MEND_SHARE * power(smith, "blacksmith")
+    share = config.SMITH_MEND_SHARE * power(smith, "blacksmith", game)
     left = config.SMITH_ITEMS + level(smith, "blacksmith") // 2
     fixed = []
     for o in sorted(_at_home(game), key=lambda o: o.id):
@@ -168,7 +177,7 @@ def _coach(game, trainer, events: List[str]) -> bool:
     pupils = pupils[:config.TRAINER_PUPILS + level(trainer, "trainer") // 4]
     if not pupils:
         return False
-    power_ = power(trainer, "trainer")
+    power_ = power(trainer, "trainer", game)
     names = []
     for o in pupils:
         gain = config.TRAINER_GAIN * power_ * max(0.1, 1 - o.class_prof / 110.0)
@@ -177,3 +186,23 @@ def _coach(game, trainer, events: List[str]) -> bool:
         names.append(o.name)
     events.append(f"📣 {trainer.name} coaches {', '.join(names)} (class proficiency).")
     return True
+
+
+def _lore(game, librarian, events: List[str]) -> bool:
+    p = power(librarian, "librarian", game)
+    helped = []
+    for o in game.slimes():                                     # students finish sooner
+        if o.state == "studying" and o.task and o.task.get("ticks_left", 0) > 1:
+            o.task["ticks_left"] = max(1, o.task["ticks_left"] - max(1, int(round(p))))
+            helped.append(o.name)
+    scholars = [o for o in _at_home(game, librarian) if o.attuned and o.state == "idle"]
+    note = ""
+    if scholars:
+        o = min(scholars, key=lambda x: min(elements.basic_level(x, b) for b in x.attuned))
+        e = min(o.attuned, key=lambda b: elements.basic_level(o, b))
+        elements.add_mastery_xp(o, e, config.LIBRARIAN_LORE_XP * p)
+        note = f"; {o.name} learns from the shelves ({elements.get(e).name})"
+        helped.append(o.name)
+    if helped:
+        events.append(f"📚 {librarian.name} hurries the students along{note}.")
+    return bool(helped)

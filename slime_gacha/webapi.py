@@ -241,9 +241,11 @@ def snapshot(g: Game) -> dict:
                        max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
-        jobs=dict(slots=jobs_mod.slots(g), used=len(jobs_mod.workers(g)),
-                  list=[dict(key=j.key, name=j.name, emoji=j.emoji, cycle=j.cycle, desc=j.description, talents=list(j.talents))
-                        for j in jobs_mod.JOBS.values()]),
+        jobs=dict(forage=g.forage, list=[dict(key=j.key, name=j.name, emoji=j.emoji, cycle=j.cycle, desc=j.description, talents=list(j.talents),
+                                                  building=BUILDINGS.get(j.building).name, bemoji=BUILDINGS.get(j.building).emoji,
+                                                  blevel=g.buildings.level(j.building), slots=jobs_mod.slots(g, j.key),
+                                                  used=len(jobs_mod.workers(g, j.key)), mult=round(g.buildings.job_mult(j.building), 2))
+                                             for j in jobs_mod.JOBS.values()]),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
         conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason,
                         away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
@@ -765,6 +767,11 @@ def _stop_job(g, a):
     return [g.stop_job(_i(a, "id"))], {}
 
 
+@command("set_forage")
+def _set_forage(g, a):
+    return [g.set_forage(bool(a.get("on")))], {}
+
+
 @command("rename_slime")
 def _rename_slime(g, a):
     return [g.rename_slime(_i(a, "id"), a.get("name", ""))], {}
@@ -890,6 +897,7 @@ class Session:
 
     def new_game(self, seed: Optional[int] = None, party_size: int = 5) -> None:
         self.game = Game(seed, int(party_size))
+        self.game.forage = True
 
     def call(self, cmd: str, args: Optional[dict] = None) -> dict:
         args = args or {}
