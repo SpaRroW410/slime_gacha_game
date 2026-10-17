@@ -185,6 +185,8 @@ def build() -> list:
                                                 f"(base +{c.PROF_DRILL:g}, less near mastery, more with the Training Grounds). Tiers unlock with the Training Grounds: "
                                                 + "; ".join(f"{t[0]} (level {t[1]}, {t[2]}h, x{t[4]:g})" for t in c.DRILL_TIERS) + ". No stars are needed, so a slime that has just risen in rarity "
                                                 "and is back to one star can still drill (it just cannot study new elements until it has three stars again). Mages, Medics and Necromancers are always pulled at 3 stars or more, and a rarity ascension keeps their earned elemental mastery (it simply cannot grow until the stars catch up)."),
+            dict(name="Rarity shapes", text="A slime's silhouette shows its rarity inside a round ring: common is a plain dome, uncommon grows round ears (green ring), rare is a "
+                                             "droplet with a pointed tip (blue ring), epic wears a crown (purple ring), legendary a golden crown and halo (glowing gold ring)."),
             dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),

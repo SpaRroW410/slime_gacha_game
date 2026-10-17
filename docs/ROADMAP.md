@@ -237,4 +237,5 @@ Legend: `[x]` done · `[ ]` todo.  The remaining work is tracked task by task in
 - [x] Training facility (solo drills in the Blade Yard / Archery Range / Mana Pool for class proficiency, no star requirement); mages, medics and necromancers pulled at 3+ stars; rarity ascension keeps earned elemental mastery (growth paused)
 - [x] Drill tiers (Basic / Advanced / Master) unlocked by the Training Grounds level
 - [x] UI: the slime icon (three dots in a triangle) is the menu button; compact one-row header and tabs stay pinned while scrolling
+- [x] Slime body shape follows rarity inside the round rarity ring (dome, eared, droplet, crowned, royal crown with halo)
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

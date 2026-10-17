@@ -54,11 +54,11 @@ const badge = (t, c = '') => `<span class="badge ${c}">${t}</span>`;
 function avatar(s, cls = '') {
   const c = CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
-  return `<div class="blob ${s.rarity} ${st} ${cls}" style="--c:${c}"><i></i><i></i><span class="em">${s.emoji}</span></div>`;
+  return `<div class="blob ${s.rarity} ${st} ${cls}" style="--c:${c}"><div class="body"><i></i><i></i></div><span class="em">${s.emoji}</span></div>`;
 }
 function ghost(g) { // graveyard entry
   const c = CLASS_COLORS[g.archetype] || hashColor(g.archetype);
-  return `<div class="blob sm dead" style="--c:${c}"><i></i><i></i></div>`;
+  return `<div class="blob sm dead" style="--c:${c}"><div class="body"><i></i><i></i></div></div>`;
 }
 
 /* ---------------------------------------------------------------- persistence + api */
@@ -251,7 +251,7 @@ function declutter() {
 function welcome() {
   const saved = loadLocal();
   return `<div class="welcome panel">
-    <div class="blob big"><i></i><i></i><span class="em">🟢</span></div>
+    <div class="blob big"><div class="body"><i></i><i></i></div><span class="em">🟢</span></div>
     <h1>Slime Gacha</h1>
     <p class="mute">Pick me up, little goo! Collect slimes, keep them fed and happy, send them hunting, and dare the Hollow Descent.<br>Slimes can die. Choose wisely.</p>
     <div class="stack">
@@ -429,7 +429,7 @@ function gacha() {
   const w = st.wallet;
   const b = (n, pay, label, cls) => `<button class="btn ${cls}" data-act="pull" data-n="${n}" data-pay="${pay}" ${w[pay] >= c * n ? '' : 'disabled'}>${label}<br><small>${c * n} ${RES[pay][0]}</small></button>`;
   return `<div class="panel well">
-    <div class="blob big"><i></i><i></i><span class="em">🎰</span></div>
+    <div class="blob big"><div class="body"><i></i><i></i></div><span class="em">🎰</span></div>
     <h2>The Last Gacha Well</h2>
     <p class="mute">Each pull wakes a slime. Odds: ${rates}. Stars 1–5 fall off exponentially (steeper for higher rarities).<br>⚪ White gel and 🟣 purple gel cost ${c} per pull — purple gel multiplies rare+ odds ×${r.purple_boost}.</p>
     <div class="row" style="justify-content:center;gap:12px">
