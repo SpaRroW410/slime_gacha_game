@@ -13,6 +13,7 @@ const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '�
 const SUBS = {
   dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['hunts', 'Hunts & foraging']],
   town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
+  academy: [['training', '🥋 Training & sparring'], ['library', '📚 Library & spells']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'stranded', 'rescue'];
@@ -56,6 +57,9 @@ function avatar(s, cls = '') {
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
   return `<div class="blob ${s.rarity} ${st} ${cls}" style="--c:${c}"><div class="body"><i></i><i></i></div><span class="em">${s.emoji}</span></div>`;
 }
+/* The three-digit power tag (001-999) shown beside a slime's figure; the full number and parts are on its card. */
+const ptag = (s) => `<span class="ptag t${Math.min(4, Math.floor(s.power_tag / 250) + 1)}" title="Total power ${s.power}">⚡${String(s.power_tag).padStart(3, '0')}</span>`;
+const figure = (s, cls = '') => `<span class="figwrap">${avatar(s, cls)}${ptag(s)}</span>`;
 function ghost(g) { // graveyard entry
   const c = CLASS_COLORS[g.archetype] || hashColor(g.archetype);
   return `<div class="blob sm dead" style="--c:${c}"><div class="body"><i></i><i></i></div></div>`;
@@ -294,7 +298,7 @@ function colony() {
 function srow(s) {
   const a = awayOf(s.id);
   const tag = s.in_dungeon ? `🕳 ${esc(s.in_dungeon)}` : s.state !== 'idle' ? esc(s.state) : '';
-  return `<div class="srow ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">${avatar(s, 'sm')}
+  return `<div class="srow ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">${figure(s, 'sm')}
     <span class="sname">${s.is_vice ? '🎖 ' : ''}${esc(s.name)}</span><span class="smeta">${esc(s.class_name)} · ${s.stars}★ ${esc(s.rarity)} · Lv${s.level}</span>
     <span class="shp">${bar(s.hp, s.max_hp, 'hp')}</span>
     <span class="stag">${a ? `⏳ ${etaHtml(a)}` : tag}${s.party ? ` 👥 ${esc(partyById(s.party)?.name || '')}` : ''}${s.hp < s.max_hp * 0.4 ? ' 🩹' : ''}${s.dominant && !s.busy ? ' ❗' : ''}</span></div>`;
@@ -314,7 +318,7 @@ function card(s) {
   if (s.morale_label === 'broken') b.push(badge('broken morale', 'bad'));
   if (s.outlook) b.push(badge(`${s.outlook.emoji} ${s.outlook.name}`, 'info'));
   return `<div class="scard ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">
-    ${avatar(s)}
+    ${figure(s)}
     <div class="nm">${esc(s.name)}</div><div class="sub">${esc(s.title)} · Lv${s.level}</div>
     <div>${stars(s.stars)}</div>
     ${bar(s.hp, s.max_hp, 'hp')}
@@ -332,7 +336,7 @@ function drawer(s) {
   return `<aside class="drawer">
     <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button> <input type="color" class="colpick" data-colorid="${s.id}" value="${s.color || CLASS_COLORS[s.archetype] || '#5be0a0'}" title="Slime colour (ring colour stays with rarity)"> ${s.color ? `<button class="btn small" data-act="set_color" data-id="${s.id}" data-reset="1" title="Back to class colour">↺</button>` : ''}</h2><button class="btn small" data-act="closesel">✕</button></div>
     ${s.grounded ? `<div class="row panel flat"><small>🚫 Grounded after a brawl: no hunts, drills or parties until the quarrel is mediated.</small><button class="btn small" data-act="unground" data-id="${s.id}">Let out</button></div>` : ''}
-    <div class="row" style="margin:8px 0">${avatar(s, 'big')}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
+    <div class="row" style="margin:8px 0">${figure(s, 'big')}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
       <div class="mute">${s.state}${s.in_dungeon ? ' · inside ' + s.in_dungeon : ''} · mood ${s.mood}${s.party ? ' · 👥 ' + esc(partyById(s.party)?.name) : ''}</div></div></div>
     <div class="seg dtabs">${tabs.map(([k, n]) => `<button class="${dt === k ? 'on' : ''}" data-act="dtab" data-t="${k}">${n}</button>`).join('')}</div>
     ${body}
@@ -728,6 +732,12 @@ function guide() {
 }
 
 /* ---------------------------------------------------------------- academy */
+function academy() {
+  const all = academyAll();
+  const lib = '<div class="panel stack"><h2>📚 Library', spec = '<div class="panel stack"><h2>🧬 Specialization';
+  if (sub('academy') === 'library') return subnav('academy') + `<div class="grid acad">${cut(all, lib, spec)}</div>`;
+  return subnav('academy') + cut(all, null, lib) + cut(all, spec, null);
+}
 function mutationNotes(s) {
   const defs = S.state.spell_defs;
   const rows = s.spells.map((k) => defs[k]).filter((d) => d && d.forms && d.forms.length).map((d) => {
@@ -744,7 +754,7 @@ function trainTags(s) {
   if (s.hp < s.max_hp * 0.5) tags.push(s.hp <= 1 ? '🤕 downed' : '🤕 hurt: drills worth less');
   return tags.length ? ' · ' + tags.join(' · ') : '';
 }
-function academy() {
+function academyAll() {
   const st = S.state;
   const arena = ui('arena', 'sword');
   const slimeSel = (key, filter = () => true, extra = '', idx = 0) => {

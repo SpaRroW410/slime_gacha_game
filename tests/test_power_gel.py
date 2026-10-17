@@ -64,6 +64,17 @@ class TestTotalPower(unittest.TestCase):
         self.assertLess(low["multiplier"], more["multiplier"])
         self.assertLess(low["total"], more["total"])
 
+    def test_the_display_number_runs_from_001_to_999(self):
+        self.assertEqual(power.display(0), 1)
+        self.assertEqual(power.display(-5), 1)
+        self.assertEqual(power.display(10 ** 9), 999)
+        self.assertEqual(power.display(config.POWER_DISPLAY_MAX), 999)
+        self.assertLess(power.display(30), power.display(500))
+        self.assertLess(power.display(500), power.display(5000))
+        g = rich(66)
+        weak = slime(g, "mage", stars=1)
+        self.assertLessEqual(power.display(power.total_power(weak)["total"]), 60)
+
     def test_the_snapshot_exposes_the_breakdown(self):
         from slime_gacha.webapi import snapshot
         g = rich(65)
@@ -71,6 +82,7 @@ class TestTotalPower(unittest.TestCase):
         v = snapshot(g)["slimes"][0]
         self.assertEqual(set(v["power_parts"]), {"stats", "skills", "attributes", "mastery", "styles", "proficiency"})
         self.assertGreater(v["power"], 0)
+        self.assertTrue(1 <= v["power_tag"] <= 999)
 
 
 if __name__ == "__main__":

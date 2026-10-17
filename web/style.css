@@ -240,3 +240,12 @@ header.top .logo { flex: none; font-size: 1.05rem; }
 .topscroll > * { flex: none; }
 nav.tabs { position: sticky; top: 56px; z-index: 19; }
 @media (max-width: 640px) { header.top { padding: 0 8px; gap: 6px; } header.top .logo { font-size: .95rem; } }
+
+/* three-digit power tag beside a slime's figure */
+.figwrap { position: relative; display: inline-block; }
+.ptag { position: absolute; right: -10px; top: -6px; font: 700 .7rem/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .02em; padding: 2px 5px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--mute); pointer-events: none; }
+.ptag.t2 { color: var(--text); }
+.ptag.t3 { color: #ffd45a; border-color: #ffd45a66; }
+.ptag.t4 { color: #ff9d5c; border-color: #ff9d5c88; }
+.srow .ptag { right: -8px; top: -5px; font-size: .62rem; padding: 1px 4px; }
+.scard .figwrap { margin: 0 auto; }

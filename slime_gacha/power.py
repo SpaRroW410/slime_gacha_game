@@ -45,3 +45,8 @@ def total_power(slime) -> Dict[str, object]:
     mult = slime.power_multiplier() * SocialEngine.morale_factor(slime.morale)
     return dict(total=round(sum(parts.values()) * mult, 1), multiplier=round(mult, 2),
                 parts={k: round(v, 1) for k, v in parts.items()})
+
+
+def display(total: float) -> int:
+    """The three-digit number shown beside a slime: 1 to 999 on a square-root scale of total power."""
+    return max(1, min(999, round(999 * (max(0.0, total) / config.POWER_DISPLAY_MAX) ** 0.5)))

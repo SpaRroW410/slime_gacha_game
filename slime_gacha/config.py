@@ -71,7 +71,7 @@ NEED_THRESHOLD = 40
 # Per-tick decay when idle.
 NEED_DECAY = {"energy": 2.5, "food": 2.0, "safety": 0.0, "belonging": 1.5, "esteem": 1.0}
 HUNT_DECAY_MULT = {"energy": 2.5, "food": 1.8}   # hunting is tiring
-SLEEP_ENERGY_GAIN = 14
+SLEEP_ENERGY_GAIN = 22
 SLEEP_HP_REGEN = 0.08       # fraction of max HP per tick while sleeping
 AUTO_SLEEP_BELOW = 25
 AUTO_WAKE_AT = 90
@@ -209,7 +209,8 @@ SACRIFICE_TARGET_PENALTY = 6
 SACRIFICE_TARGET_PENALTY_MAX = 30
 # Rest Area: heals fast; capacity and speed depend on its level (see buildings.py)
 REST_ENERGY_GAIN = 10
-REST_ENERGY = [14, 20, 26, 32, 40]      # energy per hour in the Rest Area by level (HP heals at the base sleeping rate)
+POWER_DISPLAY_MAX = 20000       # total power that shows as 999 on the roster (a square-root scale: weak slimes still read 001-050)
+REST_ENERGY = [26, 34, 42, 52, 64]      # energy per hour in the Rest Area by level (HP heals at the base sleeping rate)
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
 # Library / mastery
 TASK_MIN_ENERGY = 25
