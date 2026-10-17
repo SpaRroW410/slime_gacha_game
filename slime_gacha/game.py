@@ -45,6 +45,7 @@ class ScoutResult:
     before: float = 0.0
     after: float = 0.0
     survivors: int = 0
+    stranded: bool = False
     log: List[str] = field(default_factory=list)
 
 
@@ -98,6 +99,8 @@ class Game:
         self.wall_last: Optional[float] = None
         self.wall_frac = 0.0
         self.expeditions: List[dict] = []              # live mode: parties away until a game tick
+        self.stranded: List[dict] = []                 # overdue scouts waiting for a rescue party (see scout / rescue)
+        self.next_stranded = 1
         self._owed = 0.0                               # hours the current session still has to pay (live mode)
         self.clock_fn = time.time
         self.keeper = keeper_mod.Keeper()
@@ -302,6 +305,89 @@ class Game:
                     events.append("🏠 " + ", ".join(s.name for s in back[:5]) + (" and friends" if len(back) > 5 else "")
                                   + " return from the dungeon.")
 
+    def _stranded_tick(self, events: List[str]) -> None:
+        """Overdue scouts who are not reached in time are lost."""
+        for e in list(self.stranded):
+            members = [self.roster[i] for i in e["ids"] if i in self.roster and self.roster[i].in_dungeon == "stranded"]
+            if not members:
+                self.stranded.remove(e)
+            elif self.tick_count >= e["deadline"]:
+                self.stranded.remove(e)
+                for s in members:
+                    s.hp, s.death_cause = 0, f"lost scouting floors {e['first']}-{e['last']} (stranded on floor {e['stuck']})"
+                self._drop_gear(members, [], members, "Hollow Descent", events)
+                self._reap(events)
+                events.append(f"☠ Nobody came for the stranded scouts on floor {e['stuck']}. They are lost.")
+
+    def stranded_left(self, e: dict) -> int:
+        return max(0, e["deadline"] - self.tick_count)
+
+    def rescue_hours(self, e: dict) -> int:
+        return config.RESCUE_BASE_HOURS + e["stuck"]
+
+    def rescue_food(self, e: dict) -> int:
+        return int(math.ceil(self.rescue_hours(e) * config.SCOUT_FOOD_PER_HOUR))
+
+    def rescue(self, pid: int, sid: int) -> List[str]:
+        """Send a full party to bring overdue scouts home. The trip takes hours (it must beat the deadline), costs food,
+        and can be ambushed. Every rescuer must have cleared the floor above the one the scouts are stuck on. Success
+        depends on the rescuers' strength against the depth; a failed attempt leaves the scouts waiting (if time is
+        left) and can cost a rescuer's life."""
+        e = next((x for x in self.stranded if x["id"] == sid), None)
+        if not e:
+            raise InvalidAction("Nobody is waiting to be rescued.")
+        hours = self.rescue_hours(e)
+        if hours >= self.stranded_left(e):
+            raise InvalidAction(f"It would take {hours}h to reach them, but they only have {self.stranded_left(e)}h left.")
+        party = self._ready_party(pid)
+        laggard = min(party, key=lambda s: s.progress)
+        if laggard.progress < e["stuck"] - 1:
+            raise InvalidAction(f"{laggard.name} has only cleared floor {laggard.progress}; rescuers must have walked the "
+                                f"floors down to floor {e['stuck'] - 1}.")
+        self.wallet.spend("food", self.rescue_food(e))
+        stuck = e["stuck"]
+        danger = 1 + 0.06 * stuck
+        strength = sum(s.power_rating() for s in party) / len(party) / (25 * danger)
+        k = self._knowledge(stuck) / 100
+        p_ok = min(0.95, config.RESCUE_BASE_CHANCE + 0.4 * min(1.5, strength) + 0.2 * k)
+        out = [f"🛟 {self.parties.get(pid).name} sets out to rescue the scouts stranded on floor {stuck} ({hours}h)."]
+        self._owed = 0.0
+        self._set_flag(party, "rescue")
+        out.extend("   " + x for x in self._spend(hours) if "died" in x)
+        members = [s for s in party if s.id in self.roster]
+        p_hit = min(0.6, config.SCOUT_AMBUSH_BASE * 2 * danger / max(0.5, strength) * (1 - 0.7 * k))
+        if members and self.rng.random() < p_hit:
+            v = self.rng.choice(members)
+            dmg = max(1, int(v.max_hp * self.rng.uniform(0.15, 0.40) * danger))
+            v.hp -= dmg
+            out.append(f"   ambushed on the way! {v.name} takes {dmg} damage.")
+            if v.hp <= 0:
+                v.death_cause = "killed on a rescue mission in the Hollow Descent"
+                self._drop_gear([v], [s for s in members if s is not v and s.hp > 0], members, "Hollow Descent", out)
+                self._reap(out)
+        members = [s for s in party if s.id in self.roster]
+        scouts = [self.roster[i] for i in e["ids"] if i in self.roster and self.roster[i].in_dungeon == "stranded"]
+        if members and scouts and self.rng.random() < p_ok:
+            self.stranded.remove(e)
+            for s in scouts:
+                s.hp = max(1, s.hp)
+                self.social.shift_morale(s, 5)
+                emotions.feel(s, "joy", 15)
+            for s in members:
+                self.social.shift_morale(s, 6)
+                outlook.bump(s, "delve")
+            self._xp("scout", config.KEEPER_XP["scout"])
+            out.append(f"✅ The rescuers reach the scouts and bring {len(scouts)} slime(s) home.")
+            self._set_flag(scouts, "rescue")
+            self._owed = hours
+            self._release(members + scouts)
+        else:
+            out.append("✖ The rescuers could not break through to the scouts." if members else "☠ The rescue party is gone.")
+            self._owed = hours
+            self._release(members)
+        self.journal.extend(out)
+        return out
+
     def remaining_hours(self, ready_tick: int) -> float:
         return max(0.0, ready_tick - self.tick_count - self.wall_frac)
 
@@ -325,6 +411,7 @@ class Game:
             self.conflicts.tick(self.slimes(), events)
             self._reap(events)
             self._return_expeditions(events)
+            self._stranded_tick(events)
             self._stamina_tick()
             self._emotion_tick(events)
             if self.tick_count % 24 == config.RELATIONS_HOUR:
@@ -560,7 +647,7 @@ class Game:
         """Care (feeding, petting, sleeping, talking, potions) is impossible while a slime is inside a dungeon -
         unless the Vice Keeper is in there with them."""
         s = self.slime(sid)
-        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry") and not self.vice_reaches(s):
+        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry", "stranded") and not self.vice_reaches(s):
             raise InvalidAction(f"{s.name} is inside a dungeon - you cannot tend to them until they are back.")
         return s
 
@@ -2504,6 +2591,7 @@ class Game:
                     self.delves[q]["ready_tick"] = self.tick_count + spent
                 if not self._members_in("main", q):        # everyone starved / died in the meantime
                     self.delves.pop(q, None)
+        self._owed = 0.0
         report.log.extend(events)
         self.journal.extend(events)
         return report
@@ -2775,13 +2863,20 @@ class Game:
                 frac = max(0.0, min(1.0, (elapsed - cum) / hrs))
                 cum += hrs
                 self.intel[f] = max(self.intel.get(f, 0.0), round(100 * frac * config.SCOUT_NOTE_FRACTION, 1))
-            if survivors:                              # out of time and supplies: nobody comes back
-                for s in survivors:
-                    s.hp, s.death_cause = 0, f"lost scouting floors {first}-{last} (needed ~{total:.0f}h)"
-                self._drop_gear(survivors, [], survivors, "Hollow Descent", res.log)
-                self._reap(res.log)
-            res.log.append(f"☠ The exploration party never came back. Their half-finished note survives "
-                           f"(they needed ~{total:.0f}h, they had {hours}h).")
+            if survivors:                              # out of time and supplies: overdue - a rescue party may still reach them
+                owed = int(math.ceil(self._owed)) if self.live else 0
+                self._owed = 0.0
+                self._set_flag(survivors, "stranded")
+                self.stranded.append(dict(id=self.next_stranded, ids=[s.id for s in survivors], first=first, last=last,
+                                          stuck=now, needed=round(total), deadline=self.tick_count + owed + config.RESCUE_DEADLINE_HOURS))
+                self.next_stranded += 1
+                res.stranded = True
+                res.log.append(f"🆘 The exploration party is overdue: out of supplies on floor {now} (they needed ~{total:.0f}h, "
+                               f"they had {hours}h). Their half-finished note survives. Send a rescue party within "
+                               f"{config.RESCUE_DEADLINE_HOURS}h or they are lost.")
+            else:
+                res.log.append(f"☠ The exploration party never came back. Their half-finished note survives "
+                               f"(they needed ~{total:.0f}h, they had {hours}h).")
         res.after = sum(self._knowledge(f) for f in floors) / len(floors)
         self.journal.extend(res.log)
         return res
@@ -2969,7 +3064,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -3070,10 +3165,12 @@ class Game:
         g.relations.load(d.get("relations"), set(g.roster))
         g.expeditions = [dict(e, ids=[i for i in e["ids"] if i in g.roster]) for e in d.get("expeditions", [])]
         g.expeditions = [e for e in g.expeditions if e["ids"]]
+        g.stranded = [e for e in d.get("stranded", []) if any(i in g.roster for i in e["ids"])]
+        g.next_stranded = d.get("next_stranded", 1)
         g.journal = d.get("journal", [])
         g.journal.extend(awakening.load_notes(g.slimes(), g.mood_rng))
         away = {i for e in g.expeditions for i in e["ids"]}      # a battle that was open when the game was saved is gone:
         for sl in g.slimes():                                     # free its party (the Descent keeps its own delve flags)
-            if sl.in_dungeon in ("grind", "scout", "adventure", "quarry") and sl.id not in away:
+            if sl.in_dungeon in ("grind", "scout", "adventure", "quarry", "rescue") and sl.id not in away:
                 sl.in_dungeon = ""
         return g

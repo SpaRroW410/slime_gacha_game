@@ -253,6 +253,7 @@ CAMP_RELIEF_REACH = 3          # ... starting this many floors below
 STOP_REST_HEAL, STOP_REST_HOURS = 0.5, 3   # a wayside stop's safe rest: share of max HP healed, hours taken
 RETREAT_PURPLE_BASE, RETREAT_AMBUSH, RETREAT_MORALE = 2, 0.35, 12   # emergency retreat: purple gel base fee (+1 per 5 floors), ambush chance, morale lost
 CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
+RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35   # overdue scouts wait this long; trip = base + floor hours; base success chance
 SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 240
 SCOUT_RATE = 0.10               # knowledge: k' = 100 - (100 - k) * exp(-RATE * skill * hours)
 SCOUT_AMBUSH_BASE = 0.12        # per hour in the segment, vs party strength, cut by what is already known

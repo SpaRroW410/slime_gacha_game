@@ -1,0 +1,114 @@
+"""Rescue parties for overdue scouts, and several delves at once in live mode."""
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from slime_gacha import config
+from slime_gacha.errors import InvalidAction
+from slime_gacha.webapi import away_view, snapshot
+from tests.test_delves import party, members
+from tests.test_time import mk
+
+
+def stranded_game(live=False, seed=31):
+    g = mk(seed=seed, n=1, live=live)
+    scouts = party(g, strong=True, name="Scouts")
+    rescuers = party(g, strong=True, name="Rescue")
+    for pid in (scouts, rescuers):
+        for s in members(g, pid):
+            s.progress = 20
+    g.rng.random = lambda: 0.99                                   # no ambushes
+    plan = g.scout_plan(scouts, 3, 5)
+    res = g.scout(scouts, 3, 5, max(2, int(plan["low"] * 0.5)))
+    assert res.stranded
+    return g, scouts, rescuers
+
+
+class TestStranded(unittest.TestCase):
+    def test_overdue_scouts_are_stranded_with_a_deadline_and_listed(self):
+        g, scouts, _ = stranded_game()
+        (e,) = g.stranded
+        self.assertEqual(e["first"], 3)
+        self.assertTrue(all(g.roster[i].in_dungeon == "stranded" for i in e["ids"]))
+        self.assertGreater(g.stranded_left(e), 0)
+        view = [a for a in away_view(g) if a["kind"] == "stranded"]
+        self.assertEqual(len(view), 1)
+        self.assertEqual(snapshot(g)["stranded"][0]["rescue_hours"], g.rescue_hours(e))
+
+    def test_a_rescue_brings_them_home(self):
+        g, scouts, rescuers = stranded_game()
+        (e,) = g.stranded
+        g.rng.random = lambda: 0.0                                    # success (and an ambush that we ignore below)
+        for s in members(g, rescuers):
+            s.hp = s.max_hp
+        gel_food = g.wallet.get("food")
+        out = g.rescue(rescuers, e["id"])
+        self.assertTrue(any("bring" in l for l in out))
+        self.assertEqual(g.stranded, [])
+        self.assertTrue(all(g.roster[i].in_dungeon == "" for i in e["ids"] if i in g.roster))
+        self.assertLess(g.wallet.get("food"), gel_food)
+        g.tick(config.RESCUE_DEADLINE_HOURS)
+        self.assertGreaterEqual(sum(1 for i in e["ids"] if i in g.roster), 1)    # nobody is lost afterwards
+
+    def test_a_failed_rescue_leaves_them_waiting_and_late_rescue_is_refused(self):
+        g, scouts, rescuers = stranded_game()
+        (e,) = g.stranded
+        seq = iter([0.99, 0.99])
+        g.rng.random = lambda: next(seq, 0.99)                         # no ambush, rescue fails
+        out = g.rescue(rescuers, e["id"])
+        self.assertTrue(any("could not" in l for l in out))
+        self.assertEqual(len(g.stranded), 1)
+        g.tick(config.RESCUE_DEADLINE_HOURS)                           # the deadline passes
+        self.assertEqual(g.stranded, [])
+        self.assertTrue(any("scout" in d["cause"] or "stranded" in d["cause"] for d in g.graveyard))
+
+    def test_rescuers_must_have_walked_down_to_the_scouts(self):
+        g, scouts, rescuers = stranded_game()
+        (e,) = g.stranded
+        for s in members(g, rescuers):
+            s.progress = 0
+        with self.assertRaises(InvalidAction):
+            g.rescue(rescuers, e["id"])
+        with self.assertRaises(InvalidAction):
+            g.rescue(rescuers, 999)
+
+    def test_stranded_scouts_survive_a_save(self):
+        from slime_gacha.game import Game
+        g, scouts, _ = stranded_game()
+        h = Game.from_dict(g.to_dict())
+        self.assertEqual(h.stranded, g.stranded)
+        self.assertTrue(all(h.roster[i].in_dungeon == "stranded" for i in h.stranded[0]["ids"]))
+
+
+class TestSeveralDelvesLive(unittest.TestCase):
+    def test_two_parties_delve_at_once_with_their_own_timers(self):
+        g = mk(seed=32, n=1, live=True)
+        a = party(g, strong=True, name="A")
+        b = party(g, strong=True, name="B")
+        for pid in (a, b):
+            for s in members(g, pid):
+                s.progress = 30
+            g.enter_dungeon(pid)
+        g.rng.random = lambda: 0.99
+        g.delve_next(a)
+        ta = g.delves[a]["ready_tick"] - g.tick_count
+        self.assertGreater(ta, 0)
+        self.assertNotIn("ready_tick", g.delves[b])                    # B is untouched and free to act
+        g.clock.advance(0.0001)
+        g.delve_next(b)
+        tb = g.delves[b]["ready_tick"] - g.tick_count
+        self.assertGreater(tb, 0)
+        with self.assertRaises(InvalidAction):
+            g.delve_next(a)                                            # A is still busy
+        self.assertEqual({v["kind"] for v in away_view(g)}, {"delve"})
+        self.assertEqual(len([v for v in away_view(g) if v["kind"] == "delve"]), 2)
+        g.tick(max(ta, tb))                                            # time passes for both
+        g.delve_next(a)
+        g.delve_next(b)
+        self.assertEqual(g.delves[a]["floor"] + g.delves[b]["floor"] > 4, True)
+
+
+if __name__ == "__main__":
+    unittest.main()

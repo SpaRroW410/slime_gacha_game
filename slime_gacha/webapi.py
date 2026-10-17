@@ -145,7 +145,7 @@ def ability_view(a) -> dict:
                 element=a.element, tier=a.tier, creator=a.creator, description=a.description, forms=spells.mutation_view(a))
 
 
-_AWAY_PLACE = dict(grind="🫧 Gloop Pit", adventure="🧭 Wayfarer's Rift", quarry="💎 Starfall Quarry", scout="🔭 Scouting",
+_AWAY_PLACE = dict(rescue="🛟 Rescue mission", stranded="🆘 Stranded", grind="🫧 Gloop Pit", adventure="🧭 Wayfarer's Rift", quarry="💎 Starfall Quarry", scout="🔭 Scouting",
                    lab="⚗️ Alchemy Lab", train="🥊 Training Grounds", main="🕳 Hollow Descent")
 
 
@@ -176,6 +176,10 @@ def away_view(g: Game) -> list:
             tasks.setdefault((s.task.get("kind", "study"), s.task.get("ticks_left", 0)), []).append(s.id)
     for (kind, left), ids in tasks.items():
         out.append(item("study", "🥋 Drilling" if kind == "drill" else f"📚 {str(kind).replace('_', ' ').title()}", ids, left))
+    for e in g.stranded:
+        ids = [i for i in e["ids"] if i in g.roster]
+        if ids:
+            out.append(item("stranded", f"🆘 Stranded scouts, floor {e['stuck']}", ids, g.stranded_left(e), sid=e["id"]))
     for key, j in jobs_mod.JOBS.items():
         ids = [s.id for s in jobs_mod.workers(g) if s.job == key]
         if ids:
@@ -242,6 +246,8 @@ def snapshot(g: Game) -> dict:
                        max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
+        stranded=[dict(id=e["id"], ids=e["ids"], names=[g.roster[i].name for i in e["ids"] if i in g.roster], first=e["first"], last=e["last"],
+                       stuck=e["stuck"], hours_left=g.stranded_left(e), rescue_hours=g.rescue_hours(e), food=g.rescue_food(e)) for e in g.stranded],
         modifiers={k: dict(name=m.name, emoji=m.emoji, desc=m.desc, boon=m.boon) for k, m in modifiers_mod.MODIFIERS.items()},
         jobs=dict(forage=g.forage, list=[dict(key=j.key, name=j.name, emoji=j.emoji, cycle=j.cycle, desc=j.description, talents=list(j.talents),
                                                   building=BUILDINGS.get(j.building).name, bemoji=BUILDINGS.get(j.building).emoji,
@@ -887,11 +893,16 @@ def _descend(g, a):
     return [r.log[0]], dict(battle=[_battle(r)])
 
 
+@command("rescue")
+def _rescue(g, a):
+    return g.rescue(_i(a, "pid"), _i(a, "sid")), {}
+
+
 @command("scout")
 def _scout(g, a):
     r = g.scout(_i(a, "pid"), _i(a, "first"), _i(a, "last", _i(a, "first")), _i(a, "hours", 8))
     return r.log, dict(before=r.before, after=r.after, survivors=r.survivors, complete=r.complete,
-                       required=r.required)
+                       required=r.required, stranded=r.stranded)
 
 
 @command("grind")

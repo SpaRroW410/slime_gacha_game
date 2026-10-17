@@ -265,7 +265,7 @@ class TestScouting(unittest.TestCase):
         self.assertTrue(three.complete)
         self.assertTrue(all(g.intel[f] == 100.0 for f in (1, 2, 3, 4)))
 
-    def test_not_100_percent_means_the_party_dies(self):
+    def test_not_100_percent_strands_the_party_and_unrescued_they_are_lost(self):
         g = rich(8)
         pid = party(g, strong=True)
         names = [s.name for s in members(g, pid)]
@@ -275,9 +275,12 @@ class TestScouting(unittest.TestCase):
         plan = g.scout_plan(pid, 1, 4)
         res = g.scout(pid, 1, 4, max(2, int(plan["low"] * 0.5)))
         self.assertFalse(res.complete)
+        self.assertTrue(res.stranded)
+        self.assertEqual(len(g.roster), 5)                      # overdue, not dead yet: a rescue party may still come
+        self.assertTrue(any("overdue" in l for l in res.log))
+        g.tick(config.RESCUE_DEADLINE_HOURS)
         self.assertEqual(len(g.roster), 0)
         self.assertEqual(sorted(d["name"] for d in g.graveyard), sorted(names))
-        self.assertTrue(any("never came back" in l for l in res.log))
         self.assertEqual(g.inventory.items, {})                 # nobody left to carry the gear
         # a half-finished note survives: partial knowledge on the floors they reached
         self.assertTrue(0 < g.intel.get(1, 0) <= 100 * config.SCOUT_NOTE_FRACTION)

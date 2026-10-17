@@ -15,7 +15,7 @@ const SUBS = {
   town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['workshops', 'Jobs'], ['sacrifice', 'Merge & destroy']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
-const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry'];
+const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'stranded', 'rescue'];
 
 let backend = null;
 const S = { state: null, tab: 'colony', sel: null, sort: 'power', filter: 'all', feed: [], modal: null, pull: null,
@@ -549,6 +549,10 @@ function dungeonsAll() {
     ${segs.map((seg, i) => `<details ${i === 0 || nowFloors[seg[0].floor] ? 'open' : ''}><summary><b>Floors ${seg[0].floor}–${seg[seg.length - 1].floor}</b> <small class="mute">${Math.round(seg.reduce((a, f) => a + f.knowledge, 0) / seg.length)}% known</small></summary>${seg.map(floorHtml).join('')}</details>`).join('')}
   </div>
   <div class="stack">
+    ${st.stranded.length ? `<div class="panel stack warnbox"><h2>🆘 Overdue scouts</h2>
+      <p class="mute">These scouts ran out of supplies. A rescue party (full, with every member having cleared the floor above theirs) can still bring them home — but the trip takes time, costs food and can be ambushed, and it must arrive before the deadline.</p>
+      ${st.stranded.map((e) => `<div class="panel flat"><b>${e.names.map(esc).join(', ')}</b><br><small class="mute">stuck on floor ${e.stuck} (scouting ${e.first}–${e.last}) · ${e.hours_left}h left · rescue takes ${e.rescue_hours}h and ${e.food} 🍖</small>
+        <div class="row">${partyOptions('rescpid')}<button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left ? 'disabled' : ''}>🛟 Send rescue</button></div></div>`).join('')}</div>` : ''}
     <div class="panel stack"><h2>🔭 Scouting</h2>
       <p class="mute">Send an exploration party to learn specific floors (1 to ${d.scout_max_floors} at a time, not only multiples of 5). Scouts must reach <b>100% of every targeted floor</b> before their time runs out — <b>otherwise the whole party is lost</b> (a half-finished note survives). Time needed grows with depth and is never exactly predictable. They must have cleared the floors above the first one. Supplies (${d.scout_food} 🍖 per budgeted hour) are paid up front, even if they finish early.</p>
       <div class="row">${partyOptions('spid')}<label class="f">Floors <input type="number" min="1" max="${d.max_floor}" value="${sfirst}" data-ui="sfirst" style="width:64px"> to <input type="number" min="1" max="${d.max_floor}" value="${slast}" data-ui="slast" style="width:64px"></label>
@@ -1177,6 +1181,8 @@ const A = {
   delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn(), join: d.join ? [num(d.join)] : [] }, { title: 'The Hollow Descent' }),
   stop_rest: (d) => act('delve_stop_rest', { pid: num(d.pid) }),
   stop_buy: (d) => act('delve_stop_buy', { pid: num(d.pid), item: d.item }),
+  rescue: (d) => { const pid = num(ui('rescpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party at home.', true);
+    confirmThen('Send this party to rescue the stranded scouts?\n\nIt takes hours and food, can be ambushed (deaths are permanent), and may fail.', () => act('rescue', { pid, sid: num(d.sid) }, { slow: true })); },
   call_reinforcements: (d) => { const rid = num(S.ui['rf_' + d.pid]); if (rid) act('call_reinforcements', { pid: num(d.pid), rid }); },
   battle_pick: (d) => { const b = S.state.battle; const ab = b?.abilities.find((a) => a.key === d.key); if (!ab) return;
     if (ab.target === 'enemy' || ab.target === 'ally') {
@@ -1193,7 +1199,7 @@ const A = {
   scout: () => { const pid = num(ui('spid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const h = num(ui('shours', 8), 8);
     const first = num(ui('sfirst', 1), 1), last = num(ui('slast', first), first);
     if (!pid) return toast('You need a full party.', true);
-    confirmThen(`Scout floors ${first}-${last} with a ${h}-hour budget?\n\nIf they cannot finish ALL of it within the budget, the whole party is lost. Ambushes can kill scouts too.`, () => act('scout', { pid, first, last, hours: h }, { slow: true })); },
+    confirmThen(`Scout floors ${first}-${last} with a ${h}-hour budget?\n\nIf they cannot finish ALL of it within the budget they are stranded — and lost unless a rescue party reaches them within a day. Ambushes can kill scouts too.`, () => act('scout', { pid, first, last, hours: h }, { slow: true })); },
   specialize: (d) => confirmThen(`Specialize ${d.n} as a ${d.spec}? This is permanent and costs ${d.cost}.`, () => act('specialize', { id: num(d.id), discipline: d.disc })),
   grind: () => { const pid = num(ui('gpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const depth = num(ui('depth', 3), 3), runs = num(ui('runs', 5), 5);
     if (!pid) return toast('You need a full party.', true);
