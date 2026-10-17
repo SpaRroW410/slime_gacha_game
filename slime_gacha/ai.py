@@ -39,6 +39,7 @@ class NeedsEngine:
         self.wallet = wallet
         self.rng = rng
         self.auto_care = True
+        self.meal_hook = None            # Game sets: callable(slime) -> bool, a hungry slime eats a cooked dish from the pantry
         self.rest_hook = None            # Game sets: callable(slime) -> bool, sends a wounded slime to the Rest Area
 
     def tick(self, slimes: List, events: List[str]) -> None:
@@ -91,10 +92,13 @@ class NeedsEngine:
 
     def _autonomy(self, s, idle, events) -> None:
         n = s.needs
-        if s.state == "working" and n.get("food") < config.AUTO_EAT_BELOW and self.wallet.get("food") > 0:
-            self.wallet.spend("food", 1)
-            n.add("food", config.FOOD_NUTRITION)
-            events.append(f"{s.name} takes a meal break.")
+        if s.state in ("working", "hunting") and n.get("food") < config.AUTO_EAT_BELOW:
+            if self.meal_hook and self.meal_hook(s):
+                events.append(f"🍽 {s.name} eats a cooked meal.")
+            elif s.state == "working" and self.wallet.get("food") > 0:
+                self.wallet.spend("food", 1)
+                n.add("food", config.FOOD_NUTRITION)
+                events.append(f"{s.name} takes a meal break.")
         if s.state == "idle":
             if n.get("energy") < config.AUTO_SLEEP_BELOW:
                 s.state = "sleeping"
@@ -103,10 +107,13 @@ class NeedsEngine:
             if (self.rest_hook and s.hp < s.max_hp * config.AUTO_REST_BELOW and self.rest_hook(s)):
                 events.append(f"{s.name} limps to the Rest Area.")
                 return
-            if n.get("food") < config.AUTO_EAT_BELOW and self.wallet.get("food") > 0:
-                self.wallet.spend("food", 1)
-                n.add("food", config.FOOD_NUTRITION)
-                events.append(f"{s.name} munches some food.")
+            if n.get("food") < config.AUTO_EAT_BELOW:
+                if self.meal_hook and self.meal_hook(s):
+                    events.append(f"🍽 {s.name} eats a cooked meal.")
+                elif self.wallet.get("food") > 0:
+                    self.wallet.spend("food", 1)
+                    n.add("food", config.FOOD_NUTRITION)
+                    events.append(f"{s.name} munches some food.")
             if n.get("belonging") < config.NEED_THRESHOLD and len(idle) > 1:
                 buddies = [o for o in idle if o is not s]
                 b = self.rng.choice(buddies)

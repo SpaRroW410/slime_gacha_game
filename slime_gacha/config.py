@@ -207,6 +207,7 @@ SACRIFICE_TARGET_PENALTY = 6
 SACRIFICE_TARGET_PENALTY_MAX = 30
 # Rest Area: heals fast; capacity and speed depend on its level (see buildings.py)
 REST_ENERGY_GAIN = 10
+REST_ENERGY = [14, 20, 26, 32, 40]      # energy per hour in the Rest Area by level (HP heals at the base sleeping rate)
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
 # Library / mastery
 TASK_MIN_ENERGY = 25
@@ -222,6 +223,11 @@ CHEF_GUESTS, CHEF_MEAL_SHARE = 2, 0.6      # hungry slimes fed per round (+1 per
 SMITH_ITEMS, SMITH_MEND_SHARE = 3, 0.15    # items mended per round (+1 per 2 levels); share of max durability restored
 FORAGE_MIN_HP, FORAGE_MIN_ENERGY, FORAGE_MIN_FOOD = 0.7, 50, 35   # an idle slime sets out only when this rested and fed
 FORAGE_SAFETY = 1.5            # ... and only in a zone whose danger is at most power / this
+TRAINER_BONUS, TRAINER_BONUS_PER_LEVEL = 0.15, 0.03   # a trainer's proficiency / style gain bonus (+ per level above 1)
+CRAFT_SHIFTS, CRAFT_COST_SHARE = 4, 0.6       # a blacksmith forges every 4 shifts, at this share of the shop price
+CRAFT_RELIC_COST = {"scrap": 6, "white_gel": 15}
+PANTRY_PER_LEVEL, HUNGRY_BELOW = 12, 50       # servings the pantry holds per Kitchen level; food need below which a slime counts as hungry
+HOSPITAL_HEAL = [0.04, 0.06, 0.08, 0.10, 0.12]    # share of max HP a doctor heals every injured slime each hour, by Hospital level
 LIBRARIAN_LORE_XP = 6.0         # mastery XP a round of cataloguing gives one attuned slime (x power)
 TRAINER_PUPILS, TRAINER_GAIN = 1, 3.0      # pupils per round (+1 per 4 levels); base class-proficiency gain
 MASTERY_MIN_STARS = 3           # elemental mastery unlocks at 3 stars, for ANY class

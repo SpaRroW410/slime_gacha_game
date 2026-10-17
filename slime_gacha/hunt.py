@@ -63,6 +63,16 @@ class HuntSystem:
         slime.state = "hunting"
         slime.hunt = HuntAssignment(zone.key, zone.duration, zone.duration)
 
+    def start_from_post(self, slime) -> None:
+        """A worker with nothing to do forages for one shift (the Sunny Meadow, three hours) and keeps their post."""
+        if slime.state != "working":
+            raise InvalidAction(f"{slime.name} is not at work.")
+        zone = ZONES.get("meadow")
+        if slime.hp < slime.max_hp * config.MIN_HUNT_HP or slime.needs.get("energy") < 20:
+            raise InvalidAction(f"{slime.name} is not fit to forage.")
+        slime.state = "hunting"
+        slime.hunt = HuntAssignment(zone.key, zone.duration, zone.duration)
+
     def recall(self, slime) -> None:
         if slime.state == "hunting":
             slime.state, slime.hunt = "idle", None

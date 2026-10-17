@@ -33,7 +33,7 @@ def slime_view(g: Game, s) -> dict:
         id=s.id, name=s.name, archetype=s.archetype, class_name=a.name, emoji=a.emoji, title=s.title(),
         rarity=s.rarity, stars=s.stars, level=s.level, level_cap=s.level_cap, stage=s.stage,
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
-        job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji) if s.job else None),
+        job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji, foraging=(s.state == "hunting")) if s.job else None),
         job_levels={k: jobs_mod.level(s, k) for k in jobs_mod.JOBS},
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
@@ -198,6 +198,34 @@ def away_view(g: Game) -> list:
     return out
 
 
+def _jobs_view(g: Game) -> dict:
+    posts = []
+    for j in jobs_mod.JOBS.values():
+        hold = jobs_mod.workers(g, j.key)
+        posts.append(dict(key=j.key, name=j.name, emoji=j.emoji, desc=j.desc, talents=list(j.talents), min_stars=j.min_stars,
+                          classes=list(j.classes), discipline=j.discipline, forages=j.forages, building=j.building,
+                          bname=BUILDINGS.get(j.building).name, bemoji=BUILDINGS.get(j.building).emoji,
+                          blevel=g.buildings.level(j.building), slots=jobs_mod.slots(g, j.key), used=len(hold),
+                          mult=round(g.buildings.job_mult(j.building), 2),
+                          holders=[dict(id=s.id, name=s.name, level=jobs_mod.level(s, j.key), state=s.state,
+                                        foraging=(s.state == "hunting")) for s in hold]))
+    hurt, wounded = jobs_mod.injured(g)
+    hungry = jobs_mod.hungry(g)
+    chef = jobs_mod.holder(g, "chef")
+    return dict(
+        forage=g.forage, shift=jobs_mod.SHIFT_HOURS, posts=posts,
+        trainer={d: round((jobs_mod.trainer_bonus(g, d) - 1) * 100) for d in jobs_mod.TRAINERS},
+        kitchen=dict(pref=g.recipe_pref, pantry=dict(g.pantry), total=jobs_mod.pantry_total(g), cap=jobs_mod.pantry_cap(g),
+                     hungry=len(hungry), hungry_names=[s.name for s in hungry[:8]], chef_level=(jobs_mod.level(chef, "chef") if chef else 0),
+                     recipes=[dict(key=r.key, name=r.name, emoji=r.emoji, cost=r.cost, nutrition=r.nutrition, servings=r.servings,
+                                   morale=r.morale, level=r.level, stock=g.pantry.get(r.key, 0)) for r in jobs_mod.RECIPES.values()]),
+        hospital=dict(injured=len(hurt), wounded=len(wounded), names=[s.name for s in sorted(hurt, key=lambda s: s.hp / s.max_hp)[:8]],
+                      rate=round(config.HOSPITAL_HEAL[g.buildings.level("hospital") - 1] * 100), on_duty=bool(jobs_mod.holder(g, "doctor"))),
+        forge=dict(progress=g.forge_progress, shifts=config.CRAFT_SHIFTS, next=g.forge_next, relic_cost=dict(config.CRAFT_RELIC_COST),
+                   share=config.CRAFT_COST_SHARE),
+    )
+
+
 def snapshot(g: Game) -> dict:
     slimes = [slime_view(g, s) for s in g.slimes()]
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
@@ -249,11 +277,7 @@ def snapshot(g: Game) -> dict:
         stranded=[dict(id=e["id"], ids=e["ids"], names=[g.roster[i].name for i in e["ids"] if i in g.roster], first=e["first"], last=e["last"],
                        stuck=e["stuck"], hours_left=g.stranded_left(e), rescue_hours=g.rescue_hours(e), food=g.rescue_food(e)) for e in g.stranded],
         modifiers={k: dict(name=m.name, emoji=m.emoji, desc=m.desc, boon=m.boon) for k, m in modifiers_mod.MODIFIERS.items()},
-        jobs=dict(forage=g.forage, list=[dict(key=j.key, name=j.name, emoji=j.emoji, cycle=j.cycle, desc=j.description, talents=list(j.talents),
-                                                  building=BUILDINGS.get(j.building).name, bemoji=BUILDINGS.get(j.building).emoji,
-                                                  blevel=g.buildings.level(j.building), slots=jobs_mod.slots(g, j.key),
-                                                  used=len(jobs_mod.workers(g, j.key)), mult=round(g.buildings.job_mult(j.building), 2))
-                                             for j in jobs_mod.JOBS.values()]),
+        jobs=_jobs_view(g),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
         conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason,
                         away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
@@ -775,6 +799,15 @@ def _merge_gear(g, a):
 @command("assign_job")
 def _assign_job(g, a):
     return [g.assign_job(_i(a, "id"), str(a.get("job", "")))], {}
+
+
+@command("set_recipe")
+def _set_recipe(g, a):
+    key = str(a.get("recipe", "auto"))
+    if key != "auto" and key not in jobs_mod.RECIPES:
+        raise InvalidAction(f"Unknown recipe '{key}'.")
+    g.recipe_pref = key
+    return [f"The chef will cook {'the best recipe available' if key == 'auto' else jobs_mod.RECIPES[key].name}."], {}
 
 
 @command("stop_job")

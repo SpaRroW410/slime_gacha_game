@@ -77,6 +77,8 @@ class Game:
         self.buildings = BuildingManager(self.wallet)
         self.library = Library(self.wallet, self.buildings)
         self.academy = AcademySystem(self.wallet, self.rng, self.library, self.buildings)
+        self.academy.trainer_mult = lambda discipline: jobs.trainer_bonus(self, discipline)
+        self.needs.meal_hook = lambda s: jobs.eat_from_pantry(self, s)
         self.social = SocialEngine(self.conflicts, self.buildings)
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
         self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
@@ -99,6 +101,9 @@ class Game:
         self.wall_last: Optional[float] = None
         self.wall_frac = 0.0
         self.expeditions: List[dict] = []              # live mode: parties away until a game tick
+        self.pantry: Dict[str, int] = {}               # cooked servings by recipe (jobs.py: chef and kitchen)
+        self.recipe_pref = "auto"                      # the recipe the chef cooks ("auto" = the best one)
+        self.forge_progress, self.forge_next = 0, "weapon"   # the blacksmith's slow forging (jobs._craft)
         self.stranded: List[dict] = []                 # overdue scouts waiting for a rescue party (see scout / rescue)
         self.next_stranded = 1
         self._owed = 0.0                               # hours the current session still has to pay (live mode)
@@ -993,6 +998,8 @@ class Game:
 
     def recall(self, sid: int) -> str:
         s = self.slime(sid)
+        if s.job and s.state == "hunting":
+            return jobs.recall(self, s)                       # a worker out foraging goes straight back to the post
         self.hunts.recall(s)
         self.academy.cancel(s)
         return f"{s.name} was called back."
@@ -1027,7 +1034,7 @@ class Game:
         self.wallet.spend_many(cost)
         res = SparResult()
         res.summary.extend(notes)
-        mult = self.buildings.style_mult()
+        mult = self.buildings.style_mult() * jobs.trainer_bonus(self, d.key)       # an appointed trainer speeds it up
 
         def reward(s, won, dummy=False):
             before = sparring.style_level(s, d.key)
@@ -1035,7 +1042,8 @@ class Game:
             if outlook.has(s, "spar"):
                 xp *= config.OUTLOOK_DUELIST_STYLE
             outlook.bump(s, "spar")
-            self.practise_discipline(s, d.key, config.PROF_SPAR_OWN, config.PROF_SPAR_OTHER)
+            tb = jobs.trainer_bonus(self, d.key)
+            self.practise_discipline(s, d.key, config.PROF_SPAR_OWN * tb, config.PROF_SPAR_OTHER)
             after = sparring.gain_style_xp(s, d.key, xp, cap)
             self.social.shift_morale(s, 2 + (2 if won else 0))
             note = f"+{xp:.0f} {d.style} xp"
@@ -1856,6 +1864,24 @@ class Game:
                     k = max(keys, key=lambda k: sum(equipment.GEAR.get(k).stats.values()))
                     log.append("🎒 " + self.inventory.equip(s, k))
 
+    def brew_for_post(self, brewer: Slime) -> List[str]:
+        """The appointed brewer's shift: brew the basic or mixed potion the colony is shortest of, within its means
+        (at most 66% of each ingredient stock, like slimes helping themselves)."""
+        lab = self.buildings.level("alchemy")
+        wanted = []
+        for s in self.slimes():
+            wanted += list(self._LIKES.get(s.archetype, ()))
+        wanted += list(potions.KINDS)[:4]
+        stock = lambda k: sum(n for kk, n in self.potions.items() if kk.split(":")[0] == k)
+        for kind in sorted(set(wanted), key=lambda k: (stock(k), k)):
+            if stock(kind) >= config.AUTONOMY_BREW_STOCK + 2:
+                continue
+            for grade in range(lab, 0, -1):
+                c = potions.cost(kind, grade)
+                if all(v <= self.wallet.get(k) * self.share for k, v in c.items()):
+                    return ["⚗️ " + x for x in self._brew_core(brewer, kind, grade, wait=False)]
+        return []
+
     def _auto_brew(self, log: List[str]) -> None:
         """Once a day a free slime (magical ones first) brews a potion the colony is short of, spending at most 66%
         of each ingredient stock."""
@@ -1929,7 +1955,7 @@ class Game:
             return
         zones = sorted(ZONES, key=lambda z: -z.duration)
         for s in self.slimes():
-            if (s.state != "idle" or s.in_dungeon or s.grounded or s.id == self.vice or s.hp <= 0
+            if (s.state != "idle" or s.job or s.in_dungeon or s.grounded or s.id == self.vice or s.hp <= 0
                     or self.parties.party_of(s.id) or s.hp < s.max_hp * config.FORAGE_MIN_HP
                     or s.needs.get("energy") < config.FORAGE_MIN_ENERGY or s.needs.get("food") < config.FORAGE_MIN_FOOD):
                 continue
@@ -1948,6 +1974,9 @@ class Game:
     def brew(self, sid: int, kind: str, grade: int, wait: bool = True) -> List[str]:
         """A slime brews a potion in the Alchemy Lab (takes 2 hours per grade). Lab level caps the grade."""
         s = self._free_slime(sid)
+        return self._brew_core(s, kind, grade, wait)
+
+    def _brew_core(self, s: Slime, kind: str, grade: int, wait: bool = True) -> List[str]:
         if kind not in potions.KINDS:
             raise InvalidAction(f"Unknown potion '{kind}'.")
         if not 1 <= grade <= 5:
@@ -3102,7 +3131,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -3203,6 +3232,9 @@ class Game:
         g.relations.load(d.get("relations"), set(g.roster))
         g.expeditions = [dict(e, ids=[i for i in e["ids"] if i in g.roster]) for e in d.get("expeditions", [])]
         g.expeditions = [e for e in g.expeditions if e["ids"]]
+        g.pantry = {k: int(v) for k, v in d.get("pantry", {}).items()}
+        g.recipe_pref = d.get("recipe_pref", "auto")
+        g.forge_progress, g.forge_next = d.get("forge_progress", 0), d.get("forge_next", "weapon")
         g.stranded = [e for e in d.get("stranded", []) if any(i in g.roster for i in e["ids"])]
         g.next_stranded = d.get("next_stranded", 1)
         g.journal = d.get("journal", [])

@@ -11,8 +11,8 @@ const WISH = { energy: 'needs sleep', food: 'is hungry', safety: 'feels unsafe (
 const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'],
   ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide']];
 const SUBS = {
-  dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)']],
-  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['workshops', 'Jobs'], ['sacrifice', 'Merge & destroy']],
+  dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['hunts', 'Hunts & foraging']],
+  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'stranded', 'rescue'];
@@ -586,7 +586,7 @@ function dungeons() {
   const left = cut(all, '<div class="panel stack"><h2>🕳', '  <div class="stack">\n    ' + scout);
   const scoutHtml = cut(all, scout, pit), pitHtml = cut(all, pit, skirm), skHtml = cut(all, skirm, null).replace(/<\/div><\/div>\s*$/, '</div>');
   const body = v === 'descent' ? `<div class="grid cols2"><div class="stack">${left}</div><div class="stack">${scoutHtml}${skHtml.endsWith('</div></div>') ? skHtml : skHtml + '</div>'}</div>`
-    : v === 'pit' ? `<div class="grid cols2">${pitHtml}</div>` : v === 'quarry' ? quarryView() : riftView();
+    : v === 'pit' ? `<div class="grid cols2">${pitHtml}</div>` : v === 'quarry' ? quarryView() : v === 'hunts' ? huntsView() : riftView();
   return subnav('dungeons') + body;
 }
 function slimePickRow(a) {
@@ -618,37 +618,83 @@ function town() {
   const alch = '<div class="panel stack" style="margin-top:12px"><h2>⚗️', armory = '<div class="grid cols2" style="margin-top:12px">\n    <div class="panel stack"><h2>🛠️ Armory';
   let body;
   if (v === 'sacrifice') return subnav('town') + sacrificeView();
-  if (v === 'workshops') return subnav('town') + workshopsView();
+  if (v === 'kitchen') return subnav('town') + kitchenView();
+  if (v === 'hospital') return subnav('town') + hospitalView();
   if (v === 'buildings') body = cut(all, null, alch);
-  else if (v === 'alchemy') body = cut(all, alch, armory).replace('margin-top:12px', 'margin-top:0');
+  else if (v === 'alchemy') body = cut(all, alch, armory).replace('margin-top:12px', 'margin-top:0') + `<div class="panel stack" style="margin-top:12px"><h2>⚗️ Brewer</h2><p class="mute">An appointed brewer brews the basic potions the colony is shortest of from the herbs in the stores (never using more than 66% of a stock), one try per ${S.state.jobs.shift}-hour shift.</p>${postPanel('brewer')}</div>`;
   else {
     const rv = riftAll();
     const relics = cut(rv, '  <div class="stack"><div class="panel stack"><h2>🎒 Relic vault', null);
-    body = cut(all, armory, null) + `<div class="grid cols2" style="margin-top:12px">${relics.replace(/^\s*<div class="stack">/, '<div class="stack">')}`;
+    const fg = S.state.jobs.forge;
+    body = `<div class="panel stack"><h2>🔨 Blacksmith</h2><p class="mute">An appointed blacksmith mends worn gear carried by slimes at home for free, and slowly forges: every ${fg.shifts} shifts a <b>${fg.next === 'weapon' ? 'weapon (the best tier the Armory sells, at ' + Math.round(fg.share * 100) + '% of the shop price)' : 'relic (' + esc(cost(fg.relic_cost)) + ')'}</b>, if the materials are there — alternating weapon and relic. With no materials the shift goes foraging.</p>
+      <div class="row">${chip(`⚒️ Forge progress ${fg.progress}/${fg.shifts}`, 'info')}</div>${postPanel('blacksmith')}</div>` + cut(all, armory, null) + `<div class="grid cols2" style="margin-top:12px">${relics.replace(/^\s*<div class="stack">/, '<div class="stack">')}`;
   }
   return subnav('town') + body;
 }
-function workshopsView() {
-  const st = S.state, j = st.jobs;
-  const free = st.slimes.filter((s) => !s.busy && s.state !== 'sleeping' && !s.grounded && !s.is_vice);
-  let cur = ui('job_sl', free[0]?.id);
-  if (!free.some((s) => s.id == cur)) cur = free[0]?.id;
-  S.ui.job_sl = cur;
-  return `<div class="panel stack"><h2>👷 Jobs</h2>
-    <p class="mute">Not every slime is a fighter. Each trade works in its own building: the building's level sets how many slimes can work there (one per level) and how well (+10% per level). No wages. A working slime stays home (you can still feed and pet it) but is not free for parties, hunts or drills until you stop it; switching is free and every trade keeps its own level. Upgrade the buildings in Town > Buildings.</p>
-    <div class="row">${free.length ? `<label class="f">Slime <select data-ui="job_sl">${free.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)})</option>`).join('')}</select></label>` : '<small class="mute">Nobody is free to start a job.</small>'}</div>
-    <div class="row"><button class="btn small ${j.forage ? 'primary' : ''}" data-act="forage">🧺 Foraging: ${j.forage ? 'on' : 'off'}</button>
-      <small class="mute">When on, slimes that belong to no party and have nothing to do go hunting by themselves in the best zone they can clear safely, and bring back gel, food and essence. Rested and fed slimes only; they come home to sleep. Turn it off to keep them at home (for merging, gear or care).</small></div></div>
-  <div class="grid cols2" style="margin-top:12px">${j.list.map((x) => {
-    const workers = st.slimes.filter((s) => s.job && s.job.key === x.key);
-    const full = x.used >= x.slots;
-    return `<div class="panel stack"><h3>${x.emoji} ${esc(x.name)} <small class="mute">${x.bemoji} ${esc(x.building)} L${x.blevel} · ${x.used}/${x.slots} places · x${x.mult}</small></h3>
-      <small>${esc(x.desc)} <span class="mute">A round every ${x.cycle}h · natural talent: ${x.talents.map(esc).join(', ')}.</span></small>
-      ${workers.map((s) => `<div class="row between panel flat"><span>${avatar(s, 'sm')} <b>${esc(s.name)}</b> <small class="mute">level ${s.job_levels[x.key]}</small></span>
-        <button class="btn small danger" data-act="stop_job" data-id="${s.id}">Stop</button></div>`).join('') || '<small class="mute">Nobody works here yet.</small>'}
-      <button class="btn ${full ? '' : 'primary'}" data-act="assign_job" data-job="${x.key}" ${full || !free.length ? 'disabled' : ''}>${full ? 'All places taken' : 'Put the chosen slime to work'}</button></div>`;
-  }).join('')}</div>`;
+/* ---------------------------------------------------------------- appointments: posts live in their own buildings */
+function canHold(s, j) {
+  if (s.is_vice || s.grounded || s.in_dungeon) return false;
+  if (s.job && s.job.key === j.key) return false;
+  if (s.stars < j.min_stars) return false;
+  if (j.classes.length && !j.classes.includes(s.archetype)) return false;
+  if (!['idle', 'working'].includes(s.state) && !(s.state === 'hunting' && s.job)) return false;
+  return true;
 }
+function postPanel(key, extra = '') {
+  const st = S.state, j = st.jobs.posts.find((p) => p.key === key);
+  const pick = 'post_' + key;
+  const cands = st.slimes.filter((s) => canHold(s, j));
+  let cur = ui(pick, cands[0]?.id);
+  if (!cands.some((s) => s.id == cur)) cur = cands[0]?.id;
+  S.ui[pick] = cur;
+  const full = j.used >= j.slots;
+  return `<div class="panel flat stack"><div class="row between"><b>${j.emoji} ${esc(j.name)}</b><small class="mute">${j.bemoji} ${esc(j.bname)} L${j.blevel} · ${j.used}/${j.slots} place${j.slots > 1 ? 's' : ''} · x${j.mult}</small></div>
+    <small>${esc(j.desc)} <span class="mute">${j.min_stars > 1 ? `${j.min_stars}★ or more · ` : ''}${j.classes.length ? 'only ' + j.classes.map(esc).join('/') + ' · ' : ''}natural talent: ${j.talents.map(esc).join(', ')} · a ${st.jobs.shift}-hour shift earns a small bonus.${j.forages ? ' With nothing to do it forages for a shift (call it back any time).' : ''}</span></small>
+    ${j.holders.map((h) => { const s = slimeById(h.id); return `<div class="row between panel flat"><span>${s ? avatar(s, 'sm') : ''} <b>${esc(h.name)}</b> <small class="mute">level ${h.level}${h.foraging ? ' · 🧺 foraging' : ' · at work'}</small></span>
+      <span class="row">${h.foraging ? `<button class="btn small" data-act="do" data-c="recall" data-id="${h.id}">📞 Call back</button>` : ''}<button class="btn small danger" data-act="stop_job" data-id="${h.id}">Dismiss</button></span></div>`; }).join('') || '<small class="mute">Nobody appointed.</small>'}
+    ${full ? '<small class="mute">All places are taken: dismiss someone or upgrade the building.</small>'
+      : cands.length ? `<div class="row"><select data-ui="${pick}">${cands.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} ${s.stars}★${s.job ? ' · ' + esc(s.job.name) : ''})${s.hp < s.max_hp * 0.5 ? ' 🤕' : ''}</option>`).join('')}</select>
+        <button class="btn primary" data-act="assign_job" data-job="${key}">Appoint</button></div>` : `<small class="mute">Nobody free qualifies${j.min_stars > 1 ? ` (${j.min_stars}★+)` : ''}${j.classes.length ? ' (' + j.classes.map(esc).join('/') + ' only)' : ''}.</small>`}
+    ${extra}</div>`;
+}
+function kitchenView() {
+  const st = S.state, k = st.jobs.kitchen, b = st.buildings.find((x) => x.key === 'kitchen');
+  return `<div class="grid cols2">
+  <div class="panel stack"><h2>🍳 Kitchen <small class="mute">L${b.level}/${b.max} · ${esc(b.now)}</small></h2>
+    <p class="mute">The chef cooks the recipe you choose into the pantry; hungry slimes eat the most nourishing dish from it before touching the food stores. Better chefs unlock better recipes and cook bigger batches.</p>
+    <div class="row">${chip(`🍽 Hungry now: ${k.hungry}`, k.hungry ? 'bad' : 'ok')}${chip(`🥘 Pantry ${k.total}/${k.cap}`, 'info')}${k.hungry_names.length ? `<small class="mute">${k.hungry_names.map(esc).join(', ')}</small>` : ''}</div>
+    ${postPanel('chef')}
+    ${b.cost ? `<button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="kitchen" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade the Kitchen · ${cost(b.cost)}</button>` : ''}</div>
+  <div class="panel stack"><h2>📖 Recipes</h2>
+    <div class="row"><label class="f">The chef cooks <select data-act-change="recipe"><option value="auto" ${k.pref === 'auto' ? 'selected' : ''}>the best available</option>${k.recipes.map((r) => `<option value="${r.key}" ${k.pref === r.key ? 'selected' : ''}>${r.emoji} ${esc(r.name)}</option>`).join('')}</select></label></div>
+    <table><thead><tr><th>Dish</th><th>Needs</th><th>Gives</th><th>Chef lvl</th><th>Stock</th></tr></thead><tbody>${k.recipes.map((r) => `<tr class="${k.chef_level >= r.level ? '' : 'mute'}"><td>${r.emoji} <b>${esc(r.name)}</b></td><td>${esc(cost(r.cost))}</td><td>${r.servings}× +${r.nutrition} food${r.morale ? `, +${r.morale} morale` : ''}</td><td>${r.level}</td><td>${r.stock}</td></tr>`).join('')}</tbody></table>
+    <small class="mute">A dish restores that much of a slime's food need per serving. Chef level ${k.chef_level || '—'}.</small></div></div>`;
+}
+function hospitalView() {
+  const st = S.state, h = st.jobs.hospital, b = st.buildings.find((x) => x.key === 'hospital');
+  return `<div class="grid cols2">
+  <div class="panel stack"><h2>🏥 Hospital <small class="mute">L${b.level}/${b.max} · ${esc(b.now)}</small></h2>
+    <p class="mute">With a doctor on duty (a medic), every injured slime at home heals ${h.rate}% of its max HP every hour — far faster than sleeping. The Rest Area now restores energy; this is where health comes back. A doctor with no patients on a shift goes foraging.</p>
+    <div class="row">${chip(`🤕 Injured: ${h.injured}`, h.injured ? 'warn' : 'ok')}${chip(`🚑 Wounded (under half): ${h.wounded}`, h.wounded ? 'bad' : 'ok')}${chip(h.on_duty ? '🩺 Doctor on duty' : '🩺 No doctor', h.on_duty ? 'ok' : 'bad')}</div>
+    ${h.names.length ? `<small class="mute">Most hurt: ${h.names.map(esc).join(', ')}</small>` : '<small class="mute">Nobody is hurt.</small>'}
+    ${postPanel('doctor')}
+    ${b.cost ? `<button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="hospital" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade the Hospital · ${cost(b.cost)}</button>` : ''}</div></div>`;
+}
+function huntsView() {
+  const st = S.state, j = st.jobs;
+  const out = st.slimes.filter((s) => s.state === 'hunting');
+  return `<div class="grid cols2">
+  <div class="panel stack"><h2>🏞 Hunts & foraging ${info('Hunting sends slimes outside for white gel, food and essence (and a rare purple gel). It costs no resources, only time and risk: a hurt or weak slime can be injured, and one that is too weak may come home with little. Foraging is the same thing done automatically.')}</h2>
+    <p class="mute">Slimes can hunt in three zones. A hunt costs nothing but time and a little health; the better a slime's power against the zone's danger, the safer and richer the haul. Send slimes from their card (Colony tab), a whole party from the Parties tab, or let the Vice Keeper organise big hunts.</p>
+    <table><thead><tr><th>Zone</th><th>Time</th><th>Danger</th><th>Brings</th></tr></thead><tbody>${st.zones.map((z) => `<tr><td><b>${esc(z.name)}</b><br><small class="mute">${esc(z.desc)}</small></td><td>${z.duration}h</td><td>${z.danger}</td><td>${esc(Object.entries(z.rewards || {}).map(([k, v]) => `${(RES[k] || [k])[0]} ${Array.isArray(v) ? v.join('–') : v}`).join(' · '))}</td></tr>`).join('')}</tbody></table>
+    <div class="row"><button class="btn small ${j.forage ? 'primary' : ''}" data-act="forage">🧺 Foraging: ${j.forage ? 'on' : 'off'}</button>
+      <small class="mute">With foraging on, slimes that belong to no party, hold no post and have nothing to do hunt by themselves in the best zone they can clear safely (rested, fed and healthy only). Appointed chefs, blacksmiths, brewers and doctors forage on their own for one ${j.shift}-hour shift when their post has nothing to do — and can be called back at once.</small></div></div>
+  <div class="panel stack"><h2>🧺 Out now <small class="mute">(${out.length})</small></h2>
+    ${out.length ? out.map((s) => `<div class="row between panel flat"><span>${avatar(s, 'sm')} <b>${esc(s.name)}</b> <small class="mute">${s.job ? esc(s.job.emoji + ' ' + s.job.name) + ' · foraging a shift' : 'hunting'}</small></span>
+      <span class="row">${etaFor(s.id)}<button class="btn small" data-act="do" data-c="recall" data-id="${s.id}">📞 Call back</button></span></div>`).join('') : '<p class="mute">Nobody is out.</p>'}
+    <small class="mute">Calling a slime back is immediate; a hunt cut short brings home only a part of its haul. A worker called back returns to their post.</small></div></div>`;
+}
+function etaFor(id) { const a = (S.state.away || []).find((x) => x.ids.includes(id)); return a ? `<small class="mute">${etaHtml(a)}</small>` : ''; }
 function people() {
   const v = sub('people');
   return subnav('people') + { bonds, keeper, council, records }[v]();
@@ -719,6 +765,8 @@ function academy() {
   const trainingFacility = `<div class="panel stack"><h2>🥋 Training facility — proficiency</h2>
     <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable) in the yard of its own discipline: the <b>Blade Yard</b> for sword classes, the <b>Archery Range</b> for rangers, the <b>Mana Pool</b> for casters. The Training Grounds level boosts it and unlocks stronger drills (Advanced at level 3, Master at level 5); a drill is worth less as a slime nears mastery. <b>No stars needed</b>: a slime that has just risen in rarity (back to one star) cannot study new elements at the Library, but it can still drill here.</p>
     <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${yard === d.key ? 'sel' : ''}" data-act="yard" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><small class="mute" style="display:block">${esc(d.feeds.join(', '))}</small></div>`).join('')}</div>
+    <h4>🧑‍🏫 Trainers ${info('One trainer per discipline (2★ or more). An appointed trainer speeds up proficiency and fighting-style gains for drills and sparring in their discipline. The bonus grows with the trainer\'s level and the Training Grounds level.')}</h4>
+    ${st.disciplines.map((d) => { const k = 'trainer_' + d.key; return `<div class="row"><small class="mute">${esc(d.emoji)} ${esc(d.name)}: ${st.jobs.trainer[d.key] ? `+${st.jobs.trainer[d.key]}% proficiency and style gains` : 'no trainer appointed'}</small></div>${postPanel(k)}`; }).join('')}
     <div class="row"><label class="f">Drill <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)} · ${t.ticks}h · ${esc(cost(t.cost))}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select></label></div>
     <div class="row"><b>Slime:</b> ${slimeSel('dsl', avail)}<button class="btn primary" data-act="drill" ${dsl ? '' : 'disabled'}>${esc(tr.name)} (${tr.ticks}h)</button></div>
     ${dsl ? `<small class="mute">${esc(dsl.name)}: ${dsl.prof ? `proficiency ${dsl.prof.value}` : ''} · ${dgain > 0 ? `this drill is worth about +${dgain}` : `the ${esc(yd.name)} is not their discipline: only a little general practice`}</small>` : ''}
@@ -735,6 +783,7 @@ function academy() {
 
   <div class="panel stack"><h2>📚 Library</h2>
     <p class="mute">Elemental mastery unlocks at <b>3★ for any class</b> (mages get an extra element slot and study faster). Library spell slots: <b>${lib.slots}</b>${lib.tier3 ? '' : ' · Restricted Section (tier-3) needs Library L3'}.</p>
+    ${postPanel('librarian')}
     <div class="row"><label class="f">Scholar ${slimeSel('lib_s', (s) => s.can_master && avail(s), 'data-rerender="1"') || ''}</label></div>
     ${ls ? `<div class="stack">${st.elements.basics.map((b) => {
       const e = st.elements.list.find((x) => x.key === b), lv = ls.mastery[b];
@@ -1117,7 +1166,7 @@ const A = {
   wait: (d) => act('wait', { hours: num(d.h) }, { slow: num(d.h) >= 24 }),
   autocare: () => act('auto_care', { on: !S.state.auto_care }),
   arena: (d) => { S.ui.arena = d.k; render(); },
-  do: (d) => act(d.c, { id: S.sel }),
+  do: (d) => act(d.c, { id: d.id ? num(d.id) : S.sel }),
   hunt: () => act('hunt', { id: S.sel, zone: ui('zone', S.state.zones[0].key) }),
   equip: (d) => act('equip', { id: S.sel, key: ui('eq_' + d.slot, Object.keys(S.state.gear.inventory).find((k) => S.state.gear.all.find((g) => g.key === k).slot === d.slot)) }),
   unequip: (d) => act('unequip', { id: S.sel, slot: d.slot }),
@@ -1174,7 +1223,7 @@ const A = {
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
   set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
-  assign_job: (d) => { const id = num(S.ui.job_sl); if (id) act('assign_job', { id, job: d.job }); },
+  assign_job: (d) => { const id = num(S.ui['post_' + d.job]); if (id) act('assign_job', { id, job: d.job }); },
   forage: () => act('set_forage', { on: !S.state.jobs.forage }),
   stop_job: (d) => act('stop_job', { id: num(d.id) }),
   unground: (d) => act('unground', { id: num(d.id) }),
@@ -1262,6 +1311,7 @@ document.addEventListener('change', async (e) => {
   if (t.dataset.sel) { S[t.dataset.sel] = t.value; render(); return; }
   if (t.dataset.colorid) { act('set_color', { id: num(t.dataset.colorid), color: t.value }); return; }
   if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); return; }
+  if (t.dataset.actChange === 'recipe') { act('set_recipe', { recipe: t.value }); return; }
   if (t.dataset.actChange === 'stance' && S.sel) { act('stance', { id: S.sel, stance: t.value }); return; }
   if (t.hasAttribute('data-import') && t.files[0]) {
     try { const save = JSON.parse(await t.files[0].text()); const r = await backend.call('load', { save });
