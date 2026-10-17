@@ -55,6 +55,7 @@ class FloorInfo:
     title: str
     signature: tuple
     boss: bool = False
+    affinity: str = ""             # element an elemental floor favours ("" = an ordinary floor)
 
 
 def _pool(kind: str, floor: int, families: Optional[Tuple[str, ...]] = None, need: int = 5) -> List[Monster]:
@@ -169,6 +170,26 @@ def _smooth(enemies: List[Enemy], floor: int, size: int, boss: bool) -> List[Ene
     return out
 
 
+ELEMENTAL_EVERY, ELEMENTAL_OFFSET = 6, 3          # every 6th floor from floor 3 (3, 9, 21, 27 ...), except boss floors
+ELEMENTAL_BOOST, ELEMENTAL_DAMPEN = 1.25, 0.8
+
+
+def is_elemental_floor(floor: int) -> bool:
+    return floor % ELEMENTAL_EVERY == ELEMENTAL_OFFSET and not is_boss_floor(floor)
+
+
+def _attune(t: terr.Terrain, el: str) -> terr.Terrain:
+    """The same ground on an elemental floor: spells of the floor's element hit harder, the element that beats it softer
+    - for both sides."""
+    foe = next((a for a, d in elements.BEATS.items() if d == el), "")
+    boosts = dict(t.boosts)
+    boosts[el] = max(boosts.get(el, 1.0), ELEMENTAL_BOOST)
+    dampens = dict(t.dampens)
+    if foe:
+        dampens[foe] = min(dampens.get(foe, 1.0), ELEMENTAL_DAMPEN)
+    return replace(t, name=f"{elements.get(el).name} {t.name}", boosts=boosts, dampens=dampens)
+
+
 def _generate_floors(seed: int, size: int) -> List[FloorInfo]:
     plans: List[FloorInfo] = []
     recent: List[tuple] = []
@@ -195,17 +216,24 @@ def _generate_floors(seed: int, size: int) -> List[FloorInfo]:
         for attempt in range(40):
             rng = random.Random(seed * 1000003 + f * 7919 + attempt * 104729 + size)
             t = terr.get(rng.choice(palette))
-            pattern, picks = _compose(rng, f, _pool(t.kind, f), size)
+            pool = _pool(t.kind, f)
+            affinity = ""
+            if is_elemental_floor(f):
+                affinity = rng.choice(elements.BASICS)
+                kin = [m for m in pool if m.element == affinity or affinity in elements.components(m.element or "")]
+                pool = kin if len(kin) >= 2 else pool          # the floor's own creatures lead the waves
+            pattern, picks = _compose(rng, f, pool, size)
             enemies = []
             for m, el in picks:
                 enemies.append(bestiary.build_enemy(m, f, el))
             sig = (t.key, tuple(sorted(Counter(e.key for e in enemies).items())))
-            best = (t, pattern, enemies, sig)
+            best = (t, pattern, enemies, sig, affinity)
             if sig not in recent and len({e.key for e in enemies}) >= 2:
                 break
-        t, pattern, enemies, sig = best
+        t, pattern, enemies, sig, affinity = best
         enemies = _smooth(enemies, f, size, False)
-        plans.append(FloorInfo(f, t, enemies, pattern, _title(t, pattern, enemies), sig))
+        shown = _attune(t, affinity) if affinity else t
+        plans.append(FloorInfo(f, shown, enemies, pattern, _title(shown, pattern, enemies), sig, False, affinity))
         prev_terrain = t.key
         recent = (recent + [sig])[-4:]
     return plans
@@ -305,6 +333,9 @@ def intel_lines(seed: int, floor: int, knowledge: float, party_size: int) -> Lis
     mobs = [e for e in enemies if not e.boss] or enemies
     lines = [f"{t.emoji} {t.name}: {terr.describe(t)}",
              f"{len(enemies)} foes, tier {max(e.tier for e in mobs)}" + (" - a guardian waits" if info.boss else "")]
+    if info.affinity:
+        el = elements.get(info.affinity)
+        lines.append(f"{el.emoji} elemental floor: {el.name} spells hit harder here (for both sides) and the opposing element softer")
     if lvl >= 2:
         lines.append(f"{info.pattern}: " + _counts(mobs))
         els = sorted({e.element for e in enemies if e.element})
@@ -318,13 +349,26 @@ def intel_lines(seed: int, floor: int, knowledge: float, party_size: int) -> Lis
                      f"purple gel chance ~{max(e.purple_chance for e in enemies):.0%} per foe")
     if lvl >= 5:
         weak: dict = {}
+        tough: dict = {}
         for e in enemies:
             if e.element:
                 for a, d in elements.BEATS.items():
-                    if d == e.element:
+                    if d == e.element:                              # what beats its element is its weakness ...
                         weak[a] = weak.get(a, 0) + 1
-        best = max(weak, key=weak.get) if weak else None
+                if e.element in elements.BEATS:                     # ... and what its element beats it resists
+                    d = elements.BEATS[e.element]
+                    tough[d] = tough.get(d, 0) + 1
+            for a in e.weak:
+                weak[a] = weak.get(a, 0) + 1
+            for a in e.resists:
+                tough[a] = tough.get(a, 0) + 1
+
+        def top(d: dict) -> str:
+            ranked = sorted(d, key=lambda k: (-d[k], k))[:2]
+            return ", ".join(f"{elements.get(k).emoji}{elements.get(k).name}" for k in ranked) or "none"
         boosted = max(t.boosts, key=t.boosts.get) if t.boosts else None
+        lines.append("weak to: " + top(weak) + "; resists: " + top(tough))
+        best = max(weak, key=lambda k: (weak[k], k)) if weak else None
         lines.append("weakness: " + (f"{elements.get(best).emoji}{elements.get(best).name} spells" if best else "none")
                      + (f"; terrain favours {elements.get(boosted).emoji}{elements.get(boosted).name}" if boosted else "")
                      + f"; loot ~{sum(hi for e in enemies for (_, hi) in e.loot.values())} gel/essence max")

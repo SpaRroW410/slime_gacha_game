@@ -6,7 +6,7 @@ Add a new ability *kind* by writing a handler and adding it to KIND_HANDLERS.
 """
 import random
 from dataclasses import dataclass, field, replace
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from . import config
 from .abilities import Ability, get_ability
@@ -35,6 +35,8 @@ class Enemy:
     family: str = ""             # goblin, direwolf, orc ... (see bestiary.py)
     role: str = ""
     boss: bool = False
+    weak: Tuple[str, ...] = ()       # extra elements it is weak to (family traits, see bestiary.FAMILY_TRAITS)
+    resists: Tuple[str, ...] = ()    # extra elements it resists
 
 
 ENEMIES: "Registry[Enemy]" = Registry("enemy")
@@ -97,6 +99,8 @@ class Combatant:
     poison: tuple = (0, 0)          # (turns, dmg per turn)
     mastery: Dict[str, int] = field(default_factory=dict)   # basic element -> mastery level (slimes)
     element: str = ""               # enemy's own element
+    weak: tuple = ()                # enemy's extra weaknesses / resistances (elements)
+    resists: tuple = ()
     casts: Dict[str, int] = field(default_factory=dict)     # elemental casts this battle (mastery xp)
     style: Dict[str, int] = field(default_factory=dict)     # fighting-style levels (sparring.py)
     morale: float = 60.0
@@ -129,6 +133,10 @@ class Combatant:
     @property
     def alive(self) -> bool:
         return self.hp > 0 and not self.yielded
+
+    def matchup(self, element: str) -> float:
+        """Damage multiplier an attack of `element` gets against this combatant."""
+        return elements.matchup(element, self.element, self.weak, self.resists)
 
     def hurt(self, amount: float) -> None:
         if self.shield > 0:
@@ -211,7 +219,7 @@ class BattleSystem:
     @staticmethod
     def from_enemy(e: Enemy) -> Combatant:
         return Combatant(e.name, e.emoji, "foes", dict(e.stats), float(e.stats["hp"]), list(e.abilities),
-                         "attack", 1.0, e, element=e.element)
+                         "attack", 1.0, e, element=e.element, weak=tuple(e.weak), resists=tuple(e.resists))
 
     # -- main loop -----------------------------------------------------------
     def run(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
@@ -499,7 +507,7 @@ class BattleSystem:
                 n = len(foes) if a.target == "all_enemies" else 1
                 bonus = 1.2 if a.kind == "poison" and not any(f.poison[0] for f in foes) else 1.0
                 weakest = min(foes, key=lambda f: f.hp)
-                return (a.power * n * bonus * elements.effectiveness(a.element, weakest.element)
+                return (a.power * n * bonus * weakest.matchup(a.element)
                         * _mastery_mult(actor, a))
             return max(offense, key=score)
         return get_ability("splat")      # everyone can bonk
@@ -615,7 +623,7 @@ def _damage_value(bs: BattleSystem, actor, ability, target):
     pierce = {f[1]: f[2] for f in ability.fx if f[0] == "pierce"}
     raw = ability.power * _cast_stat(actor, ability) * _mastery_mult(actor, ability) * _terrain_mult(bs, ability) \
         - 0.5 * target.stat("defense") * (1 - pierce.get("def", 0.0))
-    eff = elements.effectiveness(ability.element, target.element)
+    eff = target.matchup(ability.element)
     raw = max(1.0, raw) * bs.rng.uniform(0.9, 1.1) * eff * _style_attack(actor, ability)
     raw *= max(0.6, 1 - config.STYLE_SWORD_GUARD * target.style.get("sword", 0))       # parrying
     if actor.winded:
@@ -853,7 +861,7 @@ class BattleRun:
             out.append(dict(key=a.key, name=a.name, kind=a.kind, element=a.element, power=a.power,
                             target=a.target, cooldown=cd, cost=cost,
                             winded=bool(actor.stamina_max and actor.stamina < cost), ready=cd == 0,
-                            eff=({i: round(elements.effectiveness(a.element, c.element), 2) for i, c in foes}
+                            eff=({i: round(c.matchup(a.element), 2) for i, c in foes}
                                  if a.element and a.target in ("enemy", "all_enemies") else {})))
         return out
 
