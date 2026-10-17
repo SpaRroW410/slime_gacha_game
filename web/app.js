@@ -570,8 +570,9 @@ function dungeonsAll() {
   const walkers = st.slimes.filter((s) => s.state === 'idle' && !s.in_dungeon && !s.grounded && s.hp > 0 && !s.is_vice);
   const chips = (key, ids) => `<div class="row">${walkers.map((s) => `<button class="btn small ${ids.includes(s.id) ? 'primary' : ''}" data-act="pick_walker" data-k="${key}" data-id="${s.id}" title="has cleared floor ${s.progress}">${ids.includes(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level} · floor ${s.progress}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>`;
   const stranded = st.stranded.length ? `<div class="panel stack warnbox"><h2>🆘 Overdue scouts</h2>
-      <p class="mute">These scouts ran out of supplies. <b>One slime is enough</b> to go and bring them home. Floors that are already scouted are a known road: rescuers only have to have walked the <i>unscouted</i> floors on the way, and the trip is shorter. It takes hours and food, can be ambushed, and must arrive before the deadline.</p>
+      <p class="mute">These scouts ran out of supplies. <b>One slime is enough</b> to go and bring them home, and <b>several parties can go together</b> (tap a party to add all its free members; a bigger force breaks through more easily). Floors that are already scouted are a known road: rescuers only have to have walked the <i>unscouted</i> floors on the way, and the trip is shorter. It takes hours and food, can be ambushed, and must arrive before the deadline.</p>
       ${st.stranded.map((e) => `<div class="panel flat"><b>${e.names.map(esc).join(', ')}</b><br><small class="mute">stuck on floor ${e.stuck} (scouting ${e.first}–${e.last}) · ${e.hours_left}h left · rescue takes ${e.rescue_hours}h and ${e.food} 🍖 · must have walked ${e.need ? 'floors up to ' + e.need : 'no floors (the way is scouted)'}</small>
+        <div class="row">${st.parties.map((q) => `<button class="btn small" data-act="pick_party" data-k="rescue_ids" data-pid="${q.id}">👥 ${esc(q.name)}</button>`).join('')}</div>
         ${chips('rescue_ids', rescueIds)}
         <button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left || !rescueIds.length ? 'disabled' : ''}>🛟 Send rescue (${rescueIds.length})</button></div>`).join('')}</div>` : '';
   const scouting = `<div class="panel stack"><h2>🔭 Scouting ${info('Scouts learn specific floors (any run of floors up to the limit, not only multiples of 5). They must reach 100% of every floor they were sent to within the hour budget; floors they finish stay known even if they run out of time. Leave the budget empty to use the safe budget from the estimate. One slime is enough; more only helps if they are good scouts.')}</h2>
@@ -1279,7 +1280,8 @@ const A = {
     if (!ids.length) return toast('Pick at least one scout.', true);
     const r = await backend.call('scout_plan', { ids, first, last });
     if (r.ok) { S.plan = { ...r.result, first, last }; render(); } else toast(r.error, true); },
-  pick_walker: (d) => { const k = d.k, id = num(d.id), cur = (S.ui[k] || []).map(num); S.ui[k] = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id].slice(0, S.state.party_size); render(); },
+  pick_walker: (d) => { const k = d.k, id = num(d.id), cur = (S.ui[k] || []).map(num); S.ui[k] = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id].slice(0, k === 'rescue_ids' ? 999 : S.state.party_size); render(); },
+  pick_party: (d) => { const k = d.k, p = partyById(num(d.pid)); const ok = (p?.members || []).filter((id) => { const s = S.state.slimes.find((x) => x.id === id); return s && s.state === 'idle' && !s.in_dungeon && !s.grounded && s.hp > 0; }); const cur = (S.ui[k] || []).map(num); S.ui[k] = ok.every((id) => cur.includes(id)) ? cur.filter((id) => !ok.includes(id)) : [...new Set([...cur, ...ok])]; render(); },
   use_safe: (d) => { S.ui.shours = num(d.h); render(); },
   gift: (d) => { const pid = num(d.pid), k = d.k; const args = { pid, kind: k };
     if (k === 'potion') Object.assign(args, { id: num(S.ui['gift_s_' + pid]), potion: S.ui.gift_k, grade: num(S.ui.gift_g, 1) });

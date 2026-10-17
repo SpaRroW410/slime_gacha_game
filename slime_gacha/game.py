@@ -353,7 +353,7 @@ class Game:
         hours = self.rescue_hours(e)
         if hours >= self.stranded_left(e):
             raise InvalidAction(f"It would take {hours}h to reach them, but they only have {self.stranded_left(e)}h left.")
-        party = self._explorers(pid, ids)
+        party = self._explorers(pid, ids, limit=False)             # any number of rescuers, several parties together
         if not party:
             raise InvalidAction("Nobody is there to go.")
         for s in party:
@@ -368,6 +368,7 @@ class Game:
         stuck = e["stuck"]
         danger = 1 + 0.06 * stuck
         strength = sum(s.power_rating() for s in party) / len(party) / (25 * danger)
+        strength *= 1 + 0.1 * max(0.0, len(party) / self.parties.size - 1)       # a bigger force (several parties) breaks through more easily
         k = self._knowledge(stuck) / 100
         p_ok = min(0.95, config.RESCUE_BASE_CHANCE + 0.4 * min(1.5, strength) + 0.2 * k)
         who = self.parties.get(pid).name if pid is not None and not ids else ", ".join(s.name for s in party)
@@ -2961,11 +2962,11 @@ class Game:
                    + 0.15 * sum(s.archetype in ("rogue", "ranger") for s in party)
                    + config.OUTLOOK_PATHFINDER_SKILL * sum(outlook.has(s, "scout") for s in party))
 
-    def _explorers(self, pid: Optional[int] = None, ids: Optional[Sequence[int]] = None) -> List[Slime]:
-        """Who goes: the given slimes (one is enough, at most a party's worth), or the members of a party."""
+    def _explorers(self, pid: Optional[int] = None, ids: Optional[Sequence[int]] = None, limit: bool = True) -> List[Slime]:
+        """Who goes: the given slimes (one is enough, at most a party's worth unless `limit` is off), or the members of a party."""
         if ids:
             ids = list(dict.fromkeys(int(i) for i in ids))
-            if len(ids) > self.parties.size:
+            if limit and len(ids) > self.parties.size:
                 raise InvalidAction(f"At most {self.parties.size} slimes can go together.")
             return [self.slime(i) for i in ids]
         if pid is None:

@@ -136,3 +136,19 @@ class TestScoutAmnesty(unittest.TestCase):
         res = g.scout(None, 1, 2, 0, ids=[s.id])
         self.assertFalse(res.stranded)
         self.assertGreaterEqual(g.knowledge.get(1, 0), 100.0) if hasattr(g, "knowledge") else None
+
+
+class TestBigRescue(unittest.TestCase):
+    def test_several_parties_can_rescue_together(self):
+        g, scouts, rescuers = stranded_game()
+        second = party(g, strong=True, name="Second")
+        for s in members(g, second):
+            s.progress = 20
+        (e,) = g.stranded
+        ids = [s.id for s in members(g, rescuers)] + [s.id for s in members(g, second)]
+        self.assertGreater(len(ids), g.parties.size)
+        g.rng.random = lambda: 0.0
+        for i in ids:
+            g.roster[i].hp = g.roster[i].max_hp
+        g.rescue(None, e["id"], ids)
+        self.assertEqual(g.stranded, [])
