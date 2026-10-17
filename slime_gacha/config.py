@@ -31,6 +31,21 @@ VICE_MIN_STARS = 3
 VICE_MEDIATE_CHANCE = 0.3        # per hour, for each quarrel the vice keeper can reach
 VICE_FEED_BELOW = 25             # feeds a reachable slime that is this hungry
 NAME_MAX = 24
+SCHOLAR_CLASSES = ("mage", "medic", "necromancer")   # the magic classes
+SCHOLAR_MIN_STARS = 3            # a pulled mage, medic or necromancer is never below this (the Library needs 3 stars)
+# Training facility: solo drills in the Sword Yard, Archery Range or Mage Sanctum raise class proficiency
+DRILL_TICKS = 3
+DRILL_COST = {"white_gel": 1}
+# Higher-tier drills unlock with the Training Grounds level: (name, grounds level needed, hours, cost, proficiency x, style XP x)
+DRILL_TIERS = [("Basic drill", 1, 3, {"white_gel": 1}, 1.0, 1.0),
+               ("Advanced drill", 3, 4, {"white_gel": 3, "essence": 1}, 1.8, 2.0),
+               ("Master drill", 5, 6, {"white_gel": 8, "essence": 3}, 3.0, 4.0)]
+PROF_DRILL = 6.0                 # base proficiency gain per drill; shrinks as proficiency nears 100
+DRILL_STYLE_XP = 4.0             # a little fighting-style XP too
+# Floor threat smoothing (tools/playtest.py found a few floors with 2-4x the threat of their neighbours)
+FLOOR_THREAT_TARGET = 6500.0      # (sum of enemy HP) x (sum of enemy damage) / growth(floor)^2, for a party of five
+FLOOR_THREAT_BAND = (0.8, 1.25)   # ordinary floors keep their flavour inside this band around the target
+BOSS_THREAT_BAND = (0.9, 1.3)
 LEADER_POWER = 0.03              # party synergy bonus from a good leader (scaled by the leader's morale)
 LEADER_MEDIATE_CHANCE = 0.15     # per hour, a party leader settles a quarrel inside the party while they are away
 VICE_HUNT_MAX_PARTIES = 3
@@ -83,9 +98,16 @@ def stat_level(level: float) -> float:
     """The level stats are computed from: linear to 50, then diminishing (level 100 counts as 80)."""
     return level if level <= SOFT_LEVEL else SOFT_LEVEL + (level - SOFT_LEVEL) * SOFT_LEVEL_RATE
 
-def pit_xp_boost(avg_level: float) -> float:
-    """Pit rewards keep pace with the XP a level costs: x1 up to level 20, ~x2.3 at 60, ~x3.3 at 100."""
-    return max(1.0, (avg_level / 20) ** 0.75)
+PIT_RUNS_PER_LEVEL = 3.5          # Pit runs a COMMON party needs per level (rarer slimes need more, see pit_xp_per_run)
+PIT_RARITY_RUNS = 0.5            # each rarity step adds this share of PIT_RUNS_PER_LEVEL (legendary: x3)
+PIT_DEPTH_XP = {1: 0.6, 2: 0.8, 3: 1.0, 4: 1.3, 5: 1.7}   # deeper Pit depths pay more
+
+def pit_xp_per_run(mean_need: float, mean_rarity_index: float, depth: int) -> float:
+    """XP each survivor earns from a won Pit run: the XP a level costs spread over the runs it should take. Tying the reward
+    to the XP *need* (not the level) keeps the climb the same length for every rarity: a rarer slime needs fewer levels
+    for the same floor but each costs more, and the Pit pays accordingly."""
+    runs = PIT_RUNS_PER_LEVEL * (1 + PIT_RARITY_RUNS * mean_rarity_index)
+    return mean_need / runs * PIT_DEPTH_XP.get(depth, 1.0)
 
 XP_RARITY_MULT = {"common": 1, "uncommon": 2, "rare": 4, "epic": 8, "legendary": 16}   # doubles with every rarity
 # Class proficiency: how sharp a slime is at its original discipline (see attributes.capstones)
@@ -130,7 +152,6 @@ MAIN_FLOOR_TICKS = 3            # hours that pass per floor attempt
 GRIND_DEPTHS = 5                # depth 1..5 = enemies (party avg level - 2) .. (+2)
 GRIND_STAT_STEP = 0.12          # enemy stats +12% per level above the tier's base level
 GRIND_TIER_BASE_LEVEL = {1: 1, 2: 8, 3: 18}
-GRIND_XP_MULT = 0.35            # every survivor gets this share of the FULL wave XP (not split)
 GRIND_LOOT_MULT = 0.5           # little loot, no purple gel
 GRIND_TICKS = 2
 GRIND_MIN_HP = 0.4              # auto-grind stops when anyone drops below this HP fraction

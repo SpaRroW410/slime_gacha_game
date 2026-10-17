@@ -70,11 +70,12 @@ class TestEarningAndProficiency(unittest.TestCase):
     def test_fighting_builds_proficiency(self):
         g = rich(55)
         pid = party(g, strong=True)
-        s0 = members(g, pid)[0]
-        s0.class_prof = 40
+        for s in members(g, pid):
+            s.class_prof, s.prof_idle = 40, 5
         g.battle(pid, 1)
-        self.assertGreater(s0.class_prof, 40)
-        self.assertEqual(s0.prof_idle, 0)
+        gained = [s for s in members(g, pid) if s.class_prof > 40]
+        self.assertTrue(gained)                                   # whoever acted before the foes fell practised
+        self.assertTrue(all(s.prof_idle == 0 for s in gained))
 
     def test_state_survives_a_save(self):
         g = rich(56)

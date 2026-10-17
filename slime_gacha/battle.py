@@ -549,9 +549,8 @@ class BattleSystem:
             s.hp = max(1, s.hp)
             for el, n in c.casts.items():                      # casting builds elemental mastery
                 for b in elements.components(el):
-                    if b in s.attuned and elements.mastery_cap(s):
-                        top = config.MASTERY_XP[elements.mastery_cap(s) - 1]
-                        s.mastery_xp[b] = min(top, s.mastery_xp.get(b, 0) + n * config.MASTERY_PER_CAST_XP)
+                    if b in s.attuned:
+                        elements.add_mastery_xp(s, b, n * config.MASTERY_PER_CAST_XP)
             if c.uses:
                 s.class_prof = min(100.0, s.class_prof + min(config.PROF_BATTLE_CAP, c.uses * config.PROF_BATTLE_GAIN))
                 s.prof_idle = 0
@@ -736,10 +735,19 @@ KIND_HANDLERS: Dict[str, Callable] = {
 }
 
 
+def _rounds_to_win(allies, foes) -> float:
+    """Rough number of rounds the party needs to kill every foe (HP left over what the party hits for per round)."""
+    dps = sum(max(c.stat("atk"), 1.5 * c.stat("mag")) * 1.4 for c in allies if not c.minion) or 1.0
+    return sum(f.hp for f in foes) / dps
+
+
 def _utility_worth(bs, actor, ab, allies, foes) -> bool:
-    """Simple AI: is it worth spending this utility skill now?"""
+    """Simple AI: is it worth spending this utility skill now? Pure set-up skills (buffs, marks, debuffs) are skipped
+    when the fight will be over in a round or two: hitting is better than buffing."""
     t = ab.target
     names = {f[0] for f in ab.fx}
+    if names <= {"buff", "debuff", "mark", "rewrite", "oath"} and _rounds_to_win(allies, foes) < 2.5:
+        return False
     fallen = [c for c in bs._everyone if c.side == actor.side and not c.alive and not c.minion] if hasattr(bs, "_everyone") else []
     if "revive" in names:
         return bool(fallen)

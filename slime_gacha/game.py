@@ -2,6 +2,7 @@
 
 One `tick()` = one game hour. Everything time-based (needs, hunts, conflicts) advances here.
 """
+import re
 import json
 import math
 import time
@@ -79,6 +80,7 @@ class Game:
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
         self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
         self.conflicts.hook = self._social_hook
+        self.conflicts.together_fn = self._together
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
         self.best_floor = 0                            # deepest floor ever cleared by anyone
         self.descent_cleared = False                   # the final boss (floor 50) has fallen
@@ -344,13 +346,7 @@ class Game:
     def practise_discipline(s: Slime, discipline: str, own: float, other: float) -> None:
         """Training in a discipline: the class's own discipline feeds class proficiency, a hybrid's secondary one feeds
         its second proficiency, anything else is only a little general practice."""
-        if discipline == s.arch.discipline:
-            Game.practise(s, own)
-        elif s.spec and discipline == s.spec_disc:
-            s.spec_prof = min(100.0, s.spec_prof + own)
-            s.spec_idle = 0
-        elif other:
-            Game.practise(s, other)
+        attributes.practise(s, discipline, own, other)
 
     def _proficiency_day(self, events: List[str]) -> None:
         """A slime that stops practising its original discipline slowly loses its edge (and, in time, its pure capstones)."""
@@ -581,6 +577,14 @@ class Game:
         old, s.name = s.name, n
         return f"{old} is now called {n}."
 
+    def set_color(self, sid: int, color: str) -> str:
+        s = self.slime(sid)
+        c = (color or "").strip().lower()
+        if c and not re.fullmatch(r"#[0-9a-f]{6}", c):
+            raise InvalidAction("A colour looks like #5be0a0.")
+        s.color = c
+        return f"{s.name} {'takes on a new colour' if c else 'is back to its class colour'}."
+
     def rename_party(self, pid: int, name: str) -> str:
         p = self.parties.get(pid)
         n = self._clean_name(name)
@@ -630,6 +634,17 @@ class Game:
             return True                                    # one hunt, several parties: the Vice Keeper leads them all
         pv, ps = self.parties.party_of(v.id), self.parties.party_of(s.id)
         return pv is not None and pv is ps and (v.in_dungeon or v.state) == (s.in_dungeon or s.state)
+
+    def _together(self, a: Slime, b: Slime) -> bool:
+        """Do two slimes share a place? Both at home, or away together (same party doing the same thing, or one hunt group)."""
+        if not a.busy and not b.busy:
+            return True
+        if not (a.busy and b.busy):
+            return False
+        if a.hunt and b.hunt and a.hunt.group and a.hunt.group == b.hunt.group:
+            return True
+        pa = self.parties.party_of(a.id)
+        return pa is not None and pa is self.parties.party_of(b.id) and (a.in_dungeon or a.state) == (b.in_dungeon or b.state)
 
     # ---- party leaders ------------------------------------------------------------------
     def party_leader(self, pid: int) -> Optional[Slime]:
@@ -1050,6 +1065,20 @@ class Game:
                                      net=gain - 3 * grief))
             sugg.sort(key=lambda x: -x["net"])
         return dict(rows=rows, merges=sugg[:5])
+
+    def drill(self, sid: int, discipline: str, tier: int = 1) -> str:
+        """Send a slime to drill (sword / archery / magic) for proficiency. See AcademySystem.start_drill."""
+        return self.academy.start_drill(self.slime(sid), discipline, tier)
+
+    def drill_party(self, pid: int, discipline: str, tier: int = 1) -> List[str]:
+        self.academy.drill_tier(tier)                       # refuse early if the tier is locked
+        out = []
+        for s in self.party_members(pid):
+            try:
+                out.append(self.drill(s.id, discipline, tier))
+            except InvalidAction as e:
+                out.append(f"✋ {e}")
+        return out
 
     def study(self, sid: int, element: str) -> str:
         """Attune to / study a basic element at the Library (3-star+ slimes of ANY class)."""
@@ -2581,8 +2610,10 @@ class Game:
                 avg = sum(s.level for s in members) / len(members)
                 theme = dungeon.pit_theme(self.dungeon_seed, self.day)
                 enemies = dungeon.grind_wave(avg, depth, self.parties.size, self.rng, theme)
+                want = config.pit_xp_per_run(sum(s.xp_needed(s.level) for s in members) / len(members),
+                                             sum(config.RARITIES.index(s.rarity) for s in members) / len(members), depth)
                 rep = yield from self._battle_gen(members, enemies, permadeath=False, split_xp=False,
-                                                  xp_mult=config.GRIND_XP_MULT * config.pit_xp_boost(avg), terrain=theme.terrain)
+                                                  xp_mult=want / max(1.0, sum(e.xp for e in enemies)), terrain=theme.terrain)
                 rep.log.insert(0, f"🕳 The Gloop Pit - depth {depth} (enemy lvl ~{dungeon.grind_level(avg, depth)}) - "
                                   f"today: {theme.title}")
                 if n == 1 or theme.day != last_day:

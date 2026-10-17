@@ -33,7 +33,7 @@ def slime_view(g: Game, s) -> dict:
         id=s.id, name=s.name, archetype=s.archetype, class_name=a.name, emoji=a.emoji, title=s.title(),
         rarity=s.rarity, stars=s.stars, level=s.level, level_cap=s.level_cap, stage=s.stage,
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
-        is_vice=(s.id == g.vice), hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
+        is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
         mood=s.mood_label(), power=round(s.power_rating(), 1), power_mult=round(s.power_multiplier(), 2),
@@ -44,6 +44,7 @@ def slime_view(g: Game, s) -> dict:
         spells=list(s.spells), attuned=list(s.attuned),
         mastery={b: elements.basic_level(s, b) for b in s.attuned},
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
+        mastery_paused=(elements.stars_to_resume(s) if elements.mastery_paused(s) else None),
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
         feelings=[dict(key=k, name=emotions.EMOTIONS[k].name, emoji=emotions.EMOTIONS[k].emoji,
                        value=round(v), kind=emotions.EMOTIONS[k].kind) for k, v in
@@ -64,7 +65,9 @@ def slime_view(g: Game, s) -> dict:
                        for k in attributes.rarity_skills(s)],
         next_rarity_skill=(get_ability(attributes.RARITY_SKILLS[s.archetype][config.RARITIES.index(s.rarity)]).name
                            if s.rarity != "legendary" and s.archetype in attributes.RARITY_SKILLS else None),
-        prof=dict(value=round(s.class_prof), idle=s.prof_idle, earned=attributes.pure_earned(s), floor=config.PROF_FLOOR,
+        prof=dict(value=round(s.class_prof), idle=s.prof_idle,
+                  drill={d.key: [g.academy.drill_gain(s, d.key, i + 1) for i in range(len(config.DRILL_TIERS))]
+                         for d in sparring.DISCIPLINES}, earned=attributes.pure_earned(s), floor=config.PROF_FLOOR,
                   both=config.PROF_BOTH_CAPSTONES, one=config.PROF_ONE_CAPSTONE,
                   capstones=[dict(key=a.key, name=a.name, desc=a.description, usable=a.key in attributes.capstones(s),
                                   need=(config.PROF_ONE_CAPSTONE if i == 0 else config.PROF_BOTH_CAPSTONES))
@@ -168,7 +171,7 @@ def away_view(g: Game) -> list:
         if s.task and s.state == "studying":
             tasks.setdefault((s.task.get("kind", "study"), s.task.get("ticks_left", 0)), []).append(s.id)
     for (kind, left), ids in tasks.items():
-        out.append(item("study", f"📚 {str(kind).replace('_', ' ').title()}", ids, left))
+        out.append(item("study", "🥋 Drilling" if kind == "drill" else f"📚 {str(kind).replace('_', ' ').title()}", ids, left))
     for e in g.expeditions:
         ids = [i for i in e["ids"] if i in g.roster]
         if ids:
@@ -273,7 +276,11 @@ def snapshot(g: Game) -> dict:
         zones=[dict(key=z.key, name=z.name, duration=z.duration, danger=z.danger, desc=z.description,
                     rewards=z.rewards, purple=z.purple_chance) for z in ZONES],
         disciplines=[dict(key=d.key, name=d.name, emoji=d.emoji, style=d.style, perk=d.perk,
-                          desc=d.description) for d in sparring.DISCIPLINES],
+                          desc=d.description, feeds=[a.name for a in all_archetypes() if a.discipline == d.key])
+                     for d in sparring.DISCIPLINES],
+        drill=dict(base=config.PROF_DRILL, grounds=g.buildings.level("training_grounds"),
+                   tiers=[dict(tier=i + 1, name=t[0], needs=t[1], ticks=t[2], cost=t[3], mult=t[4], unlocked=g.buildings.level("training_grounds") >= t[1])
+                          for i, t in enumerate(config.DRILL_TIERS)]),
         elements=dict(basics=list(elements.BASICS),
                       list=[dict(key=e.key, name=e.name, emoji=e.emoji, tier=e.tier,
                                  components=sorted(e.components)) for e in elements.ELEMENTS],
@@ -736,6 +743,11 @@ def _rename_slime(g, a):
     return [g.rename_slime(_i(a, "id"), a.get("name", ""))], {}
 
 
+@command("set_color")
+def _set_color(g, a):
+    return [g.set_color(_i(a, "id"), str(a.get("color", "")))], {}
+
+
 @command("rename_party")
 def _rename_party(g, a):
     return [g.rename_party(_i(a, "pid"), a.get("name", ""))], {}
@@ -769,6 +781,16 @@ def _challenge_vice(g, a):
 @command("resolve_challenge")
 def _resolve_challenge(g, a):
     return g.resolve_challenge(bool(a.get("approve"))), {}
+
+
+@command("drill")
+def _drill(g, a):
+    return [g.drill(_i(a, "id"), str(a.get("discipline", "")), _i(a, "tier", 1))], {}
+
+
+@command("drill_party")
+def _drill_party(g, a):
+    return g.drill_party(_i(a, "pid"), str(a.get("discipline", "")), _i(a, "tier", 1)), {}
 
 
 @command("delve_next")

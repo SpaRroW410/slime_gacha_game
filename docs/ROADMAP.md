@@ -1,6 +1,6 @@
 # Roadmap & Checklist
 
-Legend: `[x]` done · `[ ]` todo
+Legend: `[x]` done · `[ ]` todo.  The remaining work is tracked task by task in [`TASKS.md`](TASKS.md); the floor-50 playtest is in [`PLAYTEST_F50.md`](PLAYTEST_F50.md).
 
 ## M0 — Foundations (docs & scaffolding)
 - [x] README
@@ -232,4 +232,11 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Hybrid signature upgrades and 9 hybrid capstones, second proficiency, drift from pure to hybrid - step 4 (60 skills complete)
 - [x] Rename slimes and parties; Vice Keeper (delegated mediation and care inside groups, never merge/destroy)
 - [x] Party leaders; Vice Keeper organises multi-party hunts and leads the group; challenges for the post (Keeper approves, duel decides)
+- [x] Quarrels only between slimes that share a place (both home, or one party away together); they wait while one is away
+- [x] Big colonies: Colony shows the top 10 as cards and the rest as a compact searchable list
+- [x] Training facility (solo drills in the Blade Yard / Archery Range / Mana Pool for class proficiency, no star requirement); mages, medics and necromancers pulled at 3+ stars; rarity ascension keeps earned elemental mastery (growth paused)
+- [x] Drill tiers (Basic / Advanced / Master) unlocked by the Training Grounds level
+- [x] UI: the slime icon (three dots in a triangle) is the menu button; compact one-row header and tabs stay pinned while scrolling
+- [x] Slime body shape follows rarity inside the round rarity ring (dome, eared, droplet, crowned, royal crown with halo)
+- [ ] Occupations: slimes work as Chef, Blacksmith, Trainer and more (next job-type feature; see TASKS #26)
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

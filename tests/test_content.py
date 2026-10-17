@@ -413,3 +413,22 @@ class TestDailyPit(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFloorThreatSmoothing(unittest.TestCase):
+    def test_every_floor_stays_inside_its_threat_band_for_any_seed_and_party_size(self):
+        from slime_gacha import config, dungeon
+        for seed in (1, 2, 3, 4, 5, 17, 99):
+            for size in (5, 10):
+                for f in range(1, dungeon.MAX_FLOOR + 1):
+                    info = dungeon.floor_info(seed, f, size)
+                    lo, hi = config.BOSS_THREAT_BAND if info.boss else config.FLOOR_THREAT_BAND
+                    r = dungeon.threat_ratio(info.enemies, f, size)
+                    self.assertTrue(lo * 0.97 <= r <= hi * 1.03, (seed, size, f, round(r, 2)))
+
+    def test_smoothing_keeps_the_enemy_mix_and_only_rescales_stats(self):
+        from slime_gacha import dungeon
+        i = dungeon.floor_info(7, 32, 5)
+        self.assertEqual(len(i.enemies), 5)
+        self.assertTrue(all(e.stats["hp"] >= 1 for e in i.enemies))
+        self.assertEqual(dungeon.floor_info(7, 32, 5).signature, i.signature)

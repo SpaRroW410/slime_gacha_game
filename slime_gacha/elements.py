@@ -98,7 +98,30 @@ def basic_level(slime, basic: str) -> int:
     """Mastery level in one basic element (0 if not attuned)."""
     if basic not in slime.attuned:
         return 0
-    return min(mastery_cap(slime), level_from_xp(slime.mastery_xp.get(basic, 0)))
+    return level_from_xp(slime.mastery_xp.get(basic, 0))      # kept even when the stars reset (see mastery_paused)
+
+
+def mastery_paused(slime) -> bool:
+    """True when earned mastery is above what the current stars allow (after a rarity ascension reset the stars):
+    the levels are kept and still work, but cannot grow until the stars catch up."""
+    return any(basic_level(slime, b) > mastery_cap(slime) for b in slime.attuned)
+
+
+def stars_to_resume(slime) -> int:
+    """Stars needed before mastery can grow again."""
+    top = max((basic_level(slime, b) for b in slime.attuned), default=0)
+    return max(config.MASTERY_MIN_STARS, -(-top // 2) + 1)
+
+
+def add_mastery_xp(slime, basic: str, amount: float) -> None:
+    """Grow one element's mastery up to the stars' cap; never lowers it, and does nothing while it is paused."""
+    cap = mastery_cap(slime)
+    if not cap:
+        return
+    top = config.MASTERY_XP[cap - 1]
+    cur = slime.mastery_xp.get(basic, 0)
+    if cur < top:
+        slime.mastery_xp[basic] = round(min(top, cur + amount), 2)
 
 
 def effective_mastery(levels: Dict[str, int], element: str) -> int:

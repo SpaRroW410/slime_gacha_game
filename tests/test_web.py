@@ -140,7 +140,7 @@ class TestCommands(unittest.TestCase):
         self.assertTrue(e["state"]["dungeon"]["delves"]["1"]["can_leave"])          # still at the entrance
         self.assertFalse(s.call("enter_dungeon", {"pid": 1, "start": 6})["ok"])
         self.assertTrue(e["state"]["parties"][0]["in_delve"])
-        self.assertFalse(s.call("rest", {"id": s.game.slimes()[0].id})["ok"])      # locked in
+        self.assertFalse(s.call("rest", {"id": s.game.party_members(1)[0].id})["ok"])      # locked in
         n = s.call("delve_next", {"pid": 1})
         self.assertTrue(n["ok"])
         self.assertTrue(n["result"]["battle"][0]["log"])

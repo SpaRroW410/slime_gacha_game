@@ -30,6 +30,8 @@ const onCouncil = () => S.tab === 'people' && sub('people') === 'council';
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ui = (k, d) => (S.ui[k] === undefined ? d : S.ui[k]);
 const kindTitle = () => ({ pit: 'The Gloop Pit', delve: 'The Hollow Descent', skirmish: 'Skirmish' })[S.state?.battle?.kind];
+/* The slime icon is the menu button: a slime body with three large dots in a triangle. */
+const SLIME_MENU = '<svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><defs><radialGradient id="sg" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#b9ffd9"/><stop offset="1" stop-color="#2fb878"/></radialGradient></defs><path d="M24 4C13 4 5 14 5 27c0 9 5 17 19 17s19-8 19-17C43 14 35 4 24 4z" fill="url(#sg)" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/><circle cx="24" cy="17" r="4.6" fill="#0d1f17"/><circle cx="16" cy="31" r="4.6" fill="#0d1f17"/><circle cx="32" cy="31" r="4.6" fill="#0d1f17"/></svg>';
 const manualOn = () => !!S.ui.manual;
 const cmdToggle = () => `<button class="btn small ${manualOn() ? 'primary' : ''}" data-act="toggle_manual" title="Fight turn by turn: every slime acts on its own turn. You can hand the fight back to the slimes at any time.">🎮 Take command: ${manualOn() ? 'ON' : 'off'}</button>`;
 const num = (x, d = 0) => { const n = parseInt(x, 10); return Number.isFinite(n) ? n : d; };
@@ -50,13 +52,13 @@ const chip = (t, c = '') => `<span class="chip ${c}">${t}</span>`;
 const badge = (t, c = '') => `<span class="badge ${c}">${t}</span>`;
 
 function avatar(s, cls = '') {
-  const c = CLASS_COLORS[s.archetype] || hashColor(s.archetype);
+  const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
-  return `<div class="blob ${s.rarity} ${st} ${cls}" style="--c:${c}"><i></i><i></i><span class="em">${s.emoji}</span></div>`;
+  return `<div class="blob ${s.rarity} ${st} ${cls}" style="--c:${c}"><div class="body"><i></i><i></i></div><span class="em">${s.emoji}</span></div>`;
 }
 function ghost(g) { // graveyard entry
   const c = CLASS_COLORS[g.archetype] || hashColor(g.archetype);
-  return `<div class="blob sm dead" style="--c:${c}"><i></i><i></i></div>`;
+  return `<div class="blob sm dead" style="--c:${c}"><div class="body"><i></i><i></i></div></div>`;
 }
 
 /* ---------------------------------------------------------------- persistence + api */
@@ -143,16 +145,17 @@ function render() {
   const stock = Object.entries(st.wallet).filter(([k, v]) => !CORE_RES.includes(k) && v > 0);
   app.innerHTML = `
   <header class="top">
-    <div class="logo"><span class="dot"></span>Slime Gacha</div>
-    <div class="res">${Object.entries(st.wallet).filter(([k]) => CORE_RES.includes(k)).map(([k, v]) => chip(`${RES[k]?.[0] || ''} <b>${v}</b>`, k === 'white_gel' ? 'white' : k === 'purple_gel' ? 'purple' : '')).join('')}
-      ${stock.length ? `<button class="chip chipbtn" data-act="stock" title="Materials, stones and herbs">🎒 ${stock.length}</button>` : ''}</div>
-    ${chip(`Day <b>${st.day + 1}</b> · ${String(st.tick % 24).padStart(2, '0')}:00`)}
-    ${clk.mode === 'live' ? chip(`⏱ live ×${clk.rate_now}`, 'info') : ''}
-    ${fp.available ? chip('🎁 free pull', 'ok') : ''}
-    ${st.stress >= 0.1 ? chip(`😖 ${st.stress}`, 'bad') : ''}
-    <span class="spacer"></span>
-    ${clk.mode === 'turn' ? `<div class="seg small"><button data-act="wait" data-h="1">+1h</button><button data-act="wait" data-h="4">+4h</button><button data-act="wait" data-h="24">+1 day</button></div>` : ''}
-    <button class="btn small" data-act="menu" title="Menu and settings">⋯</button>
+    <button class="menubtn" data-act="menu" aria-label="Menu and settings" title="Menu and settings">${SLIME_MENU}</button>
+    <div class="logo">Slime Gacha</div>
+    <div class="topscroll">
+      ${Object.entries(st.wallet).filter(([k]) => CORE_RES.includes(k)).map(([k, v]) => chip(`${RES[k]?.[0] || ''} <b>${v}</b>`, k === 'white_gel' ? 'white' : k === 'purple_gel' ? 'purple' : '')).join('')}
+      ${stock.length ? `<button class="chip chipbtn" data-act="stock" title="Materials, stones and herbs">🎒 ${stock.length}</button>` : ''}
+      ${chip(`Day <b>${st.day + 1}</b> · ${String(st.tick % 24).padStart(2, '0')}:00`)}
+      ${clk.mode === 'live' ? chip(`⏱ live ×${clk.rate_now}`, 'info') : ''}
+      ${fp.available ? chip('🎁 free pull', 'ok') : ''}
+      ${st.stress >= 0.1 ? chip(`😖 ${st.stress}`, 'bad') : ''}
+      ${clk.mode === 'turn' ? `<div class="seg small"><button data-act="wait" data-h="1">+1h</button><button data-act="wait" data-h="4">+4h</button><button data-act="wait" data-h="24">+1 day</button></div>` : ''}
+    </div>
   </header>
   ${S.stockOpen ? `<div class="popover" id="stockpop"><div class="row" style="gap:6px">${stock.map(([k, v]) => chip(`${RES[k]?.[0] || ''} ${RES[k]?.[1] || k}: <b>${v}</b>`)).join('')}</div></div>` : ''}
   <nav class="tabs">${TABS.map(([k, n]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-t="${k}">${n}${tabBadge(k)}</button>`).join('')}</nav>
@@ -248,7 +251,7 @@ function declutter() {
 function welcome() {
   const saved = loadLocal();
   return `<div class="welcome panel">
-    <div class="blob big"><i></i><i></i><span class="em">🟢</span></div>
+    <div class="blob big"><div class="body"><i></i><i></i></div><span class="em">🟢</span></div>
     <h1>Slime Gacha</h1>
     <p class="mute">Pick me up, little goo! Collect slimes, keep them fed and happy, send them hunting, and dare the Hollow Descent.<br>Slimes can die. Choose wisely.</p>
     <div class="stack">
@@ -272,7 +275,10 @@ function colony() {
     hp: (a, b) => a.hp / a.max_hp - b.hp / b.max_hp, name: (a, b) => a.name.localeCompare(b.name), morale: (a, b) => a.morale - b.morale };
   const filters = { all: () => true, free: (s) => !s.party, idle: (s) => s.state === 'idle' && !s.in_dungeon, wounded: (s) => s.hp < s.max_hp * 0.6,
     away: (s) => s.busy || s.state === 'hunting', needy: (s) => !!s.dominant };
-  const list = st.slimes.filter(filters[S.filter]).sort(sorters[S.sort]);
+  const q = String(ui('roster_q', '')).trim().toLowerCase();
+  const list = st.slimes.filter(filters[S.filter]).filter((s) => !q || `${s.name} ${s.class_name} ${s.rarity} ${s.title}`.toLowerCase().includes(q)).sort(sorters[S.sort]);
+  const TOP = 10;
+  const big = st.slimes.length > TOP;          // a big colony: ten cards, the rest as a compact list
   const opt = (obj, cur) => Object.entries(obj).map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('');
   return `<div class="row between" style="margin-bottom:10px">
     <h2>${st.slimes.length} slimes · ${st.rest.used}/${st.rest.cap} resting</h2>
@@ -280,7 +286,18 @@ function colony() {
       <label class="f">Sort <select data-sel="sort">${opt({ power: 'Power', level: 'Level', stars: 'Stars', rarity: 'Rarity', hp: 'Lowest HP', morale: 'Lowest morale', name: 'Name' }, S.sort)}</select></label>
       <label class="f">Show <select data-sel="filter">${opt({ all: 'All', free: 'Not in a party', idle: 'Available', wounded: 'Wounded', away: 'Away', needy: 'Needs something' }, S.filter)}</select></label>
     </div></div>
-  <div class="grid roster">${list.map(card).join('') || '<p class="mute">No slimes match.</p>'}</div>`;
+  ${big ? `<div class="row" style="margin-bottom:8px"><input type="search" data-ui="roster_q" data-rerender="1" value="${esc(ui('roster_q', ''))}" placeholder="Find a slime (name, class, rarity)" style="max-width:300px"><small class="mute">Showing the top ${Math.min(TOP, list.length)} by ${esc(S.sort)}; the rest are in the list below.</small></div>` : ''}
+  <div class="grid roster">${list.slice(0, big ? TOP : list.length).map(card).join('') || '<p class="mute">No slimes match.</p>'}</div>
+  ${big && list.length > TOP ? `<details class="rosmore" data-keep="moreOpen" ${ui('moreOpen', false) ? 'open' : ''}><summary><b>${list.length - TOP} more slimes</b> <small class="mute">(compact list)</small></summary>
+    <div class="slist">${list.slice(TOP).map(srow).join('')}</div></details>` : ''}`;
+}
+function srow(s) {
+  const a = awayOf(s.id);
+  const tag = s.in_dungeon ? `🕳 ${esc(s.in_dungeon)}` : s.state !== 'idle' ? esc(s.state) : '';
+  return `<div class="srow ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">${avatar(s, 'sm')}
+    <span class="sname">${s.is_vice ? '🎖 ' : ''}${esc(s.name)}</span><span class="smeta">${esc(s.class_name)} · ${s.stars}★ ${esc(s.rarity)} · Lv${s.level}</span>
+    <span class="shp">${bar(s.hp, s.max_hp, 'hp')}</span>
+    <span class="stag">${a ? `⏳ ${etaHtml(a)}` : tag}${s.party ? ` 👥 ${esc(partyById(s.party)?.name || '')}` : ''}${s.hp < s.max_hp * 0.4 ? ' 🩹' : ''}${s.dominant && !s.busy ? ' ❗' : ''}</span></div>`;
 }
 function card(s) {
   const b = [];
@@ -312,7 +329,7 @@ function drawer(s) {
   const dt = tabs.some(([k]) => k === S.dtab) ? S.dtab : 'overview';
   const body = { overview: dOverview, fight: dFight, mind: dMind, gear: dGear }[dt](s, ctx);
   return `<aside class="drawer">
-    <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button></h2><button class="btn small" data-act="closesel">✕</button></div>
+    <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button> <input type="color" class="colpick" data-colorid="${s.id}" value="${s.color || CLASS_COLORS[s.archetype] || '#5be0a0'}" title="Slime colour (ring colour stays with rarity)"> ${s.color ? `<button class="btn small" data-act="set_color" data-id="${s.id}" data-reset="1" title="Back to class colour">↺</button>` : ''}</h2><button class="btn small" data-act="closesel">✕</button></div>
     <div class="row" style="margin:8px 0">${avatar(s, 'big')}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
       <div class="mute">${s.state}${s.in_dungeon ? ' · inside ' + s.in_dungeon : ''} · mood ${s.mood}${s.party ? ' · 👥 ' + esc(partyById(s.party)?.name) : ''}</div></div></div>
     <div class="seg dtabs">${tabs.map(([k, n]) => `<button class="${dt === k ? 'on' : ''}" data-act="dtab" data-t="${k}">${n}</button>`).join('')}</div>
@@ -346,8 +363,8 @@ function dFight(s, { st, free }) {
   const el = (b) => {
     const e = st.elements.list.find((x) => x.key === b);
     const lv = s.mastery[b];
-    return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${s.mastery_cap}</b>` : '<span class="mute">not attuned</span>'}</span>
-      <button class="btn small" data-act="study" data-el="${b}" ${free && (lv !== undefined || s.attuned.length < s.element_slots) && lv !== s.mastery_cap ? '' : 'disabled'}>Study (${cost(st.library.study_cost)})</button></div>`;
+    return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${Math.max(s.mastery_cap, lv)}</b>` : '<span class="mute">not attuned</span>'}</span>
+      <button class="btn small" data-act="study" data-el="${b}" ${free && s.can_master && (lv === undefined ? s.attuned.length < s.element_slots : lv < s.mastery_cap) ? '' : 'disabled'}>Study (${cost(st.library.study_cost)})</button></div>`;
   };
   const sp = s.spells.map((k) => { const d = st.spell_defs[k]; return d ? badge(`${elName(d.element)} ${esc(d.name)}`, 'info') : ''; }).join(' ');
   return `${sect('Skills', 'Abilities come from the class (by level), evolution, specialization, rarity and learned spells.', `<p>${s.abilities.map((a) => badge((a.element ? elName(a.element) + ' ' : '') + esc(a.name), 'info')).join(' ')}</p>`)}
@@ -373,7 +390,7 @@ function dFight(s, { st, free }) {
       ${s.spec_options.length ? `<div class="stack">${s.spec_options.map((o) => `<div class="row between panel flat"><span>${o.emoji} <b>${esc(o.name)}</b> <small class="mute">via ${esc(o.style)} (lvl ${o.level})</small><br><small class="mute">${o.ok ? esc(o.desc) : esc(o.reason)}</small></span>
         <button class="btn small ${o.ok ? 'primary' : ''}" data-act="specialize" data-id="${s.id}" data-disc="${o.discipline}" data-n="${esc(s.name)}" data-spec="${esc(o.name)}" data-cost="${esc(cost(st.spec.cost))}" ${o.ok && free && st.wallet.white_gel >= (st.spec.cost.white_gel || 0) && st.wallet.essence >= (st.spec.cost.essence || 0) ? '' : 'disabled'}>Specialize</button></div>`).join('')}</div>` : ''}`)}
     ${sect('Fighting style', 'Trained in the Academy by sparring; each style gives permanent perks.', st.disciplines.map((d) => bar(s.style[d.key], 10, '', `${d.emoji} ${d.style}${s.discipline === d.key ? ' (class)' : ''}`, `L${s.style[d.key]}`)).join(''))}
-    ${sect('Elemental mastery', 'Unlocks at 3★ for any class.', s.can_master ? `<p class="mute">Attuned ${s.attuned.length}/${s.element_slots} · cap L${s.mastery_cap}</p><div class="stack">${st.elements.basics.map(el).join('')}</div><p>${sp || '<span class="mute">No spells learned.</span>'}</p>` : `<p class="mute">This slime is ${s.stars}★.</p>`)}`;
+    ${sect('Elemental mastery', 'Unlocks at 3★ for any class; earned levels are kept (on hold) if the stars reset.', s.can_master || s.attuned.length ? `<p class="mute">Attuned ${s.attuned.length}/${s.element_slots} · cap L${s.mastery_cap}</p>${s.mastery_paused ? `<p class="mute">⏸ Earned mastery is kept and still works, but it cannot grow until this slime has ${s.mastery_paused}★ again.</p>` : ''}<div class="stack">${st.elements.basics.map(el).join('')}</div><p>${sp || '<span class="mute">No spells learned.</span>'}</p>` : `<p class="mute">This slime is ${s.stars}★.</p>`)}`;
 }
 
 function dMind(s, { st, free, inDun }) {
@@ -412,7 +429,7 @@ function gacha() {
   const w = st.wallet;
   const b = (n, pay, label, cls) => `<button class="btn ${cls}" data-act="pull" data-n="${n}" data-pay="${pay}" ${w[pay] >= c * n ? '' : 'disabled'}>${label}<br><small>${c * n} ${RES[pay][0]}</small></button>`;
   return `<div class="panel well">
-    <div class="blob big"><i></i><i></i><span class="em">🎰</span></div>
+    <div class="blob big"><div class="body"><i></i><i></i></div><span class="em">🎰</span></div>
     <h2>The Last Gacha Well</h2>
     <p class="mute">Each pull wakes a slime. Odds: ${rates}. Stars 1–5 fall off exponentially (steeper for higher rarities).<br>⚪ White gel and 🟣 purple gel cost ${c} per pull — purple gel multiplies rare+ odds ×${r.purple_boost}.</p>
     <div class="row" style="justify-content:center;gap:12px">
@@ -588,6 +605,10 @@ function academy() {
     return `<select data-ui="${key}" ${extra}>${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} Lv${s.level} ${s.stars}★)</option>`).join('')}</select>`;
   };
   const avail = (s) => !s.busy && s.state !== 'hunting' && s.state !== 'studying';
+  const freeN = st.slimes.filter(avail).length;
+  const duelA = slimeSel('spa', avail, 'data-rerender="1"');
+  const duelB = slimeSel('spb', (s) => avail(s) && s.id != S.ui.spa, 'data-rerender="1"', 0);
+  const duelOk = freeN >= 2 && S.ui.spa && S.ui.spb && S.ui.spa != S.ui.spb;
   const lib = st.library;
   const scholars = st.slimes.filter((s) => s.can_master && avail(s));
   let lsid = num(ui('lib_s', scholars[0]?.id));
@@ -599,13 +620,30 @@ function academy() {
   const ra = ui('res_a', known[0]), rb = ui('res_b', known[1]);
   const nameOf = (k) => st.spell_defs[k]?.name || k;
   const tg = st.buildings.find((b) => b.key === 'training_grounds');
+  const dsl = slimeById(num(ui('dsl', st.slimes.find(avail)?.id)));
+  const yard = ui('yard', dsl?.discipline || 'sword');
+  const yd = st.disciplines.find((d) => d.key === yard) || st.disciplines[0];
+  const tiers = st.drill.tiers;
+  const tier = Math.min(num(ui('dtier', 1), 1), tiers.filter((t) => t.unlocked).length) || 1;
+  S.ui.dtier = tier;
+  const tr = tiers[tier - 1];
+  const dgain = dsl?.prof?.drill?.[yd.key]?.[tier - 1] || 0;
+  const trainingFacility = `<div class="panel stack"><h2>🥋 Training facility — proficiency</h2>
+    <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable) in the yard of its own discipline: the <b>Blade Yard</b> for sword classes, the <b>Archery Range</b> for rangers, the <b>Mana Pool</b> for casters. The Training Grounds level boosts it and unlocks stronger drills (Advanced at level 3, Master at level 5); a drill is worth less as a slime nears mastery. <b>No stars needed</b>: a slime that has just risen in rarity (back to one star) cannot study new elements at the Library, but it can still drill here.</p>
+    <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${yard === d.key ? 'sel' : ''}" data-act="yard" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><small class="mute" style="display:block">${esc(d.feeds.join(', '))}</small></div>`).join('')}</div>
+    <div class="row"><label class="f">Drill <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)} · ${t.ticks}h · ${esc(cost(t.cost))}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select></label></div>
+    <div class="row"><b>Slime:</b> ${slimeSel('dsl', avail)}<button class="btn primary" data-act="drill" ${dsl ? '' : 'disabled'}>${esc(tr.name)} (${tr.ticks}h)</button></div>
+    ${dsl ? `<small class="mute">${esc(dsl.name)}: ${dsl.prof ? `proficiency ${dsl.prof.value}` : ''} · ${dgain > 0 ? `this drill is worth about +${dgain}` : `the ${esc(yd.name)} is not their discipline: only a little general practice`}</small>` : ''}
+    <div class="row"><b>Party:</b> ${partyOptions('dppid')}<button class="btn" data-act="drill_party">Everyone drills</button></div></div>`;
   return `<div class="grid cols2">
+  ${trainingFacility}
   <div class="panel stack"><h2>⚔ Sparring — fighting styles</h2>
     <p class="mute">Training is not for XP. Slimes duel each other (non-lethal; the loser is left at <b>1 HP</b> — heal them at the Rest Area) to develop a <b>fighting style</b> with permanent combat perks. Costs ${cost(st.mercy.spar_cost)} per duel and ${st.mercy.train_ticks}h. Training Grounds L${tg.level}: ${esc(tg.now)}.</p>
     <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${arena === d.key ? 'sel' : ''}" data-act="arena" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><div class="sub">${esc(d.style)}</div><small class="mute">${esc(d.perk)}</small></div>`).join('')}</div>
-    <div class="row"><b>Duel:</b> ${slimeSel('spa', avail)} vs ${slimeSel('spb', (s) => avail(s), '', 1)}<button class="btn primary" data-act="spar">Spar</button></div>
+    <div class="row"><b>Duel:</b> ${duelA} vs ${duelB}<button class="btn primary" data-act="spar" ${duelOk ? '' : 'disabled'}>Spar</button></div>
     ${away ? `<small class="mute">${away} slime${away > 1 ? 's are' : ' is'} away (dungeon, hunt or study) and not listed.</small>` : ''}
-    <div class="row"><b>Party:</b> ${partyOptions('sppid')}<button class="btn" data-act="spar_party">Everyone spars</button></div></div>
+    <div class="row"><b>Party sparring:</b> ${partyOptions('sppid')}<button class="btn" data-act="spar_party" ${S.ui.sppid ? '' : 'disabled'}>Everyone spars</button></div>
+    <small class="mute">Party sparring: every member of a full, at-home party duels in pairs. One duel above is just two slimes.</small></div>
 
   <div class="panel stack"><h2>📚 Library</h2>
     <p class="mute">Elemental mastery unlocks at <b>3★ for any class</b> (mages get an extra element slot and study faster). Library spell slots: <b>${lib.slots}</b>${lib.tier3 ? '' : ' · Restricted Section (tier-3) needs Library L3'}.</p>
@@ -884,7 +922,7 @@ function giftPanel(pid) {
   S.ui['gift_s_' + pid] = mem.some((s) => s.id == gs) ? gs : mem[0]?.id; S.ui.gift_k = gk; S.ui.gift_g = gg;
   const price = gf.potion[gg - 1];
   const quarrel = st.conflicts.some((c) => p.members.includes(c.a) && p.members.includes(c.b));
-  return `<details class="gifts" ${S.ui.giftOpen ? 'open' : ''}><summary><b>🎁 Commander's gifts</b> <small class="mute">(purple gel ${purple} — the only way to reach them in here)</small></summary>
+  return `<details class="gifts" data-keep="giftOpen" ${S.ui.giftOpen ? 'open' : ''}><summary><b>🎁 Commander's gifts</b> <small class="mute">(purple gel ${purple} — the only way to reach them in here)</small></summary>
     <div class="row" style="margin:6px 0"><button class="btn small" data-act="gift" data-pid="${pid}" data-k="morale" ${purple >= gf.morale ? '' : 'disabled'} title="Raise the whole party's morale">💜 Morale +${gf.morale_gain} (${gf.morale})</button>
       <button class="btn small" data-act="gift" data-pid="${pid}" data-k="peace" ${purple >= gf.peace && quarrel ? '' : 'disabled'} title="Settle quarrels inside the party">🤝 Settle quarrels (${gf.peace})</button></div>
     <div class="row"><select data-ui="gift_s_${pid}">${mem.map((s) => `<option value="${s.id}" ${s.id == S.ui['gift_s_' + pid] ? 'selected' : ''}>${esc(s.name)} (${s.buffs.length}/${s.potion_slots})</option>`).join('')}</select>
@@ -1048,6 +1086,7 @@ const A = {
   scrap_gear: (d) => confirmThen(`Scrap one ${d.n} for ${d.y}?`, () => act('destroy_gear', { key: d.key, n: 1 })),
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
+  set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
   rename_party: (d) => { const n = window.prompt('New name for the party ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_party', { pid: num(d.pid), name: n }); },
   set_leader: (d) => act('set_leader', { pid: num(d.pid), id: num(S.ui['lead_' + d.pid]) }),
   vice_hunt: () => act('vice_hunt', { zone: S.ui.vh_zone, parties: num(S.ui.vh_n, 1) }),
@@ -1079,6 +1118,10 @@ const A = {
     confirmThen(`Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose XP, morale and gear.`, () => act('grind', { pid, depth, runs, manual: manualOn() }, { slow: !manualOn(), title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     act('skirmish', { pid, tier: num(ui('tier', 1), 1), manual: manualOn() }, { title: 'Skirmish' }); },
+  yard: (d) => { S.ui.yard = d.k; render(); },
+  drill: () => act('drill', { id: num(ui('dsl')), discipline: ui('yard', 'sword'), tier: num(ui('dtier', 1), 1) }),
+  drill_party: () => { const pid = num(ui('dppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
+    act('drill_party', { pid, discipline: ui('yard', 'sword'), tier: num(ui('dtier', 1), 1) }); },
   spar: () => { const a = num(ui('spa', S.state.slimes[0]?.id)), b = num(ui('spb', S.state.slimes[1]?.id)); act('spar', { a, b, discipline: ui('arena', 'sword') }, { title: 'Sparring match' }); },
   spar_party: () => { const pid = num(ui('sppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     act('spar_party', { pid, discipline: ui('arena', 'sword') }, { title: 'Sparring session', slow: true }); },
@@ -1121,6 +1164,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', async (e) => {
   const t = e.target;
   if (t.dataset.sel) { S[t.dataset.sel] = t.value; render(); return; }
+  if (t.dataset.colorid) { act('set_color', { id: num(t.dataset.colorid), color: t.value }); return; }
   if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); return; }
   if (t.dataset.actChange === 'stance' && S.sel) { act('stance', { id: S.sel, stance: t.value }); return; }
   if (t.hasAttribute('data-import') && t.files[0]) {
@@ -1130,7 +1174,7 @@ document.addEventListener('change', async (e) => {
   }
 });
 document.addEventListener('input', (e) => { const t = e.target; if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); } });
-document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('gifts')) S.ui.giftOpen = e.target.open; }, true);
+document.addEventListener('toggle', (e) => { const k = e.target.dataset && e.target.dataset.keep; if (k) S.ui[k] = e.target.open; }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.modal) A.closemodal(); else if (S.sel) A.closesel(); } });
 
 /* ---------------------------------------------------------------- boot */

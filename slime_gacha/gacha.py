@@ -71,6 +71,8 @@ class GachaSystem:
         traits = self.rng.sample(sorted(TRAITS), 2)
         if stars is None:
             stars = self.roll_stars(rarity)
+            if arch.key in config.SCHOLAR_CLASSES:       # the magic classes are scholars: never pulled below 3 stars
+                stars = max(stars, config.SCHOLAR_MIN_STARS)
         s = Slime(self.next_id, self._name(), arch.key, rarity, var, traits, stars)
         self.next_id += 1
         return s

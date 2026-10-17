@@ -136,7 +136,7 @@ def build() -> list:
                  ", ".join(f"{k - 1}>{k}: {v}" for k, v in c.STAR_ASCEND_STONES.items()) +
                  f" (common equivalents; {c.STONE_MERGE} stones merge into one of the next rarity)."),
             dict(name="XP needed per level", text="Doubles with each rarity: x" +
-                 ", x".join(f"{v:g} ({k})" for k, v in c.XP_RARITY_MULT.items()) + ". Stars do not change it. Above level 50 stats grow at 60% per level, and the Pit pays more XP the higher your party's level."),
+                 ", x".join(f"{v:g} ({k})" for k, v in c.XP_RARITY_MULT.items()) + ". Stars do not change it. The Pit pays by the XP a level costs: a common needs about 3.5 won runs per level, +50% per rarity step, and deeper depths pay more. Above level 50 stats grow at 60% per level, and the Pit pays more XP the higher your party's level."),
             dict(name="Merging", text=f"A donor's collected XP and {c.MERGE_STAT_SHARE:.0%} of its stats are absorbed; the share shrinks as an "
                                       f"attribute grows (down to {c.MERGE_SHARE_FLOOR:.0%}). The donor is consumed."),
             dict(name="Evolution", text="At the level cap a slime may evolve (costs essence) and raises its cap.")]),
@@ -158,8 +158,8 @@ def build() -> list:
                                            "(pick the ability, then the target). Switch to auto, for one turn or the rest of the fight, whenever you like. "
                                            "Rift, Quarry and sparring are always automatic."),
             dict(name="Scouting", text="Reach 100% of every targeted floor within the hour budget or the whole party is lost."),
-            dict(name="Quarrels away from home", text="While either slime is in a dungeon, hunting or studying, you cannot mediate (no talk, no snack): the quarrel "
-                                                       "keeps growing and is out of your hands until they return."),
+            dict(name="Quarrels away from home", text="Slimes only quarrel when they share a place: both at home, or away together in the same party. A quarrel waits (it does not "
+                                                       "grow) while one of them is away, and you cannot mediate it (no talk, no snack) until they are together again."),
             dict(name="Commander's gifts", text="Purple gel is the one way to reach a party inside the Hollow Descent or fighting a skirmish: "
                                                 f"{c.GIFT_MORALE_COST} gel raises the whole party's morale by {c.GIFT_MORALE_GAIN}, {c.GIFT_PEACE_COST} gel settles quarrels inside the party, "
                                                 f"and potions are bought and drunk at once for {'/'.join(map(str, c.GIFT_POTION_PURPLE))} gel (grades 1-5). "
@@ -181,6 +181,13 @@ def build() -> list:
             dict(name="Vice Keeper hunts and challenges", text=f"The Vice Keeper can organise a hunt: it forms up to {c.VICE_HUNT_MAX_PARTIES} full parties from free, rested slimes, joins and leads the first, "
                                                               "and acts for every party in that hunt. The parties disband when the hunt ends. Any 3-star slime can challenge the Vice Keeper "
                                                               "for the post (a proud, stronger slime may ask by itself); you approve or reject, and an approved challenge is settled in a friendly duel."),
+            dict(name="Training facility", text=f"Academy > Training facility: solo drills in the Blade Yard, Archery Range or Mana Pool raise a slime's class proficiency "
+                                                f"(base +{c.PROF_DRILL:g}, less near mastery, more with the Training Grounds). Tiers unlock with the Training Grounds: "
+                                                + "; ".join(f"{t[0]} (level {t[1]}, {t[2]}h, x{t[4]:g})" for t in c.DRILL_TIERS) + ". No stars are needed, so a slime that has just risen in rarity "
+                                                "and is back to one star can still drill (it just cannot study new elements until it has three stars again). Mages, Medics and Necromancers are always pulled at 3 stars or more, and a rarity ascension keeps their earned elemental mastery (it simply cannot grow until the stars catch up)."),
+            dict(name="Rarity shapes", text="A slime's silhouette shows its rarity inside a round ring: common is a plain dome, uncommon grows round ears (green ring), rare is a "
+                                             "droplet with a pointed tip (blue ring), epic wears a crown (purple ring), legendary a golden crown and halo (glowing gold ring)."),
+            dict(name="Slime colour", text="The ring around a slime always shows its rarity; the body colour is separate. By default it follows the class, but open a slime and use the colour swatch beside its name to pick any colour (the arrow resets it)."),
             dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),
