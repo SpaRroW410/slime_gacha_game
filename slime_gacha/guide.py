@@ -176,6 +176,11 @@ def build() -> list:
                                           "same dungeon or task) it can mediate quarrels and feed and tend slimes even where you cannot reach, and it settles "
                                           "quarrels by itself (at home it leaves serious ones to you). It never merges or destroys, and cannot be merged or "
                                           "destroyed while in office."),
+            dict(name="Party leaders", text=f"Every party has a leader: the one you set, else its highest-level member. A confident leader adds up to {c.LEADER_POWER:.0%} to the party's "
+                                            "synergy, and while the party is away (in a dungeon, on a hunt) the leader settles quarrels between members."),
+            dict(name="Vice Keeper hunts and challenges", text=f"The Vice Keeper can organise a hunt: it forms up to {c.VICE_HUNT_MAX_PARTIES} full parties from free, rested slimes, joins and leads the first, "
+                                                              "and acts for every party in that hunt. The parties disband when the hunt ends. Any 3-star slime can challenge the Vice Keeper "
+                                                              "for the post (a proud, stronger slime may ask by itself); you approve or reject, and an approved challenge is settled in a friendly duel."),
             dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),

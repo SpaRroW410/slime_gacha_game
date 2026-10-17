@@ -160,5 +160,161 @@ class TestViceKeeper(unittest.TestCase):
         self.assertFalse(se.call("rename_slime", dict(id=s.id, name=""))["ok"])
 
 
+class TestLeadersHuntsAndChallenges(unittest.TestCase):
+    def test_default_leader_is_the_highest_level_and_the_keeper_can_choose(self):
+        g = rich(81)
+        pid = party(g)
+        mem = members(g, pid)
+        for i, s in enumerate(mem):
+            s.level = 5 + i
+        self.assertEqual(g.party_leader(pid), mem[-1])
+        g.set_party_leader(pid, mem[0].id)
+        self.assertEqual(g.party_leader(pid), mem[0])
+        outsider = three_star(g)
+        with self.assertRaises(InvalidAction):
+            g.set_party_leader(pid, outsider.id)
+        self.assertEqual(Game.from_dict(g.to_dict()).party_leader(pid).id, mem[0].id)
+
+    def test_a_leader_adds_a_little_synergy_and_confidence_matters(self):
+        g = rich(82)
+        pid = party(g)
+        mem = members(g, pid)
+        g.set_party_leader(pid, mem[0].id)
+        mem[0].morale = 100
+        bonus = g._leader_bonus(mem)
+        self.assertGreater(bonus, 0)
+        self.assertLessEqual(bonus, config.LEADER_POWER)
+        mem[0].morale = 0
+        self.assertLess(g._leader_bonus(mem), bonus)
+        self.assertEqual(g._leader_bonus(mem[:2] + [three_star(g)]), 0.0)         # not one party
+
+    def test_a_party_leader_can_mediate_inside_a_dungeon_without_a_vice_keeper(self):
+        g = rich(83)
+        pid = party(g, strong=True)
+        mem = members(g, pid)
+        g.set_party_leader(pid, mem[0].id)
+        g.enter_dungeon(pid, 1)
+        a, b = mem[1], mem[2]
+        g.conflicts.conflicts.append(Conflict(id=5, a=a.id, b=b.id, severity=2, age=0, reason="t"))
+        self.assertIn("make up", g.mediate(5, "snack"))
+        old = config.LEADER_MEDIATE_CHANCE
+        config.LEADER_MEDIATE_CHANCE = 1.0
+        try:
+            g.conflicts.conflicts.append(Conflict(id=6, a=a.id, b=b.id, severity=2, age=0, reason="t"))
+            ev = []
+            g._leaders_tick(ev)
+        finally:
+            config.LEADER_MEDIATE_CHANCE = old
+        self.assertTrue(any("👑" in e for e in ev))
+
+    def test_the_vice_keeper_organises_a_multi_party_hunt_and_leads_it_all(self):
+        g = rich(84)
+        for _ in range(12):
+            s = g.gacha.make_slime("common", "barbarian", stars=1)
+            g.roster[s.id] = s
+            s.hp = s.max_hp
+        vice = three_star(g)
+        vice.hp = vice.max_hp
+        with self.assertRaises(InvalidAction):
+            g.vice_organize_hunt("meadow", 1)                    # nobody appointed
+        g.appoint_vice(vice.id)
+        out = g.vice_organize_hunt("meadow", 2)
+        self.assertIn("2 parties", out[0])
+        ps = [p for p in g.parties.parties.values() if p.temp]
+        self.assertEqual(len(ps), 2)
+        self.assertIn(vice.id, ps[0].members)
+        self.assertEqual(g.party_leader(ps[0].id).id, vice.id)
+        hunters = [g.roster[m] for p in ps for m in p.members]
+        self.assertTrue(all(h.state == "hunting" and h.hunt.group == g.hunt_group for h in hunters))
+        far = next(h for h in hunters if h.id not in ps[0].members)
+        self.assertTrue(g.vice_reaches(far))                     # the other party is under the Vice Keeper's lead too
+        # the hunt ends, the temporary parties disband
+        ev = []
+        for _ in range(30):
+            ev += g.tick(1)
+        self.assertFalse([p for p in g.parties.parties.values() if p.temp])
+        self.assertTrue(any("disbands" in e for e in ev))
+
+    def test_vice_hunt_needs_enough_free_slimes(self):
+        g = rich(85)
+        vice = three_star(g)
+        g.appoint_vice(vice.id)
+        with self.assertRaises(InvalidAction):
+            g.vice_organize_hunt("meadow", 1)
+
+    def test_challenge_needs_approval_and_a_duel_decides(self):
+        g = rich(86)
+        vice, rival = three_star(g), three_star(g, "barbarian")
+        with self.assertRaises(InvalidAction):
+            g.challenge_vice(rival.id)                           # no Vice Keeper yet
+        g.appoint_vice(vice.id)
+        weak = g.gacha.make_slime("common", "mage", stars=1)
+        g.roster[weak.id] = weak
+        with self.assertRaises(InvalidAction):
+            g.challenge_vice(weak.id)
+        with self.assertRaises(InvalidAction):
+            g.challenge_vice(vice.id)
+        g.challenge_vice(rival.id)
+        self.assertEqual(g.vice, vice.id)                        # nothing changes until the Keeper decides
+        with self.assertRaises(InvalidAction):
+            g.challenge_vice(rival.id)                           # one at a time
+        out = g.resolve_challenge(False)
+        self.assertIn("turn down", out[0])
+        self.assertIsNone(g.vice_challenge)
+        self.assertEqual(g.vice, vice.id)
+        g.challenge_vice(rival.id)
+        rival.level, vice.level = 40, 1                          # the duel is a real fight
+        out = g.resolve_challenge(True)
+        self.assertEqual(g.vice, rival.id)
+        self.assertIn("new Vice Keeper", out[-1])
+
+    def test_an_approved_challenge_waits_for_slimes_to_be_home(self):
+        g = rich(87)
+        vice, rival = three_star(g), three_star(g, "barbarian")
+        g.appoint_vice(vice.id)
+        g.challenge_vice(rival.id)
+        rival.in_dungeon = "grind"
+        with self.assertRaises(InvalidAction):
+            g.resolve_challenge(True)
+        self.assertIsNotNone(g.vice_challenge)                   # still pending
+        rival.in_dungeon = ""
+        del g.roster[rival.id]
+        with self.assertRaises(InvalidAction):
+            g.resolve_challenge(True)                            # the challenger is gone: it lapses
+        self.assertIsNone(g.vice_challenge)
+
+    def test_proud_stronger_slimes_may_ask_for_the_post_by_themselves(self):
+        g = rich(88)
+        vice, rival = three_star(g), three_star(g, "barbarian")
+        g.appoint_vice(vice.id)
+        vice.level, rival.level = 5, 20
+        rival.emotions["pride"] = 60
+        old = config.VICE_CHALLENGE_DAILY
+        config.VICE_CHALLENGE_DAILY = 1.0
+        try:
+            ev = []
+            g._vice_challenge_day(ev)
+        finally:
+            config.VICE_CHALLENGE_DAILY = old
+        self.assertEqual(g.vice_challenge["challenger"], rival.id)
+        self.assertTrue(any("challenges" in e for e in ev))
+
+    def test_web_commands_and_state(self):
+        se = Session()
+        se.new_game(89)
+        g = se.game
+        vice, rival = three_star(g), three_star(g, "barbarian")
+        pid = g.create_party("P").id
+        g.party_add(pid, vice.id)
+        se.call("appoint_vice", dict(id=vice.id))
+        r = se.call("set_leader", dict(pid=pid, id=vice.id))
+        self.assertTrue(r["ok"])
+        self.assertEqual(next(p for p in r["state"]["parties"] if p["id"] == pid)["leader"], vice.id)
+        r = se.call("challenge_vice", dict(id=rival.id))
+        self.assertEqual(r["state"]["vice_challenge"]["id"], rival.id)
+        r = se.call("resolve_challenge", dict(approve=False))
+        self.assertTrue(r["ok"] and r["state"]["vice_challenge"] is None)
+
+
 if __name__ == "__main__":
     unittest.main()

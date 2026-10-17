@@ -231,4 +231,5 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Pure capstones (12) with class proficiency and decay - step 3
 - [x] Hybrid signature upgrades and 9 hybrid capstones, second proficiency, drift from pure to hybrid - step 4 (60 skills complete)
 - [x] Rename slimes and parties; Vice Keeper (delegated mediation and care inside groups, never merge/destroy)
+- [x] Party leaders; Vice Keeper organises multi-party hunts and leads the group; challenges for the post (Keeper approves, duel decides)
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

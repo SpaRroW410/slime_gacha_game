@@ -31,6 +31,11 @@ VICE_MIN_STARS = 3
 VICE_MEDIATE_CHANCE = 0.3        # per hour, for each quarrel the vice keeper can reach
 VICE_FEED_BELOW = 25             # feeds a reachable slime that is this hungry
 NAME_MAX = 24
+LEADER_POWER = 0.03              # party synergy bonus from a good leader (scaled by the leader's morale)
+LEADER_MEDIATE_CHANCE = 0.15     # per hour, a party leader settles a quarrel inside the party while they are away
+VICE_HUNT_MAX_PARTIES = 3
+VICE_CHALLENGE_LEVEL_GAP = 3     # a slime must out-level the Vice Keeper by this much to challenge on its own
+VICE_CHALLENGE_DAILY = 0.1       # daily chance that such a proud slime asks
 # Commander's gifts (purple gel): the only way to reach a party that is inside the Descent, or in a skirmish
 GIFT_MORALE_COST = 1
 GIFT_MORALE_GAIN = 12

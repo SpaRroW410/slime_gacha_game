@@ -18,9 +18,11 @@ class Party:
     id: int
     name: str
     members: List[int] = field(default_factory=list)
+    leader: Optional[int] = None         # slime id; None = the highest-level member leads
+    temp: bool = False                   # formed by the Vice Keeper for a hunt: disbands when everyone is back
 
     def to_dict(self):
-        return dict(id=self.id, name=self.name, members=list(self.members))
+        return dict(id=self.id, name=self.name, members=list(self.members), leader=self.leader, temp=self.temp)
 
 
 class PartyManager:
@@ -75,6 +77,8 @@ class PartyManager:
     def load(self, d: dict, valid_ids) -> None:
         self.parties = {}
         for pd in d.get("parties", []):
-            self.parties[pd["id"]] = Party(pd["id"], pd["name"],
-                                           [i for i in pd["members"] if i in valid_ids])
+            members = [i for i in pd["members"] if i in valid_ids]
+            leader = pd.get("leader")
+            self.parties[pd["id"]] = Party(pd["id"], pd["name"], members, leader if leader in members else None,
+                                           bool(pd.get("temp", False)))
         self._next = d.get("next", max(self.parties, default=0) + 1)

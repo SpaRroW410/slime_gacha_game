@@ -157,10 +157,12 @@ def away_view(g: Game) -> list:
     hunts = {}
     for s in g.slimes():
         if s.hunt and s.state == "hunting":
-            hunts.setdefault((s.hunt.zone, s.hunt.ticks_left), []).append(s.id)
-    for (zone, left), ids in hunts.items():
+            hunts.setdefault((s.hunt.zone, s.hunt.ticks_left, s.hunt.group), []).append(s.id)
+    vice = g.vice_slime()
+    for (zone, left, group), ids in hunts.items():
         z = next((z for z in ZONES if z.key == zone), None)
-        out.append(item("hunt", f"🏹 Hunting: {z.name if z else zone}", ids, left))
+        lead = f" · led by 🎖 {vice.name}" if group and vice and vice.id in ids else ""
+        out.append(item("hunt", f"🏹 Hunting: {z.name if z else zone}{lead}", ids, left))
     tasks = {}
     for s in g.slimes():
         if s.task and s.state == "studying":
@@ -186,6 +188,7 @@ def snapshot(g: Game) -> dict:
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
                     synergy=round(g.party_synergy(p.id) - 1, 4) if len(p.members) > 1 else 0.0,
                     in_delve=p.id in g.delves, away=any(g.slime(i).busy for i in p.members),
+                    leader=(lambda l: l.id if l else None)(g.party_leader(p.id)), leader_set=p.leader is not None, temp=p.temp,
                     entry=(g.entry_options(p.id) if p.members else [1]),
                     min_progress=min((g.slime(i).progress for i in p.members), default=0))
                for p in g.parties.parties.values()]
@@ -193,6 +196,9 @@ def snapshot(g: Game) -> dict:
     return dict(
         away=away_view(g),
         vice=(lambda v: dict(id=v.id, name=v.name) if v else None)(g.vice_slime()), vice_min_stars=config.VICE_MIN_STARS,
+        vice_challenge=(lambda c: dict(id=c["challenger"], name=g.roster[c["challenger"]].name)
+                        if c and c["challenger"] in g.roster else None)(g.vice_challenge),
+        vice_hunt_max=config.VICE_HUNT_MAX_PARTIES,
         battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid")) if run else None),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
@@ -743,6 +749,26 @@ def _appoint_vice(g, a):
 @command("dismiss_vice")
 def _dismiss_vice(g, a):
     return [g.dismiss_vice()], {}
+
+
+@command("set_leader")
+def _set_leader(g, a):
+    return [g.set_party_leader(_i(a, "pid"), _i(a, "id"))], {}
+
+
+@command("vice_hunt")
+def _vice_hunt(g, a):
+    return g.vice_organize_hunt(str(a.get("zone", "")), _i(a, "parties", 1)), {}
+
+
+@command("challenge_vice")
+def _challenge_vice(g, a):
+    return [g.challenge_vice(_i(a, "id"))], {}
+
+
+@command("resolve_challenge")
+def _resolve_challenge(g, a):
+    return g.resolve_challenge(bool(a.get("approve"))), {}
 
 
 @command("delve_next")

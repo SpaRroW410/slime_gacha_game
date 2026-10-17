@@ -168,7 +168,7 @@ function render() {
 }
 function tabBadge(k) {
   const st = S.state;
-  if (k === 'people' && st.conflicts.length) return `<span class="n">${st.conflicts.length}</span>`;
+  if (k === 'people' && (st.conflicts.length || st.vice_challenge)) return `<span class="n">${st.conflicts.length + (st.vice_challenge ? 1 : 0)}</span>`;
   if (k === 'gacha' && st.free_pull.available) return '<span class="n">1</span>';
   if (k === 'dungeons' && Object.keys(st.dungeon.delves).length) return '<span class="n">!</span>';
   return '';
@@ -442,6 +442,9 @@ function parties() {
     <div class="grid cols2" style="margin-top:12px">${st.parties.map((p) => `<div class="panel">
       <div class="row between"><h3>${esc(p.name)} <button class="btn small" data-act="rename_party" data-pid="${p.id}" data-n="${esc(p.name)}" title="Rename">✏</button> ${p.in_delve ? badge('🕳 inside dungeon', 'bad') : ''}</h3>${chip(`${p.members.length}/${st.party_size}`, p.full ? 'ok' : 'warn')}</div>
       ${[...new Set(p.members.map(awayOf).filter(Boolean))].map((a) => `<div class="chip warn" style="margin-bottom:4px">${esc(a.label)} · ${etaHtml(a)}</div>`).join('')}
+      ${p.members.length ? `<div class="row" style="gap:6px">👑 <b>${esc(slimeById(p.leader)?.name || '—')}</b> <small class="mute">${p.leader_set ? 'leader (your choice)' : 'leader (highest level)'}</small>
+        ${!(p.in_delve || p.away) && p.members.length > 1 ? `<select data-ui="lead_${p.id}">${p.members.map((id) => `<option value="${id}" ${id === p.leader ? 'selected' : ''}>${esc(slimeById(id)?.name)}</option>`).join('')}</select><button class="btn small" data-act="set_leader" data-pid="${p.id}">Set leader</button>` : ''}
+        ${p.temp ? badge('hunt party', 'info') : ''}</div>` : ''}
       <div class="row" style="margin:6px 0">${p.members.map((id) => mini(id, !(p.in_delve || p.away))).join('') || '<small class="mute">Empty</small>'}</div>
       ${p.members.length > 1 ? `<p class="mute">Synergy <b class="${p.synergy >= 0 ? '' : ''}">${(p.synergy * 100).toFixed(1)}%</b> power (from average compatibility)</p>` : ''}
       <div class="row">
@@ -700,6 +703,27 @@ function bonds() {
 }
 
 /* ---------------------------------------------------------------- keeper (the player's skills) */
+function viceExtras(v) {
+  const st = S.state;
+  const zone = ui('vh_zone', st.zones[0]?.key), n = num(ui('vh_n', 1), 1);
+  S.ui.vh_zone = zone; S.ui.vh_n = n;
+  const rivals = st.slimes.filter((s) => s.stars >= st.vice_min_stars && !s.busy && s.id !== v.id);
+  let cur = ui('ch_pick', rivals[0]?.id);
+  if (!rivals.some((s) => s.id == cur)) cur = rivals[0]?.id;
+  S.ui.ch_pick = cur;
+  const vs = slimeById(v.id), hunting = vs && vs.busy;
+  const ch = st.vice_challenge;
+  return `<div class="panel flat stack"><b>🏹 Organise a hunt</b>
+      <small class="mute">${esc(v.name)} forms up to ${st.vice_hunt_max} full parties from the free, rested slimes and leads them all (joining the first). The parties disband when the hunt is over.</small>
+      <div class="row"><select data-ui="vh_zone">${st.zones.map((z) => `<option value="${z.key}" ${z.key === zone ? 'selected' : ''}>${esc(z.name)} (${z.duration}h)</option>`).join('')}</select>
+        <label class="f">Parties <select data-ui="vh_n">${[1, 2, 3].slice(0, st.vice_hunt_max).map((k) => `<option ${k === n ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
+        <button class="btn primary" data-act="vice_hunt" ${hunting ? 'disabled' : ''}>Send the hunt</button></div></div>
+    <div class="panel flat stack"><b>⚔ Challenge for the post</b>
+      ${ch ? `<div class="row between"><span>${esc(ch.name)} challenges ${esc(v.name)}. A friendly duel decides it if you approve.</span>
+          <span class="row"><button class="btn small primary" data-act="resolve_challenge" data-ok="1">Approve</button><button class="btn small" data-act="resolve_challenge" data-ok="0">Reject</button></span></div>`
+        : `<small class="mute">Any ${st.vice_min_stars}★+ slime can ask for the post. You must approve; then a non-lethal duel decides. Proud, stronger slimes may ask by themselves.</small>
+          <div class="row">${rivals.length ? `<select data-ui="ch_pick" data-rerender="1">${rivals.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} ${s.stars}★ Lv${s.level})</option>`).join('')}</select><button class="btn" data-act="challenge_vice">Challenge</button>` : '<small class="mute">No free challengers.</small>'}</div>`}</div>`;
+}
 function viceKeeperPanel() {
   const st = S.state, v = st.vice;
   const elig = st.slimes.filter((s) => s.stars >= st.vice_min_stars && !s.busy && !s.is_vice);
@@ -709,6 +733,7 @@ function viceKeeperPanel() {
   return `<div class="panel stack" style="margin-bottom:12px"><h2>🎖 Vice Keeper</h2>
     <p class="mute">A trusted slime (${st.vice_min_stars}★ or more) who stands in for you. In its own group it can <b>mediate, feed and tend</b> slimes even inside a dungeon where you cannot, and it settles quarrels by itself (serious ones at home are left to you). It holds most Keeper permissions, but <b>never merges or destroys</b>, and cannot itself be merged or destroyed while in office.</p>
     ${v ? `<div class="row between panel flat"><span>🎖 <b>${esc(v.name)}</b> is your Vice Keeper</span><button class="btn small" data-act="dismiss_vice">Step down</button></div>` : '<small class="mute">No Vice Keeper appointed.</small>'}
+    ${v ? viceExtras(v) : ''}
     <div class="row">${elig.length ? `<select data-ui="vice_pick" data-rerender="1">${elig.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} ${s.stars}★ Lv${s.level})</option>`).join('')}</select><button class="btn primary" data-act="appoint_vice">${v ? 'Replace' : 'Appoint'}</button>` : `<small class="mute">Nobody free with ${st.vice_min_stars}★ or more.</small>`}</div></div>`;
 }
 function keeper() {
@@ -1024,6 +1049,10 @@ const A = {
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
   rename_party: (d) => { const n = window.prompt('New name for the party ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_party', { pid: num(d.pid), name: n }); },
+  set_leader: (d) => act('set_leader', { pid: num(d.pid), id: num(S.ui['lead_' + d.pid]) }),
+  vice_hunt: () => act('vice_hunt', { zone: S.ui.vh_zone, parties: num(S.ui.vh_n, 1) }),
+  challenge_vice: () => { const id = num(S.ui.ch_pick); if (id) act('challenge_vice', { id }); },
+  resolve_challenge: (d) => act('resolve_challenge', { approve: d.ok === '1' }),
   appoint_vice: () => { const id = num(S.ui.vice_pick); if (id) confirmThen('Appoint this slime as Vice Keeper?\n\nIt can mediate, feed and tend slimes in its own group even inside a dungeon, and settles quarrels by itself. It cannot merge or destroy, and cannot itself be merged or destroyed while in office.', () => act('appoint_vice', { id })); },
   dismiss_vice: () => act('dismiss_vice', {}),
   toggle_manual: () => { S.ui.manual = !manualOn(); render(); },

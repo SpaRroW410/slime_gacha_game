@@ -57,9 +57,10 @@ class HuntAssignment:
     zone: str
     ticks_left: int
     total_ticks: int
+    group: int = 0                  # hunts organised together by the Vice Keeper share a group id
 
     def to_dict(self):
-        return dict(zone=self.zone, ticks_left=self.ticks_left, total_ticks=self.total_ticks)
+        return dict(zone=self.zone, ticks_left=self.ticks_left, total_ticks=self.total_ticks, group=self.group)
 
 
 class Slime:
