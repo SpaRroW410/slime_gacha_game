@@ -66,6 +66,9 @@ register_building(Building("chamber", "Destruction Chamber", "🔥", 5,
 register_building(Building("alchemy", "Alchemy Lab", "⚗️", 5,
                            "Slimes brew potions here. The lab level caps the potion grade (1-5).", _costs(85, 12)))
 
+register_building(Building("workshops", "Workshops", "🧰", 5,
+                           "Kitchens, forges and training halls: how many slimes can hold a job at once.", _costs(75, 10)))
+
 REST_HEAL = [0.30, 0.45, 0.60, 0.80, 1.00]       # fraction of max HP healed per hour, by level
 
 
@@ -104,10 +107,14 @@ class BuildingManager:
                                 f"{', Restricted Section open' if self.tier3_open(lv) else ''}"),
             "chamber": lambda: f"destroyed slimes yield x{ascension.chamber_factor(lv):.1f}",
             "alchemy": lambda: f"brews potions up to grade {lv}",
+            "workshops": lambda: f"{self.job_slots(lv)} slimes can work at once",
             "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",
             "barracks": lambda: (f"morale +{self.morale_target_bonus(lv)}, drift {self.morale_drift(lv):.2f}/h, "
                                  f"bonds x{self.bond_mult(lv):.2f}, synergy x{self.synergy_mult(lv):.2f}"),
         }.get(key, lambda: BUILDINGS.get(key).description)()
+
+    def job_slots(self, lv: int = None) -> int:
+        return 1 + (lv or self.level("workshops"))
 
     # ---- Rest Area ---------------------------------------------------------------
     def rest_capacity(self, lv: int = None) -> int:

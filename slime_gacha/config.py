@@ -208,6 +208,14 @@ REST_ENERGY_GAIN = 10
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
 # Library / mastery
 TASK_MIN_ENERGY = 25
+
+# ---- Occupations (jobs.py) ------------------------------------------------------------------
+JOB_XP_STEP = 5                # rounds of work for level 2; level n needs JOB_XP_STEP * (n-1)^2
+JOB_MAX_LEVEL = 10
+JOB_ENERGY_PER_HOUR = 0.5      # a working slime tires slowly (on top of normal decay)
+CHEF_GUESTS, CHEF_MEAL_SHARE = 2, 0.6      # hungry slimes fed per round (+1 per 3 levels); share of a Food item each gets
+SMITH_ITEMS, SMITH_MEND_SHARE = 3, 0.15    # items mended per round (+1 per 2 levels); share of max durability restored
+TRAINER_PUPILS, TRAINER_GAIN = 1, 3.0      # pupils per round (+1 per 4 levels); base class-proficiency gain
 MASTERY_MIN_STARS = 3           # elemental mastery unlocks at 3 stars, for ANY class
 MASTERY_XP = [20, 60, 120, 200, 320, 480, 700, 1000]     # cumulative xp for mastery level 1..8
 MASTERY_PER_CAST_XP = 1

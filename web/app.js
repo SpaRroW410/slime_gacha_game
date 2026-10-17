@@ -12,7 +12,7 @@ const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '�
   ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide']];
 const SUBS = {
   dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit'], ['rift', 'Rift & Quarry']],
-  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['sacrifice', 'Merge & destroy']],
+  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['workshops', 'Workshops'], ['sacrifice', 'Merge & destroy']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry'];
@@ -202,7 +202,7 @@ function etaHtml(a) {
     return `<span class="eta" data-sec="${a.real_sec}">${fmtSec(left)}</span>`;
   }
   if (a.hours != null) return `<span class="eta">${Math.ceil(a.hours)}h left</span>`;
-  return '<span class="eta">inside</span>';
+  return `<span class="eta">${a.kind === 'job' ? 'at work' : 'inside'}</span>`;
 }
 function awayBar() {
   const items = awayItems();
@@ -308,6 +308,7 @@ function card(s) {
   if (s.party) b.push(badge('👥 ' + esc(partyById(s.party)?.name || s.party)));
   if (s.hp < s.max_hp * 0.4) b.push(badge('wounded', 'warn'));
   if (s.grounded) b.push(badge('grounded', 'bad'));
+  if (s.job) b.push(badge(`${s.job.emoji} ${esc(s.job.name)}`, 'ok'));
   if (s.dominant && !s.busy) b.push(badge(WISH[s.dominant], 'warn'));
   if (s.feelings.length && s.feelings[0].value >= 40) b.push(badge(`${s.feelings[0].emoji} ${esc(s.feelings[0].name)}`, s.feelings[0].kind === 'bad' ? 'warn' : 'ok'));
   if (s.morale_label === 'broken') b.push(badge('broken morale', 'bad'));
@@ -584,6 +585,7 @@ function town() {
   const alch = '<div class="panel stack" style="margin-top:12px"><h2>⚗️', armory = '<div class="grid cols2" style="margin-top:12px">\n    <div class="panel stack"><h2>🛠️ Armory';
   let body;
   if (v === 'sacrifice') return subnav('town') + sacrificeView();
+  if (v === 'workshops') return subnav('town') + workshopsView();
   if (v === 'buildings') body = cut(all, null, alch);
   else if (v === 'alchemy') body = cut(all, alch, armory).replace('margin-top:12px', 'margin-top:0');
   else {
@@ -592,6 +594,29 @@ function town() {
     body = cut(all, armory, null) + `<div class="grid cols2" style="margin-top:12px">${relics.replace(/^\s*<div class="stack">/, '<div class="stack">')}`;
   }
   return subnav('town') + body;
+}
+function workshopsView() {
+  const st = S.state, j = st.jobs;
+  const workers = st.slimes.filter((s) => s.job);
+  const free = st.slimes.filter((s) => !s.busy && s.state !== 'sleeping' && !s.grounded && !s.is_vice);
+  let cur = ui('job_sl', free[0]?.id);
+  if (!free.some((s) => s.id == cur)) cur = free[0]?.id;
+  S.ui.job_sl = cur;
+  const jk = ui('job_k', j.list[0].key);
+  const full = j.used >= j.slots;
+  return `<div class="grid cols2">
+  <div class="panel stack"><h2>🧰 Workshops</h2>
+    <p class="mute">Not every slime is a fighter. Put gentle ones to work in town: no wages, just a useful colony. A working slime stays home (you can still feed and pet it) but is not free for parties, hunts or drills until you stop it; switching job is free, and each trade keeps its own level. Places: <b>${j.used}/${j.slots}</b> (upgrade the Workshops in Buildings).</p>
+    ${j.list.map((x) => `<div class="panel flat"><b>${x.emoji} ${esc(x.name)}</b> <small class="mute">a round every ${x.cycle}h · natural talent: ${x.talents.map(esc).join(', ')}</small><br><small>${esc(x.desc)}</small></div>`).join('')}
+    <div class="row">${free.length ? `<select data-ui="job_sl">${free.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)})</option>`).join('')}</select>
+      <select data-ui="job_k" data-rerender="1">${j.list.map((x) => `<option value="${x.key}" ${x.key === jk ? 'selected' : ''}>${x.emoji} ${esc(x.name)}</option>`).join('')}</select>
+      <button class="btn primary" data-act="assign_job" ${full ? 'disabled' : ''}>Put to work</button>` : '<small class="mute">Nobody is free.</small>'}</div>
+    ${full ? '<small class="mute">All places are taken: stop a worker or upgrade the Workshops.</small>' : ''}</div>
+  <div class="panel stack"><h2>👷 At work</h2>
+    ${workers.length ? workers.map((s) => `<div class="row between panel flat"><span>${avatar(s, 'sm')} <b>${esc(s.name)}</b> <small class="mute">${s.job.emoji} ${esc(s.job.name)} · level ${s.job_levels[s.job.key]}</small></span>
+      <span class="row"><select data-ui="jw_${s.id}">${j.list.map((x) => `<option value="${x.key}" ${x.key === s.job.key ? 'selected' : ''}>${x.emoji} ${esc(x.name)}</option>`).join('')}</select>
+      <button class="btn small" data-act="switch_job" data-id="${s.id}">Switch</button><button class="btn small danger" data-act="stop_job" data-id="${s.id}">Stop</button></span></div>`).join('') : '<p class="mute">Nobody works yet.</p>'}
+    <small class="mute">A worker who grows too tired leaves the job to sleep. Food is taken from the stores for the Chef's cooking and a worker's own meals.</small></div></div>`;
 }
 function people() {
   const v = sub('people');
@@ -1103,6 +1128,9 @@ const A = {
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
   set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
+  assign_job: () => { const id = num(S.ui.job_sl); if (id) act('assign_job', { id, job: S.ui.job_k || S.state.jobs.list[0].key }); },
+  switch_job: (d) => act('assign_job', { id: num(d.id), job: S.ui['jw_' + d.id] }),
+  stop_job: (d) => act('stop_job', { id: num(d.id) }),
   unground: (d) => act('unground', { id: num(d.id) }),
   rename_party: (d) => { const n = window.prompt('New name for the party ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_party', { pid: num(d.pid), name: n }); },
   set_leader: (d) => act('set_leader', { pid: num(d.pid), id: num(S.ui['lead_' + d.pid]) }),

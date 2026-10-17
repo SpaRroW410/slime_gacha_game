@@ -91,6 +91,10 @@ class NeedsEngine:
 
     def _autonomy(self, s, idle, events) -> None:
         n = s.needs
+        if s.state == "working" and n.get("food") < config.AUTO_EAT_BELOW and self.wallet.get("food") > 0:
+            self.wallet.spend("food", 1)
+            n.add("food", config.FOOD_NUTRITION)
+            events.append(f"{s.name} takes a meal break.")
         if s.state == "idle":
             if n.get("energy") < config.AUTO_SLEEP_BELOW:
                 s.state = "sleeping"

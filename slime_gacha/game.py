@@ -14,7 +14,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
+from . import jobs, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
@@ -319,6 +319,7 @@ class Game:
             self._reap(events)
             self.academy.tick(self.slimes(), events)
             self._reap(events)
+            jobs.tick(self, events)
             self._healer_aura(self.slimes(), events)
             self.conflicts.tick(self.slimes(), events)
             self._reap(events)
@@ -1065,6 +1066,13 @@ class Game:
                                      net=gain - 3 * grief))
             sugg.sort(key=lambda x: -x["net"])
         return dict(rows=rows, merges=sugg[:5])
+
+    def assign_job(self, sid: int, key: str) -> str:
+        """Put a slime to work in town (Chef, Blacksmith, Trainer). Switching jobs is free; places are limited by the Workshops."""
+        return jobs.assign(self, self.slime(sid), key)
+
+    def stop_job(self, sid: int) -> str:
+        return jobs.stop(self, self.slime(sid))
 
     def drill(self, sid: int, discipline: str, tier: int = 1) -> str:
         """Send a slime to drill (sword / archery / magic) for proficiency. See AcademySystem.start_drill."""

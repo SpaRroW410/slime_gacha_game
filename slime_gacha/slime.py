@@ -86,6 +86,9 @@ class Slime:
         self.prof_idle = 0                        # days since it last practised
         self.spec_prof = config.PROF_SPEC_START   # proficiency in the secondary discipline of a hybrid class
         self.spec_idle = 0
+        self.job = ""                             # occupation key while state == "working" (see jobs.py)
+        self.job_xp: Dict[str, int] = {}          # rounds of work done per occupation (kept when switching)
+        self.job_clock = 0                        # hours into the current round
         self.star_peak = 1                        # most stars it ever had: star attributes stay unlocked after a rarity ascension
         self.color = ""                           # body colour chosen by the keeper ("" = the class colour)
         self.pure_earned = False                  # earned the pure capstones (legendary, 5 stars, never specialized)
@@ -113,7 +116,7 @@ class Slime:
         self.spells: List[str] = []               # learned spell keys (max config.MAX_SPELLS)
         self.task: Optional[dict] = None          # active study / research assignment (Library)
         self.behavior = self.arch.default_behavior
-        self.state = "idle"            # idle | sleeping | hunting
+        self.state = "idle"            # idle | sleeping | hunting | studying | working | resting
         self.hunt: Optional[HuntAssignment] = None
         self.needs = Needs()
         self.hp = self.max_hp
@@ -205,7 +208,7 @@ class Slime:
     @property
     def busy(self) -> bool:
         """Away from the colony on a task (hunting or at the training grounds / library)."""
-        return self.state in ("hunting", "studying") or bool(self.in_dungeon)
+        return self.state in ("hunting", "studying", "working") or bool(self.in_dungeon)
 
     @property
     def alive(self) -> bool:
@@ -235,7 +238,7 @@ class Slime:
                     emotion_floor=self.emotion_floor, awareness=self.awareness, temperament=self.temperament,
                     proficiency=self.proficiency, weapon_memory=self.weapon_memory, in_dungeon=self.in_dungeon, progress=self.progress, exp=self.exp, spec=self.spec, spec_disc=self.spec_disc,
                     attuned=self.attuned, mastery_xp=self.mastery_xp, spells=self.spells,
-                    task=self.task, class_prof=round(self.class_prof, 2), prof_idle=self.prof_idle, pure_earned=self.pure_earned, color=self.color, star_peak=self.star_peak,
+                    task=self.task, class_prof=round(self.class_prof, 2), prof_idle=self.prof_idle, pure_earned=self.pure_earned, color=self.color, star_peak=self.star_peak, job=self.job, job_xp=dict(self.job_xp), job_clock=self.job_clock,
                     spec_prof=round(self.spec_prof, 2), spec_idle=self.spec_idle)
 
     @classmethod
@@ -243,7 +246,7 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak"):
+                  "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
             if k in d:
                 setattr(s, k, d[k])
         s.items = {k: Item.from_dict(v) for k, v in (d.get("items") or {}).items()}

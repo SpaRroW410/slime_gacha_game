@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -33,6 +33,8 @@ def slime_view(g: Game, s) -> dict:
         id=s.id, name=s.name, archetype=s.archetype, class_name=a.name, emoji=a.emoji, title=s.title(),
         rarity=s.rarity, stars=s.stars, level=s.level, level_cap=s.level_cap, stage=s.stage,
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
+        job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji) if s.job else None),
+        job_levels={k: jobs_mod.level(s, k) for k in jobs_mod.JOBS},
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
@@ -173,6 +175,10 @@ def away_view(g: Game) -> list:
             tasks.setdefault((s.task.get("kind", "study"), s.task.get("ticks_left", 0)), []).append(s.id)
     for (kind, left), ids in tasks.items():
         out.append(item("study", "🥋 Drilling" if kind == "drill" else f"📚 {str(kind).replace('_', ' ').title()}", ids, left))
+    for key, j in jobs_mod.JOBS.items():
+        ids = [s.id for s in jobs_mod.workers(g) if s.job == key]
+        if ids:
+            out.append(item("job", f"{j.emoji} Working: {j.name}", ids, None))
     for e in g.expeditions:
         ids = [i for i in e["ids"] if i in g.roster]
         if ids:
@@ -235,6 +241,9 @@ def snapshot(g: Game) -> dict:
                        max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
+        jobs=dict(slots=jobs_mod.slots(g), used=len(jobs_mod.workers(g)),
+                  list=[dict(key=j.key, name=j.name, emoji=j.emoji, cycle=j.cycle, desc=j.description, talents=list(j.talents))
+                        for j in jobs_mod.JOBS.values()]),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
         conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason,
                         away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
@@ -744,6 +753,16 @@ def _destroy_gear(g, a):
 @command("merge_gear")
 def _merge_gear(g, a):
     return [g.merge_gear(str(a.get("key", "")), str(a.get("into", "")))], {}
+
+
+@command("assign_job")
+def _assign_job(g, a):
+    return [g.assign_job(_i(a, "id"), str(a.get("job", "")))], {}
+
+
+@command("stop_job")
+def _stop_job(g, a):
+    return [g.stop_job(_i(a, "id"))], {}
 
 
 @command("rename_slime")
