@@ -334,12 +334,29 @@ class Game:
         s.class_prof = min(100.0, s.class_prof + amount)
         s.prof_idle = 0
 
+    @staticmethod
+    def practise_discipline(s: Slime, discipline: str, own: float, other: float) -> None:
+        """Training in a discipline: the class's own discipline feeds class proficiency, a hybrid's secondary one feeds
+        its second proficiency, anything else is only a little general practice."""
+        if discipline == s.arch.discipline:
+            Game.practise(s, own)
+        elif s.spec and discipline == s.spec_disc:
+            s.spec_prof = min(100.0, s.spec_prof + own)
+            s.spec_idle = 0
+        elif other:
+            Game.practise(s, other)
+
     def _proficiency_day(self, events: List[str]) -> None:
         """A slime that stops practising its original discipline slowly loses its edge (and, in time, its pure capstones)."""
         for s in self.slimes():
             if s.in_dungeon:                 # out fighting in a dungeon counts as practice
                 s.prof_idle = 0
+                s.spec_idle = 0
                 continue
+            if s.spec:
+                s.spec_idle += 1
+                if s.spec_idle > config.PROF_IDLE_DAYS and s.spec_prof > config.PROF_FLOOR:
+                    s.spec_prof = max(config.PROF_FLOOR, s.spec_prof - config.PROF_DECAY)
             s.prof_idle += 1
             if s.prof_idle > config.PROF_IDLE_DAYS and s.class_prof > config.PROF_FLOOR:
                 before = len(attributes.capstones(s))
@@ -635,7 +652,7 @@ class Game:
             if outlook.has(s, "spar"):
                 xp *= config.OUTLOOK_DUELIST_STYLE
             outlook.bump(s, "spar")
-            self.practise(s, config.PROF_SPAR_OWN if d.key == s.arch.discipline else config.PROF_SPAR_OTHER)
+            self.practise_discipline(s, d.key, config.PROF_SPAR_OWN, config.PROF_SPAR_OTHER)
             after = sparring.gain_style_xp(s, d.key, xp, cap)
             self.social.shift_morale(s, 2 + (2 if won else 0))
             note = f"+{xp:.0f} {d.style} xp"
@@ -780,8 +797,7 @@ class Game:
         """Attune to / study a basic element at the Library (3-star+ slimes of ANY class)."""
         s = self.slime(sid)
         msg = self.academy.start_study(s, element)
-        if s.arch.discipline == "magic":
-            self.practise(s, config.PROF_STUDY)
+        self.practise_discipline(s, "magic", config.PROF_STUDY, 0.0)
         return msg
 
     def learn_spell(self, sid: int, spell_key: str) -> str:
@@ -2252,6 +2268,7 @@ class Game:
         spec = specialization.check(s, discipline)
         self.wallet.spend_many(config.SPEC_COST)
         s.spec, s.spec_disc = spec.key, discipline
+        s.spec_prof, s.spec_idle = config.PROF_SPEC_START, 0
         s.hp = min(s.max_hp, s.hp + 5)
         s.needs.add("esteem", 25)
         self.social.shift_morale(s, 10)

@@ -9,6 +9,9 @@ An `Ability.fx` is a tuple of effect tuples, applied after the ability's main ef
   ("debuff", name, amount, turns)  crit_dmg, evasion, guard, resist, spell_power, lifesteal, regen: additive); debuff = minus
   ("rewrite", stat, value, turns)  the target's stat is *set* to value for a while (Edit Source); stat "best" = whichever
                                    of its attack / magic is higher; bosses are only affected for half as long
+  ("counter_self", turns, power)   the caster takes a counter stance
+  ("shield_self", mult)            the caster gains a shield
+  ("heal_lowest", share)           the most wounded ally heals `share` of the damage just dealt
   ("harvest", share)               after a drain: the party heals `share` of everything drained
   ("shield", mult)                 absorb damage worth mult x power x the caster's stat
   ("cleanse",)                     remove poison, bleed, stun and debuffs from the targets
@@ -42,7 +45,7 @@ from typing import List, Optional
 
 STAT_NAMES = ("atk", "mag", "defense", "spd")
 MOD_NAMES = ("crit_rate", "crit_dmg", "evasion", "guard", "resist", "spell_power", "lifesteal", "regen")
-SELF_ONLY = ("extra_turn", "oath")
+SELF_ONLY = ("extra_turn", "oath", "counter_self", "shield_self", "heal_lowest")
 
 
 def find(ab, name: str) -> Optional[tuple]:
@@ -155,6 +158,20 @@ def apply(bs, actor, ab, targets, everyone, log, cast_stat) -> None:
             if kind == "extra_turn":
                 actor.extra_turns += 1
                 log.append(f"  ⚡ {actor.name} is ready to act again!")
+            elif kind == "counter_self":
+                actor.counter = (f[1], f[2])
+                log.append(f"  ↩ {actor.name} takes a counter stance for {f[1]} turns.")
+            elif kind == "shield_self":
+                amt = max(1, int(f[1] * max(ab.power, 0.5) * cast_stat))
+                actor.shield += amt
+                log.append(f"  🔰 {actor.name} raises a {amt} point shield.")
+            elif kind == "heal_lowest":
+                hurt = [c for c in allies if not c.minion]
+                if hurt:
+                    low = min(hurt, key=lambda c: c.hp / c.max_hp)
+                    heal = int(sum(bs.last_hits.values()) * f[1])
+                    low.hp = min(low.max_hp, low.hp + heal)
+                    log.append(f"  💚 {low.name} is healed for {heal}.")
             elif kind == "oath":
                 actor.oath = f[1]
                 log.append(f"  🔥 {actor.name} swears an oath: +{f[1]:.0%} attack while badly hurt.")
@@ -285,3 +302,25 @@ def apply(bs, actor, ab, targets, everyone, log, cast_stat) -> None:
                 if foes_now:
                     from .battle import KIND_HANDLERS
                     KIND_HANDLERS[sub.kind](bs, c, sub, bs.choose_targets(c, sub, allies, foes_now), everyone, log)
+
+
+# ---- scaling (hybrid capstones are weaker than pure ones) -----------------------------------------------------
+_SCALED = {"bleed": (2,), "stun": (1,), "mark": (2,), "buff": (2,), "debuff": (2,), "shield": (1,), "revive": (1,),
+           "tithe": (1,), "harvest": (1,), "oath": (1,), "shield_self": (1,), "heal_lowest": (1,), "counter_self": (2,),
+           "counter": (2,)}
+
+
+def scale(ab, factor: float):
+    """A copy of `ab` at `factor` of its strength: power and the amounts of its effects shrink; durations stay."""
+    if abs(factor - 1.0) < 1e-9:
+        return ab
+    out = []
+    for f in ab.fx:
+        idx = _SCALED.get(f[0], ())
+        g = list(f)
+        for i in idx:
+            g[i] = round(g[i] * factor, 3)
+        if f[0] == "execute":
+            g[2] = round(1 + (f[2] - 1) * factor, 3)
+        out.append(tuple(g))
+    return replace(ab, power=round(ab.power * factor, 3), fx=tuple(out))

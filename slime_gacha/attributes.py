@@ -191,6 +191,30 @@ def capstones(slime) -> List[str]:
     return [first] if p >= config.PROF_ONE_CAPSTONE else []
 
 
+def hybrid_capstone(slime):
+    """The hybrid capstone's key once a specialized slime is legendary 5-star, else None."""
+    from .specialization import HYBRID_CAPSTONES
+    if slime.spec and slime.rarity == "legendary" and slime.stars >= config.MAX_STARS and slime.spec in HYBRID_CAPSTONES:
+        return HYBRID_CAPSTONES[slime.spec].key
+    return None
+
+
+def hybrid_keys(slime) -> set:
+    """Signature skill and capstone of the slime's hybrid class (what counts as practising the second discipline)."""
+    from .specialization import SPECS, HYBRID_CAPSTONES
+    out = set()
+    if slime.spec in SPECS:
+        out.add(SPECS[slime.spec].ability)
+    if slime.spec in HYBRID_CAPSTONES:
+        out.add(HYBRID_CAPSTONES[slime.spec].key)
+    return out
+
+
+def hybrid_scale(slime) -> float:
+    """Strength of the hybrid capstone: up to 60% of a pure one at full second-discipline proficiency, 30% at none."""
+    return round(config.HYBRID_CAPSTONE_MAX * (0.5 + 0.5 * slime.spec_prof / 100.0), 3)
+
+
 def evolution_skill(slime):
     """The class's signature skill for the slime's evolution stage (rank I at stage 1, rank II from stage 2), or None."""
     pair = EVOLUTION_SKILLS.get(slime.archetype)

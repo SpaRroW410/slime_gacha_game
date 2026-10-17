@@ -85,6 +85,10 @@ PROF_DECAY = 1.0               # lost per further idle day (never below PROF_FLO
 PROF_BATTLE_GAIN, PROF_BATTLE_CAP = 0.3, 4.0     # per action taken in a fight, at most per fight
 PROF_SPAR_OWN, PROF_SPAR_OTHER, PROF_STUDY = 3.0, 1.0, 3.0
 PROF_BOTH_CAPSTONES, PROF_ONE_CAPSTONE = 70.0, 30.0   # proficiency needed for both / for the first pure capstone
+# Hybrid (specialized) classes: a second proficiency in the secondary discipline scales the hybrid capstone
+PROF_SPEC_START = 30.0
+PROF_SPEC_BATTLE_GAIN = 0.5    # per hybrid skill used in a fight (capped by PROF_BATTLE_CAP)
+HYBRID_CAPSTONE_MAX = 0.6      # hybrid capstones reach at most this share of a pure capstone's strength
 STAR_LEVELS = {                                   # level needed to ascend to 2 / 3 / 4 / 5 stars: rarer slimes level slower, so they need fewer
     "common": [10, 30, 60, 100], "uncommon": [10, 25, 50, 80], "rare": [10, 20, 40, 65],
     "epic": [10, 15, 30, 50], "legendary": [10, 12, 22, 35]}

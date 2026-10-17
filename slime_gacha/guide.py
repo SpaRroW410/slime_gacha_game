@@ -168,6 +168,10 @@ def build() -> list:
                                                          f"proficiency (0-100): the first capstone needs {c.PROF_ONE_CAPSTONE:.0f}, the second {c.PROF_BOTH_CAPSTONES:.0f}. "
                                                          f"Fighting, sparring and (for magic classes) studying raise it; after {c.PROF_IDLE_DAYS} idle days it fades by "
                                                          f"{c.PROF_DECAY:g} a day (never below {c.PROF_FLOOR:.0f}), and the second capstone goes first."),
+            dict(name="Hybrid capstones", text=f"A specialized slime that reaches legendary 5-star gets one hybrid capstone, at no more than "
+                                               f"{c.HYBRID_CAPSTONE_MAX:.0%} of a pure capstone's strength (30% to 60% depending on its second proficiency, which grows "
+                                               f"from its hybrid skills and training in its secondary discipline). A slime that was pure first keeps its pure "
+                                               f"capstones only while it keeps practising its original discipline; neglect it and they lock, the second one first."),
             dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),

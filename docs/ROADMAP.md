@@ -229,5 +229,5 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Battle effect mechanics (bleed, stun, mark, shield, revive, delay, ...) - step 1 of the 60-skill plan
 - [x] 24 rarity skills rebuilt on the new mechanics + 6 evolution skills (rank II at the second evolution) - step 2
 - [x] Pure capstones (12) with class proficiency and decay - step 3
-- [ ] Hybrid skills and capstones, post-specialization drift (step 4)
+- [x] Hybrid signature upgrades and 9 hybrid capstones, second proficiency, drift from pure to hybrid - step 4 (60 skills complete)
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

@@ -121,7 +121,10 @@ class Combatant:
     extra_turns: int = 0
     acted: bool = False             # has acted this round
     last_ability: str = ""
-    uses: int = 0                   # actions taken this fight (class practice)
+    uses: int = 0                   # class-line actions taken this fight (class practice)
+    spec_uses: int = 0              # hybrid skills used this fight (second-discipline practice)
+    cap_scale: Dict[str, float] = field(default_factory=dict)   # ability key -> strength factor (hybrid capstones)
+    hybrid: frozenset = frozenset() # keys that count as hybrid practice
 
     @property
     def alive(self) -> bool:
@@ -200,6 +203,8 @@ class BattleSystem:
         return Combatant(s.name, s.arch.emoji, side, stats, float(s.hp),
                          s.known_abilities(), s.behavior, s.power_multiplier() * morale_f * synergy, s,
                          mastery={b: elements.basic_level(s, b) for b in s.attuned},
+                         cap_scale=({attributes.hybrid_capstone(s): attributes.hybrid_scale(s)} if attributes.hybrid_capstone(s) else {}),
+                         hybrid=frozenset(attributes.hybrid_keys(s)),
                          style=sparring.style_levels(s), morale=s.morale, mods=_merge_mods(_merge_mods(items_mod.battle_mods(s), attributes.battle_mods(s)), emods),
                          stamina=s.stamina, stamina_max=s.max_stamina, sta_regen=attributes.regen_per_round(s))
 
@@ -415,6 +420,7 @@ class BattleSystem:
         else:
             ability = self.choose_ability(actor, allies, foes)
             targets = self.choose_targets(actor, ability, allies, foes)
+        orig_key = ability.key
         if fx.find(ability, "copy"):                       # Stolen Spell: use the last skill a foe used
             seen = [c.last_ability for c in foes if c.last_ability and not fx.find(get_ability(c.last_ability), "copy")]
             if not seen:
@@ -431,8 +437,14 @@ class BattleSystem:
             if actor.winded:
                 log.append(f"  😮‍💨 {actor.emoji}{actor.name} is winded!")
             actor.stamina = max(0.0, actor.stamina - cost)
+        sc = actor.cap_scale.get(ability.key) or (actor.cap_scale.get(orig_key) if orig_key in actor.cap_scale else None)
+        if sc:
+            ability = fx.scale(ability, sc)
         actor.last_ability = ability.key
-        actor.uses += 1
+        if orig_key in actor.hybrid:
+            actor.spec_uses += 1
+        else:
+            actor.uses += 1
         delay = fx.find(ability, "delay")
         if delay and ability.kind in ("damage", "drain", "poison"):
             self.delayed.append(dict(round=self.round + delay[1], actor=actor, ability=fx.strip_delay(ability), targets=list(targets)))
@@ -540,8 +552,12 @@ class BattleSystem:
                     if b in s.attuned and elements.mastery_cap(s):
                         top = config.MASTERY_XP[elements.mastery_cap(s) - 1]
                         s.mastery_xp[b] = min(top, s.mastery_xp.get(b, 0) + n * config.MASTERY_PER_CAST_XP)
-            s.class_prof = min(100.0, s.class_prof + min(config.PROF_BATTLE_CAP, c.uses * config.PROF_BATTLE_GAIN))
-            s.prof_idle = 0
+            if c.uses:
+                s.class_prof = min(100.0, s.class_prof + min(config.PROF_BATTLE_CAP, c.uses * config.PROF_BATTLE_GAIN))
+                s.prof_idle = 0
+            if c.spec_uses:
+                s.spec_prof = min(100.0, s.spec_prof + min(config.PROF_BATTLE_CAP, c.spec_uses * config.PROF_SPEC_BATTLE_GAIN))
+                s.spec_idle = 0
             s.needs.add("energy", -10)
             s.needs.add("esteem", 10 if win else -6)
             survivors.append(s)

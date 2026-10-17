@@ -68,7 +68,13 @@ def slime_view(g: Game, s) -> dict:
                   both=config.PROF_BOTH_CAPSTONES, one=config.PROF_ONE_CAPSTONE,
                   capstones=[dict(key=a.key, name=a.name, desc=a.description, usable=a.key in attributes.capstones(s),
                                   need=(config.PROF_ONE_CAPSTONE if i == 0 else config.PROF_BOTH_CAPSTONES))
-                             for i, a in enumerate(attributes.PURE_CAPSTONES.get(s.archetype, ()))]),
+                             for i, a in enumerate(attributes.PURE_CAPSTONES.get(s.archetype, ()))],
+                  hybrid=(dict(value=round(s.spec_prof), idle=s.spec_idle, scale=round(attributes.hybrid_scale(s) * 100),
+                               capstone=(lambda k: dict(key=k, name=get_ability(k).name, desc=get_ability(k).description,
+                                                        usable=True)
+                                         if k else None)(attributes.hybrid_capstone(s)),
+                               name=(specialization.SPECS[s.spec].name if s.spec in specialization.SPECS else ""))
+                          if s.spec else None)),
         weapons=dict(memory=list(s.weapon_memory), slots=config.WEAPON_MEMORY, favourite=items_mod.favourite_family(s),
                      proficiency={f: dict(uses=s.proficiency.get(f, 0), level=items_mod.proficiency_level(s, f))
                                   for f in items_mod.FAMILIES if s.proficiency.get(f, 0) or f in s.weapon_memory}),
