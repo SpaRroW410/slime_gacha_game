@@ -236,6 +236,8 @@ ELEMENT_DISADVANTAGE = 0.7
 CAMP_HEAL_HOURS_MAX = 24
 CAMP_HEAL_PER_HOUR = 0.08       # share of max HP a sleeping party recovers per hour of camp
 CAMP_AMBUSH_BASE = 0.10         # per hour of camping inside the Descent (scaled by floor, cut by intel)
+CAMP_RELIEF_MAX = 0.5          # ambush chance falls by up to this share while another party closes in from below
+CAMP_RELIEF_REACH = 3          # ... starting this many floors below
 CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
 SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 240
 SCOUT_RATE = 0.10               # knowledge: k' = 100 - (100 - k) * exp(-RATE * skill * hours)

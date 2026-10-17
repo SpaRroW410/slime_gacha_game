@@ -247,6 +247,8 @@ def snapshot(g: Game) -> dict:
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
                                    boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
                                    knowledge=g._knowledge(d["floor"]),
+                                   camp_left=g.camp_left(pid), camp_limit=g.camp_limit(pid), relief=round(g.relief(pid), 2),
+                                   joinable=g.joinable(pid), callers=[s.id for s in g.callers(pid)], call_cost=g.call_cost(d["floor"]),
                                    ready_in=(max(0, d.get("ready_tick", 0) - g.tick_count) if g.live else 0),
                                    next_hours=dungeon.clear_hours(d["floor"], sum(s.level for s in g._members_in("main", pid)) / max(1, len(g._members_in("main", pid))), g._knowledge(d["floor"]), max(1, len(g._members_in("main", pid)))),
                                    members=[m.id for m in g._members_in("main", pid)])
@@ -801,7 +803,12 @@ def _drill_party(g, a):
 
 @command("delve_next")
 def _delve_next(g, a):
-    return _flow_result(g, "delve", g.delve_next(_i(a, "pid"), _manual(a)))
+    return _flow_result(g, "delve", g.delve_next(_i(a, "pid"), _manual(a), [int(x) for x in a.get("join", [])]))
+
+
+@command("call_reinforcements")
+def _call_reinforcements(g, a):
+    return [g.call_reinforcements(_i(a, "pid"), _i(a, "rid"))], {}
 
 
 @command("battle_act")

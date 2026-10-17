@@ -488,6 +488,18 @@ function partyOptions(key, fullOnly = true, includeDelve = false) {
   return list.length ? `<select data-ui="${key}" data-rerender="1">${list.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''}>${esc(p.name)} (${p.members.length}/${st.party_size})</option>`).join('')}</select>`
     : '<small class="mute">No party is free (full and at home). Make one in the Parties tab or wait for them to return.</small>';
 }
+function reinforcePanel(pid, v) {
+  const st = S.state;
+  const home = st.parties.filter((p) => p.full && !p.in_delve && p.members.every((id) => { const m = slimeById(id); return m && !m.busy; }));
+  const key = 'rf_' + pid;
+  let cur = ui(key, home[0]?.id);
+  if (!home.some((p) => p.id == cur)) cur = home[0]?.id;
+  S.ui[key] = cur;
+  const mage = slimeById(v.callers[0]);
+  return `<div class="row"><small class="mute">📯 ${esc(mage?.name)} can call a party to floor ${v.floor}:</small>
+    ${home.length ? `<select data-ui="${key}">${home.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+    <button class="btn small" data-act="call_reinforcements" data-pid="${pid}" ${st.wallet.purple_gel >= v.call_cost ? '' : 'disabled'}>Call · ${v.call_cost} 🟣</button>` : '<small class="mute">no party is free</small>'}</div>`;
+}
 function dungeonsAll() {
   const st = S.state, d = st.dungeon;
   const delves = Object.entries(d.delves);
@@ -511,9 +523,12 @@ function dungeonsAll() {
       ${v.ready_in > 0 ? `<div class="chip bad">⏱ busy — back in ~${Math.max(1, Math.round(v.ready_in / (S.state.clock.rate_now || 1) * 60))} real min</div>` : ''}
       <div class="row">${v.members.map((id) => mini(id)).join('')}</div>
       <div class="row" style="margin-top:6px"><button class="btn primary" data-act="delve_next" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight floor ${v.floor}</button>${cmdToggle()}
-        <input type="number" min="1" max="24" value="${camp}" data-ui="camp_h" style="width:70px"><button class="btn" data-act="delve_camp" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⛺ Camp (h)</button>
+        ${v.joinable.map((q) => `<button class="btn primary" data-act="delve_next" data-pid="${pid}" data-join="${q}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight together with ${esc(partyById(q)?.name)}</button>`).join('')}
+        <input type="number" min="1" max="24" value="${camp}" data-ui="camp_h" style="width:70px"><button class="btn" data-act="delve_camp" data-pid="${pid}" ${v.ready_in > 0 || v.camp_left <= 0 ? 'disabled' : ''}>⛺ Camp (h)</button>
         <button class="btn ${v.can_leave ? 'primary' : ''}" data-act="leave_dungeon" data-pid="${pid}" ${v.can_leave ? '' : 'disabled'} title="${v.can_leave ? 'Climb out' : 'Only possible at a checkpoint'}">🚪 Leave</button></div>
       ${v.can_leave ? '' : `<small class="mute">No way out until the boss of floor ${v.boss_floor} falls.</small>`}
+      <small class="mute" style="display:block">⛺ Camp time left on this floor: <b>${v.camp_left}h</b> of ${v.camp_limit}h (the floor number, stretched by how well it is scouted).${v.relief > 0 ? ` Ambushes are ${Math.round(v.relief * 50)}% less likely: another party is closing in from below.` : ''}</small>
+      ${v.callers.length ? reinforcePanel(+pid, v) : ''}
       ${giftPanel(+pid)}</div>`; }).join('')}
     <div class="row">${partyOptions('dpid')}
       ${entryParty ? `<label class="f">Start at floor <select data-ui="dstart">${entry.map((f) => `<option value="${f}" ${f === dstart ? 'selected' : ''}>${f}</option>`).join('')}</select></label>` : ''}
@@ -1097,7 +1112,8 @@ const A = {
   appoint_vice: () => { const id = num(S.ui.vice_pick); if (id) confirmThen('Appoint this slime as Vice Keeper?\n\nIt can mediate, feed and tend slimes in its own group even inside a dungeon, and settles quarrels by itself. It cannot merge or destroy, and cannot itself be merged or destroyed while in office.', () => act('appoint_vice', { id })); },
   dismiss_vice: () => act('dismiss_vice', {}),
   toggle_manual: () => { S.ui.manual = !manualOn(); render(); },
-  delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn() }, { title: 'The Hollow Descent' }),
+  delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn(), join: d.join ? [num(d.join)] : [] }, { title: 'The Hollow Descent' }),
+  call_reinforcements: (d) => { const rid = num(S.ui['rf_' + d.pid]); if (rid) act('call_reinforcements', { pid: num(d.pid), rid }); },
   battle_pick: (d) => { const b = S.state.battle; const ab = b?.abilities.find((a) => a.key === d.key); if (!ab) return;
     if (ab.target === 'enemy' || ab.target === 'ally') {
       const side = ab.target === 'enemy' ? 'foes' : 'party';
