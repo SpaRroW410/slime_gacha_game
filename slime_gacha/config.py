@@ -265,6 +265,8 @@ GEAR_RECOVERY_SYNERGY_SLOPE = 5.0       # chance = 0.5 + 5 * (party synergy - 1)
 GEAR_RECOVERY_MIN, GEAR_RECOVERY_MAX = 0.10, 0.95
 PIT_LOST_RECOVER = 0.15         # a later Pit victory may find one item left behind earlier
 GEAR_DROP_PIT, GEAR_DROP_MAIN = 0.15, 0.30
+PIT_LURE_COST = 1               # purple gel per Pit run for a lure ...
+PIT_LURE_XP, PIT_LURE_GEAR = 1.5, 3.0    # ... which brings out richer prey: x XP and x gear-drop chance
 
 # ---- Per-slime dungeon progress, exits, scouting by floor ---------------------------------
 # Every slime tracks the deepest floor it has CLEARED (`progress`). To enter floor f every member needs

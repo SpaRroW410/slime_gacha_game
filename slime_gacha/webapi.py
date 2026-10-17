@@ -254,7 +254,7 @@ def snapshot(g: Game) -> dict:
         dungeon=dict(
             best_floor=g.best_floor, boss_every=config.MAIN_BOSS_EVERY, floors=g.intel_report(),
             max_floor=dungeon.MAX_FLOOR, cleared=g.descent_cleared,
-            pit=_pit_view(g),
+            pit=dict(_pit_view(g), lure_cost=config.PIT_LURE_COST, lure_xp=config.PIT_LURE_XP, lure_gear=config.PIT_LURE_GEAR),
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
                                    boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
                                    knowledge=g._knowledge(d["floor"]),
@@ -877,7 +877,7 @@ def _scout(g, a):
 
 @command("grind")
 def _grind(g, a):
-    return _flow_result(g, "pit", g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)), manual=_manual(a)))
+    return _flow_result(g, "pit", g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)), manual=_manual(a), lure=bool(a.get("lure"))))
 
 
 @command("skirmish")

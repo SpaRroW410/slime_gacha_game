@@ -153,7 +153,8 @@ def build() -> list:
         dict(title="Dungeons and death", icon="🕳️", blurb="Where death is possible.", items=[
             dict(name="Hollow Descent", text="Permadeath. Floors in order; you may leave only after a boss floor. Every slime must have "
                                              "cleared the floors above."),
-            dict(name="Gloop Pit, Wayfarer's Rift, Starfall Quarry", text="Nobody dies. A knocked-out slime loses morale (and XP in the Pit) and its relics are battered."),
+            dict(name="Gloop Pit, Wayfarer's Rift, Starfall Quarry", text="Nobody dies. A knocked-out slime loses morale (and XP in the Pit) and its relics are battered. The Pit (XP) is run by a full party; the Rift (relics) and the Quarry (ascension stones) take any 1-5 slimes. Each has its own sub-tab in Dungeons."),
+            dict(name="Lures", text="A lure costs 1 purple gel per run. In the Wayfarer's Rift it multiplies the odds of rarer relics; in the Gloop Pit it draws richer prey: x1.5 XP and x3 chance of gear. If the purple gel runs out in a Pit session the remaining runs go without a lure."),
             dict(name="Take command", text="Hollow Descent, Gloop Pit and skirmishes can be fought by hand: every slime acts on its own turn "
                                            "(pick the ability, then the target). Switch to auto, for one turn or the rest of the fight, whenever you like. "
                                            "Rift, Quarry and sparring are always automatic."),

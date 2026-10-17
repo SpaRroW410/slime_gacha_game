@@ -2687,12 +2687,12 @@ class Game:
                 f"{get_ability(spec.ability).name}. {spec.description}")
 
     # ---- grinding dungeon: The Gloop Pit (committed session of N runs) -----------------------------
-    def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True, manual: bool = False):
+    def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True, manual: bool = False, lure: bool = False):
         """Commit the party to a Pit session (see _grind_gen). With manual=True it pauses for orders in every
         fight (returns None until the whole session ends); you can hand it back to the slimes at any time."""
-        return self._play(self._grind_gen(pid, depth, runs), "pit", manual, pid)
+        return self._play(self._grind_gen(pid, depth, runs, lure), "pit", manual, pid)
 
-    def _grind_gen(self, pid: int, depth: int = 3, runs: int = 1):
+    def _grind_gen(self, pid: int, depth: int = 3, runs: int = 1, lure: bool = False):
         """Commit the party to `runs` Pit fights at `depth` (enemy level = party average + depth - 3).
         Once in, they only leave when all runs are done or the whole party is knocked out; they camp (sleep,
         eat) between runs when hurt. A slime that goes down is not dead, but loses XP and morale and DROPS ITS
@@ -2726,13 +2726,21 @@ class Game:
                 for s in members:
                     if s.state in ("sleeping", "resting"):
                         s.state = "idle"
+                lured = False
+                if lure:                                        # 1 purple gel per run; the lure stops when the gel runs out
+                    if self.wallet.get("purple_gel") >= config.PIT_LURE_COST:
+                        self.wallet.spend("purple_gel", config.PIT_LURE_COST)
+                        lured = True
+                    else:
+                        lure = False
+                        res.summary.append("   (out of purple gel: no more lures)")
                 avg = sum(s.level for s in members) / len(members)
                 theme = dungeon.pit_theme(self.dungeon_seed, self.day)
                 enemies = dungeon.grind_wave(avg, depth, self.parties.size, self.rng, theme)
                 want = config.pit_xp_per_run(sum(s.xp_needed(s.level) for s in members) / len(members),
                                              sum(config.RARITIES.index(s.rarity) for s in members) / len(members), depth)
                 rep = yield from self._battle_gen(members, enemies, permadeath=False, split_xp=False,
-                                                  xp_mult=want / max(1.0, sum(e.xp for e in enemies)), terrain=theme.terrain)
+                                                  xp_mult=want * (config.PIT_LURE_XP if lured else 1.0) / max(1.0, sum(e.xp for e in enemies)), terrain=theme.terrain)
                 rep.log.insert(0, f"🕳 The Gloop Pit - depth {depth} (enemy lvl ~{dungeon.grind_level(avg, depth)}) - "
                                   f"today: {theme.title}")
                 if n == 1 or theme.day != last_day:
@@ -2757,7 +2765,7 @@ class Game:
                 self._drop_gear(downed, standing, members, "Gloop Pit", events)
                 self._ko_wear(downed, events)
                 if rep.victory:
-                    self._gear_drop(1 if depth <= 3 else 2, config.GEAR_DROP_PIT, events)
+                    self._gear_drop(1 if depth <= 3 else 2, config.GEAR_DROP_PIT * (config.PIT_LURE_GEAR if lured else 1.0), events)
                     self._stone_side_drop("grind", len(enemies), events)
                     self._herb_drop("grind", len(enemies), events, theme.terrain)
                     self._recover_pit_gear(members, events)

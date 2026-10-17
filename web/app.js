@@ -11,7 +11,7 @@ const WISH = { energy: 'needs sleep', food: 'is hungry', safety: 'feels unsafe (
 const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'],
   ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide']];
 const SUBS = {
-  dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit'], ['rift', 'Rift & Quarry']],
+  dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)']],
   town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['workshops', 'Jobs'], ['sacrifice', 'Merge & destroy']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
@@ -553,8 +553,9 @@ function dungeonsAll() {
       <div class="row">${partyOptions('gpid')}
         <label class="f">Depth <input type="range" min="1" max="${d.grind_depths}" value="${depth}" data-ui="depth" data-rerender="1"> <b>${depth}</b></label>
         <label class="f">Runs <input type="number" min="1" max="60" value="${runs}" data-ui="runs" style="width:70px"></label>
+        <button class="btn small ${ui('pit_lure', false) ? 'primary' : ''}" data-act="pit_lure" title="Richer prey: x${d.pit.lure_xp} XP and x${d.pit.lure_gear} gear drops">${ui('pit_lure', false) ? '✔ ' : ''}Lure (${d.pit.lure_cost} 🟣/run)</button>
         <button class="btn primary" data-act="grind">Commit</button>${cmdToggle()}</div>
-      <small class="mute">Depth 3 = enemies at your party's average level; 1 is easier, 5 is harder and pays more XP.</small></div>
+      <small class="mute">Depth 3 = enemies at your party's average level; 1 is easier, 5 is harder and pays more XP. A <b>lure</b> (${d.pit.lure_cost} 🟣 per run) draws richer prey: <b>×${d.pit.lure_xp} XP</b> and <b>×${d.pit.lure_gear} chance of gear</b>; it stops when the purple gel runs out.</small></div>
     <div class="panel stack"><h2>⚔ Skirmish</h2><p class="mute">One quick fight (permanent death applies). Tier 4 is a boss.</p>
       <div class="row">${partyOptions('kpid')}<select data-ui="tier">${[1, 2, 3, 4].map((t) => `<option ${t == tier ? 'selected' : ''}>${t}</option>`).join('')}</select><button class="btn" data-act="skirmish">Fight</button>${cmdToggle()}</div></div>
   </div></div>`;
@@ -572,8 +573,26 @@ function dungeons() {
   const left = cut(all, '<div class="panel stack"><h2>🕳', '  <div class="stack">\n    ' + scout);
   const scoutHtml = cut(all, scout, pit), pitHtml = cut(all, pit, skirm), skHtml = cut(all, skirm, null).replace(/<\/div><\/div>\s*$/, '</div>');
   const body = v === 'descent' ? `<div class="grid cols2"><div class="stack">${left}</div><div class="stack">${scoutHtml}${skHtml.endsWith('</div></div>') ? skHtml : skHtml + '</div>'}</div>`
-    : v === 'pit' ? `<div class="grid cols2">${pitHtml}</div>` : riftView();
+    : v === 'pit' ? `<div class="grid cols2">${pitHtml}</div>` : v === 'quarry' ? quarryView() : riftView();
   return subnav('dungeons') + body;
+}
+function slimePickRow(a) {
+  const st = S.state;
+  const sel = new Set((ui('adv_ids', []) || []).map(num));
+  return { sel, html: `<div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>` };
+}
+function quarryView() {
+  const st = S.state, a = st.gear.adventure;
+  const pick = slimePickRow(a);
+  return `<div class="grid cols2"><div class="panel stack"><h2>💎 The Starfall Quarry <small class="mute">(ascension stones)</small></h2>
+    <p class="mute">Same rules as the Rift: any <b>1–${a.max_party}</b> slimes may go, monsters are <b>one level above</b> the party average, nobody dies (a knocked-out slime loses morale and its relics are battered). The prize is <b>ascension stones</b> (and a little XP) instead of relics. There is no lure here.</p>
+    ${pick.html}
+    <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" style="width:70px"></label>
+      <button class="btn primary" data-act="quarry" ${pick.sel.size ? '' : 'disabled'}>💎 Quarry (${pick.sel.size}/${a.max_party})</button></div></div>
+  <div class="panel stack"><h2>💎 Ascension stones</h2>
+    <div class="row">${Object.entries(st.ascension.stones).map(([r, n]) => `<span class="chip ${r}">${RES['stone_' + r][0]} ${n}${n >= st.ascension.merge && r !== 'legendary' ? ` <button class="btn small" data-act="merge_stones" data-r="${r}">merge ${st.ascension.merge} → 1</button>` : ''}</span>`).join('')}</div>
+    <small class="mute">Total worth ${st.ascension.total} common stones. Stars cost ${Object.entries(st.ascension.star_stones).map(([k, v]) => `${k - 1}→${k}★: ${v}`).join(' · ')}. 100 stones of a rarity merge into 1 of the next. The 💎 <b>Starfall Quarry</b> drops stones (${Object.entries(st.ascension.rates).map(([k, v]) => `${k} ${v}%`).join(', ')}); other dungeons hide the odd common stone and boss hoards hold more. Destroying slimes in the 🔥 Chamber also yields stones.</small>
+  </div></div>`;
 }
 function riftView() {
   const all = riftAll();
@@ -741,16 +760,12 @@ function riftAll() {
   const equipped = st.slimes.flatMap((s) => Object.values(s.items).map((it) => ({ it, s })));
   const rates = Object.entries(a.rates).map(([k, v]) => `${k} ${v}%`).join(' · ');
   return `<div class="grid cols2">
-  <div class="panel stack"><h2>🧭 The Wayfarer's Rift</h2>
+  <div class="panel stack"><h2>🧭 The Wayfarer's Rift <small class="mute">(relics)</small></h2>
     <p class="mute">An adventure dungeon for <b>relics</b>. Any <b>1–${a.max_party}</b> slimes may go; monsters are <b>one level above</b> the party average (a smaller party meets fewer). Nobody dies, but a knocked-out slime loses morale and its relics are battered. Every win may drop a relic — odds are far harsher than the gacha: ${rates}. A <b>lure</b> (${a.lure_cost} 🟣 per run) multiplies the rare odds.</p>
     <div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>
     <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" style="width:70px"></label>
       <button class="btn small ${ui('adv_lure', false) ? 'primary' : ''}" data-act="adv_lure">${ui('adv_lure', false) ? '✔ ' : ''}Lure (🟣)</button>
-      <button class="btn primary" data-act="adventure" ${sel.size ? '' : 'disabled'}>🧭 Rift (${sel.size}/${a.max_party})</button>
-      <button class="btn" data-act="quarry" ${sel.size ? '' : 'disabled'} title="Starfall Quarry: ascension stones instead of relics">💎 Quarry</button></div>
-    <h4>💎 Ascension stones</h4>
-    <div class="row">${Object.entries(st.ascension.stones).map(([r, n]) => `<span class="chip ${r}">${RES['stone_' + r][0]} ${n}${n >= st.ascension.merge && r !== 'legendary' ? ` <button class="btn small" data-act="merge_stones" data-r="${r}">merge ${st.ascension.merge} → 1</button>` : ''}</span>`).join('')}</div>
-    <small class="mute">Total worth ${st.ascension.total} common stones. Stars cost ${Object.entries(st.ascension.star_stones).map(([k, v]) => `${k - 1}→${k}★: ${v}`).join(' · ')}. 100 stones of a rarity merge into 1 of the next. The 💎 <b>Starfall Quarry</b> drops stones (${Object.entries(st.ascension.rates).map(([k, v]) => `${k} ${v}%`).join(', ')}); other dungeons hide the odd common stone and boss hoards hold more. Destroying slimes in the 🔥 Chamber also yields stones.</small>
+      <button class="btn primary" data-act="adventure" ${sel.size ? '' : 'disabled'}>🧭 Rift (${sel.size}/${a.max_party})</button></div>
     <h4>Materials</h4><div class="row">${Object.entries(a.materials || st.gear.materials).map(([k, v]) => chip(`${RES[k][0]} ${RES[k][1]}: ${v}`)).join('')}</div>
     <small class="mute">Salvaging relics gives materials of their tier; the higher the level and stars, the more — and a better tier. Levelling needs materials of the relic's own tier. Star ascension (level 10) also needs Armory level ≥ the current star count; raising rarity needs ★5 Lv10 and Armory level 5.</small></div>
   <div class="stack"><div class="panel stack"><h2>🎒 Relic vault <small class="mute">(${st.gear.vault.length})</small></h2>
@@ -1089,6 +1104,7 @@ const A = {
   keeper_use: (d) => act('keeper_use', { key: d.key }),
   bud: (d) => confirmThen('Have a child? It costs ' + cost(S.state.family.bud_cost) + '.', () => act('bud', { a: num(d.a), b: num(d.b) })),
   autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
+  pit_lure: () => { S.ui.pit_lure = !ui('pit_lure', false); render(); },
   adv_lure: () => { S.ui.adv_lure = !ui('adv_lure', false); render(); },
   adv_toggle: (d) => { const ids = new Set((ui('adv_ids', []) || []).map(num)); const id = num(d.id); ids.has(id) ? ids.delete(id) : ids.add(id); S.ui.adv_ids = [...ids].slice(0, S.state.gear.adventure.max_party); render(); },
   adventure: () => { const ids = (ui('adv_ids', []) || []).map(num); const runs = num(ui('adv_runs', 5), 5);
@@ -1160,7 +1176,7 @@ const A = {
   specialize: (d) => confirmThen(`Specialize ${d.n} as a ${d.spec}? This is permanent and costs ${d.cost}.`, () => act('specialize', { id: num(d.id), discipline: d.disc })),
   grind: () => { const pid = num(ui('gpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const depth = num(ui('depth', 3), 3), runs = num(ui('runs', 5), 5);
     if (!pid) return toast('You need a full party.', true);
-    confirmThen(`Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose XP, morale and gear.`, () => act('grind', { pid, depth, runs, manual: manualOn() }, { slow: !manualOn(), title: 'The Gloop Pit' })); },
+    confirmThen(`Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose XP, morale and gear.`, () => act('grind', { pid, depth, runs, manual: manualOn(), lure: !!ui('pit_lure', false) }, { slow: !manualOn(), title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     act('skirmish', { pid, tier: num(ui('tier', 1), 1), manual: manualOn() }, { title: 'Skirmish' }); },
   yard: (d) => { S.ui.yard = d.k; render(); },

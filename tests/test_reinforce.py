@@ -119,3 +119,36 @@ class TestCall(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def strong_party(g):
+    pid = party(g, strong=True, name="L")
+    for s in members(g, pid):
+        s.level, s.xp = 40, 0                  # strong, but well below the level cap
+        s.hp = s.max_hp
+    return pid
+
+
+class TestPitLure(unittest.TestCase):
+    def test_lure_costs_purple_gel_per_run_and_adds_xp(self):
+        def run(lure):
+            g = rich(83)
+            pid = strong_party(g)
+            g.rng.seed(5)
+            gel = g.wallet.get("purple_gel")
+            res = g.grind(pid, 3, 2, lure=lure)
+            assert len(res.runs) == 2
+            return gel - g.wallet.get("purple_gel"), sum(s.total_xp for s in members(g, pid))
+        spent0, xp0 = run(False)
+        spent1, xp1 = run(True)
+        self.assertEqual(spent0, 0)
+        self.assertEqual(spent1, 2 * config.PIT_LURE_COST)
+        self.assertGreater(xp1, xp0)
+
+    def test_lure_stops_when_the_gel_is_gone(self):
+        g = rich(84)
+        pid = strong_party(g)
+        g.wallet.add("purple_gel", -g.wallet.get("purple_gel") + 1)
+        res = g.grind(pid, 3, 3, lure=True)
+        self.assertEqual(g.wallet.get("purple_gel"), 0)
+        self.assertTrue(any("out of purple gel" in l for l in res.summary))
