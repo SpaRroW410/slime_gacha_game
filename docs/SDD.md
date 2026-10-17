@@ -306,7 +306,7 @@ in-browser Pyodide build all call `Game`.
 25 essence. The spec is looked up by `(archetype, secondary)` first, then `(primary, secondary)`:
 Battlemage (sword+magic), Spellknight (magic+sword), Arcane Archer (archery+magic), Hexshot (magic+archery),
 Swashbuckler (sword+archery), Bulwark Archer (archery+sword), Battle Medic (medic+sword), Death Knight
-(necromancer+sword), Shadowcaster (rogue+magic). A spec adds stat shifts computed from the *pre-shift* stats
+(necromancer+sword), Shadowcaster (rogue+magic), Dawn Archer (medic+archery), Plague Archer (necromancer+archery), Nightstalker (rogue+archery). A spec adds stat shifts computed from the *pre-shift* stats
 (e.g. `mag += 0.5 · atk`), a signature ability, a new title, and affinity (×1.5 style xp) in both disciplines. It is
 permanent and stored on the slime (`spec`, `spec_disc`); `Slime.max_stats()` applies it after gear.
 

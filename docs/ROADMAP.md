@@ -126,7 +126,7 @@ Legend: `[x]` done · `[ ]` todo.  The remaining work is tracked task by task in
 - [x] Several parties can be inside at once and re-walk the same floors; boss bounty once per boss floor
 - [x] Scouting by floor range (1–10 floors): 100 % or the whole party is lost; hidden time variance; up-front supplies
 - [x] Per-floor knowledge (scouting, or having walked the floor) and staged intel
-- [x] Specialization: hybrid classes from cross-training (Battlemage and 8 more)
+- [x] Specialization: hybrid classes from cross-training (Battlemage and 11 more, incl. Dawn Archer, Plague Archer, Nightstalker)
 - [x] Outlook: experience shapes the slime (Duelist, Grinder, Delver, Pathfinder, Forager, Scholar)
 - [x] Save v7 with migration from v6; web UI + CLI updated
 - [x] 29 new tests

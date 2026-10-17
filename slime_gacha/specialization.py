@@ -55,6 +55,10 @@ _ab("holy_smite", "Smite", "drain", 1.3, "atk", "enemy", 2, "A blessed blow that
 _ab("soul_cleave", "Soul Cleave", "drain", 1.5, "atk", "enemy", 2, "Cuts the life out of a foe and wraps the knight in a shield.", 0, ("shield_self", 0.5))
 _ab("shadow_bolt", "Shadow Bolt", "damage", 1.8, "mag", "enemy", 2, "A knife of darkness that slows its target.", 0, ("debuff", "spd", 0.25, 2))
 
+_ab("mending_arrow", "Mending Arrow", "damage", 1.3, "mag", "enemy", 2, "A glowing arrow that heals the most wounded ally for part of the damage.", 0, ("heal_lowest", 0.6))
+_ab("plague_arrow", "Plague Arrow", "poison", 0.9, "mag", "enemy", 2, "A rotting arrow: poison that stacks and softens the foe's armor.", 3, ("stack",), ("debuff", "defense", 0.2, 3))
+_ab("silent_shot", "Silent Shot", "damage", 2.0, "atk", "enemy", 3, "An unseen shot from the dark: always crits a foe that has not acted yet.", 0, ("first_strike",), ("nomiss",))
+
 # hybrid capstones: defined at full strength, cast at up to HYBRID_CAPSTONE_MAX of it (config), less when the
 # second discipline is neglected (see attributes.hybrid_scale)
 HYBRID_CAPSTONES: Dict[str, Ability] = {}
@@ -67,6 +71,9 @@ for _spec, _a in dict(
     shieldbow=_ab("fortress_volley", "Fortress Volley", "damage", 1.6, "atk", "all_enemies", 5, "Fire from behind a fortress of shields.", 0, ("shield_self", 1.5)),
     battle_medic=_ab("martyrs_smite", "Martyr's Smite", "damage", 2.2, "atk", "enemy", 4, "Strike a foe; the most wounded ally heals for the damage dealt.", 0, ("heal_lowest", 1.0)),
     death_knight=_ab("soul_reaver", "Soul Reaver", "drain", 2.4, "atk", "enemy", 4, "Reap a foe's life and wrap the knight in a shield.", 0, ("shield_self", 0.8)),
+    dawn_archer=_ab("dawnfall_volley", "Dawnfall Volley", "damage", 1.5, "mag", "all_enemies", 5, "A volley of light on every foe; the most wounded ally heals for the damage dealt.", 0, ("heal_lowest", 0.8)),
+    plague_archer=_ab("pestilence_rain", "Pestilence Rain", "poison", 1.0, "mag", "all_enemies", 5, "Poisoned arrows rain on every foe: the poison stacks, spreads and bleeds.", 3, ("stack",), ("spread",), ("bleed", 3, 0.2)),
+    nightstalker=_ab("death_from_shadows", "Death from Shadows", "damage", 3.0, "atk", "enemy", 5, "An unseen killing shot that cannot miss and finishes anything weakened.", 0, ("nomiss",), ("execute", 0.4, 2.0)),
     shadowcaster=_ab("stolen_spell", "Stolen Spell", "utility", 0.0, "mag", "enemy", 5, "Copy the last skill a foe used, at the shadowcaster's strength.", 0, ("copy",)),
 ).items():
     HYBRID_CAPSTONES[_spec] = _a
@@ -89,6 +96,12 @@ register_spec(Spec("death_knight", "Death Knight", "💀⚔️", {"atk": ("mag",
                    "soul_cleave", "Necromancy with armor on."), cls=("necromancer", "sword"))
 register_spec(Spec("shadowcaster", "Shadowcaster", "🗡️🌑", {"mag": ("atk", 0.5), "spd": ("atk", 0.2)},
                    "shadow_bolt", "A rogue who steals spells."), cls=("rogue", "magic"))
+register_spec(Spec("dawn_archer", "Dawn Archer", "💚🏹", {"atk": ("mag", 0.4), "spd": ("mag", 0.2)},
+                   "mending_arrow", "A healer whose arrows mend."), cls=("medic", "archery"))
+register_spec(Spec("plague_archer", "Plague Archer", "☠️🏹", {"atk": ("mag", 0.5)},
+                   "plague_arrow", "Necromancy at range: every arrow rots."), cls=("necromancer", "archery"))
+register_spec(Spec("nightstalker", "Nightstalker", "🌑🏹", {"spd": ("atk", 0.4), "mag": ("atk", 0.3)},
+                   "silent_shot", "A rogue who kills from the dark."), cls=("rogue", "archery"))
 
 
 def primary_discipline(slime) -> str:

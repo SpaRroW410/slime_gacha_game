@@ -12,7 +12,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
   *Done when:* met; `tests/test_economy.py` pins the rule and the < 200 hour ceiling.
 
 ## Gameplay
-- [ ] **2. More specialization paths** — three-way hybrids, evolving specializations, slimes asking for jobs.  *Done when:* at least two new hybrid paths exist with skills and capstones, tested.
+- [x] **2. More specialization paths** — three new class paths into archery, each with a signature skill and a capstone: Medic+archery = Dawn Archer, Necromancer+archery = Plague Archer, Rogue+archery = Nightstalker (12 hybrids now). Three-way hybrids, evolving specializations and slimes asking for jobs are left as later ideas.  *Done when:* met; `tests/test_hybrids.py` covers resolution, skills and capstones.
 - [ ] **3. Spell mutation** — fused spells evolve with mastery (effects from `fx.py`).  *Done when:* a researched spell changes form at set mastery levels, with UI.
 - [ ] **4. Enemy resistances and elemental floors** — several resistances per enemy; floors that favour specific elements.  *Done when:* bestiary, intel text and Guide show them; elemental floors playable.
 - [ ] **5. Floor modifiers and shops between floors** — poison fog, darkness, a shop or rest stop between floors.  *Done when:* modifiers use fx statuses and scouting reveals them.
