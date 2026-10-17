@@ -360,8 +360,8 @@ function dFight(s, { st, free }) {
   const el = (b) => {
     const e = st.elements.list.find((x) => x.key === b);
     const lv = s.mastery[b];
-    return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${s.mastery_cap}</b>` : '<span class="mute">not attuned</span>'}</span>
-      <button class="btn small" data-act="study" data-el="${b}" ${free && (lv !== undefined || s.attuned.length < s.element_slots) && lv !== s.mastery_cap ? '' : 'disabled'}>Study (${cost(st.library.study_cost)})</button></div>`;
+    return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${Math.max(s.mastery_cap, lv)}</b>` : '<span class="mute">not attuned</span>'}</span>
+      <button class="btn small" data-act="study" data-el="${b}" ${free && s.can_master && (lv === undefined ? s.attuned.length < s.element_slots : lv < s.mastery_cap) ? '' : 'disabled'}>Study (${cost(st.library.study_cost)})</button></div>`;
   };
   const sp = s.spells.map((k) => { const d = st.spell_defs[k]; return d ? badge(`${elName(d.element)} ${esc(d.name)}`, 'info') : ''; }).join(' ');
   return `${sect('Skills', 'Abilities come from the class (by level), evolution, specialization, rarity and learned spells.', `<p>${s.abilities.map((a) => badge((a.element ? elName(a.element) + ' ' : '') + esc(a.name), 'info')).join(' ')}</p>`)}
@@ -387,7 +387,7 @@ function dFight(s, { st, free }) {
       ${s.spec_options.length ? `<div class="stack">${s.spec_options.map((o) => `<div class="row between panel flat"><span>${o.emoji} <b>${esc(o.name)}</b> <small class="mute">via ${esc(o.style)} (lvl ${o.level})</small><br><small class="mute">${o.ok ? esc(o.desc) : esc(o.reason)}</small></span>
         <button class="btn small ${o.ok ? 'primary' : ''}" data-act="specialize" data-id="${s.id}" data-disc="${o.discipline}" data-n="${esc(s.name)}" data-spec="${esc(o.name)}" data-cost="${esc(cost(st.spec.cost))}" ${o.ok && free && st.wallet.white_gel >= (st.spec.cost.white_gel || 0) && st.wallet.essence >= (st.spec.cost.essence || 0) ? '' : 'disabled'}>Specialize</button></div>`).join('')}</div>` : ''}`)}
     ${sect('Fighting style', 'Trained in the Academy by sparring; each style gives permanent perks.', st.disciplines.map((d) => bar(s.style[d.key], 10, '', `${d.emoji} ${d.style}${s.discipline === d.key ? ' (class)' : ''}`, `L${s.style[d.key]}`)).join(''))}
-    ${sect('Elemental mastery', 'Unlocks at 3★ for any class.', s.can_master ? `<p class="mute">Attuned ${s.attuned.length}/${s.element_slots} · cap L${s.mastery_cap}</p><div class="stack">${st.elements.basics.map(el).join('')}</div><p>${sp || '<span class="mute">No spells learned.</span>'}</p>` : `<p class="mute">This slime is ${s.stars}★.</p>`)}`;
+    ${sect('Elemental mastery', 'Unlocks at 3★ for any class; earned levels are kept (on hold) if the stars reset.', s.can_master || s.attuned.length ? `<p class="mute">Attuned ${s.attuned.length}/${s.element_slots} · cap L${s.mastery_cap}</p>${s.mastery_paused ? `<p class="mute">⏸ Earned mastery is kept and still works, but it cannot grow until this slime has ${s.mastery_paused}★ again.</p>` : ''}<div class="stack">${st.elements.basics.map(el).join('')}</div><p>${sp || '<span class="mute">No spells learned.</span>'}</p>` : `<p class="mute">This slime is ${s.stars}★.</p>`)}`;
 }
 
 function dMind(s, { st, free, inDun }) {

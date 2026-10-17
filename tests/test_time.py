@@ -167,7 +167,7 @@ class TestLiveTime(unittest.TestCase):
     def test_pit_session_returns_on_the_wall_clock(self):
         g = mk(live=True)
         for s in g.slimes():
-            s.level, s.stage = 40, 2
+            s.archetype, s.level, s.stage = "barbarian", 40, 2     # a fighting party (pulled slimes may be all healers)
             s.hp = s.max_hp
         pid = party(g)
         g.wallet.add("food", 500)

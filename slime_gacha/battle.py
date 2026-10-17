@@ -549,9 +549,8 @@ class BattleSystem:
             s.hp = max(1, s.hp)
             for el, n in c.casts.items():                      # casting builds elemental mastery
                 for b in elements.components(el):
-                    if b in s.attuned and elements.mastery_cap(s):
-                        top = config.MASTERY_XP[elements.mastery_cap(s) - 1]
-                        s.mastery_xp[b] = min(top, s.mastery_xp.get(b, 0) + n * config.MASTERY_PER_CAST_XP)
+                    if b in s.attuned:
+                        elements.add_mastery_xp(s, b, n * config.MASTERY_PER_CAST_XP)
             if c.uses:
                 s.class_prof = min(100.0, s.class_prof + min(config.PROF_BATTLE_CAP, c.uses * config.PROF_BATTLE_GAIN))
                 s.prof_idle = 0

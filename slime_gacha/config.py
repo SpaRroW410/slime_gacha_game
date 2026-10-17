@@ -31,7 +31,8 @@ VICE_MIN_STARS = 3
 VICE_MEDIATE_CHANCE = 0.3        # per hour, for each quarrel the vice keeper can reach
 VICE_FEED_BELOW = 25             # feeds a reachable slime that is this hungry
 NAME_MAX = 24
-MAGE_MIN_STARS = 3               # a pulled mage is never below this (mages cannot study elements before 3 stars)
+SCHOLAR_CLASSES = ("mage", "medic", "necromancer")   # the magic classes
+SCHOLAR_MIN_STARS = 3            # a pulled mage, medic or necromancer is never below this (the Library needs 3 stars)
 # Training facility: solo drills in the Sword Yard, Archery Range or Mage Sanctum raise class proficiency
 DRILL_TICKS = 3
 DRILL_COST = {"white_gel": 1}

@@ -118,8 +118,7 @@ class AcademySystem:
             (config.OUTLOOK_SCHOLAR_STUDY if outlook.has(s, "study") else 1.0)
         outlook.bump(s, "study")
         before = elements.basic_level(s, e)
-        top = config.MASTERY_XP[max(0, elements.mastery_cap(s) - 1)]
-        s.mastery_xp[e] = min(top, s.mastery_xp.get(e, 0) + gain)
+        elements.add_mastery_xp(s, e, gain)
         after = elements.basic_level(s, e)
         el = elements.get(e)
         events.append(f"📖 {s.name} studied {el.emoji}{el.name}: mastery {after}"
@@ -185,8 +184,7 @@ class AcademySystem:
             if fresh else get_ability(key)
         self.library.discovered.add(key)
         for c in el.components:                  # insight boosts the underlying elements
-            s.mastery_xp[c] = min(config.MASTERY_XP[max(0, elements.mastery_cap(s) - 1)],
-                                  s.mastery_xp.get(c, 0) + 10)
+            elements.add_mastery_xp(s, c, 10)
         s.needs.add("esteem", 15)
         outlook.bump(s, "study", 2)
         msg = f"✨ {s.name} {'invented' if fresh else 'recreated'} {el.emoji}{spell.name}! "
