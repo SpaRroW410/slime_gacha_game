@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -33,6 +33,8 @@ def slime_view(g: Game, s) -> dict:
         id=s.id, name=s.name, archetype=s.archetype, class_name=a.name, emoji=a.emoji, title=s.title(),
         rarity=s.rarity, stars=s.stars, level=s.level, level_cap=s.level_cap, stage=s.stage,
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
+        job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji) if s.job else None),
+        job_levels={k: jobs_mod.level(s, k) for k in jobs_mod.JOBS},
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
@@ -82,6 +84,7 @@ def slime_view(g: Game, s) -> dict:
                      proficiency={f: dict(uses=s.proficiency.get(f, 0), level=items_mod.proficiency_level(s, f))
                                   for f in items_mod.FAMILIES if s.proficiency.get(f, 0) or f in s.weapon_memory}),
         ascend=dict(next_rarity=ascension.next_rarity(s.rarity), rarity_cost=ascension.rarity_cost(s),
+                    rarity_ready=(s.level >= config.RARITY_ASCEND_LEVEL and s.stars >= config.MAX_STARS), rarity_level=config.RARITY_ASCEND_LEVEL,
                     star_cost=ascension.star_cost(s), star_level=ascension.star_level(s), chamber=ascension.chamber_yield(s, g.buildings.level("chamber"))),
         gear=dict(s.gear), items={k: _item_view(v, s) for k, v in s.items.items()}, task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
         party=(party.id if party else None), can_evolve=can_evolve(s),
@@ -172,6 +175,10 @@ def away_view(g: Game) -> list:
             tasks.setdefault((s.task.get("kind", "study"), s.task.get("ticks_left", 0)), []).append(s.id)
     for (kind, left), ids in tasks.items():
         out.append(item("study", "🥋 Drilling" if kind == "drill" else f"📚 {str(kind).replace('_', ' ').title()}", ids, left))
+    for key, j in jobs_mod.JOBS.items():
+        ids = [s.id for s in jobs_mod.workers(g) if s.job == key]
+        if ids:
+            out.append(item("job", f"{j.emoji} Working: {j.name}", ids, None))
     for e in g.expeditions:
         ids = [i for i in e["ids"] if i in g.roster]
         if ids:
@@ -234,6 +241,11 @@ def snapshot(g: Game) -> dict:
                        max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
+        jobs=dict(forage=g.forage, list=[dict(key=j.key, name=j.name, emoji=j.emoji, cycle=j.cycle, desc=j.description, talents=list(j.talents),
+                                                  building=BUILDINGS.get(j.building).name, bemoji=BUILDINGS.get(j.building).emoji,
+                                                  blevel=g.buildings.level(j.building), slots=jobs_mod.slots(g, j.key),
+                                                  used=len(jobs_mod.workers(g, j.key)), mult=round(g.buildings.job_mult(j.building), 2))
+                                             for j in jobs_mod.JOBS.values()]),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
         conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason,
                         away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
@@ -246,6 +258,8 @@ def snapshot(g: Game) -> dict:
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
                                    boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
                                    knowledge=g._knowledge(d["floor"]),
+                                   camp_left=g.camp_left(pid), camp_limit=g.camp_limit(pid), relief=round(g.relief(pid), 2),
+                                   joinable=g.joinable(pid), callers=[s.id for s in g.callers(pid)], call_cost=g.call_cost(d["floor"]),
                                    ready_in=(max(0, d.get("ready_tick", 0) - g.tick_count) if g.live else 0),
                                    next_hours=dungeon.clear_hours(d["floor"], sum(s.level for s in g._members_in("main", pid)) / max(1, len(g._members_in("main", pid))), g._knowledge(d["floor"]), max(1, len(g._members_in("main", pid)))),
                                    members=[m.id for m in g._members_in("main", pid)])
@@ -294,7 +308,7 @@ def snapshot(g: Game) -> dict:
         classes=[dict(key=a.key, name=a.name, emoji=a.emoji) for a in all_archetypes()],
         stances=list(BEHAVIORS),
         rates=dict(rarity=config.RARITY_RATES, purple_boost=config.PURPLE_RARITY_BOOST,
-                   pull_cost=config.PULL_COST),
+                   pull_cost=config.PULL_COST, bulk_n=config.PULL_BULK_N, bulk_discount=config.PULL_BULK_DISCOUNT),
         mercy=dict(spar_cost=config.SPAR_COST, train_ticks=config.SPAR_TICKS),
         spec=dict(cost=config.SPEC_COST, style=config.SPEC_MIN_STYLE, level=config.SPEC_MIN_LEVEL, table=_spec_table()),
         outlooks=[dict(key=o.key, name=o.name, emoji=o.emoji, perk=o.perk) for o in outlook.OUTLOOKS.values()],
@@ -569,6 +583,11 @@ def _slime_rarity(g, a):
     return _msg(g.ascend_slime_rarity(_i(a, "id")))
 
 
+@command("unground")
+def _unground(g, a):
+    return _msg(g.unground(_i(a, "id")))
+
+
 @command("slime_star")
 def _slime_star(g, a):
     return _msg(g.ascend_slime_star(_i(a, "id")))
@@ -738,6 +757,21 @@ def _merge_gear(g, a):
     return [g.merge_gear(str(a.get("key", "")), str(a.get("into", "")))], {}
 
 
+@command("assign_job")
+def _assign_job(g, a):
+    return [g.assign_job(_i(a, "id"), str(a.get("job", "")))], {}
+
+
+@command("stop_job")
+def _stop_job(g, a):
+    return [g.stop_job(_i(a, "id"))], {}
+
+
+@command("set_forage")
+def _set_forage(g, a):
+    return [g.set_forage(bool(a.get("on")))], {}
+
+
 @command("rename_slime")
 def _rename_slime(g, a):
     return [g.rename_slime(_i(a, "id"), a.get("name", ""))], {}
@@ -795,7 +829,12 @@ def _drill_party(g, a):
 
 @command("delve_next")
 def _delve_next(g, a):
-    return _flow_result(g, "delve", g.delve_next(_i(a, "pid"), _manual(a)))
+    return _flow_result(g, "delve", g.delve_next(_i(a, "pid"), _manual(a), [int(x) for x in a.get("join", [])]))
+
+
+@command("call_reinforcements")
+def _call_reinforcements(g, a):
+    return [g.call_reinforcements(_i(a, "pid"), _i(a, "rid"))], {}
 
 
 @command("battle_act")
@@ -858,6 +897,7 @@ class Session:
 
     def new_game(self, seed: Optional[int] = None, party_size: int = 5) -> None:
         self.game = Game(seed, int(party_size))
+        self.game.forage = True
 
     def call(self, cmd: str, args: Optional[dict] = None) -> dict:
         args = args or {}

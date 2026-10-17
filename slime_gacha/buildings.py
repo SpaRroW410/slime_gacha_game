@@ -66,6 +66,11 @@ register_building(Building("chamber", "Destruction Chamber", "🔥", 5,
 register_building(Building("alchemy", "Alchemy Lab", "⚗️", 5,
                            "Slimes brew potions here. The lab level caps the potion grade (1-5).", _costs(85, 12)))
 
+register_building(Building("kitchen", "Kitchen", "🍳", 5,
+                           "A warm hearth where chefs cook: places for chefs and better meals.", _costs(75, 10)))
+
+JOB_HOSTS = {"kitchen": "Chef", "armory": "Blacksmith", "library": "Librarian", "training_grounds": "Trainer"}
+
 REST_HEAL = [0.30, 0.45, 0.60, 0.80, 1.00]       # fraction of max HP healed per hour, by level
 
 
@@ -96,7 +101,7 @@ class BuildingManager:
 
     def describe(self, key: str, level: int = None) -> str:
         lv = level or self.level(key)
-        return {
+        base = {
             "rest_area": lambda: f"holds {self.rest_capacity(lv)} slimes, heals {int(REST_HEAL[lv - 1] * 100)}% HP/hour",
             "training_grounds": lambda: f"style level cap {self.style_cap(lv)}, style XP x{self.style_mult(lv):.2f}",
             "library": lambda: (f"study x{self.study_mult(lv):.2f}, research +{int(self.research_bonus(lv) * 100)}%, "
@@ -104,10 +109,21 @@ class BuildingManager:
                                 f"{', Restricted Section open' if self.tier3_open(lv) else ''}"),
             "chamber": lambda: f"destroyed slimes yield x{ascension.chamber_factor(lv):.1f}",
             "alchemy": lambda: f"brews potions up to grade {lv}",
+            "kitchen": lambda: "hot meals for the colony",
             "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",
             "barracks": lambda: (f"morale +{self.morale_target_bonus(lv)}, drift {self.morale_drift(lv):.2f}/h, "
                                  f"bonds x{self.bond_mult(lv):.2f}, synergy x{self.synergy_mult(lv):.2f}"),
         }.get(key, lambda: BUILDINGS.get(key).description)()
+        if key in JOB_HOSTS:
+            base += f" · {self.job_slots(key, lv)} {JOB_HOSTS[key].lower()} place{'s' if self.job_slots(key, lv) > 1 else ''}, jobs x{self.job_mult(key, lv):.1f}"
+        return base
+
+    def job_slots(self, key: str, lv: int = None) -> int:
+        """Slimes that can work at once in this building (see jobs.py): one per building level."""
+        return lv or self.level(key)
+
+    def job_mult(self, key: str, lv: int = None) -> float:
+        return 1 + 0.1 * ((lv or self.level(key)) - 1)
 
     # ---- Rest Area ---------------------------------------------------------------
     def rest_capacity(self, lv: int = None) -> int:

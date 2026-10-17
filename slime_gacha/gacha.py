@@ -84,6 +84,12 @@ class GachaSystem:
     def free_available(self, day: int) -> bool:
         return day > self.last_free_day
 
+    @staticmethod
+    def cost_of(n: int) -> int:
+        """Gel for n pulls in one go: a bulk pull (10 or more) is 10% cheaper."""
+        total = config.PULL_COST * n
+        return int(round(total * (1 - config.PULL_BULK_DISCOUNT))) if n >= config.PULL_BULK_N else total
+
     # ---- public --------------------------------------------------------------
     def pull(self, n: int = 1, pay: str = "white_gel", day: int = 0) -> List[Slime]:
         """pay: 'free' (once per game day, n must be 1), 'white_gel' or 'purple_gel' (PULL_COST each)."""
@@ -98,7 +104,7 @@ class GachaSystem:
                 raise InvalidAction("You already used today's free pull.")
             self.last_free_day = day
         else:
-            self.wallet.spend(pay, config.PULL_COST * n)
+            self.wallet.spend(pay, self.cost_of(n))
         out = []
         for _ in range(n):
             r = self.roll_rarity(purple=(pay == "purple_gel"))

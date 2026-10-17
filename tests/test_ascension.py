@@ -1,7 +1,7 @@
 import random
 import unittest
 
-from slime_gacha import ascension, config
+from slime_gacha import ascension, attributes, config
 from slime_gacha.errors import InvalidAction, NotEnoughResources
 from slime_gacha.game import Game
 
@@ -26,13 +26,32 @@ class TestRarityAndStars(unittest.TestCase):
         paid = []
         for want, cost in (("uncommon", 10), ("rare", 100), ("epic", 1000), ("legendary", 10000)):
             before = g.wallet.get("white_gel")
+            s.level, s.stars = 100, 5
             g.ascend_slime_rarity(s.id)
             paid.append(before - g.wallet.get("white_gel"))
             self.assertEqual(s.rarity, want)
         self.assertEqual(paid, [10, 100, 1000, 10000])
         self.assertGreater(s.max_stats()["atk"], base * 2)
         with self.assertRaises(InvalidAction):
+            s.level, s.stars = 100, 5
             g.ascend_slime_rarity(s.id)
+
+    def test_rarity_needs_level_100_and_five_stars(self):
+        g = mk()
+        s = g.slimes()[0]
+        for lv, st in ((1, 1), (99, 5), (100, 4)):
+            s.rarity, s.level, s.stars = "common", lv, st
+            with self.assertRaises(InvalidAction):
+                g.ascend_slime_rarity(s.id)
+
+    def test_unground(self):
+        g = mk()
+        s = g.slimes()[0]
+        with self.assertRaises(InvalidAction):
+            g.unground(s.id)
+        s.grounded = True
+        g.unground(s.id)
+        self.assertFalse(s.grounded)
 
     def test_rarity_needs_the_gel(self):
         g = mk()
@@ -40,18 +59,22 @@ class TestRarityAndStars(unittest.TestCase):
         s.rarity = "rare"
         g.wallet.add("white_gel", -g.wallet.get("white_gel") + 999)
         with self.assertRaises(NotEnoughResources):
+            s.level, s.stars = 100, 5
             g.ascend_slime_rarity(s.id)                     # epic costs 1000
         self.assertEqual(s.rarity, "rare")
 
     def test_hp_grows_with_ascension(self):
         g = mk()
         s = g.slimes()[0]
-        s.rarity, s.stars = "common", 1
+        s.rarity, s.stars, s.level = "common", 5, 100
         s.hp = s.max_hp
-        old = s.max_hp
         g.ascend_slime_rarity(s.id)
         self.assertEqual(s.hp, s.max_hp)
-        self.assertGreater(s.max_hp, old)
+        s.stars = 1
+        s.rarity = "common"
+        old = s.max_hp
+        s.rarity = "uncommon"
+        self.assertGreater(s.max_hp, old)                          # at equal stars the higher rarity is stronger
 
     def test_star_costs_in_stones(self):
         g = mk()
@@ -104,6 +127,7 @@ class TestRarityAndStars(unittest.TestCase):
             self.assertEqual(s.stars, stars + 1)
         self.assertEqual(s.stars, 5)
         g.wallet.add("white_gel", 100)
+        s.level, s.stars = 100, 5
         g.ascend_slime_rarity(s.id)
         self.assertEqual((s.rarity, s.stars), ("uncommon", 1))     # stars (and their attributes) start over
 
@@ -131,7 +155,51 @@ class TestRarityAndStars(unittest.TestCase):
         s = g.slimes()[0]
         s.state = "hunting"
         with self.assertRaises(InvalidAction):
+            s.level, s.stars = 100, 5
             g.ascend_slime_rarity(s.id)
+
+
+class TestBulkPull(unittest.TestCase):
+    def test_ten_pulls_cost_ninety(self):
+        g = Game(5)
+        g.wallet.add("white_gel", 1000)
+        before = g.wallet.get("white_gel")
+        g.pull(10, "white_gel")
+        self.assertEqual(before - g.wallet.get("white_gel"), 90)
+        before = g.wallet.get("white_gel")
+        g.pull(9, "white_gel")
+        self.assertEqual(before - g.wallet.get("white_gel"), 90)        # nine singles: no discount
+        before = g.wallet.get("white_gel")
+        g.pull(20, "white_gel")
+        self.assertEqual(before - g.wallet.get("white_gel"), 180)
+
+
+class TestKeptAttributes(unittest.TestCase):
+    def test_star_attributes_survive_rarity_ascension_and_grow(self):
+        g = mk()
+        s = g.slimes()[0]
+        s.rarity, s.stars, s.star_peak = "common", 5, 5
+        before = {a["key"]: a["value"] for a in attributes.star_attributes(s)}
+        self.assertEqual(len(before), 4)
+        g.wallet.add("white_gel", 100)
+        s.level, s.stars = 100, 5
+        g.ascend_slime_rarity(s.id)
+        self.assertEqual(s.stars, 1)
+        after = {a["key"]: a["value"] for a in attributes.star_attributes(s)}
+        self.assertEqual(set(after), set(before))
+        for k in before:
+            self.assertAlmostEqual(after[k], round(dict(attributes.STAR_ATTRS[s.archetype])[k] * config.STAR_ATTR_RARITY_BOOST["uncommon"], 3))
+        s.stars = 3
+        more = {a["key"]: a["value"] for a in attributes.star_attributes(s)}
+        self.assertGreater(more[list(after)[0]], after[list(after)[0]])    # extra stars strengthen the first one
+
+    def test_merge_needs_slimes_at_home(self):
+        g = mk()
+        a, b = g.slimes()[:2]
+        b.state = "hunting"
+        with self.assertRaises(InvalidAction):
+            g.merge(a.id, b.id)
+        self.assertTrue(all(not m["target"].busy and not m["donor"].busy for m in g.council()["merges"]))
 
 
 class TestMerge(unittest.TestCase):

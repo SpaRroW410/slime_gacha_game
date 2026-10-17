@@ -12,7 +12,7 @@ const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '�
   ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide']];
 const SUBS = {
   dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit'], ['rift', 'Rift & Quarry']],
-  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['sacrifice', 'Merge & destroy']],
+  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['workshops', 'Jobs'], ['sacrifice', 'Merge & destroy']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry'];
@@ -202,7 +202,7 @@ function etaHtml(a) {
     return `<span class="eta" data-sec="${a.real_sec}">${fmtSec(left)}</span>`;
   }
   if (a.hours != null) return `<span class="eta">${Math.ceil(a.hours)}h left</span>`;
-  return '<span class="eta">inside</span>';
+  return `<span class="eta">${a.kind === 'job' ? 'at work' : 'inside'}</span>`;
 }
 function awayBar() {
   const items = awayItems();
@@ -308,6 +308,7 @@ function card(s) {
   if (s.party) b.push(badge('👥 ' + esc(partyById(s.party)?.name || s.party)));
   if (s.hp < s.max_hp * 0.4) b.push(badge('wounded', 'warn'));
   if (s.grounded) b.push(badge('grounded', 'bad'));
+  if (s.job) b.push(badge(`${s.job.emoji} ${esc(s.job.name)}`, 'ok'));
   if (s.dominant && !s.busy) b.push(badge(WISH[s.dominant], 'warn'));
   if (s.feelings.length && s.feelings[0].value >= 40) b.push(badge(`${s.feelings[0].emoji} ${esc(s.feelings[0].name)}`, s.feelings[0].kind === 'bad' ? 'warn' : 'ok'));
   if (s.morale_label === 'broken') b.push(badge('broken morale', 'bad'));
@@ -330,6 +331,7 @@ function drawer(s) {
   const body = { overview: dOverview, fight: dFight, mind: dMind, gear: dGear }[dt](s, ctx);
   return `<aside class="drawer">
     <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button> <input type="color" class="colpick" data-colorid="${s.id}" value="${s.color || CLASS_COLORS[s.archetype] || '#5be0a0'}" title="Slime colour (ring colour stays with rarity)"> ${s.color ? `<button class="btn small" data-act="set_color" data-id="${s.id}" data-reset="1" title="Back to class colour">↺</button>` : ''}</h2><button class="btn small" data-act="closesel">✕</button></div>
+    ${s.grounded ? `<div class="row panel flat"><small>🚫 Grounded after a brawl: no hunts, drills or parties until the quarrel is mediated.</small><button class="btn small" data-act="unground" data-id="${s.id}">Let out</button></div>` : ''}
     <div class="row" style="margin:8px 0">${avatar(s, 'big')}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
       <div class="mute">${s.state}${s.in_dungeon ? ' · inside ' + s.in_dungeon : ''} · mood ${s.mood}${s.party ? ' · 👥 ' + esc(partyById(s.party)?.name) : ''}</div></div></div>
     <div class="seg dtabs">${tabs.map(([k, n]) => `<button class="${dt === k ? 'on' : ''}" data-act="dtab" data-t="${k}">${n}</button>`).join('')}</div>
@@ -381,7 +383,7 @@ function dFight(s, { st, free }) {
         ${s.prof.hybrid.capstone ? `<div>👑 <b>${esc(s.prof.hybrid.capstone.name)}</b> <small class="mute">at ${s.prof.hybrid.scale}% strength (max 60%, a pure capstone is 100%). ${esc(s.prof.hybrid.capstone.desc)}</small></div>` : '<small class="mute">A hybrid capstone unlocks at legendary 5★.</small>'}
         ${s.prof.hybrid.idle > 3 ? `<small class="mute">Second discipline idle for ${s.prof.hybrid.idle} days: fading.</small>` : ''}` : ''}</div>`) : ''}
     ${sect('Ascension', 'Rarity costs white gel; stars cost ascension stones. Both are permanent. The chamber destroys a slime for gel and stones.', `<div class="row">
-      <button class="btn small ${s.ascend.next_rarity && st.wallet.white_gel >= s.ascend.rarity_cost ? 'primary' : ''}" data-act="slime_rarity" ${free && s.ascend.next_rarity && st.wallet.white_gel >= s.ascend.rarity_cost ? '' : 'disabled'}>✨ ${s.ascend.next_rarity ? `to ${s.ascend.next_rarity} · ${s.ascend.rarity_cost} ⚪` : 'Legendary'}</button>
+      <button class="btn small ${s.ascend.next_rarity && s.ascend.rarity_ready && st.wallet.white_gel >= s.ascend.rarity_cost ? 'primary' : ''}" data-act="slime_rarity" ${free && s.ascend.next_rarity && s.ascend.rarity_ready && st.wallet.white_gel >= s.ascend.rarity_cost ? '' : 'disabled'} title="Needs level ${s.ascend.rarity_level} and 5 stars">✨ ${s.ascend.next_rarity ? `to ${s.ascend.next_rarity} · ${s.ascend.rarity_cost} ⚪${s.ascend.rarity_ready ? '' : ` · Lv${s.ascend.rarity_level} & 5★`}` : 'Legendary'}</button>
       <button class="btn small ${s.ascend.star_cost && s.level >= s.ascend.star_level && st.ascension.total >= s.ascend.star_cost ? 'primary' : ''}" data-act="slime_star" ${free && s.ascend.star_cost && s.level >= s.ascend.star_level && st.ascension.total >= s.ascend.star_cost ? '' : 'disabled'} title="${s.ascend.star_cost ? `Needs level ${s.ascend.star_level} and ${s.ascend.star_cost} stones` : ''}">🌟 ${s.ascend.star_cost ? `to ${s.stars + 1}★ · Lv${s.ascend.star_level} · ${s.ascend.star_cost} 💎` : 'Max stars'}</button>
       <button class="btn small danger" data-act="destroy_slime" data-id="${s.id}" data-n="${esc(s.name)}" data-y="${esc(cost(s.ascend.chamber))}" ${free ? '' : 'disabled'}>🔥 Destroy</button></div>
       ${Object.keys(s.merge_bonus).length ? `<small class="mute">Merged-in stats: ${Object.entries(s.merge_bonus).filter(([, v]) => v).map(([k, v]) => `+${v} ${k}`).join(' ')}</small>` : ''}`)}
@@ -427,11 +429,12 @@ function gacha() {
   const st = S.state, r = st.rates, c = r.pull_cost;
   const rates = Object.entries(r.rarity).map(([k, v]) => `${chip(`${k} ${v}%`, k)}`).join(' ');
   const w = st.wallet;
-  const b = (n, pay, label, cls) => `<button class="btn ${cls}" data-act="pull" data-n="${n}" data-pay="${pay}" ${w[pay] >= c * n ? '' : 'disabled'}>${label}<br><small>${c * n} ${RES[pay][0]}</small></button>`;
+  const price = (n) => n >= r.bulk_n ? Math.round(c * n * (1 - r.bulk_discount)) : c * n;
+  const b = (n, pay, label, cls) => `<button class="btn ${cls}" data-act="pull" data-n="${n}" data-pay="${pay}" ${w[pay] >= price(n) ? '' : 'disabled'}>${label}<br><small>${price(n)} ${RES[pay][0]}${n >= r.bulk_n ? ` (−${Math.round(r.bulk_discount * 100)}%)` : ''}</small></button>`;
   return `<div class="panel well">
     <div class="blob big"><div class="body"><i></i><i></i></div><span class="em">🎰</span></div>
     <h2>The Last Gacha Well</h2>
-    <p class="mute">Each pull wakes a slime. Odds: ${rates}. Stars 1–5 fall off exponentially (steeper for higher rarities).<br>⚪ White gel and 🟣 purple gel cost ${c} per pull — purple gel multiplies rare+ odds ×${r.purple_boost}.</p>
+    <p class="mute">Each pull wakes a slime. Odds: ${rates}. Stars 1–5 fall off exponentially (steeper for higher rarities).<br>⚪ White gel and 🟣 purple gel cost ${c} per pull (pull ${r.bulk_n} or more at once for ${Math.round(r.bulk_discount * 100)}% off) — purple gel multiplies rare+ odds ×${r.purple_boost}.</p>
     <div class="row" style="justify-content:center;gap:12px">
       <button class="btn primary" data-act="pull" data-n="1" data-pay="free" ${st.free_pull.available ? '' : 'disabled'}>🎁 Free daily pull<br><small>${st.free_pull.available ? 'ready!' : `in ${st.free_pull.hours}h`}</small></button>
       ${b(1, 'white_gel', '⚪ Pull ×1', '')}${b(10, 'white_gel', '⚪ Pull ×10', '')}
@@ -487,6 +490,18 @@ function partyOptions(key, fullOnly = true, includeDelve = false) {
   return list.length ? `<select data-ui="${key}" data-rerender="1">${list.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''}>${esc(p.name)} (${p.members.length}/${st.party_size})</option>`).join('')}</select>`
     : '<small class="mute">No party is free (full and at home). Make one in the Parties tab or wait for them to return.</small>';
 }
+function reinforcePanel(pid, v) {
+  const st = S.state;
+  const home = st.parties.filter((p) => p.full && !p.in_delve && p.members.every((id) => { const m = slimeById(id); return m && !m.busy; }));
+  const key = 'rf_' + pid;
+  let cur = ui(key, home[0]?.id);
+  if (!home.some((p) => p.id == cur)) cur = home[0]?.id;
+  S.ui[key] = cur;
+  const mage = slimeById(v.callers[0]);
+  return `<div class="row"><small class="mute">📯 ${esc(mage?.name)} can call a party to floor ${v.floor}:</small>
+    ${home.length ? `<select data-ui="${key}">${home.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+    <button class="btn small" data-act="call_reinforcements" data-pid="${pid}" ${st.wallet.purple_gel >= v.call_cost ? '' : 'disabled'}>Call · ${v.call_cost} 🟣</button>` : '<small class="mute">no party is free</small>'}</div>`;
+}
 function dungeonsAll() {
   const st = S.state, d = st.dungeon;
   const delves = Object.entries(d.delves);
@@ -510,9 +525,12 @@ function dungeonsAll() {
       ${v.ready_in > 0 ? `<div class="chip bad">⏱ busy — back in ~${Math.max(1, Math.round(v.ready_in / (S.state.clock.rate_now || 1) * 60))} real min</div>` : ''}
       <div class="row">${v.members.map((id) => mini(id)).join('')}</div>
       <div class="row" style="margin-top:6px"><button class="btn primary" data-act="delve_next" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight floor ${v.floor}</button>${cmdToggle()}
-        <input type="number" min="1" max="24" value="${camp}" data-ui="camp_h" style="width:70px"><button class="btn" data-act="delve_camp" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⛺ Camp (h)</button>
+        ${v.joinable.map((q) => `<button class="btn primary" data-act="delve_next" data-pid="${pid}" data-join="${q}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight together with ${esc(partyById(q)?.name)}</button>`).join('')}
+        <input type="number" min="1" max="24" value="${camp}" data-ui="camp_h" style="width:70px"><button class="btn" data-act="delve_camp" data-pid="${pid}" ${v.ready_in > 0 || v.camp_left <= 0 ? 'disabled' : ''}>⛺ Camp (h)</button>
         <button class="btn ${v.can_leave ? 'primary' : ''}" data-act="leave_dungeon" data-pid="${pid}" ${v.can_leave ? '' : 'disabled'} title="${v.can_leave ? 'Climb out' : 'Only possible at a checkpoint'}">🚪 Leave</button></div>
       ${v.can_leave ? '' : `<small class="mute">No way out until the boss of floor ${v.boss_floor} falls.</small>`}
+      <small class="mute" style="display:block">⛺ Camp time left on this floor: <b>${v.camp_left}h</b> of ${v.camp_limit}h (the floor number, stretched by how well it is scouted).${v.relief > 0 ? ` Ambushes are ${Math.round(v.relief * 50)}% less likely: another party is closing in from below.` : ''}</small>
+      ${v.callers.length ? reinforcePanel(+pid, v) : ''}
       ${giftPanel(+pid)}</div>`; }).join('')}
     <div class="row">${partyOptions('dpid')}
       ${entryParty ? `<label class="f">Start at floor <select data-ui="dstart">${entry.map((f) => `<option value="${f}" ${f === dstart ? 'selected' : ''}>${f}</option>`).join('')}</select></label>` : ''}
@@ -568,6 +586,7 @@ function town() {
   const alch = '<div class="panel stack" style="margin-top:12px"><h2>⚗️', armory = '<div class="grid cols2" style="margin-top:12px">\n    <div class="panel stack"><h2>🛠️ Armory';
   let body;
   if (v === 'sacrifice') return subnav('town') + sacrificeView();
+  if (v === 'workshops') return subnav('town') + workshopsView();
   if (v === 'buildings') body = cut(all, null, alch);
   else if (v === 'alchemy') body = cut(all, alch, armory).replace('margin-top:12px', 'margin-top:0');
   else {
@@ -576,6 +595,27 @@ function town() {
     body = cut(all, armory, null) + `<div class="grid cols2" style="margin-top:12px">${relics.replace(/^\s*<div class="stack">/, '<div class="stack">')}`;
   }
   return subnav('town') + body;
+}
+function workshopsView() {
+  const st = S.state, j = st.jobs;
+  const free = st.slimes.filter((s) => !s.busy && s.state !== 'sleeping' && !s.grounded && !s.is_vice);
+  let cur = ui('job_sl', free[0]?.id);
+  if (!free.some((s) => s.id == cur)) cur = free[0]?.id;
+  S.ui.job_sl = cur;
+  return `<div class="panel stack"><h2>👷 Jobs</h2>
+    <p class="mute">Not every slime is a fighter. Each trade works in its own building: the building's level sets how many slimes can work there (one per level) and how well (+10% per level). No wages. A working slime stays home (you can still feed and pet it) but is not free for parties, hunts or drills until you stop it; switching is free and every trade keeps its own level. Upgrade the buildings in Town > Buildings.</p>
+    <div class="row">${free.length ? `<label class="f">Slime <select data-ui="job_sl">${free.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)})</option>`).join('')}</select></label>` : '<small class="mute">Nobody is free to start a job.</small>'}</div>
+    <div class="row"><button class="btn small ${j.forage ? 'primary' : ''}" data-act="forage">🧺 Foraging: ${j.forage ? 'on' : 'off'}</button>
+      <small class="mute">When on, slimes that belong to no party and have nothing to do go hunting by themselves in the best zone they can clear safely, and bring back gel, food and essence. Rested and fed slimes only; they come home to sleep. Turn it off to keep them at home (for merging, gear or care).</small></div></div>
+  <div class="grid cols2" style="margin-top:12px">${j.list.map((x) => {
+    const workers = st.slimes.filter((s) => s.job && s.job.key === x.key);
+    const full = x.used >= x.slots;
+    return `<div class="panel stack"><h3>${x.emoji} ${esc(x.name)} <small class="mute">${x.bemoji} ${esc(x.building)} L${x.blevel} · ${x.used}/${x.slots} places · x${x.mult}</small></h3>
+      <small>${esc(x.desc)} <span class="mute">A round every ${x.cycle}h · natural talent: ${x.talents.map(esc).join(', ')}.</span></small>
+      ${workers.map((s) => `<div class="row between panel flat"><span>${avatar(s, 'sm')} <b>${esc(s.name)}</b> <small class="mute">level ${s.job_levels[x.key]}</small></span>
+        <button class="btn small danger" data-act="stop_job" data-id="${s.id}">Stop</button></div>`).join('') || '<small class="mute">Nobody works here yet.</small>'}
+      <button class="btn ${full ? '' : 'primary'}" data-act="assign_job" data-job="${x.key}" ${full || !free.length ? 'disabled' : ''}>${full ? 'All places taken' : 'Put the chosen slime to work'}</button></div>`;
+  }).join('')}</div>`;
 }
 function people() {
   const v = sub('people');
@@ -1087,6 +1127,10 @@ const A = {
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
   set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
+  assign_job: (d) => { const id = num(S.ui.job_sl); if (id) act('assign_job', { id, job: d.job }); },
+  forage: () => act('set_forage', { on: !S.state.jobs.forage }),
+  stop_job: (d) => act('stop_job', { id: num(d.id) }),
+  unground: (d) => act('unground', { id: num(d.id) }),
   rename_party: (d) => { const n = window.prompt('New name for the party ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_party', { pid: num(d.pid), name: n }); },
   set_leader: (d) => act('set_leader', { pid: num(d.pid), id: num(S.ui['lead_' + d.pid]) }),
   vice_hunt: () => act('vice_hunt', { zone: S.ui.vh_zone, parties: num(S.ui.vh_n, 1) }),
@@ -1095,7 +1139,8 @@ const A = {
   appoint_vice: () => { const id = num(S.ui.vice_pick); if (id) confirmThen('Appoint this slime as Vice Keeper?\n\nIt can mediate, feed and tend slimes in its own group even inside a dungeon, and settles quarrels by itself. It cannot merge or destroy, and cannot itself be merged or destroyed while in office.', () => act('appoint_vice', { id })); },
   dismiss_vice: () => act('dismiss_vice', {}),
   toggle_manual: () => { S.ui.manual = !manualOn(); render(); },
-  delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn() }, { title: 'The Hollow Descent' }),
+  delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn(), join: d.join ? [num(d.join)] : [] }, { title: 'The Hollow Descent' }),
+  call_reinforcements: (d) => { const rid = num(S.ui['rf_' + d.pid]); if (rid) act('call_reinforcements', { pid: num(d.pid), rid }); },
   battle_pick: (d) => { const b = S.state.battle; const ab = b?.abilities.find((a) => a.key === d.key); if (!ab) return;
     if (ab.target === 'enemy' || ab.target === 'ally') {
       const side = ab.target === 'enemy' ? 'foes' : 'party';
@@ -1173,7 +1218,19 @@ document.addEventListener('change', async (e) => {
     } catch (err) { toast('That file is not a valid save.', true); }
   }
 });
-document.addEventListener('input', (e) => { const t = e.target; if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); } });
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (!t.dataset.ui) return;
+  S.ui[t.dataset.ui] = t.value;
+  if (!t.dataset.rerender) return;
+  const typing = t.matches('input[type=search], input[type=text]');
+  const pos = typing ? t.selectionStart : null;
+  render();
+  if (typing) {                       // the page was rebuilt: put the cursor back so the phone keyboard stays open
+    const again = document.querySelector(`input[data-ui="${t.dataset.ui}"]`);
+    if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (err) { /* not a text field */ } }
+  }
+});
 document.addEventListener('toggle', (e) => { const k = e.target.dataset && e.target.dataset.keep; if (k) S.ui[k] = e.target.open; }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.modal) A.closemodal(); else if (S.sel) A.closesel(); } });
 

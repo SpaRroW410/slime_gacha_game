@@ -172,6 +172,7 @@ class TestDelve(unittest.TestCase):
         g = rich(5)
         pid = party(g, strong=True)
         g.enter_dungeon(pid)
+        g.delves[pid]["floor"] = 6                          # camping is limited to about one hour per floor
         for s in members(g, pid):
             s.hp = max(1, s.max_hp // 4)
         g.rng.random = lambda: 0.99

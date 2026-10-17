@@ -8,13 +8,13 @@ import math
 import time
 import random
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
+from . import jobs, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
@@ -106,6 +106,7 @@ class Game:
         self.mood_rng = random.Random(((seed or 0) ^ 0xE70) & 0xFFFFFFFF)   # feelings never disturb the main dice
         self.vault_peak = 0                            # relics: slimes leave 34% of the most ever held
         self.gear_peak: Dict[str, int] = {}
+        self.forage = False                            # slimes with no party and nothing to do go foraging (a new web/CLI game turns it on)
         self.autonomy = True                           # slimes may use up to 66% of the stock by themselves
         self.vice: Optional[int] = None                # id of the Vice Keeper, if one is appointed
         self.vice_challenge: Optional[dict] = None     # {"challenger": id} waiting for the Keeper's approval
@@ -319,6 +320,7 @@ class Game:
             self._reap(events)
             self.academy.tick(self.slimes(), events)
             self._reap(events)
+            jobs.tick(self, events)
             self._healer_aura(self.slimes(), events)
             self.conflicts.tick(self.slimes(), events)
             self._reap(events)
@@ -330,6 +332,7 @@ class Game:
                 self._proficiency_day(events)
                 self._vice_challenge_day(events)
             self._autonomy_tick(events)
+            self._forage_tick()
             self._leaders_tick(events)
             self._vice_tick(events)
         self.journal.extend(events)
@@ -1052,8 +1055,8 @@ class Game:
         sugg = []
         if len(rows) >= 2:
             half = max(1, len(rows) // 2)
-            targets = [r["slime"] for r in rows[:half]][:5]
-            donors = [r["slime"] for r in rows[::-1][:half] if r["slime"].id != self.vice][:5]
+            targets = [r["slime"] for r in rows[:half] if not r["slime"].busy][:5]      # only slimes at home can be merged
+            donors = [r["slime"] for r in rows[::-1][:half] if r["slime"].id != self.vice and not r["slime"].busy][:5]
             for t in targets:
                 for d in donors:
                     if t is d:
@@ -1065,6 +1068,13 @@ class Game:
                                      net=gain - 3 * grief))
             sugg.sort(key=lambda x: -x["net"])
         return dict(rows=rows, merges=sugg[:5])
+
+    def assign_job(self, sid: int, key: str) -> str:
+        """Put a slime to work in town (Chef, Blacksmith, Trainer). Switching jobs is free; places are limited by the Workshops."""
+        return jobs.assign(self, self.slime(sid), key)
+
+    def stop_job(self, sid: int) -> str:
+        return jobs.stop(self, self.slime(sid))
 
     def drill(self, sid: int, discipline: str, tier: int = 1) -> str:
         """Send a slime to drill (sword / archery / magic) for proficiency. See AcademySystem.start_drill."""
@@ -1111,7 +1121,7 @@ class Game:
         return evolve(self.slime(sid), self.wallet)
 
     def merge(self, target_id: int, donor_id: int) -> List[str]:
-        t, d = self.slime(target_id), self.slime(donor_id)
+        t, d = self._free_slime(target_id), self._free_slime(donor_id)
         if d.id == self.vice:
             raise InvalidAction(f"{d.name} is the Vice Keeper and cannot be merged away. Dismiss them first.")
         compat = self.social.compat(t, d)
@@ -1546,16 +1556,29 @@ class Game:
         up = ascension.next_rarity(s.rarity)
         if not up:
             raise InvalidAction(f"{s.name} is already legendary.")
+        if s.level < config.RARITY_ASCEND_LEVEL or s.stars < config.MAX_STARS:
+            raise InvalidAction(f"{s.name} must reach level {config.RARITY_ASCEND_LEVEL} and {config.MAX_STARS} stars "
+                                f"to rise in rarity (now level {s.level}, {s.stars} stars).")
         self.wallet.spend("white_gel", ascension.rarity_cost(s))
         old = s.max_hp
         s.rarity = up
-        s.stars = 1                              # a new rarity starts again at one star; star attributes are locked until re-earned
+        s.star_peak = max(s.star_peak, s.stars)  # unlocked star attributes are kept
+        s.stars = 1                              # a new rarity starts again at one star
         s.hp = max(1, min(s.max_hp, s.hp + s.max_hp - old))
         s.needs.add("esteem", 20)
         self.social.shift_morale(s, 10)
         self._xp("ascend", config.KEEPER_XP["ascend"])
-        return (f"✨ {s.name} ascends to {up}! (stats x{config.RARITY_STAT_MULT[up]}) Stars reset to 1: the star attributes "
-                f"are locked until it climbs again.")
+        return (f"✨ {s.name} ascends to {up}! (stats x{config.RARITY_STAT_MULT[up]}) Stars reset to 1, but the star attributes "
+                f"it unlocked are kept (and hit harder at the new rarity); more stars strengthen them further.")
+
+    def unground(self, sid: int) -> str:
+        """Let a grounded slime out. The quarrel stays; it can brawl again if it is left to escalate."""
+        s = self.slime(sid)
+        if not s.grounded:
+            raise InvalidAction(f"{s.name} is not grounded.")
+        s.grounded = False
+        s.needs.add("belonging", 5)
+        return f"{s.name} is let out. The quarrel is still unresolved."
 
     def ascend_slime_star(self, sid: int) -> str:
         """Add a star, paid in ascension stones (10 / 100 / 1000 / 10000 common-stone equivalents)."""
@@ -1569,6 +1592,7 @@ class Game:
         ascension.pay_stones(self.wallet, need)
         old = s.max_hp
         s.stars += 1
+        s.star_peak = max(s.star_peak, s.stars)
         s.hp += s.max_hp - old
         s.needs.add("esteem", 20)
         self.social.shift_morale(s, 10)
@@ -1768,6 +1792,26 @@ class Game:
                 self.wallet.add(m, -need)
                 it.durability = it.max_durability
                 log.append(f"🔧 {s.name} mends {it.label()} by itself ({need} {m}).")
+
+    def set_forage(self, on: bool) -> str:
+        self.forage = bool(on)
+        return ("Slimes with no party and nothing to do will go foraging on their own." if on else
+                "Slimes will wait at home until you send them out.")
+
+    def _forage_tick(self) -> None:
+        """Idle slimes that belong to no party go and gather resources by themselves, in the most rewarding zone they can
+        clear comfortably. Only rested, fed, healthy slimes set out; they come home to sleep when tired."""
+        if not self.forage:
+            return
+        zones = sorted(ZONES, key=lambda z: -z.duration)
+        for s in self.slimes():
+            if (s.state != "idle" or s.in_dungeon or s.grounded or s.id == self.vice or s.hp <= 0
+                    or self.parties.party_of(s.id) or s.hp < s.max_hp * config.FORAGE_MIN_HP
+                    or s.needs.get("energy") < config.FORAGE_MIN_ENERGY or s.needs.get("food") < config.FORAGE_MIN_FOOD):
+                continue
+            zone = next((z for z in zones if s.power_rating() >= z.danger * config.FORAGE_SAFETY), None)
+            if zone:
+                self.hunts.start(s, zone.key)
 
     def set_autonomy(self, on: bool) -> str:
         self.autonomy = bool(on)
@@ -2320,16 +2364,33 @@ class Game:
             raise InvalidAction(f"The party is still busy: about {left} game hour(s), roughly "
                                 f"{real_min:.0f} real minute(s) at the current speed.")
 
-    def delve_next(self, pid: int, manual: bool = False):
-        """Fight the next floor. With manual=True the fight pauses for orders (returns None until it ends)."""
-        return self._play(self._delve_gen(pid), "delve", manual, pid)
+    def delve_next(self, pid: int, manual: bool = False, join: Sequence[int] = ()):
+        """Fight the next floor. With manual=True the fight pauses for orders (returns None until it ends).
+        `join` lists other parties standing on the same floor: they fight together as one force."""
+        return self._play(self._delve_gen(pid, join), "delve", manual, pid)
 
-    def _delve_gen(self, pid: int):
+    def joinable(self, pid: int) -> List[int]:
+        """Other parties inside the Descent on the very floor this one stands on (and ready to fight)."""
+        d = self.delves.get(pid)
+        if not d:
+            return []
+        return [q for q, e in self.delves.items() if q != pid and e["floor"] == d["floor"]
+                and not (self.live and e.get("ready_tick", 0) > self.tick_count) and self._members_in("main", q)]
+
+    def _delve_gen(self, pid: int, join: Sequence[int] = ()):
         d = self.delves.get(pid)
         if not d:
             raise InvalidAction("That party has not entered the dungeon (enter_dungeon first).")
         self._delve_wait(d)
-        party = self._members_in("main", pid)
+        pids = [pid]
+        for q in dict.fromkeys(int(x) for x in join):
+            if q == pid:
+                continue
+            if q not in self.joinable(pid):
+                raise InvalidAction(f"{self.parties.get(q).name} is not on floor {d['floor']} of the Descent, ready to fight.")
+            self._delve_wait(self.delves[q])
+            pids.append(q)
+        party = [s for q in pids for s in self._members_in("main", q)]
         for s in party:
             if s.state == "sleeping":
                 s.state = "idle"                      # woken by the next fight
@@ -2346,7 +2407,7 @@ class Game:
                                              * (1 + config.OUTLOOK_DELVER_POWER * delver_share), terrain=info.terrain)
         boss = dungeon.is_boss_floor(floor)
         report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}{' (BOSS)' if boss else ''}: {info.title} "
-                             f"[knowledge {k:.0f}%]")
+                             f"[knowledge {k:.0f}%]" + (f" - {len(pids)} parties fight together" if len(pids) > 1 else ""))
         self._after_battle(party, report, boss=boss)
         survivors = [s for s in party if s.hp > 0]
         events: List[str] = []
@@ -2365,7 +2426,9 @@ class Game:
                 if self.rng.random() < 0.15:
                     self.wallet.add("stone_uncommon", 1)
                     events.append("💎 ...and an uncommon stone!")
-            d["floor"] = floor + 1
+            for q in pids:
+                self.delves[q]["floor"] = floor + 1
+                self.delves[q]["camped"] = 0
             self._xp("floor", config.KEEPER_XP["floor"] + floor // 5)
             if floor == dungeon.MAX_FLOOR:
                 self.descent_cleared = True
@@ -2384,20 +2447,70 @@ class Game:
                               f"(exit after the boss on floor {self._checkpoint_after(floor + 1)}).")
         elif report.winner == "foes":
             events.append("☠ The whole party has fallen in the Hollow Descent.")
-            self.delves.pop(pid, None)
+            for q in pids:
+                self.delves.pop(q, None)
         self._reap(events)
         spent = dungeon.clear_hours(floor, avg_level, k, len(party))
         self._owed = 0.0
         events.extend(self._spend(spent))
-        if pid in self.delves:
-            self.delves[pid]["hours"] += spent
-            if self.live:
-                self.delves[pid]["ready_tick"] = self.tick_count + spent
-            if not self._members_in("main", pid):          # everyone starved / died in the meantime
-                self.delves.pop(pid, None)
+        for q in pids:
+            if q in self.delves:
+                self.delves[q]["hours"] += spent
+                if self.live:
+                    self.delves[q]["ready_tick"] = self.tick_count + spent
+                if not self._members_in("main", q):        # everyone starved / died in the meantime
+                    self.delves.pop(q, None)
         report.log.extend(events)
         self.journal.extend(events)
         return report
+
+    def camp_limit(self, pid: int) -> int:
+        """Hours a party may camp on its current floor: the floor number, stretched by how well the floor is known."""
+        d = self.delves[pid]
+        return max(1, int(d["floor"] * (1 + self._knowledge(d["floor"]) / 100.0)))
+
+    def camp_left(self, pid: int) -> int:
+        return max(0, self.camp_limit(pid) - self.delves[pid].get("camped", 0))
+
+    def relief(self, pid: int) -> float:
+        """0-1: how close another party is to reaching this one. The nearer the floors below are to being cleared,
+        the fewer things lurk around the camp."""
+        d = self.delves[pid]
+        near = 0.0
+        for q, e in self.delves.items():
+            if q != pid and e["floor"] <= d["floor"]:
+                near = max(near, min(1.0, max(0.0, (e["floor"] - (d["floor"] - config.CAMP_RELIEF_REACH)) / config.CAMP_RELIEF_REACH)))
+        return near
+
+    def callers(self, pid: int) -> List[Slime]:
+        """Members who can call reinforcements: 5-star mages attuned to at least two elements."""
+        return [s for s in self._members_in("main", pid)
+                if s.archetype == "mage" and s.stars >= config.MAX_STARS and len(s.attuned) >= 2]
+
+    def call_cost(self, floor: int) -> int:
+        return 1 + floor // config.MAIN_BOSS_EVERY
+
+    def call_reinforcements(self, pid: int, rid: int) -> str:
+        """A 5-star mage calls party `rid` (at home) straight to the floor `pid` stands on, for purple gel.
+        The called party needs no prior clearing of the floors above: the call skips that rule."""
+        d = self.delves.get(pid)
+        if not d:
+            raise InvalidAction("That party is not inside the dungeon.")
+        if rid == pid or rid in self.delves:
+            raise InvalidAction("Pick a party that is at home.")
+        mages = self.callers(pid)
+        if not mages:
+            raise InvalidAction("Only a 5-star mage attuned to two elements can call reinforcements.")
+        floor = d["floor"]
+        party = self._ready_party(rid)
+        cost = self.call_cost(floor)
+        self.wallet.spend("purple_gel", cost)
+        pre: List[str] = []
+        self._autonomy_prepare(party, pre)
+        self._set_flag(party, "main")
+        self.delves[rid] = dict(floor=floor, start=floor, hours=0, camped=0)
+        return (f"📯 {mages[0].name} calls {self.parties.get(rid).name} to floor {floor} ({cost} purple gel). "
+                f"The two parties can now fight together.")
 
     def delve_camp(self, pid: int, hours: int = 4) -> List[str]:
         """Rest INSIDE the dungeon (sleep: ~8%/h healing, eats food). Ambushes can strike; intel reduces them."""
@@ -2405,7 +2518,12 @@ class Game:
         if not d:
             raise InvalidAction("That party is not inside the dungeon.")
         self._delve_wait(d)
-        hours = max(1, min(config.CAMP_HEAL_HOURS_MAX, int(hours)))
+        left = self.camp_left(pid)
+        if left <= 0:
+            raise InvalidAction(f"The party cannot camp on floor {d['floor']} any longer ({self.camp_limit(pid)}h at most here): "
+                                f"fight on, or call reinforcements.")
+        hours = max(1, min(config.CAMP_HEAL_HOURS_MAX, int(hours), left))
+        d["camped"] = d.get("camped", 0) + hours
         out: List[str] = []
         self._owed = 0.0
         for _ in range(hours):
@@ -2421,7 +2539,8 @@ class Game:
             party = self._members_in("main", pid)
             if not party:
                 break
-            p = min(0.7, config.CAMP_AMBUSH_BASE * (1 + 0.1 * d["floor"]) * (1 - 0.6 * self._knowledge(d["floor"]) / 100))
+            p = min(0.7, config.CAMP_AMBUSH_BASE * (1 + 0.1 * d["floor"]) * (1 - 0.6 * self._knowledge(d["floor"]) / 100)
+                    * (1 - config.CAMP_RELIEF_MAX * self.relief(pid)))
             if self.rng.random() < p:
                 v = self.rng.choice(party)
                 dmg = max(1, int(v.max_hp * self.rng.uniform(*config.CAMP_AMBUSH_DAMAGE) * (1 + 0.05 * d["floor"])))
@@ -2726,7 +2845,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -2783,6 +2902,7 @@ class Game:
         for k, v in g.potions.items():
             g.potion_peak[k] = max(g.potion_peak.get(k, 0), v)
         g.autonomy = d.get("autonomy", True)
+        g.forage = d.get("forage", True)
         g.vice = d.get("vice")
         g.vice_challenge = d.get("vice_challenge")                # checked when resolved (the roster loads below)
         g.hunt_group = d.get("hunt_group", 0)

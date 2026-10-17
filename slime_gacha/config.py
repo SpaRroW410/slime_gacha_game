@@ -9,6 +9,7 @@ RARITY_TAG = {"common": "C", "uncommon": "U", "rare": "R", "epic": "E", "legenda
 # Star rating 1..5. P(star = k) ~ exp(-lambda * (k-1)); lambda grows with rarity, so high stars are
 # exponentially rarer and the drop-off is steeper at higher ranks.
 MAX_STARS = 5
+RARITY_ASCEND_LEVEL = 100        # a slime may rise in rarity only at this level and at MAX_STARS stars
 STAR_DECAY = {"common": 0.7, "uncommon": 0.85, "rare": 1.0, "epic": 1.3, "legendary": 1.6}
 STAR_STAT_MULT = [1.0, 1.1, 1.25, 1.45, 1.7]
 PITY_EPIC = 0           # 0 = disabled (stated rates are honest). Set e.g. 10 / 50 to enable pity.
@@ -21,6 +22,7 @@ RESOURCES = ["white_gel", "purple_gel", "food", "essence", "herb_green", "herb_r
              "stone_common", "stone_uncommon", "stone_rare", "stone_epic", "stone_legendary"]       # add a name here to add a resource
 STARTING_WALLET = {"white_gel": 100, "purple_gel": 10, "food": 15, "essence": 0}
 MATERIAL_OF = {"common": "scrap", "uncommon": "alloy", "rare": "crystal", "epic": "stardust", "legendary": "voidglass"}   # crafting materials
+PULL_BULK_N, PULL_BULK_DISCOUNT = 10, 0.10     # pulling 10 or more at once costs 10% less
 PULL_COST = 10          # of white OR purple gel per single pull
 PURPLE_RARITY_BOOST = 5.0 # multiplies rare/epic/legendary weights when paying with purple gel
 DAY_TICKS = 24          # one game day; one free pull per day
@@ -207,6 +209,17 @@ REST_ENERGY_GAIN = 10
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
 # Library / mastery
 TASK_MIN_ENERGY = 25
+
+# ---- Occupations (jobs.py) ------------------------------------------------------------------
+JOB_XP_STEP = 5                # rounds of work for level 2; level n needs JOB_XP_STEP * (n-1)^2
+JOB_MAX_LEVEL = 10
+JOB_ENERGY_PER_HOUR = 0.5      # a working slime tires slowly (on top of normal decay)
+CHEF_GUESTS, CHEF_MEAL_SHARE = 2, 0.6      # hungry slimes fed per round (+1 per 3 levels); share of a Food item each gets
+SMITH_ITEMS, SMITH_MEND_SHARE = 3, 0.15    # items mended per round (+1 per 2 levels); share of max durability restored
+FORAGE_MIN_HP, FORAGE_MIN_ENERGY, FORAGE_MIN_FOOD = 0.7, 50, 35   # an idle slime sets out only when this rested and fed
+FORAGE_SAFETY = 1.5            # ... and only in a zone whose danger is at most power / this
+LIBRARIAN_LORE_XP = 6.0         # mastery XP a round of cataloguing gives one attuned slime (x power)
+TRAINER_PUPILS, TRAINER_GAIN = 1, 3.0      # pupils per round (+1 per 4 levels); base class-proficiency gain
 MASTERY_MIN_STARS = 3           # elemental mastery unlocks at 3 stars, for ANY class
 MASTERY_XP = [20, 60, 120, 200, 320, 480, 700, 1000]     # cumulative xp for mastery level 1..8
 MASTERY_PER_CAST_XP = 1
@@ -235,6 +248,8 @@ ELEMENT_DISADVANTAGE = 0.7
 CAMP_HEAL_HOURS_MAX = 24
 CAMP_HEAL_PER_HOUR = 0.08       # share of max HP a sleeping party recovers per hour of camp
 CAMP_AMBUSH_BASE = 0.10         # per hour of camping inside the Descent (scaled by floor, cut by intel)
+CAMP_RELIEF_MAX = 0.5          # ambush chance falls by up to this share while another party closes in from below
+CAMP_RELIEF_REACH = 3          # ... starting this many floors below
 CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
 SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 240
 SCOUT_RATE = 0.10               # knowledge: k' = 100 - (100 - k) * exp(-RATE * skill * hours)

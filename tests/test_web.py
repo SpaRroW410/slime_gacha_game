@@ -18,6 +18,7 @@ def session(seed=3, pulls=10, gel=500):
     s.game.wallet.add("food", 300)
     s.game.wallet.add("essence", 300)
     s.game.needs.auto_care = False
+    s.game.forage = False
     if pulls:
         assert s.call("pull", {"n": pulls, "pay": "white_gel"})["ok"]
     return s
