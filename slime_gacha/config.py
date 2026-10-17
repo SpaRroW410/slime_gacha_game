@@ -22,6 +22,7 @@ RESOURCES = ["white_gel", "purple_gel", "food", "essence", "herb_green", "herb_r
              "stone_common", "stone_uncommon", "stone_rare", "stone_epic", "stone_legendary"]       # add a name here to add a resource
 STARTING_WALLET = {"white_gel": 100, "purple_gel": 10, "food": 15, "essence": 0}
 MATERIAL_OF = {"common": "scrap", "uncommon": "alloy", "rare": "crystal", "epic": "stardust", "legendary": "voidglass"}   # crafting materials
+PULL_BULK_N, PULL_BULK_DISCOUNT = 10, 0.10     # pulling 10 or more at once costs 10% less
 PULL_COST = 10          # of white OR purple gel per single pull
 PURPLE_RARITY_BOOST = 5.0 # multiplies rare/epic/legendary weights when paying with purple gel
 DAY_TICKS = 24          # one game day; one free pull per day

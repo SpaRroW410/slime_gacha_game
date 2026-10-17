@@ -429,11 +429,12 @@ function gacha() {
   const st = S.state, r = st.rates, c = r.pull_cost;
   const rates = Object.entries(r.rarity).map(([k, v]) => `${chip(`${k} ${v}%`, k)}`).join(' ');
   const w = st.wallet;
-  const b = (n, pay, label, cls) => `<button class="btn ${cls}" data-act="pull" data-n="${n}" data-pay="${pay}" ${w[pay] >= c * n ? '' : 'disabled'}>${label}<br><small>${c * n} ${RES[pay][0]}</small></button>`;
+  const price = (n) => n >= r.bulk_n ? Math.round(c * n * (1 - r.bulk_discount)) : c * n;
+  const b = (n, pay, label, cls) => `<button class="btn ${cls}" data-act="pull" data-n="${n}" data-pay="${pay}" ${w[pay] >= price(n) ? '' : 'disabled'}>${label}<br><small>${price(n)} ${RES[pay][0]}${n >= r.bulk_n ? ` (−${Math.round(r.bulk_discount * 100)}%)` : ''}</small></button>`;
   return `<div class="panel well">
     <div class="blob big"><div class="body"><i></i><i></i></div><span class="em">🎰</span></div>
     <h2>The Last Gacha Well</h2>
-    <p class="mute">Each pull wakes a slime. Odds: ${rates}. Stars 1–5 fall off exponentially (steeper for higher rarities).<br>⚪ White gel and 🟣 purple gel cost ${c} per pull — purple gel multiplies rare+ odds ×${r.purple_boost}.</p>
+    <p class="mute">Each pull wakes a slime. Odds: ${rates}. Stars 1–5 fall off exponentially (steeper for higher rarities).<br>⚪ White gel and 🟣 purple gel cost ${c} per pull (pull ${r.bulk_n} or more at once for ${Math.round(r.bulk_discount * 100)}% off) — purple gel multiplies rare+ odds ×${r.purple_boost}.</p>
     <div class="row" style="justify-content:center;gap:12px">
       <button class="btn primary" data-act="pull" data-n="1" data-pay="free" ${st.free_pull.available ? '' : 'disabled'}>🎁 Free daily pull<br><small>${st.free_pull.available ? 'ready!' : `in ${st.free_pull.hours}h`}</small></button>
       ${b(1, 'white_gel', '⚪ Pull ×1', '')}${b(10, 'white_gel', '⚪ Pull ×10', '')}

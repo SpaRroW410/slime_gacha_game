@@ -308,7 +308,7 @@ def snapshot(g: Game) -> dict:
         classes=[dict(key=a.key, name=a.name, emoji=a.emoji) for a in all_archetypes()],
         stances=list(BEHAVIORS),
         rates=dict(rarity=config.RARITY_RATES, purple_boost=config.PURPLE_RARITY_BOOST,
-                   pull_cost=config.PULL_COST),
+                   pull_cost=config.PULL_COST, bulk_n=config.PULL_BULK_N, bulk_discount=config.PULL_BULK_DISCOUNT),
         mercy=dict(spar_cost=config.SPAR_COST, train_ticks=config.SPAR_TICKS),
         spec=dict(cost=config.SPEC_COST, style=config.SPEC_MIN_STYLE, level=config.SPEC_MIN_LEVEL, table=_spec_table()),
         outlooks=[dict(key=o.key, name=o.name, emoji=o.emoji, perk=o.perk) for o in outlook.OUTLOOKS.values()],

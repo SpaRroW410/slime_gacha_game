@@ -159,6 +159,21 @@ class TestRarityAndStars(unittest.TestCase):
             g.ascend_slime_rarity(s.id)
 
 
+class TestBulkPull(unittest.TestCase):
+    def test_ten_pulls_cost_ninety(self):
+        g = Game(5)
+        g.wallet.add("white_gel", 1000)
+        before = g.wallet.get("white_gel")
+        g.pull(10, "white_gel")
+        self.assertEqual(before - g.wallet.get("white_gel"), 90)
+        before = g.wallet.get("white_gel")
+        g.pull(9, "white_gel")
+        self.assertEqual(before - g.wallet.get("white_gel"), 90)        # nine singles: no discount
+        before = g.wallet.get("white_gel")
+        g.pull(20, "white_gel")
+        self.assertEqual(before - g.wallet.get("white_gel"), 180)
+
+
 class TestKeptAttributes(unittest.TestCase):
     def test_star_attributes_survive_rarity_ascension_and_grow(self):
         g = mk()
