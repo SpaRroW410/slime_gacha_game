@@ -490,6 +490,12 @@ function partyOptions(key, fullOnly = true, includeDelve = false) {
   return list.length ? `<select data-ui="${key}" data-rerender="1">${list.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''}>${esc(p.name)} (${p.members.length}/${st.party_size})</option>`).join('')}</select>`
     : '<small class="mute">No party is free (full and at home). Make one in the Parties tab or wait for them to return.</small>';
 }
+function stopPanel(pid, v) {
+  const st = S.state, s = v.stop;
+  return `<div class="panel flat stack"><b>🏕 Wayside stop</b> <small class="mute">A safe nook between floors: rest once without ambush, and buy supplies for white gel (one of each).</small>
+    <div class="row"><button class="btn small" data-act="stop_rest" data-pid="${pid}" ${s.rested || v.ready_in > 0 ? 'disabled' : ''}>🏕 Rest (3h, +50% HP)</button>
+    ${s.items.map((i) => `<button class="btn small" data-act="stop_buy" data-pid="${pid}" data-item="${i.key}" ${i.bought || st.wallet.white_gel < i.cost ? 'disabled' : ''} title="${esc(i.desc)}">${esc(i.name)} · ${i.cost} ⚪</button>`).join('')}</div></div>`;
+}
 function reinforcePanel(pid, v) {
   const st = S.state;
   const home = st.parties.filter((p) => p.full && !p.in_delve && p.members.every((id) => { const m = slimeById(id); return m && !m.busy; }));
@@ -529,6 +535,8 @@ function dungeonsAll() {
         <input type="number" min="1" max="24" value="${camp}" data-ui="camp_h" style="width:70px"><button class="btn" data-act="delve_camp" data-pid="${pid}" ${v.ready_in > 0 || v.camp_left <= 0 ? 'disabled' : ''}>⛺ Camp (h)</button>
         <button class="btn ${v.can_leave ? 'primary' : ''}" data-act="leave_dungeon" data-pid="${pid}" ${v.can_leave ? '' : 'disabled'} title="${v.can_leave ? 'Climb out' : 'Only possible at a checkpoint'}">🚪 Leave</button></div>
       ${v.can_leave ? '' : `<small class="mute">No way out until the boss of floor ${v.boss_floor} falls.</small>`}
+      ${v.modifier ? `<div class="chip bad">${esc(S.state.modifiers[v.modifier].emoji)} ${esc(S.state.modifiers[v.modifier].name)}: ${esc(S.state.modifiers[v.modifier].desc)}</div>` : ''}
+      ${v.stop ? stopPanel(+pid, v) : ''}
       <small class="mute" style="display:block">⛺ Camp time left on this floor: <b>${v.camp_left}h</b> of ${v.camp_limit}h (the floor number, stretched by how well it is scouted).${v.relief > 0 ? ` Ambushes are ${Math.round(v.relief * 50)}% less likely: another party is closing in from below.` : ''}</small>
       ${v.callers.length ? reinforcePanel(+pid, v) : ''}
       ${giftPanel(+pid)}</div>`; }).join('')}
@@ -1165,6 +1173,8 @@ const A = {
   dismiss_vice: () => act('dismiss_vice', {}),
   toggle_manual: () => { S.ui.manual = !manualOn(); render(); },
   delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn(), join: d.join ? [num(d.join)] : [] }, { title: 'The Hollow Descent' }),
+  stop_rest: (d) => act('delve_stop_rest', { pid: num(d.pid) }),
+  stop_buy: (d) => act('delve_stop_buy', { pid: num(d.pid), item: d.item }),
   call_reinforcements: (d) => { const rid = num(S.ui['rf_' + d.pid]); if (rid) act('call_reinforcements', { pid: num(d.pid), rid }); },
   battle_pick: (d) => { const b = S.state.battle; const ab = b?.abilities.find((a) => a.key === d.key); if (!ab) return;
     if (ab.target === 'enemy' || ab.target === 'ally') {

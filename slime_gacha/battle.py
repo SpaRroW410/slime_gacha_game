@@ -11,7 +11,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from . import config
 from .abilities import Ability, get_ability
 from . import attributes, elements, emotions, fx, items as items_mod, terrain as terrain_mod
-from . import sparring, spells
+from . import modifiers, sparring, spells
 from .archetypes import STAT_KEYS
 from .growth import add_xp
 from .registry import Registry
@@ -232,7 +232,8 @@ class BattleSystem:
         return run.report
 
     def start(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
-              xp_mult: float = 1.0, synergy: float = 1.0, terrain=None, manual: bool = False) -> "BattleRun":
+              xp_mult: float = 1.0, synergy: float = 1.0, terrain=None, manual: bool = False,
+              modifier=None, boons=()) -> "BattleRun":
         """Set a battle up and return it un-advanced; BattleRun.advance() plays it until a manual slime must choose."""
         totals: Dict[str, int] = {}
         for e in enemies:
@@ -252,6 +253,13 @@ class BattleSystem:
                f"{', '.join(c.emoji + c.name for c in foes)}"]
         if terrain:
             log.append(f"🌍 {terrain.emoji} {terrain.name}: {terrain_mod.describe(terrain)}")
+        if modifier:
+            log.extend(modifiers.apply(modifier, mine, foes))
+        for name, amount in boons:                          # bought at a wayside stop: lasts this fight
+            for c in mine:
+                fx.add_buff(c, name, amount, modifiers.WHOLE_FIGHT)
+        if boons:
+            log.append("🎒 Supplies from the wayside stop: " + ", ".join(f"{n} +{round(a * 100)}%" for n, a in boons))
         for s_ in party:
             note = emotions.battle_note(s_)
             if note:

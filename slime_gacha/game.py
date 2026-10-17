@@ -14,7 +14,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import jobs, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
+from . import jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
@@ -2403,8 +2403,12 @@ class Game:
         info = dungeon.floor_info(self.dungeon_seed, floor, self.parties.size)
         enemies = info.enemies
         delver_share = sum(outlook.has(s, "delve") for s in party) / max(1, len(party))
+        boons = [tuple(b) for q in pids for b in self.delves[q].get("boons", [])]
+        for q in pids:
+            self.delves[q]["boons"] = []                      # supplies from a wayside stop last one fight
         report = yield from self._battle_gen(party, enemies, intel=(1 + config.INTEL_POWER_BONUS * k / 100)
-                                             * (1 + config.OUTLOOK_DELVER_POWER * delver_share), terrain=info.terrain)
+                                             * (1 + config.OUTLOOK_DELVER_POWER * delver_share), terrain=info.terrain,
+                                             modifier=modifiers.get(info.modifier), boons=boons)
         boss = dungeon.is_boss_floor(floor)
         report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}{' (BOSS)' if boss else ''}: {info.title} "
                              f"[knowledge {k:.0f}%]" + (f" - {len(pids)} parties fight together" if len(pids) > 1 else ""))
@@ -2463,6 +2467,74 @@ class Game:
         report.log.extend(events)
         self.journal.extend(events)
         return report
+
+    # ---- wayside stops: a little shop and a safe rest between floors ------------------------------------------
+    STOP_ITEMS = {
+        "salve": ("Healing Salve", 8, "Heals the whole party for 35% of max HP."),
+        "ration": ("Trail Ration", 4, "5 Food for the colony's stores."),
+        "ward": ("Ward Charm", 10, "+15% defense for the next fight."),
+        "whetstone": ("Whetstone", 10, "+15% attack for the next fight."),
+    }
+
+    def _stop(self, pid: int) -> dict:
+        d = self.delves.get(pid)
+        if not d:
+            raise InvalidAction("That party is not inside the dungeon.")
+        if not dungeon.has_stop(d["floor"]):
+            raise InvalidAction(f"There is no wayside stop on floor {d['floor']}.")
+        st = d.get("stop")
+        if not st or st.get("floor") != d["floor"]:
+            st = d["stop"] = dict(floor=d["floor"], bought=[], rested=False)
+        return st
+
+    def stop_price(self, pid: int, item: str) -> int:
+        d = self.delves[pid]
+        return max(1, int(self.STOP_ITEMS[item][1] * (1 + d["floor"] / 10)))
+
+    def stop_view(self, pid: int) -> Optional[dict]:
+        d = self.delves.get(pid)
+        if not d or not dungeon.has_stop(d["floor"]):
+            return None
+        st = self._stop(pid)
+        return dict(rested=st["rested"], items=[dict(key=k, name=v[0], desc=v[2], cost=self.stop_price(pid, k), bought=k in st["bought"])
+                                                for k, v in self.STOP_ITEMS.items()])
+
+    def stop_rest(self, pid: int) -> str:
+        """A safe rest at the wayside stop (once per stop): the party mends half its health for 3 hours, no ambush."""
+        st = self._stop(pid)
+        self._delve_wait(self.delves[pid])
+        if st["rested"]:
+            raise InvalidAction("The party has already rested at this stop.")
+        party = self._members_in("main", pid)
+        for s in party:
+            s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.STOP_REST_HEAL))
+            s.stamina_frac = min(1.0, s.stamina_frac + 0.3)
+        st["rested"] = True
+        self._owed = 0.0
+        self._spend(config.STOP_REST_HOURS)
+        self.delves[pid]["hours"] += config.STOP_REST_HOURS
+        if self.live:
+            self.delves[pid]["ready_tick"] = self.tick_count + config.STOP_REST_HOURS
+        return f"🏕 {self.parties.get(pid).name} rests safely at the wayside stop ({config.STOP_REST_HOURS}h)."
+
+    def stop_buy(self, pid: int, item: str) -> str:
+        st = self._stop(pid)
+        if item not in self.STOP_ITEMS:
+            raise InvalidAction(f"The stop does not sell '{item}'.")
+        if item in st["bought"]:
+            raise InvalidAction("Sold out: the stop has one of each.")
+        name = self.STOP_ITEMS[item][0]
+        self.wallet.spend("white_gel", self.stop_price(pid, item))
+        st["bought"].append(item)
+        party = self._members_in("main", pid)
+        if item == "salve":
+            for s in party:
+                s.hp = min(s.max_hp, s.hp + int(s.max_hp * 0.35))
+        elif item == "ration":
+            self.wallet.add("food", 5)
+        else:
+            self.delves[pid].setdefault("boons", []).append(("defense", 0.15) if item == "ward" else ("atk", 0.15))
+        return f"🛒 Bought a {name}."
 
     def camp_limit(self, pid: int) -> int:
         """Hours a party may camp on its current floor: the floor number, stretched by how well the floor is known."""

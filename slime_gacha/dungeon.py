@@ -14,7 +14,7 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Dict, List, Optional, Tuple
 
-from . import bestiary, config, elements, terrain as terr
+from . import bestiary, config, elements, modifiers, terrain as terr
 from .battle import Enemy
 from .bestiary import MAX_FLOOR, Monster
 
@@ -56,6 +56,7 @@ class FloorInfo:
     signature: tuple
     boss: bool = False
     affinity: str = ""             # element an elemental floor favours ("" = an ordinary floor)
+    modifier: str = ""             # floor modifier key (modifiers.py), "" = none
 
 
 def _pool(kind: str, floor: int, families: Optional[Tuple[str, ...]] = None, need: int = 5) -> List[Monster]:
@@ -190,6 +191,24 @@ def _attune(t: terr.Terrain, el: str) -> terr.Terrain:
     return replace(t, name=f"{elements.get(el).name} {t.name}", boosts=boosts, dampens=dampens)
 
 
+MODIFIER_CHANCE = 0.32            # chance an ordinary floor (from floor 2) carries a modifier
+STOP_EVERY, STOP_OFFSET = 5, 3     # a wayside stop waits on floors 3, 8, 13 ... (never where the party could leave anyway)
+
+
+def has_stop(floor: int) -> bool:
+    return floor % STOP_EVERY == STOP_OFFSET and floor <= MAX_FLOOR
+
+
+def floor_modifier(seed: int, floor: int) -> str:
+    """The modifier of a floor, fixed by the dungeon seed ("" for none; boss floors never have one)."""
+    if floor < 2 or is_boss_floor(floor):
+        return ""
+    rng = random.Random(seed * 7368787 + floor * 2147483)
+    if rng.random() >= MODIFIER_CHANCE:
+        return ""
+    return rng.choice(modifiers.ORDER)
+
+
 def _generate_floors(seed: int, size: int) -> List[FloorInfo]:
     plans: List[FloorInfo] = []
     recent: List[tuple] = []
@@ -233,7 +252,8 @@ def _generate_floors(seed: int, size: int) -> List[FloorInfo]:
         t, pattern, enemies, sig, affinity = best
         enemies = _smooth(enemies, f, size, False)
         shown = _attune(t, affinity) if affinity else t
-        plans.append(FloorInfo(f, shown, enemies, pattern, _title(shown, pattern, enemies), sig, False, affinity))
+        plans.append(FloorInfo(f, shown, enemies, pattern, _title(shown, pattern, enemies), sig, False, affinity,
+                               floor_modifier(seed, f)))
         prev_terrain = t.key
         recent = (recent + [sig])[-4:]
     return plans
@@ -336,6 +356,8 @@ def intel_lines(seed: int, floor: int, knowledge: float, party_size: int) -> Lis
     if info.affinity:
         el = elements.get(info.affinity)
         lines.append(f"{el.emoji} elemental floor: {el.name} spells hit harder here (for both sides) and the opposing element softer")
+    if lvl >= 2 and info.modifier:
+        lines.append(modifiers.describe(modifiers.get(info.modifier)))
     if lvl >= 2:
         lines.append(f"{info.pattern}: " + _counts(mobs))
         els = sorted({e.element for e in enemies if e.element})

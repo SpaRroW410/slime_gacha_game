@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -242,6 +242,7 @@ def snapshot(g: Game) -> dict:
                        max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
+        modifiers={k: dict(name=m.name, emoji=m.emoji, desc=m.desc, boon=m.boon) for k, m in modifiers_mod.MODIFIERS.items()},
         jobs=dict(forage=g.forage, list=[dict(key=j.key, name=j.name, emoji=j.emoji, cycle=j.cycle, desc=j.description, talents=list(j.talents),
                                                   building=BUILDINGS.get(j.building).name, bemoji=BUILDINGS.get(j.building).emoji,
                                                   blevel=g.buildings.level(j.building), slots=jobs_mod.slots(g, j.key),
@@ -259,6 +260,7 @@ def snapshot(g: Game) -> dict:
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
                                    boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
                                    knowledge=g._knowledge(d["floor"]),
+                                   stop=g.stop_view(pid), modifier=((dungeon.floor_modifier(g.dungeon_seed, d["floor"]) or None) if dungeon.intel_level(g._knowledge(d["floor"])) >= 2 else None),
                                    camp_left=g.camp_left(pid), camp_limit=g.camp_limit(pid), relief=round(g.relief(pid), 2),
                                    joinable=g.joinable(pid), callers=[s.id for s in g.callers(pid)], call_cost=g.call_cost(d["floor"]),
                                    ready_in=(max(0, d.get("ready_tick", 0) - g.tick_count) if g.live else 0),
@@ -831,6 +833,16 @@ def _drill_party(g, a):
 @command("delve_next")
 def _delve_next(g, a):
     return _flow_result(g, "delve", g.delve_next(_i(a, "pid"), _manual(a), [int(x) for x in a.get("join", [])]))
+
+
+@command("delve_stop_rest")
+def _delve_stop_rest(g, a):
+    return [g.stop_rest(_i(a, "pid"))], {}
+
+
+@command("delve_stop_buy")
+def _delve_stop_buy(g, a):
+    return [g.stop_buy(_i(a, "pid"), str(a.get("item", "")))], {}
 
 
 @command("call_reinforcements")
