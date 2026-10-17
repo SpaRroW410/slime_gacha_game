@@ -104,19 +104,24 @@ class TestSparring(unittest.TestCase):
         g.spar(a.id, b.id, "sword")                       # allowed again
         self.assertGreater(a.style_xp["sword"], config.STYLE_XP[cap - 1])
 
-    def test_party_spar_pairs_and_dummy(self):
+    def test_two_parties_spar_as_teams(self):
         g = rich()
-        for _ in range(5):
-            mk(g)
-        p = g.create_party("P")
-        g.party_autofill(p.id)
+        pa, pb = g.create_party("A"), g.create_party("B")
+        for pid in (pa.id, pb.id):
+            for _ in range(g.parties.size):
+                s = mk(g)
+                g.parties.add(pid, s.id)
+        team_a, team_b = g.party_members(pa.id), g.party_members(pb.id)
         gel = g.wallet.get("white_gel")
-        res = g.spar_party(p.id, "magic")
-        self.assertEqual(len(res.reports), 2)
-        self.assertTrue(any("dummy" in l for l in res.summary))
-        self.assertTrue(all(s.style_xp.get("magic", 0) > 0 for s in g.slimes()))
-        self.assertEqual(sum(s.hp == 1 for s in g.slimes()), 2)     # two losers, nobody else hurt to 1
-        self.assertEqual(g.wallet.get("white_gel"), gel - 3)       # a party session is a flat 3, not per pair
+        bond = g.social.bond(team_a[0], team_a[1])
+        res = g.spar_parties(pa.id, pb.id, "magic")
+        self.assertEqual(len(res.reports), 1)
+        self.assertEqual(g.wallet.get("white_gel"), gel - 3)         # one flat price for the whole session
+        self.assertTrue(all(s.style_xp.get("magic", 0) > 0 for s in team_a + team_b))
+        self.assertTrue(any("synergy" in l for l in res.summary))
+        self.assertGreater(g.social.bond(team_a[0], team_a[1]), bond)   # teammates grew closer
+        with self.assertRaises(InvalidAction):
+            g.spar_parties(pa.id, pa.id, "magic")
 
     def test_sparring_builds_bonds_and_morale(self):
         g = rich()

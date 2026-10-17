@@ -480,10 +480,10 @@ function parties() {
 }
 
 /* ---------------------------------------------------------------- dungeons */
-function partyOptions(key, fullOnly = true, includeDelve = false) {
+function partyOptions(key, fullOnly = true, includeDelve = false, exclude = null) {
   const st = S.state;
   const home = (p) => p.members.every((id) => { const m = slimeById(id); return m && !m.busy; });
-  const list = st.parties.filter((p) => (includeDelve ? true : !p.in_delve && home(p)) && (!fullOnly || p.full));
+  const list = st.parties.filter((p) => (includeDelve ? true : !p.in_delve && home(p)) && (!fullOnly || p.full) && p.id != exclude);
   let cur = ui(key, list[0]?.id);
   if (!list.some((p) => p.id == cur)) cur = list[0]?.id;
   S.ui[key] = cur;
@@ -742,6 +742,9 @@ function academy() {
   const freeN = st.slimes.filter(avail).length;
   const duelA = slimeSel('spa', avail, 'data-rerender="1"');
   const duelB = slimeSel('spb', (s) => avail(s) && s.id != S.ui.spa, 'data-rerender="1"', 0);
+  const partyA = partyOptions('sppid');
+  const partyB = partyOptions('sppid2', true, false, S.ui.sppid);
+  const partyOk = !!S.ui.sppid && !!S.ui.sppid2 && S.ui.sppid != S.ui.sppid2;
   const duelOk = freeN >= 2 && S.ui.spa && S.ui.spb && S.ui.spa != S.ui.spb;
   const lib = st.library;
   const scholars = st.slimes.filter((s) => s.can_master && avail(s));
@@ -773,13 +776,13 @@ function academy() {
     <div class="row"><b>Party:</b> ${partyOptions('dppid')}<button class="btn" data-act="drill_party">Everyone drills</button></div></div>`;
   return `<div class="grid cols2">
   ${trainingFacility}
-  <div class="panel stack"><h2>⚔ Sparring — fighting styles ${info('A duel costs 2 white gel. A whole-party session costs a flat 3 white gel (not per pair). Each takes 3 hours. A sleeping slime is woken first (mood cost: morale and a flash of anger); a slime at a job leaves it (that shift is lost); a slime below half health is too hurt to spar and drills for less. Check the tags in the pickers.')}</h2>
+  <div class="panel stack"><h2>⚔ Sparring — fighting styles ${info('A duel costs 2 white gel. Two parties sparring as teams cost a flat 3 white gel (not per pair). Each takes 3 hours. A sleeping slime is woken first (mood cost: morale and a flash of anger); a slime at a job leaves it (that shift is lost); a slime below half health is too hurt to spar and drills for less. Check the tags in the pickers.')}</h2>
     <p class="mute">Training is not for XP. Slimes duel each other (non-lethal; the loser is left at <b>1 HP</b> — heal them at the Rest Area) to develop a <b>fighting style</b> with permanent combat perks. Costs ${cost(st.mercy.spar_cost)} per duel and ${st.mercy.train_ticks}h. Training Grounds L${tg.level}: ${esc(tg.now)}.</p>
     <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${arena === d.key ? 'sel' : ''}" data-act="arena" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><div class="sub">${esc(d.style)}</div><small class="mute">${esc(d.perk)}</small></div>`).join('')}</div>
     <div class="row"><b>Duel:</b> ${duelA} vs ${duelB}<button class="btn primary" data-act="spar" ${duelOk ? '' : 'disabled'}>Spar · 2 ⚪</button></div>
     ${away ? `<small class="mute">${away} slime${away > 1 ? 's are' : ' is'} away (dungeon, hunt or study) and not listed.</small>` : ''}
-    <div class="row"><b>Party sparring:</b> ${partyOptions('sppid')}<button class="btn" data-act="spar_party" ${S.ui.sppid ? '' : 'disabled'}>Everyone spars · 3 ⚪</button>${info('One flat price of 3 white gel for the whole party, however many pairs spar (an odd slime out trains on a dummy).')}</div>
-    <small class="mute">Party sparring: every member of a full, at-home party duels in pairs. One duel above is just two slimes.</small></div>
+    <div class="row"><b>Party vs party:</b> ${partyA} vs ${partyB}<button class="btn" data-act="spar_parties" ${partyOk ? '' : 'disabled'}>Parties spar · 3 ⚪</button>${info('Two full parties at home fight each other, non-lethally, for a flat 3 white gel (not per pair) and 3 hours. Every member gains fighting-style XP and class proficiency, and the members of each party grow closer, which raises party synergy. The loser is left low on health (the Hospital heals them).')}</div>
+    <small class="mute">${partyOk ? 'Two parties fight as teams to knit together and sharpen their class.' : 'You need two full parties at home to spar them against each other. Make them in the Parties tab.'}</small></div>
 
   <div class="panel stack"><h2>📚 Library</h2>
     <p class="mute">Elemental mastery unlocks at <b>3★ for any class</b> (mages get an extra element slot and study faster). Library spell slots: <b>${lib.slots}</b>${lib.tier3 ? '' : ' · Restricted Section (tier-3) needs Library L3'}.</p>
@@ -1268,8 +1271,8 @@ const A = {
   drill_party: () => { const pid = num(ui('dppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     act('drill_party', { pid, discipline: ui('yard', 'sword'), tier: num(ui('dtier', 1), 1) }); },
   spar: () => { const a = num(ui('spa', S.state.slimes[0]?.id)), b = num(ui('spb', S.state.slimes[1]?.id)); act('spar', { a, b, discipline: ui('arena', 'sword') }, { title: 'Sparring match' }); },
-  spar_party: () => { const pid = num(ui('sppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
-    act('spar_party', { pid, discipline: ui('arena', 'sword') }, { title: 'Sparring session', slow: true }); },
+  spar_parties: () => { const pid = num(S.ui.sppid), other = num(S.ui.sppid2); if (!pid || !other) return toast('You need two full parties at home.', true);
+    act('spar_parties', { pid, other, discipline: ui('arena', 'sword') }, { title: 'Party spar', slow: true }); },
   learn: (d) => { const id = num(ui('lib_s', S.state.slimes.find((s) => s.can_master)?.id)); act('learn', { id, spell: d.spell }); },
   forget: (d) => act('forget', { id: num(d.id), spell: d.spell }),
   res_preview: async (d) => { const r = await backend.call('research_preview', { id: num(d.id), a: ui('res_a'), b: ui('res_b') });

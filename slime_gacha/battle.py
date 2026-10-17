@@ -391,6 +391,26 @@ class BattleSystem:
         rep.winner_slime = a if winner == "party" else b
         return rep
 
+    def team_spar(self, party_a, party_b, syn_a: float = 1.0, syn_b: float = 1.0) -> "BattleReport":
+        """Non-lethal friendly match between two whole parties. No XP, no loot; whoever reaches 1 HP yields, and
+        everybody's HP is written back (losers are left low). The caller handles style XP, proficiency and bonds."""
+        ca = [self.from_slime(s, syn_a, "party") for s in party_a]
+        cb = [self.from_slime(s, syn_b, "foes") for s in party_b]
+        for c in ca + cb:
+            c.nonlethal = True
+            c.stamina_max = 0.0
+        log = ["🥊 Party spar: " + ", ".join(c.emoji + c.name for c in ca) + "  vs  " + ", ".join(c.emoji + c.name for c in cb)]
+        self.terrain = None
+        rounds, winner = self._simulate(ca + cb, log, config.DUEL_ROUND_CAP)
+        if winner is None:                      # round cap: the healthier side takes it on points
+            share = lambda cs: sum(c.hp for c in cs) / max(1.0, sum(c.max_hp for c in cs))
+            winner = "party" if share(ca) >= share(cb) else "foes"
+        log.append(f"🏅 {'The first' if winner == 'party' else 'The second'} party wins the spar!")
+        for s, c in list(zip(party_a, ca)) + list(zip(party_b, cb)):
+            s.hp = max(1, int(c.hp))
+            s.needs.add("energy", -8)
+        return BattleReport(log, winner, rounds)
+
     @staticmethod
     def _side_alive(everyone, side) -> bool:
         return any(c.alive and c.side == side and not c.minion for c in everyone)

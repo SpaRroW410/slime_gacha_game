@@ -143,7 +143,7 @@ def sparring_menu(g: Game) -> None:
     who = _ask("spar [s]ingle duel or a whole [p]arty: ").lower()[:1]
     if who == "p":
         show_parties(g)
-        res = g.spar_party(_int("party #: "), d)
+        res = g.spar_parties(_int("first party #: "), _int("second party #: "), d)
     else:
         show_roster(g)
         res = g.spar(_int("first slime id: "), _int("second slime id: "), d)
@@ -727,7 +727,7 @@ def run_demo(seed: int) -> None:
         s.grounded = False
         s.hp, s.state = s.max_hp, "idle"
         s.needs.v["energy"] = s.needs.v["food"] = 100
-    res = g.spar_party(1, "sword")
+    res = g.spar(g.party_members(1)[0].id, g.party_members(1)[1].id, "sword")
     print("\n".join("  " + x for x in res.summary[:9]))
     print("  HP after sparring: " + ", ".join(f"{s.name} {s.hp}/{s.max_hp}" for s in g.party_members(1)))
     print("  " + g.party_rest(1))

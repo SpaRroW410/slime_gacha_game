@@ -59,9 +59,9 @@ class TestTrainingGate(unittest.TestCase):
 
     def test_party_spar_is_flat_three_and_a_duel_is_two(self):
         g = rich(45)
-        pid = party(g)
+        pid, other = party(g, name="A"), party(g, name="B")
         gel = g.wallet.get("white_gel")
-        g.spar_party(pid, "sword")
+        g.spar_parties(pid, other, "sword")
         self.assertEqual(gel - g.wallet.get("white_gel"), 3)
         a, b = slime(g, "barbarian"), slime(g, "rogue")
         gel = g.wallet.get("white_gel")

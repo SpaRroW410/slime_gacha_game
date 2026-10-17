@@ -1010,19 +1010,67 @@ class Game:
         STYLE. No XP; the loser is left at 1 HP (use the Rest Area). Costs 2 white gel and 3 hours (a whole party session is a flat 3)."""
         return self._spar_group([(self.slime(a_id), self.slime(b_id))], None, discipline, config.SPAR_COST)
 
-    def spar_party(self, pid: int, discipline: str) -> SparResult:
-        """Everyone in a full party spars in random pairs; an odd slime out trains on a dummy."""
-        self._require_full(pid)
-        members = self.party_members(pid)
-        self.rng.shuffle(members)
-        pairs = [(members[i], members[i + 1]) for i in range(0, len(members) - 1, 2)]
-        odd = members[-1] if len(members) % 2 else None
-        return self._spar_group(pairs, odd, discipline, config.SPAR_PARTY_COST)
+    def spar_parties(self, pid_a: int, pid_b: int, discipline: str) -> SparResult:
+        """Two full parties fight each other (non-lethal) to knit together and sharpen their class: every member
+        earns fighting-style XP and class proficiency, and the members of each party grow closer (bonds, so party
+        synergy rises). Costs a flat 3 white gel and 3 hours for the whole session."""
+        if pid_a == pid_b:
+            raise InvalidAction("Pick two different parties.")
+        d = sparring.DISCIPLINES.get(discipline)
+        for pid in (pid_a, pid_b):
+            self._require_full(pid)
+        team_a, team_b = self.party_members(pid_a), self.party_members(pid_b)
+        everyone = team_a + team_b
+        for s in everyone:
+            sparring.check_ready(s)
+        cap = self.buildings.style_cap()
+        if all(sparring.style_level(s, d.key) >= cap for s in everyone):
+            raise InvalidAction(f"Everyone is already at the {d.style} ceiling (level {cap}) - upgrade the Training Grounds.")
+        self.wallet.spend_many(config.SPAR_PARTY_COST)
+        res = SparResult()
+        res.summary.extend(self._prepare_trainees(everyone))
+        syn_a, syn_b = self.social.synergy(team_a), self.social.synergy(team_b)
+        rep = self.battles.team_spar(team_a, team_b, syn_a, syn_b)
+        res.reports.append(rep)
+        names = (self.parties.get(pid_a).name, self.parties.get(pid_b).name)
+        winner = 0 if rep.winner == "party" else 1
+        res.summary.append(f"{d.emoji} {names[winner]} beat {names[1 - winner]} in {rep.rounds} rounds")
+        for i, team in enumerate((team_a, team_b)):
+            before = self.social.synergy(team)
+            for x in range(len(team)):                    # teamwork: every pair in the party grows closer
+                for y in range(x + 1, len(team)):
+                    self.social.add_bond(team[x], team[y], config.SPAR_PARTY_BOND)
+            for s in team:
+                self._spar_reward(res, s, d, i == winner, cap)
+            res.summary.append(f"   {names[i]}'s synergy {before - 1:+.1%} -> {self.social.synergy(team) - 1:+.1%}")
+        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train")
+        res.summary.extend("   " + e for e in events if "died" in e)
+        self.journal.extend(events)
+        return res
+
+    def _spar_reward(self, res: SparResult, s: Slime, d, won: Optional[bool], cap: int, dummy: bool = False) -> None:
+        """Style XP, class proficiency and a little morale for one sparring slime."""
+        mult = self.buildings.style_mult() * jobs.trainer_bonus(self, d.key)        # an appointed trainer speeds it up
+        before = sparring.style_level(s, d.key)
+        xp = sparring.style_xp_for(s, d.key, won, mult, dummy)
+        if outlook.has(s, "spar"):
+            xp *= config.OUTLOOK_DUELIST_STYLE
+        outlook.bump(s, "spar")
+        tb = jobs.trainer_bonus(self, d.key)
+        self.practise_discipline(s, d.key, config.PROF_SPAR_OWN * tb, config.PROF_SPAR_OTHER)
+        after = sparring.gain_style_xp(s, d.key, xp, cap)
+        self.social.shift_morale(s, 2 + (2 if won else 0))
+        note = f"+{xp:.0f} {d.style} xp"
+        if after > before:
+            note += f" ⬆ {d.style} level {after}!"
+        elif after >= cap and sparring.style_level(s, d.key) >= cap:
+            note += " (Training Grounds ceiling)"
+        res.summary.append(f"   {s.name}: {note}")
 
     def _spar_group(self, pairs, dummy_slime, discipline: str, cost: Dict[str, int]) -> SparResult:
         d = sparring.DISCIPLINES.get(discipline)
         cap = self.buildings.style_cap()
-        everyone = [s for p in pairs for s in p] + ([dummy_slime] if dummy_slime else [])
+        everyone = [s for p in pairs for s in p]
         if len({s.id for s in everyone}) != len(everyone):
             raise InvalidAction("A slime can't spar with themselves.")
         for s in everyone:
@@ -1034,40 +1082,16 @@ class Game:
         self.wallet.spend_many(cost)
         res = SparResult()
         res.summary.extend(notes)
-        mult = self.buildings.style_mult() * jobs.trainer_bonus(self, d.key)       # an appointed trainer speeds it up
-
-        def reward(s, won, dummy=False):
-            before = sparring.style_level(s, d.key)
-            xp = sparring.style_xp_for(s, d.key, won, mult, dummy)
-            if outlook.has(s, "spar"):
-                xp *= config.OUTLOOK_DUELIST_STYLE
-            outlook.bump(s, "spar")
-            tb = jobs.trainer_bonus(self, d.key)
-            self.practise_discipline(s, d.key, config.PROF_SPAR_OWN * tb, config.PROF_SPAR_OTHER)
-            after = sparring.gain_style_xp(s, d.key, xp, cap)
-            self.social.shift_morale(s, 2 + (2 if won else 0))
-            note = f"+{xp:.0f} {d.style} xp"
-            if after > before:
-                note += f" ⬆ {d.style} level {after}!"
-            elif after >= cap and sparring.style_level(s, d.key) >= cap:
-                note += " (Training Grounds ceiling)"
-            res.summary.append(f"   {s.name}: {note}")
-
         for a, b in pairs:
             rep = self.battles.duel(a, b)
             res.reports.append(rep)
             win, lose = (a, b) if rep.winner == "party" else (b, a)
             res.summary.append(f"{d.emoji} {win.name} beat {lose.name} in {rep.rounds} rounds "
                                f"({lose.name} left at {lose.hp} HP)")
-            reward(win, True)
-            reward(lose, False)
+            self._spar_reward(res, win, d, True, cap)
+            self._spar_reward(res, lose, d, False, cap)
             self.social.add_bond(a, b, config.SPAR_BOND)
-        if dummy_slime:
-            res.summary.append(f"{d.emoji} {dummy_slime.name} drills on a training dummy")
-            reward(dummy_slime, None, dummy=True)
-            dummy_slime.needs.add("energy", -4)
-        who = {x for pr in pairs for x in pr} | ({dummy_slime} if dummy_slime else set())
-        events = self._occupy([x for x in who if x.id in self.roster], config.SPAR_TICKS, "train")
+        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train")
         res.summary.extend("   " + e for e in events if "died" in e)
         self.journal.extend(events)
         return res

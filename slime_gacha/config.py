@@ -169,6 +169,7 @@ SPAR_WINNER_MULT = 1.3
 SPAR_DUMMY_MULT = 0.5           # odd slime out trains on a dummy at half rate (no HP loss)
 SPAR_MIN_HP = 0.4
 SPAR_BOND = 3
+SPAR_PARTY_BOND = 4             # every pair inside a party that spars as a team grows this much closer
 STYLE_AFFINITY_MULT = 1.5       # practising the discipline that matches your class
 STYLE_XP = [30, 80, 150, 250, 400, 600, 850, 1150, 1500, 2000]   # cumulative xp for style level 1..10
 STYLE_SWORD_DAMAGE = 0.03       # per level: +3% attack-stat damage ...

@@ -506,9 +506,9 @@ def _spar(g, a):
     return r.summary, dict(battle=[_battle(x) for x in r.reports])
 
 
-@command("spar_party")
-def _spar_party(g, a):
-    r = g.spar_party(_i(a, "pid"), a.get("discipline", ""))
+@command("spar_parties")
+def _spar_parties(g, a):
+    r = g.spar_parties(_i(a, "pid"), _i(a, "other"), a.get("discipline", ""))
     return r.summary, dict(battle=[_battle(x) for x in r.reports])
 
 
