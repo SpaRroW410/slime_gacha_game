@@ -26,6 +26,25 @@ PURPLE_RARITY_BOOST = 5.0 # multiplies rare/epic/legendary weights when paying w
 DAY_TICKS = 24          # one game day; one free pull per day
 FOOD_NUTRITION = 50     # food need restored per Food item
 MEDIATE_SNACK_COST = 2
+# Vice Keeper: a trusted slime who stands in for the Keeper (everything except merging and destroying)
+VICE_MIN_STARS = 3
+VICE_MEDIATE_CHANCE = 0.3        # per hour, for each quarrel the vice keeper can reach
+VICE_FEED_BELOW = 25             # feeds a reachable slime that is this hungry
+NAME_MAX = 24
+LEADER_POWER = 0.03              # party synergy bonus from a good leader (scaled by the leader's morale)
+LEADER_MEDIATE_CHANCE = 0.15     # per hour, a party leader settles a quarrel inside the party while they are away
+VICE_HUNT_MAX_PARTIES = 3
+VICE_CHALLENGE_LEVEL_GAP = 3     # a slime must out-level the Vice Keeper by this much to challenge on its own
+VICE_CHALLENGE_DAILY = 0.1       # daily chance that such a proud slime asks
+# Commander's gifts (purple gel): the only way to reach a party that is inside the Descent, or in a skirmish
+GIFT_MORALE_COST = 1
+GIFT_MORALE_GAIN = 12
+GIFT_PEACE_COST = 1
+GIFT_POTION_PURPLE = [1, 2, 3, 5, 8]          # purple gel for a grade 1-5 potion, bought and drunk on the spot
+POTION_SLOTS_BASE = 1                          # potion slots a slime can have active at once = this + stars (2 to 6)
+GEAR_SCRAP_REFUND = 0.5                        # share of a gear's price returned when it is destroyed
+GEAR_MERGE_COUNT = 3                           # identical gear that merge into one of the next tier
+RELIC_MERGE_MOD_CHANCE = 0.35                  # chance a merged relic inherits one of the donor's mods it lacks
 
 # ---- Needs (Maslow) -------------------------------------------------------
 # Order matters: lowest tier first. Higher tiers are suppressed while a lower one is unmet.
@@ -69,6 +88,17 @@ def pit_xp_boost(avg_level: float) -> float:
     return max(1.0, (avg_level / 20) ** 0.75)
 
 XP_RARITY_MULT = {"common": 1, "uncommon": 2, "rare": 4, "epic": 8, "legendary": 16}   # doubles with every rarity
+# Class proficiency: how sharp a slime is at its original discipline (see attributes.capstones)
+PROF_START, PROF_FLOOR = 50.0, 20.0
+PROF_IDLE_DAYS = 3             # days without practice before proficiency starts to fade
+PROF_DECAY = 1.0               # lost per further idle day (never below PROF_FLOOR)
+PROF_BATTLE_GAIN, PROF_BATTLE_CAP = 0.3, 4.0     # per action taken in a fight, at most per fight
+PROF_SPAR_OWN, PROF_SPAR_OTHER, PROF_STUDY = 3.0, 1.0, 3.0
+PROF_BOTH_CAPSTONES, PROF_ONE_CAPSTONE = 70.0, 30.0   # proficiency needed for both / for the first pure capstone
+# Hybrid (specialized) classes: a second proficiency in the secondary discipline scales the hybrid capstone
+PROF_SPEC_START = 30.0
+PROF_SPEC_BATTLE_GAIN = 0.5    # per hybrid skill used in a fight (capped by PROF_BATTLE_CAP)
+HYBRID_CAPSTONE_MAX = 0.6      # hybrid capstones reach at most this share of a pure capstone's strength
 STAR_LEVELS = {                                   # level needed to ascend to 2 / 3 / 4 / 5 stars: rarer slimes level slower, so they need fewer
     "common": [10, 30, 60, 100], "uncommon": [10, 25, 50, 80], "rare": [10, 20, 40, 65],
     "epic": [10, 15, 30, 50], "legendary": [10, 12, 22, 35]}
@@ -237,7 +267,7 @@ OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 14
+SAVE_VERSION = 15
 DEFAULT_SAVE = "savegame.json"
 
 

@@ -180,3 +180,130 @@ class TestLevelHundredBalance(unittest.TestCase):
         rep = g.grind(pid, 3, 1).runs[0]
         self.assertTrue(rep.victory)
         self.assertLess(config.xp_to_next(99) / max(1, rep.xp), 20)      # common: well under 20 Pit runs per level
+
+
+class TestMergeAndMediate(unittest.TestCase):
+    def test_keeper_cannot_mediate_for_slimes_away_from_the_colony(self):
+        g = rich(21)
+        a, b = (g.gacha.make_slime("common", "barbarian") for _ in range(2))
+        for s in (a, b):
+            g.roster[s.id] = s
+        from slime_gacha.ai import Conflict
+        c = Conflict(id=1, a=a.id, b=b.id, severity=1, age=0, reason="test")
+        g.conflicts.conflicts.append(c)
+        a.in_dungeon = "grind"
+        with self.assertRaises(InvalidAction):
+            g.mediate(1, "talk")
+        with self.assertRaises(InvalidAction):
+            g.mediate(1, "snack")
+        a.in_dungeon = ""
+        self.assertIn("make up", g.mediate(1, "snack"))
+
+    def test_manual_merge_preview_and_merge_of_any_two_free_slimes(self):
+        se = Session()
+        se.new_game(5)
+        g = se.game
+        ids = [g.gacha.make_slime("common", "barbarian") for _ in range(2)]
+        for s in ids:
+            g.roster[s.id] = s
+        t, d = ids
+        d.total_xp = 500
+        pv = se.call("merge_preview", dict(target=t.id, donor=d.id))
+        self.assertTrue(pv["ok"] and pv["result"]["xp"] > 0 and "grief" in pv["result"])
+        self.assertFalse(se.call("merge_preview", dict(target=t.id, donor=t.id))["ok"])
+        r = se.call("merge", dict(target=t.id, donor=d.id))
+        self.assertTrue(r["ok"])
+        self.assertNotIn(d.id, g.roster)
+        d2 = g.gacha.make_slime("common", "mage")
+        g.roster[d2.id] = d2
+        d2.in_dungeon = "grind"
+        self.assertFalse(se.call("merge", dict(target=t.id, donor=d2.id))["ok"])
+
+
+class TestGiftsPotionsGear(unittest.TestCase):
+    def _g(self, strong=False):
+        g = rich(31)
+        pid = party(g, strong=strong)
+        return g, pid
+
+    def test_potion_slots_follow_stars(self):
+        from slime_gacha import attributes, potions
+        g, pid = self._g()
+        s = members(g, pid)[0]
+        for stars, slots in ((1, 2), (2, 3), (3, 4), (4, 5), (5, 6)):
+            s.stars = stars
+            self.assertEqual(attributes.potion_slots(s), slots)
+        s.stars = 1
+        kinds = list(potions.KINDS)[:3]
+        for k in kinds:
+            g.potions[f"{k}:1"] = 1
+        g.use_potion(s.id, kinds[0], 1)
+        g.use_potion(s.id, kinds[1], 1)
+        with self.assertRaises(InvalidAction):
+            g.use_potion(s.id, kinds[2], 1)
+        self.assertEqual(g.potions[f"{kinds[2]}:1"], 1)         # not consumed
+
+    def test_gifts_reach_a_descent_party_with_purple_gel(self):
+        g, pid = self._g()
+        for s in members(g, pid):
+            s.progress = 0
+        g.enter_dungeon(pid, 1)
+        s0, s1 = members(g, pid)[:2]
+        with self.assertRaises(InvalidAction):
+            g.use_potion(s0.id, "vigor", 1)                      # care is still refused inside
+        purple = g.wallet.get("purple_gel")
+        m0 = s0.morale
+        g.commander_gift(pid, "morale")
+        self.assertGreater(s0.morale, m0 - 1)
+        self.assertEqual(g.wallet.get("purple_gel"), purple - 1)
+        with self.assertRaises(InvalidAction):
+            g.commander_gift(pid, "peace")                       # nothing to settle
+        from slime_gacha.ai import Conflict
+        g.conflicts.conflicts.append(Conflict(id=9, a=s0.id, b=s1.id, severity=1, age=0, reason="t"))
+        g.commander_gift(pid, "peace")
+        self.assertFalse(g.conflicts.conflicts)
+        g.commander_gift(pid, "potion", s0.id, "might", 2)
+        self.assertTrue(any(b["kind"] == "might" for b in s0.buffs))
+        self.assertEqual(g.wallet.get("purple_gel"), purple - 1 - 1 - 2)
+
+    def test_gifts_refused_for_a_party_at_home_and_in_the_pit(self):
+        g, pid = self._g()
+        with self.assertRaises(InvalidAction):
+            g.commander_gift(pid, "morale")
+        g.grind(pid, 1, 1, manual=True)
+        with self.assertRaises(InvalidAction):
+            g.commander_gift(pid, "morale")
+
+    def test_gift_during_a_manual_skirmish_changes_the_live_fight(self):
+        g, pid = self._g(strong=True)
+        g.battle(pid, 1, manual=True)
+        s = members(g, pid)[0]
+        run = g.battle_run()
+        c = next(c for c in run.mine if c.source is s)
+        atk = c.stats["atk"]
+        g.commander_gift(pid, "potion", s.id, "might", 3)
+        self.assertGreater(c.stats["atk"], atk)
+
+    def test_relic_merge_and_gear_destroy_and_merge(self):
+        g = rich(33)
+        a = g.new_item(rarity="common")
+        b = g.new_item(rarity="common")
+        while b.slot != a.slot:
+            b = g.new_item(rarity="common")
+        g.vault[a.uid], g.vault[b.uid] = a, b
+        b.level = 6
+        lv = a.level
+        g.merge_items(a.uid, b.uid)
+        self.assertGreater(a.level, lv)
+        self.assertNotIn(b.uid, g.vault)
+        with self.assertRaises(InvalidAction):
+            g.merge_items(a.uid, a.uid)
+        g.inventory.add("wooden_club", 3)
+        white = g.wallet.get("white_gel")
+        g.destroy_gear("wooden_club", 1)
+        self.assertEqual(g.wallet.get("white_gel"), white + 15)
+        g.inventory.add("wooden_club", 1)
+        g.merge_gear("wooden_club", "goo_blade")
+        self.assertEqual(g.inventory.items["goo_blade"], 1)
+        with self.assertRaises(InvalidAction):
+            g.merge_gear("wooden_club", "kings_edge")            # not the next tier

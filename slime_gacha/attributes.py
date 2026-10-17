@@ -39,6 +39,8 @@ def hourly_regen(slime) -> float:
 
 
 def action_cost(ability) -> float:
+    if ability.kind == "utility":
+        return config.STAMINA_COSTS["heal"]
     if ability.kind == "guard":
         return config.STAMINA_COSTS["guard"]
     if ability.kind == "heal":
@@ -50,6 +52,11 @@ def action_cost(ability) -> float:
 
 
 # ---- buffs (potions) --------------------------------------------------------------------------------------------------------
+def potion_slots(slime) -> int:
+    """How many potions a slime can have active at once: 2 at one star up to 6 at five."""
+    return config.POTION_SLOTS_BASE + slime.stars
+
+
 def buff_value(slime, kind: str) -> float:
     return sum(b["bonus"] for b in getattr(slime, "buffs", []) if b["kind"] == kind)
 
@@ -89,37 +96,131 @@ def battle_mods(slime) -> Dict[str, float]:
 
 
 # ---- rarity skills --------------------------------------------------------------------------------------------------------------
+def _A(key, name, kind, power, stat, target, cd, dur, desc, *fxs):
+    return Ability(key, name, kind, power, stat, target, cd, dur, desc, fx=tuple(fxs))
+
+
 _S = dict(
-    barbarian=[Ability("moon_slash", "Moon Slash", "damage", 1.7, "atk", "enemy", 2, 0, "A crescent of goo cuts one foe."),
-               Ability("aura_blade", "Aura Blade", "damage", 1.0, "atk", "all_enemies", 3, 0, "A glowing arc sweeps every foe."),
-               Ability("earthsplitter", "Earthsplitter", "damage", 3.0, "atk", "enemy", 4, 0, "The ground itself breaks."),
-               Ability("titan_break", "Titan Break", "damage", 2.4, "atk", "all_enemies", 5, 0, "A world-shaking finisher.")],
-    mage=[Ability("mana_lance", "Mana Lance", "damage", 1.8, "mag", "enemy", 2, 0, "A lance of pure mana."),
-          Ability("starfall", "Starfall", "damage", 1.0, "mag", "all_enemies", 3, 0, "Stars rain on the foes."),
-          Ability("void_rift", "Void Rift", "damage", 3.2, "mag", "enemy", 4, 0, "Tear a hole in one foe."),
-          Ability("cataclysm", "Cataclysm", "damage", 2.4, "mag", "all_enemies", 5, 0, "Everything burns.")],
-    medic=[Ability("healing_light", "Healing Light", "heal", 2.0, "mag", "ally", 2, 0, "A strong, focused heal."),
-           Ability("sanctuary_mist", "Sanctuary Mist", "heal", 1.2, "mag", "all_allies", 3, 0, "A mist mends the whole party."),
-           Ability("aegis_bloom", "Aegis Bloom", "guard", 0.0, "mag", "ally", 3, 3, "A flower ward halves damage for 3 turns."),
-           Ability("miracle_bloom", "Miracle Bloom", "heal", 2.4, "mag", "all_allies", 5, 0, "Everyone is nearly restored.")],
-    rogue=[Ability("shadow_stab", "Shadow Stab", "damage", 1.8, "atk", "enemy", 2, 0, "Strike from nowhere."),
-           Ability("viper_kiss", "Viper Kiss", "poison", 0.7, "atk", "enemy", 3, 4, "A lingering, vicious poison."),
-           Ability("death_mark", "Death Mark", "damage", 3.0, "atk", "enemy", 4, 0, "A marked foe takes a killing blow."),
-           Ability("thousand_cuts", "Thousand Cuts", "damage", 1.4, "atk", "all_enemies", 5, 0, "A blur of blades.")],
-    ranger=[Ability("piercing_shot", "Piercing Shot", "damage", 1.9, "atk", "enemy", 2, 0, "An arrow that ignores the odds."),
-            Ability("rain_of_stars", "Rain of Stars", "damage", 1.0, "atk", "all_enemies", 3, 0, "Glittering arrows fall everywhere."),
-            Ability("hawkeye", "Hawkeye", "damage", 3.0, "atk", "enemy", 4, 0, "One shot, never missed."),
-            Ability("heavens_volley", "Heaven's Volley", "damage", 2.2, "atk", "all_enemies", 5, 0, "The sky answers.")],
-    necromancer=[Ability("bone_spear", "Bone Spear", "damage", 1.8, "mag", "enemy", 2, 0, "A javelin of old bone."),
-                 Ability("plague_cloud", "Plague Cloud", "poison", 0.7, "mag", "enemy", 3, 4, "A rotting haze."),
-                 Ability("grave_feast", "Grave Feast", "drain", 2.0, "mag", "enemy", 4, 0, "Feast on a foe's life."),
-                 Ability("legion_of_bones", "Legion of Bones", "summon", 1.0, "mag", "self", 5, 0, "A greater bone servant answers.")],
+    barbarian=[_A("moon_slash", "Moon Slash", "damage", 1.7, "atk", "enemy", 2, 0, "A crescent of goo cuts deep and leaves the foe bleeding.", ("bleed", 3, 0.25)),
+               _A("aura_blade", "Aura Blade", "damage", 1.0, "atk", "all_enemies", 3, 0, "A glowing arc sweeps every foe, slicing through 30% of their armor.", ("pierce", "def", 0.3)),
+               _A("earthsplitter", "Earthsplitter", "damage", 3.0, "atk", "enemy", 4, 0, "The ground breaks: a huge hit with a good chance to stun.", ("stun", 0.4)),
+               _A("titan_break", "Titan Break", "damage", 2.4, "atk", "all_enemies", 5, 0, "A world-shaking finisher; the Titan is ready to act again at once.", ("extra_turn",))],
+    mage=[_A("mana_lance", "Mana Lance", "damage", 1.8, "mag", "enemy", 2, 0, "A lance of pure mana that ignores magic resistance.", ("pierce", "resist", 1.0)),
+          _A("starfall", "Starfall", "damage", 1.0, "mag", "all_enemies", 3, 0, "Stars of every element rain on the foes.", ("prism",)),
+          _A("void_rift", "Void Rift", "damage", 3.2, "mag", "enemy", 4, 0, "Tear a hole in one foe: huge damage, one round later.", ("delay", 1)),
+          _A("cataclysm", "Cataclysm", "damage", 2.4, "mag", "all_enemies", 5, 0, "Everything burns; far worse on hazardous ground.", ("terrain_boost", 0.5))],
+    medic=[_A("healing_light", "Healing Light", "heal", 2.0, "mag", "ally", 2, 0, "A strong, focused heal that also cleanses poison, bleeding and curses.", ("cleanse",)),
+           _A("sanctuary_mist", "Sanctuary Mist", "heal", 1.2, "mag", "all_allies", 3, 0, "A mist mends the whole party and keeps healing it for 3 turns.", ("buff", "regen", 0.05, 3)),
+           _A("aegis_bloom", "Aegis Bloom", "utility", 1.0, "mag", "ally", 3, 0, "A flower ward absorbs the next stretch of damage on one ally.", ("shield", 2.5)),
+           _A("miracle_bloom", "Miracle Bloom", "heal", 2.4, "mag", "all_allies", 5, 0, "Everyone is nearly restored.")],
+    rogue=[_A("shadow_stab", "Shadow Stab", "damage", 1.8, "atk", "enemy", 2, 0, "Strike from nowhere: a sure crit on a foe that has not acted yet.", ("first_strike",)),
+           _A("viper_kiss", "Viper Kiss", "poison", 0.7, "atk", "enemy", 3, 4, "A vicious poison that stacks on a foe already poisoned.", ("stack",)),
+           _A("death_mark", "Death Mark", "damage", 1.5, "atk", "enemy", 4, 0, "The marked foe takes 50% more damage from everyone for 3 turns.", ("mark", 3, 0.5)),
+           _A("thousand_cuts", "Thousand Cuts", "damage", 0.6, "atk", "all_enemies", 5, 0, "A blur of blades: three hits on every foe, each can crit.", ("hits", 3))],
+    ranger=[_A("piercing_shot", "Piercing Shot", "damage", 1.9, "atk", "enemy", 2, 0, "An arrow that ignores guard.", ("pierce", "guard", 1.0)),
+            _A("rain_of_stars", "Rain of Stars", "damage", 1.0, "atk", "all_enemies", 3, 0, "Glittering arrows fall everywhere and slow the foes.", ("debuff", "spd", 0.3, 3)),
+            _A("hawkeye", "Hawkeye", "damage", 3.0, "atk", "enemy", 4, 0, "One shot: it never misses and always crits.", ("nomiss",), ("crit",)),
+            _A("heavens_volley", "Heaven's Volley", "damage", 2.2, "atk", "all_enemies", 5, 0, "The sky answers: every ranger in the party fires too.", ("chorus", "arrow"))],
+    necromancer=[_A("bone_spear", "Bone Spear", "damage", 1.8, "mag", "enemy", 2, 0, "A javelin of old bone; a small bone pal rises if none is fighting.", ("minion",)),
+                 _A("plague_cloud", "Plague Cloud", "poison", 0.7, "mag", "enemy", 3, 4, "A rotting haze that spreads to every foe.", ("spread",)),
+                 _A("grave_feast", "Grave Feast", "drain", 2.0, "mag", "enemy", 4, 0, "Feast on a foe's life."),
+                 _A("legion_of_bones", "Legion of Bones", "summon", 1.0, "mag", "self", 5, 0, "Three bone servants answer the call.", ("count", 3))],
 )
+# one signature skill per class at its first evolution; the second evolution raises it to rank II
+EVOLUTION_SKILLS = dict(
+    barbarian=(_A("berserkers_oath", "Berserker's Oath", "utility", 0.0, "atk", "self", 99, 0, "Swear an oath: +60% attack whenever badly hurt (below 30% HP), for the rest of the fight.", ("oath", 0.6)),
+               _A("berserkers_oath_ii", "Berserker's Oath II", "utility", 0.0, "atk", "self", 99, 0, "The oath deepens: +90% attack whenever badly hurt.", ("oath", 0.9))),
+    mage=(_A("arcane_focus", "Arcane Focus", "utility", 0.0, "mag", "self", 4, 0, "Focus: spell power +40% for 3 turns.", ("buff", "spell_power", 0.4, 3)),
+          _A("arcane_focus_ii", "Arcane Focus II", "utility", 0.0, "mag", "self", 4, 0, "Deeper focus: spell power +60% for 3 turns.", ("buff", "spell_power", 0.6, 3))),
+    medic=(_A("sacred_ward", "Sacred Ward", "utility", 0.0, "mag", "ally", 3, 0, "An ally takes 30% less damage for 3 turns.", ("buff", "guard", 0.3, 3)),
+           _A("sacred_ward_ii", "Sacred Ward II", "utility", 0.0, "mag", "ally", 3, 0, "An ally takes 45% less damage for 3 turns.", ("buff", "guard", 0.45, 3))),
+    rogue=(_A("vanish", "Vanish", "utility", 0.0, "atk", "self", 5, 0, "Slip out of sight: cannot be targeted for 2 turns.", ("untarget", 2)),
+           _A("vanish_ii", "Vanish II", "utility", 0.0, "atk", "self", 5, 0, "Slip out of sight: cannot be targeted for 3 turns.", ("untarget", 3))),
+    ranger=(_A("mark_prey", "Mark Prey", "utility", 0.0, "atk", "enemy", 4, 0, "The party focuses one foe: it takes 30% more damage for 3 turns.", ("mark", 3, 0.3)),
+            _A("mark_prey_ii", "Mark Prey II", "utility", 0.0, "atk", "enemy", 4, 0, "The party focuses one foe: it takes 45% more damage for 3 turns.", ("mark", 3, 0.45))),
+    necromancer=(_A("soul_tithe", "Soul Tithe", "utility", 0.0, "mag", "self", 4, 0, "Sacrifice a minion: the party heals its full HP.", ("tithe", 1.0)),
+                 _A("soul_tithe_ii", "Soul Tithe II", "utility", 0.0, "mag", "self", 4, 0, "Sacrifice a minion: the party heals 150% of its HP.", ("tithe", 1.5))),
+)
+for _cls, _pair in EVOLUTION_SKILLS.items():
+    for _a in _pair:
+        register_ability(_a)
 RARITY_SKILLS: Dict[str, List[str]] = {}
 for _cls, _abs in _S.items():
     RARITY_SKILLS[_cls] = [a.key for a in _abs]
     for _a in _abs:
         register_ability(_a)
+
+
+# Pure capstones: two per class, earned by a legendary 5-star that never specialized. They need class proficiency
+# (>= 30 for the first, >= 70 for the second) and fade when the slime stops practising (see capstones()).
+PURE_CAPSTONES = dict(
+    barbarian=(_A("warlords_cry", "Warlord's Cry", "utility", 0.0, "atk", "all_allies", 5, 0, "A roar that fires up the whole party: +40% attack for 3 turns.", ("buff", "atk", 0.4, 3)),
+               _A("undying_rage", "Undying Rage", "utility", 0.0, "atk", "self", 6, 0, "Cannot fall below 1 HP for 2 turns, and hits 30% harder.", ("undying", 2), ("buff", "atk", 0.3, 2))),
+    mage=(_A("edit_source", "Edit Source", "utility", 0.0, "mag", "enemy", 5, 0, "Rewrite the foe's strongest stat to 1 for 3 turns (half as long on bosses).", ("rewrite", "best", 1, 3)),
+          _A("debug", "Debug", "utility", 0.0, "mag", "all_allies", 5, 0, "Cleanse the whole party and strip every foe of buffs and shields.", ("cleanse",), ("strip",))),
+    medic=(_A("resurrection", "Resurrection", "utility", 0.0, "mag", "self", 99, 0, "Once per fight: a fallen ally stands again with half its HP.", ("revive", 0.5)),
+           _A("overheal_shield", "Overheal Shield", "heal", 1.5, "mag", "all_allies", 4, 0, "Heal the party; healing beyond full HP becomes a shield.", ("overheal",))),
+    rogue=(_A("assassinate", "Assassinate", "damage", 2.5, "atk", "enemy", 4, 0, "A killing blow: triple damage to a foe below 25% HP.", ("execute", 0.25, 3.0)),
+           _A("smoke_bomb", "Smoke Bomb", "utility", 0.0, "atk", "all_allies", 5, 0, "The whole party gains +30% evasion for 3 turns.", ("buff", "evasion", 0.3, 3))),
+    ranger=(_A("trapfield", "Trapfield", "utility", 0.0, "atk", "all_enemies", 5, 0, "Snares everywhere: every foe loses half its speed for 3 turns.", ("debuff", "spd", 0.5, 3)),
+            _A("eagle_eye", "Eagle Eye", "utility", 0.0, "atk", "all_allies", 5, 0, "The whole party gains +30% crit chance for 3 turns.", ("buff", "crit_rate", 0.3, 3))),
+    necromancer=(_A("raise_fallen", "Raise Fallen", "utility", 0.0, "mag", "self", 5, 0, "A fallen foe or ally rises as your thrall.", ("raise",)),
+                 _A("soul_harvest", "Soul Harvest", "drain", 1.2, "mag", "all_enemies", 5, 0, "Drain every foe; the party heals half of everything taken.", ("harvest", 0.5))),
+)
+for _cls, _pair in PURE_CAPSTONES.items():
+    for _a in _pair:
+        register_ability(_a)
+
+
+def pure_earned(slime) -> bool:
+    """A legendary 5-star that never specialized earns the pure capstones for good (specializing later keeps them)."""
+    if not slime.pure_earned and slime.rarity == "legendary" and slime.stars >= config.MAX_STARS and not slime.spec \
+            and slime.archetype in PURE_CAPSTONES:
+        slime.pure_earned = True
+    return slime.pure_earned
+
+
+def capstones(slime) -> List[str]:
+    """The pure capstones the slime can use right now: both at proficiency >= 70, the first at >= 30."""
+    if not pure_earned(slime):
+        return []
+    first, second = (a.key for a in PURE_CAPSTONES[slime.archetype])
+    p = slime.class_prof
+    if p >= config.PROF_BOTH_CAPSTONES:
+        return [first, second]
+    return [first] if p >= config.PROF_ONE_CAPSTONE else []
+
+
+def hybrid_capstone(slime):
+    """The hybrid capstone's key once a specialized slime is legendary 5-star, else None."""
+    from .specialization import HYBRID_CAPSTONES
+    if slime.spec and slime.rarity == "legendary" and slime.stars >= config.MAX_STARS and slime.spec in HYBRID_CAPSTONES:
+        return HYBRID_CAPSTONES[slime.spec].key
+    return None
+
+
+def hybrid_keys(slime) -> set:
+    """Signature skill and capstone of the slime's hybrid class (what counts as practising the second discipline)."""
+    from .specialization import SPECS, HYBRID_CAPSTONES
+    out = set()
+    if slime.spec in SPECS:
+        out.add(SPECS[slime.spec].ability)
+    if slime.spec in HYBRID_CAPSTONES:
+        out.add(HYBRID_CAPSTONES[slime.spec].key)
+    return out
+
+
+def hybrid_scale(slime) -> float:
+    """Strength of the hybrid capstone: up to 60% of a pure one at full second-discipline proficiency, 30% at none."""
+    return round(config.HYBRID_CAPSTONE_MAX * (0.5 + 0.5 * slime.spec_prof / 100.0), 3)
+
+
+def evolution_skill(slime):
+    """The class's signature skill for the slime's evolution stage (rank I at stage 1, rank II from stage 2), or None."""
+    pair = EVOLUTION_SKILLS.get(slime.archetype)
+    if not pair or slime.stage < 1:
+        return None
+    return pair[min(1, slime.stage - 1)].key
 
 
 def rarity_skills(slime) -> List[str]:

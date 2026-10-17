@@ -54,6 +54,10 @@ class GrindResult:
     stop_reason: str = ""
 
 
+def ids_of(slimes) -> set:
+    return {s.id for s in slimes}
+
+
 class Game:
     def __init__(self, seed: Optional[int] = None, party_size: int = config.PARTY_SIZE):
         load_plugins()
@@ -101,6 +105,9 @@ class Game:
         self.vault_peak = 0                            # relics: slimes leave 34% of the most ever held
         self.gear_peak: Dict[str, int] = {}
         self.autonomy = True                           # slimes may use up to 66% of the stock by themselves
+        self.vice: Optional[int] = None                # id of the Vice Keeper, if one is appointed
+        self.vice_challenge: Optional[dict] = None     # {"challenger": id} waiting for the Keeper's approval
+        self.hunt_group = 0                            # counter for hunts organised by the Vice Keeper
         self.vault: Dict[int, items_mod.Item] = {}     # unequipped relics (see items.py)
         self.next_item_id = 1
         self.sacrifice_stress = 0.0                    # recent merges; decays 1/day
@@ -318,10 +325,51 @@ class Game:
             self._emotion_tick(events)
             if self.tick_count % 24 == config.RELATIONS_HOUR:
                 self._relations_day(events)
+                self._proficiency_day(events)
+                self._vice_challenge_day(events)
             self._autonomy_tick(events)
+            self._leaders_tick(events)
+            self._vice_tick(events)
         self.journal.extend(events)
         self.journal = self.journal[-200:]
         return events
+
+    @staticmethod
+    def practise(s: Slime, amount: float) -> None:
+        """Class practice sharpens proficiency and resets the idle counter."""
+        s.class_prof = min(100.0, s.class_prof + amount)
+        s.prof_idle = 0
+
+    @staticmethod
+    def practise_discipline(s: Slime, discipline: str, own: float, other: float) -> None:
+        """Training in a discipline: the class's own discipline feeds class proficiency, a hybrid's secondary one feeds
+        its second proficiency, anything else is only a little general practice."""
+        if discipline == s.arch.discipline:
+            Game.practise(s, own)
+        elif s.spec and discipline == s.spec_disc:
+            s.spec_prof = min(100.0, s.spec_prof + own)
+            s.spec_idle = 0
+        elif other:
+            Game.practise(s, other)
+
+    def _proficiency_day(self, events: List[str]) -> None:
+        """A slime that stops practising its original discipline slowly loses its edge (and, in time, its pure capstones)."""
+        for s in self.slimes():
+            if s.in_dungeon:                 # out fighting in a dungeon counts as practice
+                s.prof_idle = 0
+                s.spec_idle = 0
+                continue
+            if s.spec:
+                s.spec_idle += 1
+                if s.spec_idle > config.PROF_IDLE_DAYS and s.spec_prof > config.PROF_FLOOR:
+                    s.spec_prof = max(config.PROF_FLOOR, s.spec_prof - config.PROF_DECAY)
+            s.prof_idle += 1
+            if s.prof_idle > config.PROF_IDLE_DAYS and s.class_prof > config.PROF_FLOOR:
+                before = len(attributes.capstones(s))
+                s.class_prof = max(config.PROF_FLOOR, s.class_prof - config.PROF_DECAY)
+                if len(attributes.capstones(s)) < before and attributes.pure_earned(s):
+                    events.append(f"📉 {s.name} is out of practice: a capstone skill is now beyond them "
+                                  f"(proficiency {s.class_prof:.0f}). Train or fight to win it back.")
 
     def _emotion_tick(self, events: List[str]) -> None:
         """Feelings fade and are stirred by needs; legendary 5-star slimes slowly realise they are code."""
@@ -510,11 +558,263 @@ class Game:
 
     # ---- care ------------------------------------------------------------------
     def _tend(self, sid: int) -> Slime:
-        """Care (feeding, petting, sleeping, talking, potions) is impossible while a slime is inside a dungeon."""
+        """Care (feeding, petting, sleeping, talking, potions) is impossible while a slime is inside a dungeon -
+        unless the Vice Keeper is in there with them."""
         s = self.slime(sid)
-        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry"):
+        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry") and not self.vice_reaches(s):
             raise InvalidAction(f"{s.name} is inside a dungeon - you cannot tend to them until they are back.")
         return s
+
+    # ---- names -------------------------------------------------------------------
+    @staticmethod
+    def _clean_name(name: str) -> str:
+        n = " ".join(str(name).split())
+        if not n or len(n) > config.NAME_MAX or any(c in n for c in "<>&\"'`"):
+            raise InvalidAction(f"A name must be 1-{config.NAME_MAX} characters, without < > & or quotes.")
+        return n
+
+    def rename_slime(self, sid: int, name: str) -> str:
+        s = self.slime(sid)
+        n = self._clean_name(name)
+        if any(o.id != s.id and o.name.lower() == n.lower() for o in self.slimes()):
+            raise InvalidAction(f"Another slime is already called {n}.")
+        old, s.name = s.name, n
+        return f"{old} is now called {n}."
+
+    def rename_party(self, pid: int, name: str) -> str:
+        p = self.parties.get(pid)
+        n = self._clean_name(name)
+        if any(o.id != p.id and o.name.lower() == n.lower() for o in self.parties.parties.values()):
+            raise InvalidAction(f"Another party is already called {n}.")
+        old, p.name = p.name, n
+        return f"Party {old} is now {n}."
+
+    # ---- the Vice Keeper ---------------------------------------------------------------
+    def vice_slime(self) -> Optional[Slime]:
+        if self.vice is not None and self.vice not in self.roster:
+            self.vice = None                              # died or was lost
+        return self.roster.get(self.vice) if self.vice is not None else None
+
+    def appoint_vice(self, sid: int) -> str:
+        """A trusted slime (3 stars or more) stands in for the Keeper: it can mediate, feed and tend slimes the Keeper
+        cannot reach (it must be in the same group), and settles quarrels by itself. It may not merge or destroy."""
+        s = self.slime(sid)
+        if s.stars < config.VICE_MIN_STARS:
+            raise InvalidAction(f"A Vice Keeper must have at least {config.VICE_MIN_STARS} stars.")
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
+        old = self.vice_slime()
+        self.vice = s.id
+        self.social.shift_morale(s, 8)
+        emotions.feel(s, "pride", 25)
+        return f"🎖 {s.name} is now the Vice Keeper" + (f" (replacing {old.name})." if old and old.id != s.id else ".")
+
+    def dismiss_vice(self) -> str:
+        v = self.vice_slime()
+        if not v:
+            raise InvalidAction("There is no Vice Keeper.")
+        self.vice = None
+        return f"{v.name} steps down as Vice Keeper."
+
+    def vice_reaches(self, s: Slime) -> bool:
+        """Can the Vice Keeper act for this slime? At home always; away only when they are in the same group
+        (same party and the same dungeon / task)."""
+        v = self.vice_slime()
+        if v is None or v.id == s.id:
+            return False
+        if not s.busy and not v.busy:
+            return True
+        if not (s.busy and v.busy):
+            return False
+        if v.hunt and s.hunt and v.hunt.group and v.hunt.group == s.hunt.group:
+            return True                                    # one hunt, several parties: the Vice Keeper leads them all
+        pv, ps = self.parties.party_of(v.id), self.parties.party_of(s.id)
+        return pv is not None and pv is ps and (v.in_dungeon or v.state) == (s.in_dungeon or s.state)
+
+    # ---- party leaders ------------------------------------------------------------------
+    def party_leader(self, pid: int) -> Optional[Slime]:
+        """The leader the Keeper chose, else the highest-level (then best-morale) member."""
+        p = self.parties.get(pid)
+        members = [self.roster[i] for i in p.members if i in self.roster]
+        if not members:
+            return None
+        if p.leader in p.members and p.leader in self.roster:
+            return self.roster[p.leader]
+        return max(members, key=lambda s: (s.level, s.morale))
+
+    def set_party_leader(self, pid: int, sid: int) -> str:
+        p = self.parties.get(pid)
+        if sid not in p.members:
+            raise InvalidAction("The leader must be a member of the party.")
+        s = self.slime(sid)
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away.")
+        p.leader = sid
+        self.social.shift_morale(s, 4)
+        emotions.feel(s, "pride", 12)
+        return f"👑 {s.name} now leads {p.name}."
+
+    def _leader_bonus(self, members: List[Slime]) -> float:
+        """A party fights a little better under a confident leader."""
+        if not members:
+            return 0.0
+        p = self.parties.party_of(members[0].id)
+        if p is None or any(self.parties.party_of(m.id) is not p for m in members):
+            return 0.0
+        lead = self.party_leader(p.id)
+        return config.LEADER_POWER * (0.5 + 0.5 * lead.morale / 100.0) if lead else 0.0
+
+    def leader_reaches(self, s: Slime) -> bool:
+        """Away from home, a party's leader can mediate for members doing the same thing."""
+        if not s.busy:
+            return False
+        p = self.parties.party_of(s.id)
+        lead = self.party_leader(p.id) if p else None
+        return bool(lead and lead.id != s.id and lead.busy and (lead.in_dungeon or lead.state) == (s.in_dungeon or s.state))
+
+    def vice_organize_hunt(self, zone: str, parties: int = 1) -> List[str]:
+        """The Vice Keeper forms up to `parties` full parties from the free slimes and leads them all on one hunt.
+        The Vice Keeper joins and leads the first party (and, as head of the hunt, can act for every party in it)."""
+        v = self.vice_slime()
+        if v is None:
+            raise InvalidAction("Appoint a Vice Keeper first.")
+        if v.busy or v.state != "idle":
+            raise InvalidAction(f"{v.name} is not free to lead a hunt ({v.in_dungeon or v.state}).")
+        if zone not in [z.key for z in ZONES]:
+            raise InvalidAction(f"Unknown hunting zone '{zone}'.")
+        parties = max(1, min(config.VICE_HUNT_MAX_PARTIES, int(parties)))
+        cur = self.parties.party_of(v.id)
+        if cur and cur.id in self.delves:
+            raise InvalidAction(f"{v.name} is inside the Hollow Descent with {cur.name}.")
+        size = self.parties.size
+        free = [s for s in self.slimes() if s.id != v.id and s.state == "idle" and not s.in_dungeon and not s.grounded
+                and not self.parties.party_of(s.id) and s.hp >= s.max_hp * config.MIN_HUNT_HP and s.needs.get("energy") >= 20]
+        free.sort(key=lambda s: -s.power_rating())
+        n_full = min(parties, (len(free) + 1) // size) if size > 1 else parties
+        if n_full < 1:
+            raise InvalidAction(f"Not enough free, rested slimes to form a party of {size} around {v.name} "
+                                f"({len(free) + 1} available).")
+        self.parties.remove(v.id)
+        self.hunt_group += 1
+        out = [f"🎖 {v.name} organises a hunt in {next(z.name for z in ZONES if z.key == zone)}: {n_full} part{'ies' if n_full > 1 else 'y'}."]
+        pool = list(free)
+        for i in range(n_full):
+            p = self.parties.create(f"Hunt {self.hunt_group}{chr(65 + i)}")
+            p.temp = True
+            first = [v] if i == 0 else []
+            for s in first + [pool.pop(0) for _ in range(size - len(first))]:
+                self.parties.add(p.id, s.id)
+            lead = v if i == 0 else max((self.roster[m] for m in p.members), key=lambda s: (s.level, s.morale))
+            p.leader = lead.id
+            for line in self.party_hunt(p.id, zone):
+                out.append("   " + line)
+            for m in p.members:
+                s = self.roster.get(m)
+                if s and s.hunt:
+                    s.hunt.group = self.hunt_group
+        return out
+
+    def _leaders_tick(self, events: List[str]) -> None:
+        """Hourly: party leaders settle quarrels inside their party while away; spent hunt parties disband."""
+        for c in list(self.conflicts.conflicts):
+            a, b = self.roster.get(c.a), self.roster.get(c.b)
+            if not a or not b or not (a.busy or b.busy):
+                continue
+            pa, pb = self.parties.party_of(a.id), self.parties.party_of(b.id)
+            if pa is None or pa is not pb:
+                continue
+            lead = self.party_leader(pa.id)
+            if lead and lead.id not in (a.id, b.id) and self.leader_reaches(a) and self.leader_reaches(b) \
+                    and self.mood_rng.random() < config.LEADER_MEDIATE_CHANCE:
+                self.conflicts.resolve(c, self.roster, True)
+                events.append(f"👑 {lead.name} settles the quarrel between {a.name} and {b.name}.")
+        for p in list(self.parties.parties.values()):
+            if p.temp and p.id not in self.delves and all(
+                    (m in self.roster and not self.roster[m].busy) for m in p.members):
+                self.parties.disband(p.id)
+                events.append(f"👥 {p.name} disbands: the hunt is over.")
+
+    # ---- challenging the Vice Keeper -----------------------------------------------------------------
+    def challenge_vice(self, sid: int) -> str:
+        """Ask for the Vice Keeper's post. The Keeper must approve before the contest (a friendly duel) happens."""
+        v = self.vice_slime()
+        if v is None:
+            raise InvalidAction("There is no Vice Keeper to challenge.")
+        s = self.slime(sid)
+        if s.id == v.id:
+            raise InvalidAction("The Vice Keeper cannot challenge themselves.")
+        if s.stars < config.VICE_MIN_STARS:
+            raise InvalidAction(f"A challenger must have at least {config.VICE_MIN_STARS} stars.")
+        if self.vice_challenge:
+            raise InvalidAction("A challenge is already waiting for your decision.")
+        self.vice_challenge = dict(challenger=s.id)
+        return f"⚔ {s.name} challenges {v.name} for the Vice Keeper's post. Approve or reject it in People > Keeper."
+
+    def resolve_challenge(self, approve: bool) -> List[str]:
+        """The Keeper's decision. Approved: the two settle it in a friendly (non-lethal) duel; the winner holds the post."""
+        ch = self.vice_challenge
+        if not ch:
+            raise InvalidAction("There is no challenge waiting.")
+        v, s = self.vice_slime(), self.roster.get(ch["challenger"])
+        if v is None or s is None:                         # either is gone: the challenge lapses
+            self.vice_challenge = None
+            raise InvalidAction("The challenge has lapsed (someone is gone).")
+        if not approve:
+            self.vice_challenge = None
+            emotions.feel(s, "anger", 12)
+            self.social.shift_morale(s, -3)
+            return [f"🚫 You turn down {s.name}'s challenge. {v.name} keeps the post."]
+        for x in (v, s):
+            if x.busy:
+                raise InvalidAction(f"{x.name} is away ({x.in_dungeon or x.state}); wait until they are home.")
+        rep = self.battles.duel(v, s)
+        self.vice_challenge = None
+        winner = rep.winner_slime
+        loser = s if winner is v else v
+        self.social.shift_morale(winner, 8)
+        self.social.shift_morale(loser, -5)
+        emotions.feel(winner, "pride", 20)
+        emotions.feel(loser, "sadness", 10)
+        out = list(rep.log[-3:])
+        if winner is s:
+            self.vice = s.id
+            out.append(f"🎖 {s.name} wins and becomes the new Vice Keeper; {v.name} steps back.")
+        else:
+            out.append(f"🎖 {v.name} holds the post against {s.name}.")
+        return out
+
+    def _vice_challenge_day(self, events: List[str]) -> None:
+        """A proud, stronger slime may ask for the post by itself; the Keeper still decides."""
+        v = self.vice_slime()
+        if v is None or self.vice_challenge:
+            return
+        cands = [s for s in self.slimes() if s.id != v.id and not s.busy and s.stars >= config.VICE_MIN_STARS
+                 and s.level >= v.level + config.VICE_CHALLENGE_LEVEL_GAP
+                 and s.emotions.get("pride", 0) + s.emotions.get("determination", 0) >= 40]
+        if cands and self.mood_rng.random() < config.VICE_CHALLENGE_DAILY:
+            s = self.mood_rng.choice(cands)
+            events.append(self.challenge_vice(s.id))
+
+    def _vice_tick(self, events: List[str]) -> None:
+        """Hourly: the Vice Keeper settles quarrels it can reach and feeds hungry slimes in its group."""
+        v = self.vice_slime()
+        if v is None:
+            return
+        for c in list(self.conflicts.conflicts):
+            a, b = self.roster.get(c.a), self.roster.get(c.b)
+            if not a or not b or not (self.vice_reaches(a) or a.id == v.id) or not (self.vice_reaches(b) or b.id == v.id):
+                continue
+            away = a.busy or b.busy
+            if not away and c.severity > 2:
+                continue                                   # at home the serious ones are left to the Keeper
+            if self.mood_rng.random() < config.VICE_MEDIATE_CHANCE:
+                self.conflicts.resolve(c, self.roster, True)
+                events.append(f"🎖 {v.name} settles the quarrel between {a.name} and {b.name}.")
+        if v.busy:
+            for s in self.slimes():
+                if s.id != v.id and s.busy and s.needs.get("food") < config.VICE_FEED_BELOW and self.wallet.get("food") >= 1 \
+                        and self.vice_reaches(s):
+                    events.append("🎖 " + self.feed(s.id))
 
     def feed(self, sid: int) -> str:
         s = self._tend(sid)
@@ -610,6 +910,7 @@ class Game:
             if outlook.has(s, "spar"):
                 xp *= config.OUTLOOK_DUELIST_STYLE
             outlook.bump(s, "spar")
+            self.practise_discipline(s, d.key, config.PROF_SPAR_OWN, config.PROF_SPAR_OTHER)
             after = sparring.gain_style_xp(s, d.key, xp, cap)
             self.social.shift_morale(s, 2 + (2 if won else 0))
             note = f"+{xp:.0f} {d.style} xp"
@@ -737,7 +1038,7 @@ class Game:
         if len(rows) >= 2:
             half = max(1, len(rows) // 2)
             targets = [r["slime"] for r in rows[:half]][:5]
-            donors = [r["slime"] for r in rows[::-1][:half]][:5]
+            donors = [r["slime"] for r in rows[::-1][:half] if r["slime"].id != self.vice][:5]
             for t in targets:
                 for d in donors:
                     if t is d:
@@ -752,7 +1053,10 @@ class Game:
 
     def study(self, sid: int, element: str) -> str:
         """Attune to / study a basic element at the Library (3-star+ slimes of ANY class)."""
-        return self.academy.start_study(self.slime(sid), element)
+        s = self.slime(sid)
+        msg = self.academy.start_study(s, element)
+        self.practise_discipline(s, "magic", config.PROF_STUDY, 0.0)
+        return msg
 
     def learn_spell(self, sid: int, spell_key: str) -> str:
         return self.library.learn(self.slime(sid), spell_key)
@@ -779,6 +1083,8 @@ class Game:
 
     def merge(self, target_id: int, donor_id: int) -> List[str]:
         t, d = self.slime(target_id), self.slime(donor_id)
+        if d.id == self.vice:
+            raise InvalidAction(f"{d.name} is the Vice Keeper and cannot be merged away. Dismiss them first.")
         compat = self.social.compat(t, d)
         amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
         grief = self.social.grief(d, self.slimes(), amp)
@@ -810,12 +1116,77 @@ class Game:
         t, d = self.slime(target_id), self.slime(donor_id)
         return merge_gain(t, d, self.social.compat(t, d))
 
+    def sacrifice_preview(self, target_id: int, donor_id: int) -> dict:
+        """What a manual merge would cost and give, before the player commits."""
+        t, d = self.slime(target_id), self.slime(donor_id)
+        if t.id == d.id:
+            raise InvalidAction("A slime can't merge with itself.")
+        compat = self.social.compat(t, d)
+        amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
+        return dict(xp=merge_gain(t, d, compat), compat=compat, label=self.social.compat_label(compat),
+                    grief=self.social.grief(d, self.slimes(), amp), stress=round(self.sacrifice_stress, 2),
+                    away=[s.name for s in (t, d) if s.busy])
+
+    # ---- the commander's gifts (purple gel) ---------------------------------------------------------
+    def gift_party(self, pid: Optional[int] = None) -> Optional[int]:
+        """The party the commander may send gifts to right now: one inside the Descent, or in an open Descent /
+        skirmish battle. (Care is otherwise refused for slimes that are away; purple gel is the way in.)"""
+        f = self.flow
+        if f and f["kind"] in ("delve", "skirmish") and f.get("pid") is not None and pid in (None, f["pid"]):
+            return f["pid"]
+        if pid is not None and pid in self.delves:
+            return pid
+        return None
+
+    def commander_gift(self, pid: int, kind: str, sid: Optional[int] = None, potion: str = "", grade: int = 1) -> List[str]:
+        """kind: 'morale' (+morale for the whole party), 'peace' (settle the party's quarrels) or 'potion'
+        (a bought potion drunk by slime `sid`). Paid in purple gel; only for a Descent party or a skirmish."""
+        if self.gift_party(pid) != pid:
+            raise InvalidAction("Gifts can only reach a party inside the Hollow Descent, or fighting a skirmish.")
+        party = self.party_members(pid)
+        run = self.battle_run()
+        if kind == "morale":
+            self.wallet.spend("purple_gel", config.GIFT_MORALE_COST)
+            for s in party:
+                self.social.shift_morale(s, config.GIFT_MORALE_GAIN)
+                emotions.feel(s, "joy", 8)
+                if run:
+                    run.refresh(s)
+            return [f"🎁 The commander's gift lifts the party's spirits (+{config.GIFT_MORALE_GAIN} morale)."]
+        if kind == "peace":
+            ids = {s.id for s in party}
+            qs = [c for c in self.conflicts.conflicts if c.a in ids and c.b in ids]
+            if not qs:
+                raise InvalidAction("There is no quarrel inside this party.")
+            self.wallet.spend("purple_gel", config.GIFT_PEACE_COST)
+            for c in qs:
+                self.conflicts.resolve(c, self.roster, True)
+            return [f"🎁 A gift settles {len(qs)} quarrel{'s' if len(qs) > 1 else ''} in the party."]
+        if kind == "potion":
+            if sid not in ids_of(party):
+                raise InvalidAction("That slime is not in this party.")
+            s = self.slime(sid)
+            if potion not in potions.KINDS or not 1 <= grade <= 5:
+                raise InvalidAction("Unknown potion or grade.")
+            self._check_potion_slot(s, potion)
+            self.wallet.spend("purple_gel", config.GIFT_POTION_PURPLE[grade - 1])
+            msg = self._drink(s, potion, grade)
+            if run:
+                run.refresh(s)
+            return ["🎁 " + msg]
+        raise InvalidAction("Gift must be 'morale', 'peace' or 'potion'.")
+
     # ---- conflict -----------------------------------------------------------------
     def mediate(self, cid: int, method: str = "talk") -> str:
         c = self.conflicts.get(cid)
         if not c:
             raise InvalidAction(f"No conflict #{cid}.")
         a, b = self.slime(c.a), self.slime(c.b)
+        vice = self.vice_slime()
+        for s in (a, b):
+            if s.busy and not (self.vice_reaches(s) or (vice and s.id == vice.id) or self.leader_reaches(s)):   # the Keeper cannot reach them
+                raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}) - this quarrel is out of your hands "
+                                    f"until they are home.")
         if method == "snack":
             self.wallet.spend("food", config.MEDIATE_SNACK_COST)
             ok = True
@@ -883,7 +1254,7 @@ class Game:
     def battle(self, pid: int, tier: int = 1, manual: bool = False):
         """A full party fights a wave of tier-N enemies (one foe per party slot; tier 4 = boss).
         Fallen slimes are gone for good. With manual=True it pauses for orders (returns None until it ends)."""
-        return self._play(self._skirmish_gen(pid, tier), "skirmish", manual)
+        return self._play(self._skirmish_gen(pid, tier), "skirmish", manual, pid)
 
     def _skirmish_gen(self, pid: int, tier: int):
         self._require_full(pid)
@@ -904,7 +1275,7 @@ class Game:
     def _battle_gen(self, party, enemies, intel: float = 1.0, allow_manual: bool = True, **opts):
         """One fight as a generator: party synergy (compatibility) and scouting intel applied. Under a manual flow it
         yields at every party slime's turn; the generator returns the BattleReport."""
-        syn = self.social.synergy(party) * intel * (1 + self.relations.synergy_delta(party))
+        syn = self.social.synergy(party) * intel * (1 + self.relations.synergy_delta(party)) * (1 + self._leader_bonus(party))
         self.relations.prebattle(party, emotions)
         bc = 6 * self.keeper.rank("battle_cry")
         if bc:
@@ -938,10 +1309,10 @@ class Game:
     # Only the Hollow Descent, the Gloop Pit and skirmishes can be fought by hand. Each is a generator that yields
     # whenever a party slime must choose; `flow` is the one battle in progress (kept in memory, never saved: the
     # slimes' HP is only written back when the fight ends, so an abandoned battle simply never happened).
-    def _play(self, gen, kind: str, manual: bool):
+    def _play(self, gen, kind: str, manual: bool, pid: Optional[int] = None):
         if self.flow is not None:
             raise InvalidAction("A battle is already under way - finish it first.")
-        self.flow = dict(kind=kind, gen=gen, manual=bool(manual), run=None)
+        self.flow = dict(kind=kind, gen=gen, manual=bool(manual), run=None, pid=pid)
         return self._pump()
 
     def _pump(self):
@@ -1218,6 +1589,8 @@ class Game:
     def destroy_slime(self, sid: int) -> List[str]:
         """The Destruction Chamber breaks a slime into white gel and ascension stones (more for rarity and stars)."""
         s = self._free_slime(sid)
+        if s.id == self.vice:
+            raise InvalidAction(f"{s.name} is the Vice Keeper and cannot be destroyed. Dismiss them first.")
         y = ascension.chamber_yield(s, self.buildings.level("chamber"))
         name, label = s.name, f"{config.RARITY_TAG[s.rarity]} {s.star_str()} Lv{s.level} {s.arch.name}"
         self._consume_slime(s, config.CHAMBER_STRESS)
@@ -1256,7 +1629,7 @@ class Game:
         return stock > math.ceil(peak * (1 - self.share))
 
     def _auto_drink(self, s: Slime, kind: str, log: List[str]) -> bool:
-        if any(b["kind"] == kind for b in s.buffs):
+        if any(b["kind"] == kind for b in s.buffs) or len(s.buffs) >= attributes.potion_slots(s):
             return False
         grades = sorted(g for (kk, g) in ((k.split(":")[0], int(k.split(":")[1])) for k in self.potions) if kk == kind)
         for g in grades:                                     # the humblest grade that is free to take
@@ -1410,9 +1783,19 @@ class Game:
         k = potions.key(kind, grade)
         if self.potions.get(k, 0) <= 0 or kind not in potions.KINDS:
             raise InvalidAction("You have no such potion.")
+        self._check_potion_slot(s, kind)
         self.potions[k] -= 1
         if not self.potions[k]:
             del self.potions[k]
+        return self._drink(s, kind, grade)
+
+    @staticmethod
+    def _check_potion_slot(s: Slime, kind: str) -> None:
+        if not any(b["kind"] == kind for b in s.buffs) and len(s.buffs) >= attributes.potion_slots(s):
+            raise InvalidAction(f"{s.name} can only have {attributes.potion_slots(s)} potion(s) active at once "
+                                f"({s.stars}-star). Wait for one to wear off.")
+
+    def _drink(self, s: Slime, kind: str, grade: int) -> str:
         s.buffs = [b for b in s.buffs if b["kind"] != kind]
         s.buffs.append(dict(kind=kind, grade=grade, bonus=potions.bonus(grade), hours=potions.hours(grade)))
         pk = potions.KINDS[kind]
@@ -1589,6 +1972,61 @@ class Game:
             del self.vault[uid]
         self.wallet.add_many(y)
         return f"♻️ {it.label()} is broken down: " + ", ".join(f"{v} {k}" for k, v in y.items()) + "."
+
+    def merge_items(self, target_uid: int, donor_uid: int) -> str:
+        """Feed one relic to another of the same kind of slot: the donor is consumed, the target gains levels
+        (its star and rarity are untouched), is fully mended, and may inherit one of the donor's mods."""
+        if target_uid == donor_uid:
+            raise InvalidAction("A relic can't merge with itself.")
+        t, th = self._item_ready(target_uid)
+        d, dh = self._item_ready(donor_uid)
+        if t.ego or d.ego:
+            raise InvalidAction("An ego relic holds a soul - it cannot be merged.")
+        if t.slot != d.slot:
+            raise InvalidAction(f"Only relics of the same slot merge ({t.slot} vs {d.slot}).")
+        gain = max(1, d.grade() // 3)
+        before = t.level
+        t.level = min(config.ITEM_MAX_LEVEL, t.level + gain)
+        t.durability = t.max_durability
+        have = {m["kind"] for m in t.mods}
+        extra = [m for m in d.mods if m["kind"] not in have]
+        note = ""
+        if extra and len(t.mods) < items_mod.RARITIES.index(t.rarity) + 1 and self.rng.random() < config.RELIC_MERGE_MOD_CHANCE:
+            m = dict(self.rng.choice(extra))
+            t.mods.append(m)
+            note = f" It inherits {t.mod_text(m)}."
+        if dh is not None:
+            dh.items.pop(d.slot, None)
+            dh.hp = min(dh.hp, dh.max_hp)
+        else:
+            del self.vault[donor_uid]
+        self._xp("forge", config.KEEPER_XP["forge"])
+        return (f"🫧 {d.label()} melts into {t.label()}: level {before} -> {t.level}, fully mended.{note}")
+
+    def destroy_gear(self, key: str, n: int = 1) -> str:
+        """Scrap spare gear (not equipped) for half of its price."""
+        g = equipment.GEAR.get(key)
+        n = max(1, int(n))
+        if self.inventory.items[key] < n:
+            raise InvalidAction(f"You do not have {n} spare {g.name}.")
+        for _ in range(n):
+            self.inventory.take(key)
+        back = {k: max(1, int(v * config.GEAR_SCRAP_REFUND)) * n for k, v in g.cost.items()}
+        self.wallet.add_many(back)
+        return f"♻️ {n} x {g.emoji}{g.name} scrapped: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in back.items()) + "."
+
+    def merge_gear(self, key: str, into: str) -> str:
+        """Merge GEAR_MERGE_COUNT identical spare gear into one piece of the next tier (same slot)."""
+        g, up = equipment.GEAR.get(key), equipment.GEAR.get(into)
+        if up.slot != g.slot or up.tier != g.tier + 1:
+            raise InvalidAction(f"{g.name} can only merge into a tier {g.tier + 1} {g.slot}.")
+        n = config.GEAR_MERGE_COUNT
+        if self.inventory.items[key] < n:
+            raise InvalidAction(f"Merging needs {n} spare {g.name} (you have {self.inventory.items[key]}).")
+        for _ in range(n):
+            self.inventory.take(key)
+        self.inventory.add(into)
+        return f"🫧 {n} x {g.emoji}{g.name} fuse into {up.emoji}{up.name}!"
 
     def fuse_ego(self, uid: int, sid: int) -> List[str]:
         """Sacrifice a 5-star legendary slime into a 5-star legendary relic: it becomes an EGO relic, wieldable only
@@ -1855,7 +2293,7 @@ class Game:
 
     def delve_next(self, pid: int, manual: bool = False):
         """Fight the next floor. With manual=True the fight pauses for orders (returns None until it ends)."""
-        return self._play(self._delve_gen(pid), "delve", manual)
+        return self._play(self._delve_gen(pid), "delve", manual, pid)
 
     def _delve_gen(self, pid: int):
         d = self.delves.get(pid)
@@ -2093,6 +2531,7 @@ class Game:
         spec = specialization.check(s, discipline)
         self.wallet.spend_many(config.SPEC_COST)
         s.spec, s.spec_disc = spec.key, discipline
+        s.spec_prof, s.spec_idle = config.PROF_SPEC_START, 0
         s.hp = min(s.max_hp, s.hp + 5)
         s.needs.add("esteem", 25)
         self.social.shift_morale(s, 10)
@@ -2103,7 +2542,7 @@ class Game:
     def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True, manual: bool = False):
         """Commit the party to a Pit session (see _grind_gen). With manual=True it pauses for orders in every
         fight (returns None until the whole session ends); you can hand it back to the slimes at any time."""
-        return self._play(self._grind_gen(pid, depth, runs), "pit", manual)
+        return self._play(self._grind_gen(pid, depth, runs), "pit", manual, pid)
 
     def _grind_gen(self, pid: int, depth: int = 3, runs: int = 1):
         """Commit the party to `runs` Pit fights at `depth` (enemy level = party average + depth - 3).
@@ -2256,7 +2695,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -2313,6 +2752,9 @@ class Game:
         for k, v in g.potions.items():
             g.potion_peak[k] = max(g.potion_peak.get(k, 0), v)
         g.autonomy = d.get("autonomy", True)
+        g.vice = d.get("vice")
+        g.vice_challenge = d.get("vice_challenge")                # checked when resolved (the roster loads below)
+        g.hunt_group = d.get("hunt_group", 0)
         g.time_mode, g.time_scale = d.get("time_mode", "turn"), d.get("time_scale", 1.0)
         g.wall_last, g.wall_frac = d.get("wall_last"), d.get("wall_frac", 0.0)
         g.keeper.load(d.get("keeper"))

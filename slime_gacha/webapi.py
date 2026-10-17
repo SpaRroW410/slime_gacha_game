@@ -33,7 +33,7 @@ def slime_view(g: Game, s) -> dict:
         id=s.id, name=s.name, archetype=s.archetype, class_name=a.name, emoji=a.emoji, title=s.title(),
         rarity=s.rarity, stars=s.stars, level=s.level, level_cap=s.level_cap, stage=s.stage,
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
-        hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
+        is_vice=(s.id == g.vice), hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
         mood=s.mood_label(), power=round(s.power_rating(), 1), power_mult=round(s.power_multiplier(), 2),
@@ -55,7 +55,7 @@ def slime_view(g: Game, s) -> dict:
                    for r in g.relations.of(s.id)],
         parents=list(s.parents), parent_names=list(s.parent_names), generation=s.generation,
         merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
-        stamina=s.stamina, max_stamina=s.max_stamina, buffs=[dict(b) for b in s.buffs],
+        stamina=s.stamina, max_stamina=s.max_stamina, buffs=[dict(b) for b in s.buffs], potion_slots=attributes.potion_slots(s),
         star_attrs=attributes.star_attributes(s),
         next_star_attr=next(({"star": i + 2, "label": attributes.ATTR_LABEL[k], "value": v}
                              for i, (k, v) in enumerate(attributes.STAR_ATTRS.get(s.archetype, []))
@@ -64,6 +64,17 @@ def slime_view(g: Game, s) -> dict:
                        for k in attributes.rarity_skills(s)],
         next_rarity_skill=(get_ability(attributes.RARITY_SKILLS[s.archetype][config.RARITIES.index(s.rarity)]).name
                            if s.rarity != "legendary" and s.archetype in attributes.RARITY_SKILLS else None),
+        prof=dict(value=round(s.class_prof), idle=s.prof_idle, earned=attributes.pure_earned(s), floor=config.PROF_FLOOR,
+                  both=config.PROF_BOTH_CAPSTONES, one=config.PROF_ONE_CAPSTONE,
+                  capstones=[dict(key=a.key, name=a.name, desc=a.description, usable=a.key in attributes.capstones(s),
+                                  need=(config.PROF_ONE_CAPSTONE if i == 0 else config.PROF_BOTH_CAPSTONES))
+                             for i, a in enumerate(attributes.PURE_CAPSTONES.get(s.archetype, ()))],
+                  hybrid=(dict(value=round(s.spec_prof), idle=s.spec_idle, scale=round(attributes.hybrid_scale(s) * 100),
+                               capstone=(lambda k: dict(key=k, name=get_ability(k).name, desc=get_ability(k).description,
+                                                        usable=True)
+                                         if k else None)(attributes.hybrid_capstone(s)),
+                               name=(specialization.SPECS[s.spec].name if s.spec in specialization.SPECS else ""))
+                          if s.spec else None)),
         weapons=dict(memory=list(s.weapon_memory), slots=config.WEAPON_MEMORY, favourite=items_mod.favourite_family(s),
                      proficiency={f: dict(uses=s.proficiency.get(f, 0), level=items_mod.proficiency_level(s, f))
                                   for f in items_mod.FAMILIES if s.proficiency.get(f, 0) or f in s.weapon_memory}),
@@ -127,17 +138,68 @@ def ability_view(a) -> dict:
                 element=a.element, tier=a.tier, creator=a.creator, description=a.description)
 
 
+_AWAY_PLACE = dict(grind="🫧 Gloop Pit", adventure="🧭 Wayfarer's Rift", quarry="💎 Starfall Quarry", scout="🔭 Scouting",
+                   lab="⚗️ Alchemy Lab", train="🥊 Training Grounds", main="🕳 Hollow Descent")
+
+
+def away_view(g: Game) -> list:
+    """Everything that keeps slimes away from the colony, with the time left. `hours` are game hours; in live mode
+    `real_sec` is the wall-clock estimate at the current speed (the browser counts it down)."""
+    rate = g.clock_rate() if g.live else None
+
+    def item(kind, label, ids, hours, **extra):
+        hours = max(0.0, float(hours)) if hours is not None else None
+        return dict(kind=kind, label=label, ids=list(ids), names=[g.roster[i].name for i in ids if i in g.roster],
+                    hours=(round(hours, 2) if hours is not None else None),
+                    real_sec=(round(hours / rate * 3600) if (rate and hours is not None) else None), **extra)
+
+    out = []
+    hunts = {}
+    for s in g.slimes():
+        if s.hunt and s.state == "hunting":
+            hunts.setdefault((s.hunt.zone, s.hunt.ticks_left, s.hunt.group), []).append(s.id)
+    vice = g.vice_slime()
+    for (zone, left, group), ids in hunts.items():
+        z = next((z for z in ZONES if z.key == zone), None)
+        lead = f" · led by 🎖 {vice.name}" if group and vice and vice.id in ids else ""
+        out.append(item("hunt", f"🏹 Hunting: {z.name if z else zone}{lead}", ids, left))
+    tasks = {}
+    for s in g.slimes():
+        if s.task and s.state == "studying":
+            tasks.setdefault((s.task.get("kind", "study"), s.task.get("ticks_left", 0)), []).append(s.id)
+    for (kind, left), ids in tasks.items():
+        out.append(item("study", f"📚 {str(kind).replace('_', ' ').title()}", ids, left))
+    for e in g.expeditions:
+        ids = [i for i in e["ids"] if i in g.roster]
+        if ids:
+            where = _AWAY_PLACE.get(g.roster[ids[0]].in_dungeon, "🕳 Dungeon")
+            out.append(item("expedition", where, ids, g.remaining_hours(e["until"]) if g.live else None))
+    for pid, d in g.delves.items():
+        ids = [m.id for m in g._members_in("main", pid)]
+        if ids:
+            left = g.remaining_hours(d.get("ready_tick", 0)) if g.live else 0
+            out.append(item("delve", f"🕳 Hollow Descent, floor {d['floor']}", ids, left if left > 0 else None,
+                            pid=pid, ready=left <= 0))
+    return out
+
+
 def snapshot(g: Game) -> dict:
     slimes = [slime_view(g, s) for s in g.slimes()]
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
                     synergy=round(g.party_synergy(p.id) - 1, 4) if len(p.members) > 1 else 0.0,
-                    in_delve=p.id in g.delves,
+                    in_delve=p.id in g.delves, away=any(g.slime(i).busy for i in p.members),
+                    leader=(lambda l: l.id if l else None)(g.party_leader(p.id)), leader_set=p.leader is not None, temp=p.temp,
                     entry=(g.entry_options(p.id) if p.members else [1]),
                     min_progress=min((g.slime(i).progress for i in p.members), default=0))
                for p in g.parties.parties.values()]
     run = g.battle_run()
     return dict(
-        battle=(dict(run.view(), kind=g.flow["kind"]) if run else None),
+        away=away_view(g),
+        vice=(lambda v: dict(id=v.id, name=v.name) if v else None)(g.vice_slime()), vice_min_stars=config.VICE_MIN_STARS,
+        vice_challenge=(lambda c: dict(id=c["challenger"], name=g.roster[c["challenger"]].name)
+                        if c and c["challenger"] in g.roster else None)(g.vice_challenge),
+        vice_hunt_max=config.VICE_HUNT_MAX_PARTIES,
+        battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid")) if run else None),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
         potions=dict(stock=[dict(kind=k.split(':')[0], grade=int(k.split(':')[1]), n=n) for k, n in sorted(g.potions.items())],
@@ -170,7 +232,8 @@ def snapshot(g: Game) -> dict:
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
-        conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason)
+        conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason,
+                        away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
                    for c in g.conflicts.conflicts],
         graveyard=list(g.graveyard)[-50:], journal=list(g.journal)[-60:],
         dungeon=dict(
@@ -195,6 +258,8 @@ def snapshot(g: Game) -> dict:
                                      real_min=round(max(0, e["until"] - g.tick_count) / max(1e-9, g.clock_rate()) * 60))
                                 for e in g.expeditions] if g.live else []),
         stress=round(g.sacrifice_stress, 2),
+        gift=dict(morale=config.GIFT_MORALE_COST, morale_gain=config.GIFT_MORALE_GAIN, peace=config.GIFT_PEACE_COST,
+                  potion=config.GIFT_POTION_PURPLE, merge_gear=config.GEAR_MERGE_COUNT, scrap=config.GEAR_SCRAP_REFUND),
         gear=dict(shop=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier,
                              stats=x.stats, cost=x.cost) for x in g.gear_shop()],
                   all=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier, stats=x.stats,
@@ -566,7 +631,7 @@ def _mediate(g, a):
 @command("merge_preview")
 def _merge_preview(g, a):
     t, d = _i(a, "target"), _i(a, "donor")
-    return [], dict(xp=g.merge_preview(t, d), compat=g.compat(t, d))
+    return [], dict(g.sacrifice_preview(t, d), parts=g.compat(t, d))
 
 
 @command("merge")
@@ -645,6 +710,67 @@ def _manual(a) -> bool:
     return bool(a.get("manual"))
 
 
+@command("commander_gift")
+def _commander_gift(g, a):
+    return g.commander_gift(_i(a, "pid"), str(a.get("kind", "")), (None if a.get("id") is None else _i(a, "id")),
+                            str(a.get("potion", "")), _i(a, "grade", 1)), {}
+
+
+@command("merge_items")
+def _merge_items(g, a):
+    return [g.merge_items(_i(a, "target"), _i(a, "donor"))], {}
+
+
+@command("destroy_gear")
+def _destroy_gear(g, a):
+    return [g.destroy_gear(str(a.get("key", "")), _i(a, "n", 1))], {}
+
+
+@command("merge_gear")
+def _merge_gear(g, a):
+    return [g.merge_gear(str(a.get("key", "")), str(a.get("into", "")))], {}
+
+
+@command("rename_slime")
+def _rename_slime(g, a):
+    return [g.rename_slime(_i(a, "id"), a.get("name", ""))], {}
+
+
+@command("rename_party")
+def _rename_party(g, a):
+    return [g.rename_party(_i(a, "pid"), a.get("name", ""))], {}
+
+
+@command("appoint_vice")
+def _appoint_vice(g, a):
+    return [g.appoint_vice(_i(a, "id"))], {}
+
+
+@command("dismiss_vice")
+def _dismiss_vice(g, a):
+    return [g.dismiss_vice()], {}
+
+
+@command("set_leader")
+def _set_leader(g, a):
+    return [g.set_party_leader(_i(a, "pid"), _i(a, "id"))], {}
+
+
+@command("vice_hunt")
+def _vice_hunt(g, a):
+    return g.vice_organize_hunt(str(a.get("zone", "")), _i(a, "parties", 1)), {}
+
+
+@command("challenge_vice")
+def _challenge_vice(g, a):
+    return [g.challenge_vice(_i(a, "id"))], {}
+
+
+@command("resolve_challenge")
+def _resolve_challenge(g, a):
+    return g.resolve_challenge(bool(a.get("approve"))), {}
+
+
 @command("delve_next")
 def _delve_next(g, a):
     return _flow_result(g, "delve", g.delve_next(_i(a, "pid"), _manual(a)))
@@ -699,7 +825,7 @@ def _skirmish(g, a):
 
 
 # ---- session -----------------------------------------------------------------------------------------------
-BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual"}
+BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift"}
 
 
 class Session:

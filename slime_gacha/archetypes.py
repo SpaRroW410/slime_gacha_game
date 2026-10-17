@@ -58,8 +58,7 @@ register_archetype(Archetype(
     "barbarian", "Barbarian", "🪓", _s(40, 9, 5, 1, 4), _s(6, 2, 1, 0.3, 0.5),
     {1: "splat", 3: "smash", 6: "war_cry", 10: "rampage"}, "attack",
     discipline="sword",
-    likes=("meat", "shouting"), hunt_bonus={"white_gel": 1.3}, rivals=("mage",),
-    evolve_abilities={1: "blorp_blast"}))
+    likes=("meat", "shouting"), hunt_bonus={"white_gel": 1.3}, rivals=("mage",)))
 
 register_archetype(Archetype(
     "mage", "Mage", "🔮", _s(24, 2, 2, 10, 5), _s(3, 0.3, 0.5, 2.2, 0.6),

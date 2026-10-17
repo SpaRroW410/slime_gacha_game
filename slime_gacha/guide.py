@@ -60,6 +60,21 @@ def _specialization_section() -> dict:
     return dict(title="Specialization (hybrid classes)", icon="🧬", blurb="Which cross-training makes which hybrid.", items=items)
 
 
+def _class_skills_section() -> dict:
+    from . import attributes
+    from .archetypes import ARCHETYPES
+    items = []
+    for cls, keys in attributes.RARITY_SKILLS.items():
+        arch = ARCHETYPES.get(cls)
+        rar = "; ".join(f"{r}: {get_ability(k).name} - {get_ability(k).description}" for r, k in zip(config.RARITIES[1:], keys))
+        evo = attributes.EVOLUTION_SKILLS[cls]
+        items.append(dict(name=f"{arch.emoji} {arch.name}",
+                          text=f"By rarity - {rar}. First evolution: {evo[0].name} - {evo[0].description} "
+                               f"The second evolution raises it to {evo[1].name}."))
+    return dict(title="Class skills", icon="🌟", blurb="One class skill per rarity step, and one signature skill when a slime "
+                "evolves (stars give attributes instead, see Rarity, stars and ascension).", items=items)
+
+
 def build() -> list:
     c = config
     need_rows = [
@@ -125,6 +140,7 @@ def build() -> list:
             dict(name="Merging", text=f"A donor's collected XP and {c.MERGE_STAT_SHARE:.0%} of its stats are absorbed; the share shrinks as an "
                                       f"attribute grows (down to {c.MERGE_SHARE_FLOOR:.0%}). The donor is consumed."),
             dict(name="Evolution", text="At the level cap a slime may evolve (costs essence) and raises its cap.")]),
+        _class_skills_section(),
         dict(title="Bonds, family and the Keeper", icon="💞", blurb="Relationships between slimes, and your own progress.", items=[
             dict(name="Ties", text="Friends (bond 25+), best friends (45+), rivals (sour bond and quarrels), mentors (8+ levels ahead) and "
                                    "couples (deep bond, compatibility, affection). Reviewed once a day."),
@@ -142,6 +158,30 @@ def build() -> list:
                                            "(pick the ability, then the target). Switch to auto, for one turn or the rest of the fight, whenever you like. "
                                            "Rift, Quarry and sparring are always automatic."),
             dict(name="Scouting", text="Reach 100% of every targeted floor within the hour budget or the whole party is lost."),
+            dict(name="Quarrels away from home", text="While either slime is in a dungeon, hunting or studying, you cannot mediate (no talk, no snack): the quarrel "
+                                                       "keeps growing and is out of your hands until they return."),
+            dict(name="Commander's gifts", text="Purple gel is the one way to reach a party inside the Hollow Descent or fighting a skirmish: "
+                                                f"{c.GIFT_MORALE_COST} gel raises the whole party's morale by {c.GIFT_MORALE_GAIN}, {c.GIFT_PEACE_COST} gel settles quarrels inside the party, "
+                                                f"and potions are bought and drunk at once for {'/'.join(map(str, c.GIFT_POTION_PURPLE))} gel (grades 1-5). "
+                                                "In a manual battle the effect applies to the live fight."),
+            dict(name="Capstones and proficiency", text=f"A legendary 5-star that never specialized earns two class capstones for good. Each slime has a class "
+                                                         f"proficiency (0-100): the first capstone needs {c.PROF_ONE_CAPSTONE:.0f}, the second {c.PROF_BOTH_CAPSTONES:.0f}. "
+                                                         f"Fighting, sparring and (for magic classes) studying raise it; after {c.PROF_IDLE_DAYS} idle days it fades by "
+                                                         f"{c.PROF_DECAY:g} a day (never below {c.PROF_FLOOR:.0f}), and the second capstone goes first."),
+            dict(name="Hybrid capstones", text=f"A specialized slime that reaches legendary 5-star gets one hybrid capstone, at no more than "
+                                               f"{c.HYBRID_CAPSTONE_MAX:.0%} of a pure capstone's strength (30% to 60% depending on its second proficiency, which grows "
+                                               f"from its hybrid skills and training in its secondary discipline). A slime that was pure first keeps its pure "
+                                               f"capstones only while it keeps practising its original discipline; neglect it and they lock, the second one first."),
+            dict(name="Vice Keeper", text=f"People > Keeper: appoint a trusted slime ({c.VICE_MIN_STARS} stars or more) as Vice Keeper. In its own group (same party and "
+                                          "same dungeon or task) it can mediate quarrels and feed and tend slimes even where you cannot reach, and it settles "
+                                          "quarrels by itself (at home it leaves serious ones to you). It never merges or destroys, and cannot be merged or "
+                                          "destroyed while in office."),
+            dict(name="Party leaders", text=f"Every party has a leader: the one you set, else its highest-level member. A confident leader adds up to {c.LEADER_POWER:.0%} to the party's "
+                                            "synergy, and while the party is away (in a dungeon, on a hunt) the leader settles quarrels between members."),
+            dict(name="Vice Keeper hunts and challenges", text=f"The Vice Keeper can organise a hunt: it forms up to {c.VICE_HUNT_MAX_PARTIES} full parties from free, rested slimes, joins and leads the first, "
+                                                              "and acts for every party in that hunt. The parties disband when the hunt ends. Any 3-star slime can challenge the Vice Keeper "
+                                                              "for the post (a proud, stronger slime may ask by itself); you approve or reject, and an approved challenge is settled in a friendly duel."),
+            dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),
         dict(title="Time", icon="⏳", blurb="Two ways time can pass.", items=[

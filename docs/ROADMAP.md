@@ -222,4 +222,14 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Hollow Descent, Gloop Pit and skirmishes (not Rift / Quarry / sparring)
 - [x] Switch between manual and auto at any time (whole fight, one turn, later Pit runs)
 - [x] Mini battle arena in the browser (text; renderer isolated for later animation)
+- [x] Town > Merge & destroy: manual merge of any two free slimes (with preview) and the Destruction Chamber
+- [x] No mediation for quarrels involving a slime that is away
+- [x] Commander's gifts (purple gel) for Descent and skirmish parties; potion slots 2-6 by stars
+- [x] Relic merge, gear scrap and gear merge in Town > Merge & destroy
+- [x] Battle effect mechanics (bleed, stun, mark, shield, revive, delay, ...) - step 1 of the 60-skill plan
+- [x] 24 rarity skills rebuilt on the new mechanics + 6 evolution skills (rank II at the second evolution) - step 2
+- [x] Pure capstones (12) with class proficiency and decay - step 3
+- [x] Hybrid signature upgrades and 9 hybrid capstones, second proficiency, drift from pure to hybrid - step 4 (60 skills complete)
+- [x] Rename slimes and parties; Vice Keeper (delegated mediation and care inside groups, never merge/destroy)
+- [x] Party leaders; Vice Keeper organises multi-party hunts and leads the group; challenges for the post (Keeper approves, duel decides)
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee
