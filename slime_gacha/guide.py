@@ -172,6 +172,10 @@ def build() -> list:
                                                f"{c.HYBRID_CAPSTONE_MAX:.0%} of a pure capstone's strength (30% to 60% depending on its second proficiency, which grows "
                                                f"from its hybrid skills and training in its secondary discipline). A slime that was pure first keeps its pure "
                                                f"capstones only while it keeps practising its original discipline; neglect it and they lock, the second one first."),
+            dict(name="Vice Keeper", text=f"People > Keeper: appoint a trusted slime ({c.VICE_MIN_STARS} stars or more) as Vice Keeper. In its own group (same party and "
+                                          "same dungeon or task) it can mediate quarrels and feed and tend slimes even where you cannot reach, and it settles "
+                                          "quarrels by itself (at home it leaves serious ones to you). It never merges or destroys, and cannot be merged or "
+                                          "destroyed while in office."),
             dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),

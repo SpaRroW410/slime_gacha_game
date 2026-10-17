@@ -105,6 +105,7 @@ class Game:
         self.vault_peak = 0                            # relics: slimes leave 34% of the most ever held
         self.gear_peak: Dict[str, int] = {}
         self.autonomy = True                           # slimes may use up to 66% of the stock by themselves
+        self.vice: Optional[int] = None                # id of the Vice Keeper, if one is appointed
         self.vault: Dict[int, items_mod.Item] = {}     # unequipped relics (see items.py)
         self.next_item_id = 1
         self.sacrifice_stress = 0.0                    # recent merges; decays 1/day
@@ -324,6 +325,7 @@ class Game:
                 self._relations_day(events)
                 self._proficiency_day(events)
             self._autonomy_tick(events)
+            self._vice_tick(events)
         self.journal.extend(events)
         self.journal = self.journal[-200:]
         return events
@@ -552,11 +554,97 @@ class Game:
 
     # ---- care ------------------------------------------------------------------
     def _tend(self, sid: int) -> Slime:
-        """Care (feeding, petting, sleeping, talking, potions) is impossible while a slime is inside a dungeon."""
+        """Care (feeding, petting, sleeping, talking, potions) is impossible while a slime is inside a dungeon -
+        unless the Vice Keeper is in there with them."""
         s = self.slime(sid)
-        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry"):
+        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry") and not self.vice_reaches(s):
             raise InvalidAction(f"{s.name} is inside a dungeon - you cannot tend to them until they are back.")
         return s
+
+    # ---- names -------------------------------------------------------------------
+    @staticmethod
+    def _clean_name(name: str) -> str:
+        n = " ".join(str(name).split())
+        if not n or len(n) > config.NAME_MAX or any(c in n for c in "<>&\"'`"):
+            raise InvalidAction(f"A name must be 1-{config.NAME_MAX} characters, without < > & or quotes.")
+        return n
+
+    def rename_slime(self, sid: int, name: str) -> str:
+        s = self.slime(sid)
+        n = self._clean_name(name)
+        if any(o.id != s.id and o.name.lower() == n.lower() for o in self.slimes()):
+            raise InvalidAction(f"Another slime is already called {n}.")
+        old, s.name = s.name, n
+        return f"{old} is now called {n}."
+
+    def rename_party(self, pid: int, name: str) -> str:
+        p = self.parties.get(pid)
+        n = self._clean_name(name)
+        if any(o.id != p.id and o.name.lower() == n.lower() for o in self.parties.parties.values()):
+            raise InvalidAction(f"Another party is already called {n}.")
+        old, p.name = p.name, n
+        return f"Party {old} is now {n}."
+
+    # ---- the Vice Keeper ---------------------------------------------------------------
+    def vice_slime(self) -> Optional[Slime]:
+        if self.vice is not None and self.vice not in self.roster:
+            self.vice = None                              # died or was lost
+        return self.roster.get(self.vice) if self.vice is not None else None
+
+    def appoint_vice(self, sid: int) -> str:
+        """A trusted slime (3 stars or more) stands in for the Keeper: it can mediate, feed and tend slimes the Keeper
+        cannot reach (it must be in the same group), and settles quarrels by itself. It may not merge or destroy."""
+        s = self.slime(sid)
+        if s.stars < config.VICE_MIN_STARS:
+            raise InvalidAction(f"A Vice Keeper must have at least {config.VICE_MIN_STARS} stars.")
+        if s.busy:
+            raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
+        old = self.vice_slime()
+        self.vice = s.id
+        self.social.shift_morale(s, 8)
+        emotions.feel(s, "pride", 25)
+        return f"🎖 {s.name} is now the Vice Keeper" + (f" (replacing {old.name})." if old and old.id != s.id else ".")
+
+    def dismiss_vice(self) -> str:
+        v = self.vice_slime()
+        if not v:
+            raise InvalidAction("There is no Vice Keeper.")
+        self.vice = None
+        return f"{v.name} steps down as Vice Keeper."
+
+    def vice_reaches(self, s: Slime) -> bool:
+        """Can the Vice Keeper act for this slime? At home always; away only when they are in the same group
+        (same party and the same dungeon / task)."""
+        v = self.vice_slime()
+        if v is None or v.id == s.id:
+            return False
+        if not s.busy and not v.busy:
+            return True
+        if not (s.busy and v.busy):
+            return False
+        pv, ps = self.parties.party_of(v.id), self.parties.party_of(s.id)
+        return pv is not None and pv is ps and (v.in_dungeon or v.state) == (s.in_dungeon or s.state)
+
+    def _vice_tick(self, events: List[str]) -> None:
+        """Hourly: the Vice Keeper settles quarrels it can reach and feeds hungry slimes in its group."""
+        v = self.vice_slime()
+        if v is None:
+            return
+        for c in list(self.conflicts.conflicts):
+            a, b = self.roster.get(c.a), self.roster.get(c.b)
+            if not a or not b or not (self.vice_reaches(a) or a.id == v.id) or not (self.vice_reaches(b) or b.id == v.id):
+                continue
+            away = a.busy or b.busy
+            if not away and c.severity > 2:
+                continue                                   # at home the serious ones are left to the Keeper
+            if self.mood_rng.random() < config.VICE_MEDIATE_CHANCE:
+                self.conflicts.resolve(c, self.roster, True)
+                events.append(f"🎖 {v.name} settles the quarrel between {a.name} and {b.name}.")
+        if v.busy:
+            for s in self.slimes():
+                if s.id != v.id and s.busy and s.needs.get("food") < config.VICE_FEED_BELOW and self.wallet.get("food") >= 1 \
+                        and self.vice_reaches(s):
+                    events.append("🎖 " + self.feed(s.id))
 
     def feed(self, sid: int) -> str:
         s = self._tend(sid)
@@ -780,7 +868,7 @@ class Game:
         if len(rows) >= 2:
             half = max(1, len(rows) // 2)
             targets = [r["slime"] for r in rows[:half]][:5]
-            donors = [r["slime"] for r in rows[::-1][:half]][:5]
+            donors = [r["slime"] for r in rows[::-1][:half] if r["slime"].id != self.vice][:5]
             for t in targets:
                 for d in donors:
                     if t is d:
@@ -825,6 +913,8 @@ class Game:
 
     def merge(self, target_id: int, donor_id: int) -> List[str]:
         t, d = self.slime(target_id), self.slime(donor_id)
+        if d.id == self.vice:
+            raise InvalidAction(f"{d.name} is the Vice Keeper and cannot be merged away. Dismiss them first.")
         compat = self.social.compat(t, d)
         amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
         grief = self.social.grief(d, self.slimes(), amp)
@@ -922,8 +1012,9 @@ class Game:
         if not c:
             raise InvalidAction(f"No conflict #{cid}.")
         a, b = self.slime(c.a), self.slime(c.b)
+        vice = self.vice_slime()
         for s in (a, b):
-            if s.busy:                         # in a dungeon, out hunting or studying: the Keeper cannot reach them
+            if s.busy and not (self.vice_reaches(s) or (vice and s.id == vice.id)):   # the Keeper cannot reach them
                 raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}) - this quarrel is out of your hands "
                                     f"until they are home.")
         if method == "snack":
@@ -1328,6 +1419,8 @@ class Game:
     def destroy_slime(self, sid: int) -> List[str]:
         """The Destruction Chamber breaks a slime into white gel and ascension stones (more for rarity and stars)."""
         s = self._free_slime(sid)
+        if s.id == self.vice:
+            raise InvalidAction(f"{s.name} is the Vice Keeper and cannot be destroyed. Dismiss them first.")
         y = ascension.chamber_yield(s, self.buildings.level("chamber"))
         name, label = s.name, f"{config.RARITY_TAG[s.rarity]} {s.star_str()} Lv{s.level} {s.arch.name}"
         self._consume_slime(s, config.CHAMBER_STRESS)
@@ -2432,7 +2525,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, vice=self.vice, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -2489,6 +2582,7 @@ class Game:
         for k, v in g.potions.items():
             g.potion_peak[k] = max(g.potion_peak.get(k, 0), v)
         g.autonomy = d.get("autonomy", True)
+        g.vice = d.get("vice")
         g.time_mode, g.time_scale = d.get("time_mode", "turn"), d.get("time_scale", 1.0)
         g.wall_last, g.wall_frac = d.get("wall_last"), d.get("wall_frac", 0.0)
         g.keeper.load(d.get("keeper"))

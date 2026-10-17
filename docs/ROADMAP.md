@@ -230,4 +230,5 @@ Legend: `[x]` done · `[ ]` todo
 - [x] 24 rarity skills rebuilt on the new mechanics + 6 evolution skills (rank II at the second evolution) - step 2
 - [x] Pure capstones (12) with class proficiency and decay - step 3
 - [x] Hybrid signature upgrades and 9 hybrid capstones, second proficiency, drift from pure to hybrid - step 4 (60 skills complete)
+- [x] Rename slimes and parties; Vice Keeper (delegated mediation and care inside groups, never merge/destroy)
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

@@ -286,6 +286,7 @@ function card(s) {
   const b = [];
   if (s.in_dungeon) b.push(badge('🕳 ' + s.in_dungeon, 'bad'));
   else if (s.state !== 'idle') b.push(badge(s.state, s.state === 'hunting' ? 'info' : ''));
+  if (s.is_vice) b.push(badge('🎖 Vice Keeper', 'ok'));
   { const a = awayOf(s.id); if (a) b.push(badge(`⏳ ${etaHtml(a)}`, 'warn')); }
   if (s.party) b.push(badge('👥 ' + esc(partyById(s.party)?.name || s.party)));
   if (s.hp < s.max_hp * 0.4) b.push(badge('wounded', 'warn'));
@@ -311,7 +312,7 @@ function drawer(s) {
   const dt = tabs.some(([k]) => k === S.dtab) ? S.dtab : 'overview';
   const body = { overview: dOverview, fight: dFight, mind: dMind, gear: dGear }[dt](s, ctx);
   return `<aside class="drawer">
-    <div class="row between"><h2 style="margin:0">${esc(s.name)}</h2><button class="btn small" data-act="closesel">✕</button></div>
+    <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button></h2><button class="btn small" data-act="closesel">✕</button></div>
     <div class="row" style="margin:8px 0">${avatar(s, 'big')}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
       <div class="mute">${s.state}${s.in_dungeon ? ' · inside ' + s.in_dungeon : ''} · mood ${s.mood}${s.party ? ' · 👥 ' + esc(partyById(s.party)?.name) : ''}</div></div></div>
     <div class="seg dtabs">${tabs.map(([k, n]) => `<button class="${dt === k ? 'on' : ''}" data-act="dtab" data-t="${k}">${n}</button>`).join('')}</div>
@@ -439,7 +440,7 @@ function parties() {
       <button class="btn primary" data-act="party_create">➕ New party</button>
       <small class="mute">Parties are fixed at <b>${st.party_size}</b> slimes. Only full parties can battle, hunt together or scout. A slime belongs to one party.</small></div>
     <div class="grid cols2" style="margin-top:12px">${st.parties.map((p) => `<div class="panel">
-      <div class="row between"><h3>${esc(p.name)} ${p.in_delve ? badge('🕳 inside dungeon', 'bad') : ''}</h3>${chip(`${p.members.length}/${st.party_size}`, p.full ? 'ok' : 'warn')}</div>
+      <div class="row between"><h3>${esc(p.name)} <button class="btn small" data-act="rename_party" data-pid="${p.id}" data-n="${esc(p.name)}" title="Rename">✏</button> ${p.in_delve ? badge('🕳 inside dungeon', 'bad') : ''}</h3>${chip(`${p.members.length}/${st.party_size}`, p.full ? 'ok' : 'warn')}</div>
       ${[...new Set(p.members.map(awayOf).filter(Boolean))].map((a) => `<div class="chip warn" style="margin-bottom:4px">${esc(a.label)} · ${etaHtml(a)}</div>`).join('')}
       <div class="row" style="margin:6px 0">${p.members.map((id) => mini(id, !(p.in_delve || p.away))).join('') || '<small class="mute">Empty</small>'}</div>
       ${p.members.length > 1 ? `<p class="mute">Synergy <b class="${p.synergy >= 0 ? '' : ''}">${(p.synergy * 100).toFixed(1)}%</b> power (from average compatibility)</p>` : ''}
@@ -699,10 +700,21 @@ function bonds() {
 }
 
 /* ---------------------------------------------------------------- keeper (the player's skills) */
+function viceKeeperPanel() {
+  const st = S.state, v = st.vice;
+  const elig = st.slimes.filter((s) => s.stars >= st.vice_min_stars && !s.busy && !s.is_vice);
+  let cur = ui('vice_pick', elig[0]?.id);
+  if (!elig.some((s) => s.id == cur)) cur = elig[0]?.id;
+  S.ui.vice_pick = cur;
+  return `<div class="panel stack" style="margin-bottom:12px"><h2>🎖 Vice Keeper</h2>
+    <p class="mute">A trusted slime (${st.vice_min_stars}★ or more) who stands in for you. In its own group it can <b>mediate, feed and tend</b> slimes even inside a dungeon where you cannot, and it settles quarrels by itself (serious ones at home are left to you). It holds most Keeper permissions, but <b>never merges or destroys</b>, and cannot itself be merged or destroyed while in office.</p>
+    ${v ? `<div class="row between panel flat"><span>🎖 <b>${esc(v.name)}</b> is your Vice Keeper</span><button class="btn small" data-act="dismiss_vice">Step down</button></div>` : '<small class="mute">No Vice Keeper appointed.</small>'}
+    <div class="row">${elig.length ? `<select data-ui="vice_pick" data-rerender="1">${elig.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} ${s.stars}★ Lv${s.level})</option>`).join('')}</select><button class="btn primary" data-act="appoint_vice">${v ? 'Replace' : 'Appoint'}</button>` : `<small class="mute">Nobody free with ${st.vice_min_stars}★ or more.</small>`}</div></div>`;
+}
 function keeper() {
   const k = S.state.keeper;
   const pips = (r, m) => '●'.repeat(r) + '○'.repeat(m - r);
-  return `<div class="panel stack"><div class="row between"><h2>🧙 ${esc(k.title)} <small class="mute">level ${k.level}/${k.max_level}</small></h2>${chip(`${k.points} skill point${k.points === 1 ? '' : 's'}`, k.points ? 'ok' : '')}</div>
+  return viceKeeperPanel() + `<div class="panel stack"><div class="row between"><h2>🧙 ${esc(k.title)} <small class="mute">level ${k.level}/${k.max_level}</small></h2>${chip(`${k.points} skill point${k.points === 1 ? '' : 's'}`, k.points ? 'ok' : '')}</div>
     ${bar(k.xp, k.xp_next, 'know', `XP ${k.xp}/${k.xp_next}`)}
     <p class="mute">You earn Keeper XP by tending slimes, pulling, winning fights, clearing floors, scouting, mediating, forging, brewing and by seeing families grow. Each level gives a skill point (a bonus one every 5 levels).</p></div>
   <div class="grid cols2" style="margin-top:12px">${Object.entries(k.branches).map(([b, br]) => `<div class="panel stack"><h3>${br.emoji} ${esc(br.name)}</h3>
@@ -717,10 +729,11 @@ function sacrificeView() {
   const st = S.state;
   const free = st.slimes.filter((s) => !s.busy);
   const pick = (key, idx) => {
-    let cur = ui(key, free[Math.min(idx, free.length - 1)]?.id);
-    if (!free.some((s) => s.id == cur)) cur = free[Math.min(idx, free.length - 1)]?.id;
+    const list = key === 'mt' ? free : free.filter((s) => !s.is_vice);        // the Vice Keeper is never a donor or destroyed
+    let cur = ui(key, list[Math.min(idx, list.length - 1)]?.id);
+    if (!list.some((s) => s.id == cur)) cur = list[Math.min(idx, list.length - 1)]?.id;
     S.ui[key] = cur;
-    return free.length ? `<select data-ui="${key}" data-rerender="1">${free.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} ${esc(s.rarity)} Lv${s.level} ${s.stars}★)</option>`).join('')}</select>` : '<small class="mute">nobody is free</small>';
+    return list.length ? `<select data-ui="${key}" data-rerender="1">${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} ${esc(s.rarity)} Lv${s.level} ${s.stars}★)</option>`).join('')}</select>` : '<small class="mute">nobody is free</small>';
   };
   const away = st.slimes.length - free.length;
   const t = pick('mt', 0), d = pick('md', 1), ds = pick('ds', 0);
@@ -1009,6 +1022,10 @@ const A = {
   merge_relic: () => confirmThen('Feed the donor relic to the target? The donor is consumed for good.', () => act('merge_items', { target: num(S.ui.rt), donor: num(S.ui.rd) })),
   scrap_gear: (d) => confirmThen(`Scrap one ${d.n} for ${d.y}?`, () => act('destroy_gear', { key: d.key, n: 1 })),
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
+  rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
+  rename_party: (d) => { const n = window.prompt('New name for the party ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_party', { pid: num(d.pid), name: n }); },
+  appoint_vice: () => { const id = num(S.ui.vice_pick); if (id) confirmThen('Appoint this slime as Vice Keeper?\n\nIt can mediate, feed and tend slimes in its own group even inside a dungeon, and settles quarrels by itself. It cannot merge or destroy, and cannot itself be merged or destroyed while in office.', () => act('appoint_vice', { id })); },
+  dismiss_vice: () => act('dismiss_vice', {}),
   toggle_manual: () => { S.ui.manual = !manualOn(); render(); },
   delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn() }, { title: 'The Hollow Descent' }),
   battle_pick: (d) => { const b = S.state.battle; const ab = b?.abilities.find((a) => a.key === d.key); if (!ab) return;

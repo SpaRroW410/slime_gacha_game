@@ -33,7 +33,7 @@ def slime_view(g: Game, s) -> dict:
         id=s.id, name=s.name, archetype=s.archetype, class_name=a.name, emoji=a.emoji, title=s.title(),
         rarity=s.rarity, stars=s.stars, level=s.level, level_cap=s.level_cap, stage=s.stage,
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
-        hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
+        is_vice=(s.id == g.vice), hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
         mood=s.mood_label(), power=round(s.power_rating(), 1), power_mult=round(s.power_multiplier(), 2),
@@ -192,6 +192,7 @@ def snapshot(g: Game) -> dict:
     run = g.battle_run()
     return dict(
         away=away_view(g),
+        vice=(lambda v: dict(id=v.id, name=v.name) if v else None)(g.vice_slime()), vice_min_stars=config.VICE_MIN_STARS,
         battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid")) if run else None),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
@@ -722,6 +723,26 @@ def _destroy_gear(g, a):
 @command("merge_gear")
 def _merge_gear(g, a):
     return [g.merge_gear(str(a.get("key", "")), str(a.get("into", "")))], {}
+
+
+@command("rename_slime")
+def _rename_slime(g, a):
+    return [g.rename_slime(_i(a, "id"), a.get("name", ""))], {}
+
+
+@command("rename_party")
+def _rename_party(g, a):
+    return [g.rename_party(_i(a, "pid"), a.get("name", ""))], {}
+
+
+@command("appoint_vice")
+def _appoint_vice(g, a):
+    return [g.appoint_vice(_i(a, "id"))], {}
+
+
+@command("dismiss_vice")
+def _dismiss_vice(g, a):
+    return [g.dismiss_vice()], {}
 
 
 @command("delve_next")

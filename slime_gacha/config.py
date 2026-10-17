@@ -26,6 +26,11 @@ PURPLE_RARITY_BOOST = 5.0 # multiplies rare/epic/legendary weights when paying w
 DAY_TICKS = 24          # one game day; one free pull per day
 FOOD_NUTRITION = 50     # food need restored per Food item
 MEDIATE_SNACK_COST = 2
+# Vice Keeper: a trusted slime who stands in for the Keeper (everything except merging and destroying)
+VICE_MIN_STARS = 3
+VICE_MEDIATE_CHANCE = 0.3        # per hour, for each quarrel the vice keeper can reach
+VICE_FEED_BELOW = 25             # feeds a reachable slime that is this hungry
+NAME_MAX = 24
 # Commander's gifts (purple gel): the only way to reach a party that is inside the Descent, or in a skirmish
 GIFT_MORALE_COST = 1
 GIFT_MORALE_GAIN = 12
