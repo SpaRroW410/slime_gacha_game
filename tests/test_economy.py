@@ -53,3 +53,32 @@ class TestPitEconomy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRarityXpFactor(unittest.TestCase):
+    def test_the_factor_is_the_level_cost_over_the_extra_fights_like_the_pit(self):
+        from slime_gacha import config
+        f = [config.rarity_xp_factor(r) for r in config.RARITIES]
+        self.assertEqual(f[0], 1.0)
+        self.assertEqual(f, sorted(f))                                  # rarer slimes always earn more
+        self.assertAlmostEqual(f[4], 16 / 3)
+        self.assertAlmostEqual(f[2], 4 / 2)
+
+    def test_descent_xp_scales_with_rarity_but_not_with_stars(self):
+        from tests.test_delves import rich, party, members
+
+        def xp(rarity, stars):
+            g = rich(81)
+            pid = party(g, strong=False, stars=stars, rarity=rarity, name="X")
+            for s in members(g, pid):
+                s.stage, s.level = 2, 20
+                s.hp = s.max_hp
+                s.xp = s.total_xp = 0
+            g.rng.random = lambda: 0.99
+            g.enter_dungeon(pid)
+            g.delve_next(pid)
+            return sum(s.total_xp for s in members(g, pid))
+        common, rare, legendary = xp("common", 2), xp("rare", 2), xp("legendary", 2)
+        self.assertGreater(rare, common)
+        self.assertGreater(legendary, rare)
+        self.assertEqual(xp("common", 1), xp("common", 5))

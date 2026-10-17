@@ -2656,7 +2656,7 @@ class Game:
             self.delves[q]["boons"] = []                      # supplies from a wayside stop last one fight
         report = yield from self._battle_gen(party, enemies, intel=(1 + config.INTEL_POWER_BONUS * k / 100)
                                              * (1 + config.OUTLOOK_DELVER_POWER * delver_share), terrain=info.terrain,
-                                             modifier=modifiers.get(info.modifier), boons=boons)
+                                             modifier=modifiers.get(info.modifier), boons=boons, rarity_xp=True)
         boss = dungeon.is_boss_floor(floor)
         report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}{' (BOSS)' if boss else ''}: {info.title} "
                              f"[knowledge {k:.0f}%]" + (f" - {len(pids)} parties fight together" if len(pids) > 1 else ""))

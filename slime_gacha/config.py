@@ -103,6 +103,14 @@ def stat_level(level: float) -> float:
 
 PIT_RUNS_PER_LEVEL = 3.5          # Pit runs a COMMON party needs per level (rarer slimes need more, see pit_xp_per_run)
 PIT_RARITY_RUNS = 0.5            # each rarity step adds this share of PIT_RUNS_PER_LEVEL (legendary: x3)
+
+
+def rarity_xp_factor(rarity: str) -> float:
+    """Multiplier on a fixed XP reward for a slime of this rarity: its level costs XP_RARITY_MULT times as much, and it is allowed
+    (1 + PIT_RARITY_RUNS per step) times as many fights per level, exactly like the Gloop Pit. common 1, uncommon 1.33, rare 2,
+    epic 3.2, legendary 5.33."""
+    idx = RARITIES.index(rarity) if rarity in RARITIES else 0
+    return XP_RARITY_MULT.get(rarity, 1) / (1 + PIT_RARITY_RUNS * idx)
 PIT_DEPTH_XP = {1: 0.6, 2: 0.8, 3: 1.0, 4: 1.3, 5: 1.7}   # deeper Pit depths pay more
 
 def pit_xp_per_run(mean_need: float, mean_rarity_index: float, depth: int) -> float:
@@ -322,7 +330,7 @@ OUTLOOK_SCHOLAR_RESEARCH = 0.05
 OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 
 HUNT_PROF_OWN, HUNT_BOND = 1.5, 1.5          # a hunt sharpens class proficiency (x0.4 if it went badly); hunters in one group grow this much closer per pair
-HUNT_XP_PER_HOUR = 0.017       # a hunt's XP is at least this share of the XP the hunter's next level costs, per hour of the hunt (mild, and it keeps up with level and rarity)
+HUNT_RUNS_PER_LEVEL = 20.0     # three-hour hunts a COMMON slime needs per level (mild); rarer slimes need more, as in the Pit
 HUNT_SIDE_CHANCE = 0.18        # chance a successful hunt also brings a little of another material (herbs, scrap, a common stone)
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
