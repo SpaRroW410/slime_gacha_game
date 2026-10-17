@@ -89,14 +89,13 @@ class TestCall(unittest.TestCase):
             g.call_reinforcements(a, b)                      # one element only
         m.attuned = ["fire", "water"]
         for s in members(g, b):
-            s.progress = 3
-        with self.assertRaises(InvalidAction):
-            g.call_reinforcements(a, b)                      # has not cleared floor 10
-        for s in members(g, b):
-            s.progress = 50
+            s.progress = 0                                   # the call skips the "cleared the floor above" rule
         g.wallet.add("purple_gel", -g.wallet.get("purple_gel"))
         with self.assertRaises(NotEnoughResources):
             g.call_reinforcements(a, b)
+        g.wallet.add("purple_gel", 10)
+        g.call_reinforcements(a, b)
+        self.assertEqual(g.delves[b]["floor"], 11)
 
     def test_two_parties_fight_one_floor_together(self):
         g, a, b = two_parties()

@@ -2462,7 +2462,7 @@ class Game:
 
     def call_reinforcements(self, pid: int, rid: int) -> str:
         """A 5-star mage calls party `rid` (at home) straight to the floor `pid` stands on, for purple gel.
-        The called party must have cleared the floor above, like any other."""
+        The called party needs no prior clearing of the floors above: the call skips that rule."""
         d = self.delves.get(pid)
         if not d:
             raise InvalidAction("That party is not inside the dungeon.")
@@ -2473,10 +2473,6 @@ class Game:
             raise InvalidAction("Only a 5-star mage attuned to two elements can call reinforcements.")
         floor = d["floor"]
         party = self._ready_party(rid)
-        laggard = min(party, key=lambda s: s.progress)
-        if laggard.progress < floor - 1:
-            raise InvalidAction(f"{laggard.name} has only cleared floor {laggard.progress}; reinforcements must have cleared "
-                                f"floor {floor - 1}.")
         cost = self.call_cost(floor)
         self.wallet.spend("purple_gel", cost)
         pre: List[str] = []
