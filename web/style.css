@@ -188,3 +188,12 @@ main h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
 
 .awaybar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 6px 16px; max-width: 1280px; margin: 0 auto; font-size: .82rem; }
 .eta { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.slist { display: grid; gap: 4px; margin-top: 8px; }
+.srow { display: grid; grid-template-columns: 34px minmax(80px, 1.2fr) minmax(120px, 2fr) 70px minmax(60px, 1.5fr); gap: 8px; align-items: center; padding: 4px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); cursor: pointer; font-size: .86rem; }
+.srow:hover, .srow.sel { border-color: var(--accent); }
+.srow .sname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srow .smeta { color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srow .stag { color: var(--mute); text-align: right; font-size: .78rem; }
+.rosmore > summary { cursor: pointer; padding: 6px 2px; }
+@media (max-width: 640px) { .srow { grid-template-columns: 30px 1fr 60px; } .srow .smeta, .srow .stag { grid-column: 2 / 4; text-align: left; } .srow .shp { grid-column: 3; grid-row: 1; } }

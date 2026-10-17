@@ -132,6 +132,7 @@ class ConflictEngine:
         self.conflicts: List[Conflict] = []
         self.friends: set = set()       # frozenset({id, id}) pairs that resolved a quarrel
         self.compat_fn = None           # Game sets: callable(a, b) -> compatibility; shapes quarrel odds
+        self.together_fn = None         # Game sets: callable(a, b) -> are they in the same place (both home, or the same group away)?
         self.hook = None                # Game sets: callable(kind, a, b[, success]) for bonds / morale
         self.calm = 1.0                 # Keeper skill (Peacemaker): multiplies the quarrel chance
         self._next = 1
@@ -175,6 +176,8 @@ class ConflictEngine:
             if c.a not in by_id or c.b not in by_id:       # a participant was merged away
                 self.conflicts.remove(c)
                 continue
+            if self.together_fn and not self.together_fn(by_id[c.a], by_id[c.b]):
+                continue                                   # one of them is away: the quarrel waits until they meet again
             c.age += 1
             for sid in (c.a, c.b):
                 by_id[sid].needs.add("belonging", -2 * c.severity)
@@ -192,6 +195,8 @@ class ConflictEngine:
             for b in awake[i + 1:]:
                 if a.id in busy or b.id in busy:
                     continue
+                if self.together_fn and not self.together_fn(a, b):
+                    continue                               # slimes only quarrel when they share a place
                 if self.rng.random() < self.chance(a, b):
                     c = Conflict(self._next, a.id, b.id, 1, 0, self.reason(a, b))
                     self._next += 1

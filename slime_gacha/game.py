@@ -79,6 +79,7 @@ class Game:
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
         self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
         self.conflicts.hook = self._social_hook
+        self.conflicts.together_fn = self._together
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
         self.best_floor = 0                            # deepest floor ever cleared by anyone
         self.descent_cleared = False                   # the final boss (floor 50) has fallen
@@ -630,6 +631,17 @@ class Game:
             return True                                    # one hunt, several parties: the Vice Keeper leads them all
         pv, ps = self.parties.party_of(v.id), self.parties.party_of(s.id)
         return pv is not None and pv is ps and (v.in_dungeon or v.state) == (s.in_dungeon or s.state)
+
+    def _together(self, a: Slime, b: Slime) -> bool:
+        """Do two slimes share a place? Both at home, or away together (same party doing the same thing, or one hunt group)."""
+        if not a.busy and not b.busy:
+            return True
+        if not (a.busy and b.busy):
+            return False
+        if a.hunt and b.hunt and a.hunt.group and a.hunt.group == b.hunt.group:
+            return True
+        pa = self.parties.party_of(a.id)
+        return pa is not None and pa is self.parties.party_of(b.id) and (a.in_dungeon or a.state) == (b.in_dungeon or b.state)
 
     # ---- party leaders ------------------------------------------------------------------
     def party_leader(self, pid: int) -> Optional[Slime]:

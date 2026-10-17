@@ -232,4 +232,6 @@ Legend: `[x]` done · `[ ]` todo.  The remaining work is tracked task by task in
 - [x] Hybrid signature upgrades and 9 hybrid capstones, second proficiency, drift from pure to hybrid - step 4 (60 skills complete)
 - [x] Rename slimes and parties; Vice Keeper (delegated mediation and care inside groups, never merge/destroy)
 - [x] Party leaders; Vice Keeper organises multi-party hunts and leads the group; challenges for the post (Keeper approves, duel decides)
+- [x] Quarrels only between slimes that share a place (both home, or one party away together); they wait while one is away
+- [x] Big colonies: Colony shows the top 10 as cards and the rest as a compact searchable list
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee

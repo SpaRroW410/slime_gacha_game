@@ -158,8 +158,8 @@ def build() -> list:
                                            "(pick the ability, then the target). Switch to auto, for one turn or the rest of the fight, whenever you like. "
                                            "Rift, Quarry and sparring are always automatic."),
             dict(name="Scouting", text="Reach 100% of every targeted floor within the hour budget or the whole party is lost."),
-            dict(name="Quarrels away from home", text="While either slime is in a dungeon, hunting or studying, you cannot mediate (no talk, no snack): the quarrel "
-                                                       "keeps growing and is out of your hands until they return."),
+            dict(name="Quarrels away from home", text="Slimes only quarrel when they share a place: both at home, or away together in the same party. A quarrel waits (it does not "
+                                                       "grow) while one of them is away, and you cannot mediate it (no talk, no snack) until they are together again."),
             dict(name="Commander's gifts", text="Purple gel is the one way to reach a party inside the Hollow Descent or fighting a skirmish: "
                                                 f"{c.GIFT_MORALE_COST} gel raises the whole party's morale by {c.GIFT_MORALE_GAIN}, {c.GIFT_PEACE_COST} gel settles quarrels inside the party, "
                                                 f"and potions are bought and drunk at once for {'/'.join(map(str, c.GIFT_POTION_PURPLE))} gel (grades 1-5). "

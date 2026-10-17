@@ -272,7 +272,10 @@ function colony() {
     hp: (a, b) => a.hp / a.max_hp - b.hp / b.max_hp, name: (a, b) => a.name.localeCompare(b.name), morale: (a, b) => a.morale - b.morale };
   const filters = { all: () => true, free: (s) => !s.party, idle: (s) => s.state === 'idle' && !s.in_dungeon, wounded: (s) => s.hp < s.max_hp * 0.6,
     away: (s) => s.busy || s.state === 'hunting', needy: (s) => !!s.dominant };
-  const list = st.slimes.filter(filters[S.filter]).sort(sorters[S.sort]);
+  const q = String(ui('roster_q', '')).trim().toLowerCase();
+  const list = st.slimes.filter(filters[S.filter]).filter((s) => !q || `${s.name} ${s.class_name} ${s.rarity} ${s.title}`.toLowerCase().includes(q)).sort(sorters[S.sort]);
+  const TOP = 10;
+  const big = st.slimes.length > TOP;          // a big colony: ten cards, the rest as a compact list
   const opt = (obj, cur) => Object.entries(obj).map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('');
   return `<div class="row between" style="margin-bottom:10px">
     <h2>${st.slimes.length} slimes · ${st.rest.used}/${st.rest.cap} resting</h2>
@@ -280,7 +283,18 @@ function colony() {
       <label class="f">Sort <select data-sel="sort">${opt({ power: 'Power', level: 'Level', stars: 'Stars', rarity: 'Rarity', hp: 'Lowest HP', morale: 'Lowest morale', name: 'Name' }, S.sort)}</select></label>
       <label class="f">Show <select data-sel="filter">${opt({ all: 'All', free: 'Not in a party', idle: 'Available', wounded: 'Wounded', away: 'Away', needy: 'Needs something' }, S.filter)}</select></label>
     </div></div>
-  <div class="grid roster">${list.map(card).join('') || '<p class="mute">No slimes match.</p>'}</div>`;
+  ${big ? `<div class="row" style="margin-bottom:8px"><input type="search" data-ui="roster_q" data-rerender="1" value="${esc(ui('roster_q', ''))}" placeholder="Find a slime (name, class, rarity)" style="max-width:300px"><small class="mute">Showing the top ${Math.min(TOP, list.length)} by ${esc(S.sort)}; the rest are in the list below.</small></div>` : ''}
+  <div class="grid roster">${list.slice(0, big ? TOP : list.length).map(card).join('') || '<p class="mute">No slimes match.</p>'}</div>
+  ${big && list.length > TOP ? `<details class="rosmore" data-keep="moreOpen" ${ui('moreOpen', false) ? 'open' : ''}><summary><b>${list.length - TOP} more slimes</b> <small class="mute">(compact list)</small></summary>
+    <div class="slist">${list.slice(TOP).map(srow).join('')}</div></details>` : ''}`;
+}
+function srow(s) {
+  const a = awayOf(s.id);
+  const tag = s.in_dungeon ? `🕳 ${esc(s.in_dungeon)}` : s.state !== 'idle' ? esc(s.state) : '';
+  return `<div class="srow ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">${avatar(s, 'sm')}
+    <span class="sname">${s.is_vice ? '🎖 ' : ''}${esc(s.name)}</span><span class="smeta">${esc(s.class_name)} · ${s.stars}★ ${esc(s.rarity)} · Lv${s.level}</span>
+    <span class="shp">${bar(s.hp, s.max_hp, 'hp')}</span>
+    <span class="stag">${a ? `⏳ ${etaHtml(a)}` : tag}${s.party ? ` 👥 ${esc(partyById(s.party)?.name || '')}` : ''}${s.hp < s.max_hp * 0.4 ? ' 🩹' : ''}${s.dominant && !s.busy ? ' ❗' : ''}</span></div>`;
 }
 function card(s) {
   const b = [];
@@ -884,7 +898,7 @@ function giftPanel(pid) {
   S.ui['gift_s_' + pid] = mem.some((s) => s.id == gs) ? gs : mem[0]?.id; S.ui.gift_k = gk; S.ui.gift_g = gg;
   const price = gf.potion[gg - 1];
   const quarrel = st.conflicts.some((c) => p.members.includes(c.a) && p.members.includes(c.b));
-  return `<details class="gifts" ${S.ui.giftOpen ? 'open' : ''}><summary><b>🎁 Commander's gifts</b> <small class="mute">(purple gel ${purple} — the only way to reach them in here)</small></summary>
+  return `<details class="gifts" data-keep="giftOpen" ${S.ui.giftOpen ? 'open' : ''}><summary><b>🎁 Commander's gifts</b> <small class="mute">(purple gel ${purple} — the only way to reach them in here)</small></summary>
     <div class="row" style="margin:6px 0"><button class="btn small" data-act="gift" data-pid="${pid}" data-k="morale" ${purple >= gf.morale ? '' : 'disabled'} title="Raise the whole party's morale">💜 Morale +${gf.morale_gain} (${gf.morale})</button>
       <button class="btn small" data-act="gift" data-pid="${pid}" data-k="peace" ${purple >= gf.peace && quarrel ? '' : 'disabled'} title="Settle quarrels inside the party">🤝 Settle quarrels (${gf.peace})</button></div>
     <div class="row"><select data-ui="gift_s_${pid}">${mem.map((s) => `<option value="${s.id}" ${s.id == S.ui['gift_s_' + pid] ? 'selected' : ''}>${esc(s.name)} (${s.buffs.length}/${s.potion_slots})</option>`).join('')}</select>
@@ -1130,7 +1144,7 @@ document.addEventListener('change', async (e) => {
   }
 });
 document.addEventListener('input', (e) => { const t = e.target; if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); } });
-document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('gifts')) S.ui.giftOpen = e.target.open; }, true);
+document.addEventListener('toggle', (e) => { const k = e.target.dataset && e.target.dataset.keep; if (k) S.ui[k] = e.target.open; }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.modal) A.closemodal(); else if (S.sel) A.closesel(); } });
 
 /* ---------------------------------------------------------------- boot */
