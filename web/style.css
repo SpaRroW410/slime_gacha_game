@@ -197,3 +197,15 @@ main h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
 .srow .stag { color: var(--mute); text-align: right; font-size: .78rem; }
 .rosmore > summary { cursor: pointer; padding: 6px 2px; }
 @media (max-width: 640px) { .srow { grid-template-columns: 30px 1fr 60px; } .srow .smeta, .srow .stag { grid-column: 2 / 4; text-align: left; } .srow .shp { grid-column: 3; grid-row: 1; } }
+
+/* compact sticky header (menu = the slime icon) and sticky tabs under it */
+header.top { flex-wrap: nowrap; gap: 10px; padding: 0 12px; height: 56px; }
+.menubtn { flex: none; width: 46px; height: 46px; border: 0; padding: 0; background: transparent; border-radius: 14px; cursor: pointer; display: grid; place-items: center; transition: transform .12s; }
+.menubtn:hover, .menubtn:focus-visible { transform: scale(1.08); outline: none; background: rgba(91, 224, 160, .12); }
+.menubtn:active { transform: scale(.94); }
+header.top .logo { flex: none; font-size: 1.05rem; }
+.topscroll { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 4px 0; }
+.topscroll::-webkit-scrollbar { display: none; }
+.topscroll > * { flex: none; }
+nav.tabs { position: sticky; top: 56px; z-index: 19; }
+@media (max-width: 640px) { header.top { padding: 0 8px; gap: 6px; } header.top .logo { font-size: .95rem; } }

@@ -30,6 +30,8 @@ const onCouncil = () => S.tab === 'people' && sub('people') === 'council';
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ui = (k, d) => (S.ui[k] === undefined ? d : S.ui[k]);
 const kindTitle = () => ({ pit: 'The Gloop Pit', delve: 'The Hollow Descent', skirmish: 'Skirmish' })[S.state?.battle?.kind];
+/* The slime icon is the menu button: a slime body with three large dots in a triangle. */
+const SLIME_MENU = '<svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><defs><radialGradient id="sg" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#b9ffd9"/><stop offset="1" stop-color="#2fb878"/></radialGradient></defs><path d="M24 4C13 4 5 14 5 27c0 9 5 17 19 17s19-8 19-17C43 14 35 4 24 4z" fill="url(#sg)" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/><circle cx="24" cy="17" r="4.6" fill="#0d1f17"/><circle cx="16" cy="31" r="4.6" fill="#0d1f17"/><circle cx="32" cy="31" r="4.6" fill="#0d1f17"/></svg>';
 const manualOn = () => !!S.ui.manual;
 const cmdToggle = () => `<button class="btn small ${manualOn() ? 'primary' : ''}" data-act="toggle_manual" title="Fight turn by turn: every slime acts on its own turn. You can hand the fight back to the slimes at any time.">🎮 Take command: ${manualOn() ? 'ON' : 'off'}</button>`;
 const num = (x, d = 0) => { const n = parseInt(x, 10); return Number.isFinite(n) ? n : d; };
@@ -143,16 +145,17 @@ function render() {
   const stock = Object.entries(st.wallet).filter(([k, v]) => !CORE_RES.includes(k) && v > 0);
   app.innerHTML = `
   <header class="top">
-    <div class="logo"><span class="dot"></span>Slime Gacha</div>
-    <div class="res">${Object.entries(st.wallet).filter(([k]) => CORE_RES.includes(k)).map(([k, v]) => chip(`${RES[k]?.[0] || ''} <b>${v}</b>`, k === 'white_gel' ? 'white' : k === 'purple_gel' ? 'purple' : '')).join('')}
-      ${stock.length ? `<button class="chip chipbtn" data-act="stock" title="Materials, stones and herbs">🎒 ${stock.length}</button>` : ''}</div>
-    ${chip(`Day <b>${st.day + 1}</b> · ${String(st.tick % 24).padStart(2, '0')}:00`)}
-    ${clk.mode === 'live' ? chip(`⏱ live ×${clk.rate_now}`, 'info') : ''}
-    ${fp.available ? chip('🎁 free pull', 'ok') : ''}
-    ${st.stress >= 0.1 ? chip(`😖 ${st.stress}`, 'bad') : ''}
-    <span class="spacer"></span>
-    ${clk.mode === 'turn' ? `<div class="seg small"><button data-act="wait" data-h="1">+1h</button><button data-act="wait" data-h="4">+4h</button><button data-act="wait" data-h="24">+1 day</button></div>` : ''}
-    <button class="btn small" data-act="menu" title="Menu and settings">⋯</button>
+    <button class="menubtn" data-act="menu" aria-label="Menu and settings" title="Menu and settings">${SLIME_MENU}</button>
+    <div class="logo">Slime Gacha</div>
+    <div class="topscroll">
+      ${Object.entries(st.wallet).filter(([k]) => CORE_RES.includes(k)).map(([k, v]) => chip(`${RES[k]?.[0] || ''} <b>${v}</b>`, k === 'white_gel' ? 'white' : k === 'purple_gel' ? 'purple' : '')).join('')}
+      ${stock.length ? `<button class="chip chipbtn" data-act="stock" title="Materials, stones and herbs">🎒 ${stock.length}</button>` : ''}
+      ${chip(`Day <b>${st.day + 1}</b> · ${String(st.tick % 24).padStart(2, '0')}:00`)}
+      ${clk.mode === 'live' ? chip(`⏱ live ×${clk.rate_now}`, 'info') : ''}
+      ${fp.available ? chip('🎁 free pull', 'ok') : ''}
+      ${st.stress >= 0.1 ? chip(`😖 ${st.stress}`, 'bad') : ''}
+      ${clk.mode === 'turn' ? `<div class="seg small"><button data-act="wait" data-h="1">+1h</button><button data-act="wait" data-h="4">+4h</button><button data-act="wait" data-h="24">+1 day</button></div>` : ''}
+    </div>
   </header>
   ${S.stockOpen ? `<div class="popover" id="stockpop"><div class="row" style="gap:6px">${stock.map(([k, v]) => chip(`${RES[k]?.[0] || ''} ${RES[k]?.[1] || k}: <b>${v}</b>`)).join('')}</div></div>` : ''}
   <nav class="tabs">${TABS.map(([k, n]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-t="${k}">${n}${tabBadge(k)}</button>`).join('')}</nav>
