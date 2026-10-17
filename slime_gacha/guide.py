@@ -187,6 +187,7 @@ def build() -> list:
                                                 "and is back to one star can still drill (it just cannot study new elements until it has three stars again). Mages, Medics and Necromancers are always pulled at 3 stars or more, and a rarity ascension keeps their earned elemental mastery (it simply cannot grow until the stars catch up)."),
             dict(name="Rarity shapes", text="A slime's silhouette shows its rarity inside a round ring: common is a plain dome, uncommon grows round ears (green ring), rare is a "
                                              "droplet with a pointed tip (blue ring), epic wears a crown (purple ring), legendary a golden crown and halo (glowing gold ring)."),
+            dict(name="Slime colour", text="The ring around a slime always shows its rarity; the body colour is separate. By default it follows the class, but open a slime and use the colour swatch beside its name to pick any colour (the arrow resets it)."),
             dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),

@@ -52,7 +52,7 @@ const chip = (t, c = '') => `<span class="chip ${c}">${t}</span>`;
 const badge = (t, c = '') => `<span class="badge ${c}">${t}</span>`;
 
 function avatar(s, cls = '') {
-  const c = CLASS_COLORS[s.archetype] || hashColor(s.archetype);
+  const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
   return `<div class="blob ${s.rarity} ${st} ${cls}" style="--c:${c}"><div class="body"><i></i><i></i></div><span class="em">${s.emoji}</span></div>`;
 }
@@ -329,7 +329,7 @@ function drawer(s) {
   const dt = tabs.some(([k]) => k === S.dtab) ? S.dtab : 'overview';
   const body = { overview: dOverview, fight: dFight, mind: dMind, gear: dGear }[dt](s, ctx);
   return `<aside class="drawer">
-    <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button></h2><button class="btn small" data-act="closesel">✕</button></div>
+    <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button> <input type="color" class="colpick" data-colorid="${s.id}" value="${s.color || CLASS_COLORS[s.archetype] || '#5be0a0'}" title="Slime colour (ring colour stays with rarity)"> ${s.color ? `<button class="btn small" data-act="set_color" data-id="${s.id}" data-reset="1" title="Back to class colour">↺</button>` : ''}</h2><button class="btn small" data-act="closesel">✕</button></div>
     <div class="row" style="margin:8px 0">${avatar(s, 'big')}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
       <div class="mute">${s.state}${s.in_dungeon ? ' · inside ' + s.in_dungeon : ''} · mood ${s.mood}${s.party ? ' · 👥 ' + esc(partyById(s.party)?.name) : ''}</div></div></div>
     <div class="seg dtabs">${tabs.map(([k, n]) => `<button class="${dt === k ? 'on' : ''}" data-act="dtab" data-t="${k}">${n}</button>`).join('')}</div>
@@ -605,6 +605,10 @@ function academy() {
     return `<select data-ui="${key}" ${extra}>${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} Lv${s.level} ${s.stars}★)</option>`).join('')}</select>`;
   };
   const avail = (s) => !s.busy && s.state !== 'hunting' && s.state !== 'studying';
+  const freeN = st.slimes.filter(avail).length;
+  const duelA = slimeSel('spa', avail, 'data-rerender="1"');
+  const duelB = slimeSel('spb', (s) => avail(s) && s.id != S.ui.spa, 'data-rerender="1"', 0);
+  const duelOk = freeN >= 2 && S.ui.spa && S.ui.spb && S.ui.spa != S.ui.spb;
   const lib = st.library;
   const scholars = st.slimes.filter((s) => s.can_master && avail(s));
   let lsid = num(ui('lib_s', scholars[0]?.id));
@@ -636,9 +640,10 @@ function academy() {
   <div class="panel stack"><h2>⚔ Sparring — fighting styles</h2>
     <p class="mute">Training is not for XP. Slimes duel each other (non-lethal; the loser is left at <b>1 HP</b> — heal them at the Rest Area) to develop a <b>fighting style</b> with permanent combat perks. Costs ${cost(st.mercy.spar_cost)} per duel and ${st.mercy.train_ticks}h. Training Grounds L${tg.level}: ${esc(tg.now)}.</p>
     <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${arena === d.key ? 'sel' : ''}" data-act="arena" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><div class="sub">${esc(d.style)}</div><small class="mute">${esc(d.perk)}</small></div>`).join('')}</div>
-    <div class="row"><b>Duel:</b> ${slimeSel('spa', avail)} vs ${slimeSel('spb', (s) => avail(s), '', 1)}<button class="btn primary" data-act="spar">Spar</button></div>
+    <div class="row"><b>Duel:</b> ${duelA} vs ${duelB}<button class="btn primary" data-act="spar" ${duelOk ? '' : 'disabled'}>Spar</button></div>
     ${away ? `<small class="mute">${away} slime${away > 1 ? 's are' : ' is'} away (dungeon, hunt or study) and not listed.</small>` : ''}
-    <div class="row"><b>Party:</b> ${partyOptions('sppid')}<button class="btn" data-act="spar_party">Everyone spars</button></div></div>
+    <div class="row"><b>Party sparring:</b> ${partyOptions('sppid')}<button class="btn" data-act="spar_party" ${S.ui.sppid ? '' : 'disabled'}>Everyone spars</button></div>
+    <small class="mute">Party sparring: every member of a full, at-home party duels in pairs. One duel above is just two slimes.</small></div>
 
   <div class="panel stack"><h2>📚 Library</h2>
     <p class="mute">Elemental mastery unlocks at <b>3★ for any class</b> (mages get an extra element slot and study faster). Library spell slots: <b>${lib.slots}</b>${lib.tier3 ? '' : ' · Restricted Section (tier-3) needs Library L3'}.</p>
@@ -1081,6 +1086,7 @@ const A = {
   scrap_gear: (d) => confirmThen(`Scrap one ${d.n} for ${d.y}?`, () => act('destroy_gear', { key: d.key, n: 1 })),
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
+  set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
   rename_party: (d) => { const n = window.prompt('New name for the party ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_party', { pid: num(d.pid), name: n }); },
   set_leader: (d) => act('set_leader', { pid: num(d.pid), id: num(S.ui['lead_' + d.pid]) }),
   vice_hunt: () => act('vice_hunt', { zone: S.ui.vh_zone, parties: num(S.ui.vh_n, 1) }),
@@ -1158,6 +1164,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', async (e) => {
   const t = e.target;
   if (t.dataset.sel) { S[t.dataset.sel] = t.value; render(); return; }
+  if (t.dataset.colorid) { act('set_color', { id: num(t.dataset.colorid), color: t.value }); return; }
   if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); return; }
   if (t.dataset.actChange === 'stance' && S.sel) { act('stance', { id: S.sel, stance: t.value }); return; }
   if (t.hasAttribute('data-import') && t.files[0]) {

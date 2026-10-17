@@ -2,6 +2,7 @@
 
 One `tick()` = one game hour. Everything time-based (needs, hunts, conflicts) advances here.
 """
+import re
 import json
 import math
 import time
@@ -575,6 +576,14 @@ class Game:
             raise InvalidAction(f"Another slime is already called {n}.")
         old, s.name = s.name, n
         return f"{old} is now called {n}."
+
+    def set_color(self, sid: int, color: str) -> str:
+        s = self.slime(sid)
+        c = (color or "").strip().lower()
+        if c and not re.fullmatch(r"#[0-9a-f]{6}", c):
+            raise InvalidAction("A colour looks like #5be0a0.")
+        s.color = c
+        return f"{s.name} {'takes on a new colour' if c else 'is back to its class colour'}."
 
     def rename_party(self, pid: int, name: str) -> str:
         p = self.parties.get(pid)

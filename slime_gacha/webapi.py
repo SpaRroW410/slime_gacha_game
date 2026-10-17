@@ -33,7 +33,7 @@ def slime_view(g: Game, s) -> dict:
         id=s.id, name=s.name, archetype=s.archetype, class_name=a.name, emoji=a.emoji, title=s.title(),
         rarity=s.rarity, stars=s.stars, level=s.level, level_cap=s.level_cap, stage=s.stage,
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
-        is_vice=(s.id == g.vice), hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
+        is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
         mood=s.mood_label(), power=round(s.power_rating(), 1), power_mult=round(s.power_multiplier(), 2),
@@ -741,6 +741,11 @@ def _merge_gear(g, a):
 @command("rename_slime")
 def _rename_slime(g, a):
     return [g.rename_slime(_i(a, "id"), a.get("name", ""))], {}
+
+
+@command("set_color")
+def _set_color(g, a):
+    return [g.set_color(_i(a, "id"), str(a.get("color", "")))], {}
 
 
 @command("rename_party")

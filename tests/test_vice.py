@@ -19,6 +19,19 @@ def three_star(g, cls="medic"):
     return s
 
 
+class TestColor(unittest.TestCase):
+    def test_colour_is_kept_and_validated(self):
+        g = rich(72)
+        s = three_star(g)
+        g.set_color(s.id, "#AABBCC")
+        self.assertEqual(s.color, "#aabbcc")
+        self.assertEqual(Game.from_dict(g.to_dict()).slime(s.id).color, "#aabbcc")
+        with self.assertRaises(InvalidAction):
+            g.set_color(s.id, "red")
+        g.set_color(s.id, "")
+        self.assertEqual(s.color, "")
+
+
 class TestRename(unittest.TestCase):
     def test_rename_slime_and_party(self):
         g = rich(71)
