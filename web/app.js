@@ -1191,7 +1191,19 @@ document.addEventListener('change', async (e) => {
     } catch (err) { toast('That file is not a valid save.', true); }
   }
 });
-document.addEventListener('input', (e) => { const t = e.target; if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); } });
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (!t.dataset.ui) return;
+  S.ui[t.dataset.ui] = t.value;
+  if (!t.dataset.rerender) return;
+  const typing = t.matches('input[type=search], input[type=text]');
+  const pos = typing ? t.selectionStart : null;
+  render();
+  if (typing) {                       // the page was rebuilt: put the cursor back so the phone keyboard stays open
+    const again = document.querySelector(`input[data-ui="${t.dataset.ui}"]`);
+    if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (err) { /* not a text field */ } }
+  }
+});
 document.addEventListener('toggle', (e) => { const k = e.target.dataset && e.target.dataset.keep; if (k) S.ui[k] = e.target.open; }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.modal) A.closemodal(); else if (S.sel) A.closesel(); } });
 
