@@ -192,6 +192,7 @@ class TestScholarsAndPausedMastery(unittest.TestCase):
         s = self._adept(g)
         self.assertEqual(elements.basic_level(s, "fire"), 8)
         g.wallet.add("white_gel", 100)
+        s.level, s.stars = 100, 5
         g.ascend_slime_rarity(s.id)                                # stars back to 1
         self.assertEqual(s.stars, 1)
         self.assertEqual(elements.basic_level(s, "fire"), 8)       # not reset to 0
@@ -215,6 +216,7 @@ class TestScholarsAndPausedMastery(unittest.TestCase):
         g = rich(113)
         s = self._adept(g)
         g.wallet.add("white_gel", 100)
+        s.level, s.stars = 100, 5
         g.ascend_slime_rarity(s.id)
         c = BattleSystem.from_slime(s)
         self.assertEqual(c.mastery.get("fire"), 8)

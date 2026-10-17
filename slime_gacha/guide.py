@@ -132,7 +132,7 @@ def build() -> list:
             dict(name="Stars", text="1-5. Each star adds one class attribute, boosted by rarity (" + ", ".join(f"{k} x{v:g}" for k, v in c.STAR_ATTR_RARITY_BOOST.items()) +
                  "). A slime may ascend to 2/3/4/5 stars only once it has reached a level that depends on its rarity: " +
                  "; ".join(f"{k} " + "/".join(map(str, v)) for k, v in c.STAR_LEVELS.items()) + ". Stone costs are multiplied by " +
-                 ", ".join(f"x{v:g} ({k})" for k, v in c.STAR_STONE_MULT.items()) + ". Rising in rarity resets the stars to 1, but star attributes already unlocked are kept and hit harder at the new rarity; every star above the one that unlocked an attribute adds 10% to it. Ascend with ascension stones: " +
+                 ", ".join(f"x{v:g} ({k})" for k, v in c.STAR_STONE_MULT.items()) + ". A slime may rise in rarity only at level 100 and 5 stars. Rising resets the stars to 1, but star attributes already unlocked are kept and hit harder at the new rarity; every star above the one that unlocked an attribute adds 10% to it. Ascend with ascension stones: " +
                  ", ".join(f"{k - 1}>{k}: {v}" for k, v in c.STAR_ASCEND_STONES.items()) +
                  f" (common equivalents; {c.STONE_MERGE} stones merge into one of the next rarity)."),
             dict(name="XP needed per level", text="Doubles with each rarity: x" +

@@ -9,6 +9,7 @@ RARITY_TAG = {"common": "C", "uncommon": "U", "rare": "R", "epic": "E", "legenda
 # Star rating 1..5. P(star = k) ~ exp(-lambda * (k-1)); lambda grows with rarity, so high stars are
 # exponentially rarer and the drop-off is steeper at higher ranks.
 MAX_STARS = 5
+RARITY_ASCEND_LEVEL = 100        # a slime may rise in rarity only at this level and at MAX_STARS stars
 STAR_DECAY = {"common": 0.7, "uncommon": 0.85, "rare": 1.0, "epic": 1.3, "legendary": 1.6}
 STAR_STAT_MULT = [1.0, 1.1, 1.25, 1.45, 1.7]
 PITY_EPIC = 0           # 0 = disabled (stated rates are honest). Set e.g. 10 / 50 to enable pity.

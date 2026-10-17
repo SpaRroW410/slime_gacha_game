@@ -1546,6 +1546,9 @@ class Game:
         up = ascension.next_rarity(s.rarity)
         if not up:
             raise InvalidAction(f"{s.name} is already legendary.")
+        if s.level < config.RARITY_ASCEND_LEVEL or s.stars < config.MAX_STARS:
+            raise InvalidAction(f"{s.name} must reach level {config.RARITY_ASCEND_LEVEL} and {config.MAX_STARS} stars "
+                                f"to rise in rarity (now level {s.level}, {s.stars} stars).")
         self.wallet.spend("white_gel", ascension.rarity_cost(s))
         old = s.max_hp
         s.rarity = up
@@ -1557,6 +1560,15 @@ class Game:
         self._xp("ascend", config.KEEPER_XP["ascend"])
         return (f"✨ {s.name} ascends to {up}! (stats x{config.RARITY_STAT_MULT[up]}) Stars reset to 1, but the star attributes "
                 f"it unlocked are kept (and hit harder at the new rarity); more stars strengthen them further.")
+
+    def unground(self, sid: int) -> str:
+        """Let a grounded slime out. The quarrel stays; it can brawl again if it is left to escalate."""
+        s = self.slime(sid)
+        if not s.grounded:
+            raise InvalidAction(f"{s.name} is not grounded.")
+        s.grounded = False
+        s.needs.add("belonging", 5)
+        return f"{s.name} is let out. The quarrel is still unresolved."
 
     def ascend_slime_star(self, sid: int) -> str:
         """Add a star, paid in ascension stones (10 / 100 / 1000 / 10000 common-stone equivalents)."""

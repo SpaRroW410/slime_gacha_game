@@ -330,6 +330,7 @@ function drawer(s) {
   const body = { overview: dOverview, fight: dFight, mind: dMind, gear: dGear }[dt](s, ctx);
   return `<aside class="drawer">
     <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button> <input type="color" class="colpick" data-colorid="${s.id}" value="${s.color || CLASS_COLORS[s.archetype] || '#5be0a0'}" title="Slime colour (ring colour stays with rarity)"> ${s.color ? `<button class="btn small" data-act="set_color" data-id="${s.id}" data-reset="1" title="Back to class colour">↺</button>` : ''}</h2><button class="btn small" data-act="closesel">✕</button></div>
+    ${s.grounded ? `<div class="row panel flat"><small>🚫 Grounded after a brawl: no hunts, drills or parties until the quarrel is mediated.</small><button class="btn small" data-act="unground" data-id="${s.id}">Let out</button></div>` : ''}
     <div class="row" style="margin:8px 0">${avatar(s, 'big')}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
       <div class="mute">${s.state}${s.in_dungeon ? ' · inside ' + s.in_dungeon : ''} · mood ${s.mood}${s.party ? ' · 👥 ' + esc(partyById(s.party)?.name) : ''}</div></div></div>
     <div class="seg dtabs">${tabs.map(([k, n]) => `<button class="${dt === k ? 'on' : ''}" data-act="dtab" data-t="${k}">${n}</button>`).join('')}</div>
@@ -381,7 +382,7 @@ function dFight(s, { st, free }) {
         ${s.prof.hybrid.capstone ? `<div>👑 <b>${esc(s.prof.hybrid.capstone.name)}</b> <small class="mute">at ${s.prof.hybrid.scale}% strength (max 60%, a pure capstone is 100%). ${esc(s.prof.hybrid.capstone.desc)}</small></div>` : '<small class="mute">A hybrid capstone unlocks at legendary 5★.</small>'}
         ${s.prof.hybrid.idle > 3 ? `<small class="mute">Second discipline idle for ${s.prof.hybrid.idle} days: fading.</small>` : ''}` : ''}</div>`) : ''}
     ${sect('Ascension', 'Rarity costs white gel; stars cost ascension stones. Both are permanent. The chamber destroys a slime for gel and stones.', `<div class="row">
-      <button class="btn small ${s.ascend.next_rarity && st.wallet.white_gel >= s.ascend.rarity_cost ? 'primary' : ''}" data-act="slime_rarity" ${free && s.ascend.next_rarity && st.wallet.white_gel >= s.ascend.rarity_cost ? '' : 'disabled'}>✨ ${s.ascend.next_rarity ? `to ${s.ascend.next_rarity} · ${s.ascend.rarity_cost} ⚪` : 'Legendary'}</button>
+      <button class="btn small ${s.ascend.next_rarity && s.ascend.rarity_ready && st.wallet.white_gel >= s.ascend.rarity_cost ? 'primary' : ''}" data-act="slime_rarity" ${free && s.ascend.next_rarity && s.ascend.rarity_ready && st.wallet.white_gel >= s.ascend.rarity_cost ? '' : 'disabled'} title="Needs level ${s.ascend.rarity_level} and 5 stars">✨ ${s.ascend.next_rarity ? `to ${s.ascend.next_rarity} · ${s.ascend.rarity_cost} ⚪${s.ascend.rarity_ready ? '' : ` · Lv${s.ascend.rarity_level} & 5★`}` : 'Legendary'}</button>
       <button class="btn small ${s.ascend.star_cost && s.level >= s.ascend.star_level && st.ascension.total >= s.ascend.star_cost ? 'primary' : ''}" data-act="slime_star" ${free && s.ascend.star_cost && s.level >= s.ascend.star_level && st.ascension.total >= s.ascend.star_cost ? '' : 'disabled'} title="${s.ascend.star_cost ? `Needs level ${s.ascend.star_level} and ${s.ascend.star_cost} stones` : ''}">🌟 ${s.ascend.star_cost ? `to ${s.stars + 1}★ · Lv${s.ascend.star_level} · ${s.ascend.star_cost} 💎` : 'Max stars'}</button>
       <button class="btn small danger" data-act="destroy_slime" data-id="${s.id}" data-n="${esc(s.name)}" data-y="${esc(cost(s.ascend.chamber))}" ${free ? '' : 'disabled'}>🔥 Destroy</button></div>
       ${Object.keys(s.merge_bonus).length ? `<small class="mute">Merged-in stats: ${Object.entries(s.merge_bonus).filter(([, v]) => v).map(([k, v]) => `+${v} ${k}`).join(' ')}</small>` : ''}`)}
@@ -1087,6 +1088,7 @@ const A = {
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
   set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
+  unground: (d) => act('unground', { id: num(d.id) }),
   rename_party: (d) => { const n = window.prompt('New name for the party ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_party', { pid: num(d.pid), name: n }); },
   set_leader: (d) => act('set_leader', { pid: num(d.pid), id: num(S.ui['lead_' + d.pid]) }),
   vice_hunt: () => act('vice_hunt', { zone: S.ui.vh_zone, parties: num(S.ui.vh_n, 1) }),

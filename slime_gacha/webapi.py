@@ -82,6 +82,7 @@ def slime_view(g: Game, s) -> dict:
                      proficiency={f: dict(uses=s.proficiency.get(f, 0), level=items_mod.proficiency_level(s, f))
                                   for f in items_mod.FAMILIES if s.proficiency.get(f, 0) or f in s.weapon_memory}),
         ascend=dict(next_rarity=ascension.next_rarity(s.rarity), rarity_cost=ascension.rarity_cost(s),
+                    rarity_ready=(s.level >= config.RARITY_ASCEND_LEVEL and s.stars >= config.MAX_STARS), rarity_level=config.RARITY_ASCEND_LEVEL,
                     star_cost=ascension.star_cost(s), star_level=ascension.star_level(s), chamber=ascension.chamber_yield(s, g.buildings.level("chamber"))),
         gear=dict(s.gear), items={k: _item_view(v, s) for k, v in s.items.items()}, task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
         party=(party.id if party else None), can_evolve=can_evolve(s),
@@ -567,6 +568,11 @@ def _adventure(g, a):
 @command("slime_rarity")
 def _slime_rarity(g, a):
     return _msg(g.ascend_slime_rarity(_i(a, "id")))
+
+
+@command("unground")
+def _unground(g, a):
+    return _msg(g.unground(_i(a, "id")))
 
 
 @command("slime_star")

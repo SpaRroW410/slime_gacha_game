@@ -137,6 +137,7 @@ class TestStarAttributesAndSkills(unittest.TestCase):
         s = make(g, "barbarian")
         self.assertNotIn("moon_slash", s.known_abilities())
         g.wallet.add("white_gel", 100)
+        s.level, s.stars = 100, 5
         g.ascend_slime_rarity(s.id)
         self.assertIn("moon_slash", s.known_abilities())
 
