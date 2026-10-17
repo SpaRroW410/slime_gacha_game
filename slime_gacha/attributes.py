@@ -151,6 +151,46 @@ for _cls, _abs in _S.items():
         register_ability(_a)
 
 
+# Pure capstones: two per class, earned by a legendary 5-star that never specialized. They need class proficiency
+# (>= 30 for the first, >= 70 for the second) and fade when the slime stops practising (see capstones()).
+PURE_CAPSTONES = dict(
+    barbarian=(_A("warlords_cry", "Warlord's Cry", "utility", 0.0, "atk", "all_allies", 5, 0, "A roar that fires up the whole party: +40% attack for 3 turns.", ("buff", "atk", 0.4, 3)),
+               _A("undying_rage", "Undying Rage", "utility", 0.0, "atk", "self", 6, 0, "Cannot fall below 1 HP for 2 turns, and hits 30% harder.", ("undying", 2), ("buff", "atk", 0.3, 2))),
+    mage=(_A("edit_source", "Edit Source", "utility", 0.0, "mag", "enemy", 5, 0, "Rewrite the foe's strongest stat to 1 for 3 turns (half as long on bosses).", ("rewrite", "best", 1, 3)),
+          _A("debug", "Debug", "utility", 0.0, "mag", "all_allies", 5, 0, "Cleanse the whole party and strip every foe of buffs and shields.", ("cleanse",), ("strip",))),
+    medic=(_A("resurrection", "Resurrection", "utility", 0.0, "mag", "self", 99, 0, "Once per fight: a fallen ally stands again with half its HP.", ("revive", 0.5)),
+           _A("overheal_shield", "Overheal Shield", "heal", 1.5, "mag", "all_allies", 4, 0, "Heal the party; healing beyond full HP becomes a shield.", ("overheal",))),
+    rogue=(_A("assassinate", "Assassinate", "damage", 2.5, "atk", "enemy", 4, 0, "A killing blow: triple damage to a foe below 25% HP.", ("execute", 0.25, 3.0)),
+           _A("smoke_bomb", "Smoke Bomb", "utility", 0.0, "atk", "all_allies", 5, 0, "The whole party gains +30% evasion for 3 turns.", ("buff", "evasion", 0.3, 3))),
+    ranger=(_A("trapfield", "Trapfield", "utility", 0.0, "atk", "all_enemies", 5, 0, "Snares everywhere: every foe loses half its speed for 3 turns.", ("debuff", "spd", 0.5, 3)),
+            _A("eagle_eye", "Eagle Eye", "utility", 0.0, "atk", "all_allies", 5, 0, "The whole party gains +30% crit chance for 3 turns.", ("buff", "crit_rate", 0.3, 3))),
+    necromancer=(_A("raise_fallen", "Raise Fallen", "utility", 0.0, "mag", "self", 5, 0, "A fallen foe or ally rises as your thrall.", ("raise",)),
+                 _A("soul_harvest", "Soul Harvest", "drain", 1.2, "mag", "all_enemies", 5, 0, "Drain every foe; the party heals half of everything taken.", ("harvest", 0.5))),
+)
+for _cls, _pair in PURE_CAPSTONES.items():
+    for _a in _pair:
+        register_ability(_a)
+
+
+def pure_earned(slime) -> bool:
+    """A legendary 5-star that never specialized earns the pure capstones for good (specializing later keeps them)."""
+    if not slime.pure_earned and slime.rarity == "legendary" and slime.stars >= config.MAX_STARS and not slime.spec \
+            and slime.archetype in PURE_CAPSTONES:
+        slime.pure_earned = True
+    return slime.pure_earned
+
+
+def capstones(slime) -> List[str]:
+    """The pure capstones the slime can use right now: both at proficiency >= 70, the first at >= 30."""
+    if not pure_earned(slime):
+        return []
+    first, second = (a.key for a in PURE_CAPSTONES[slime.archetype])
+    p = slime.class_prof
+    if p >= config.PROF_BOTH_CAPSTONES:
+        return [first, second]
+    return [first] if p >= config.PROF_ONE_CAPSTONE else []
+
+
 def evolution_skill(slime):
     """The class's signature skill for the slime's evolution stage (rank I at stage 1, rank II from stage 2), or None."""
     pair = EVOLUTION_SKILLS.get(slime.archetype)

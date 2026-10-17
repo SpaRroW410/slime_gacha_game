@@ -81,6 +81,9 @@ class Slime:
         # --- fighting style / elemental mastery (see sparring.py, elements.py, spells.py)
         self.progress = 0                         # deepest Hollow Descent floor this slime has cleared
         self.exp: Dict[str, int] = {}             # experience counters -> outlook (see outlook.py)
+        self.class_prof = config.PROF_START       # proficiency in the original class discipline, 0-100 (attributes.capstones)
+        self.prof_idle = 0                        # days since it last practised
+        self.pure_earned = False                  # earned the pure capstones (legendary, 5 stars, never specialized)
         self.spec = ""                            # hybrid class key (see specialization.py)
         self.spec_disc = ""                       # the secondary discipline that made it (style affinity)
         self.gear: Dict[str, str] = {}            # slot -> gear key (see equipment.py)
@@ -180,6 +183,7 @@ class Slime:
         if self.spec in SPECS and SPECS[self.spec].ability not in keys:
             keys.append(SPECS[self.spec].ability)
         keys += [k for k in attributes.rarity_skills(self) if k not in keys]
+        keys += [k for k in attributes.capstones(self) if k not in keys]
         return keys + [k for k in self.spells if k not in keys]
 
     def title(self) -> str:
@@ -223,14 +227,14 @@ class Slime:
                     emotion_floor=self.emotion_floor, awareness=self.awareness, temperament=self.temperament,
                     proficiency=self.proficiency, weapon_memory=self.weapon_memory, in_dungeon=self.in_dungeon, progress=self.progress, exp=self.exp, spec=self.spec, spec_disc=self.spec_disc,
                     attuned=self.attuned, mastery_xp=self.mastery_xp, spells=self.spells,
-                    task=self.task)
+                    task=self.task, class_prof=round(self.class_prof, 2), prof_idle=self.prof_idle, pure_earned=self.pure_earned)
 
     @classmethod
     def from_dict(cls, d) -> "Slime":
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task"):
+                  "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned"):
             if k in d:
                 setattr(s, k, d[k])
         s.items = {k: Item.from_dict(v) for k, v in (d.get("items") or {}).items()}

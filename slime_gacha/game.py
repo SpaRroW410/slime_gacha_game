@@ -322,10 +322,31 @@ class Game:
             self._emotion_tick(events)
             if self.tick_count % 24 == config.RELATIONS_HOUR:
                 self._relations_day(events)
+                self._proficiency_day(events)
             self._autonomy_tick(events)
         self.journal.extend(events)
         self.journal = self.journal[-200:]
         return events
+
+    @staticmethod
+    def practise(s: Slime, amount: float) -> None:
+        """Class practice sharpens proficiency and resets the idle counter."""
+        s.class_prof = min(100.0, s.class_prof + amount)
+        s.prof_idle = 0
+
+    def _proficiency_day(self, events: List[str]) -> None:
+        """A slime that stops practising its original discipline slowly loses its edge (and, in time, its pure capstones)."""
+        for s in self.slimes():
+            if s.in_dungeon:                 # out fighting in a dungeon counts as practice
+                s.prof_idle = 0
+                continue
+            s.prof_idle += 1
+            if s.prof_idle > config.PROF_IDLE_DAYS and s.class_prof > config.PROF_FLOOR:
+                before = len(attributes.capstones(s))
+                s.class_prof = max(config.PROF_FLOOR, s.class_prof - config.PROF_DECAY)
+                if len(attributes.capstones(s)) < before and attributes.pure_earned(s):
+                    events.append(f"📉 {s.name} is out of practice: a capstone skill is now beyond them "
+                                  f"(proficiency {s.class_prof:.0f}). Train or fight to win it back.")
 
     def _emotion_tick(self, events: List[str]) -> None:
         """Feelings fade and are stirred by needs; legendary 5-star slimes slowly realise they are code."""
@@ -614,6 +635,7 @@ class Game:
             if outlook.has(s, "spar"):
                 xp *= config.OUTLOOK_DUELIST_STYLE
             outlook.bump(s, "spar")
+            self.practise(s, config.PROF_SPAR_OWN if d.key == s.arch.discipline else config.PROF_SPAR_OTHER)
             after = sparring.gain_style_xp(s, d.key, xp, cap)
             self.social.shift_morale(s, 2 + (2 if won else 0))
             note = f"+{xp:.0f} {d.style} xp"
@@ -756,7 +778,11 @@ class Game:
 
     def study(self, sid: int, element: str) -> str:
         """Attune to / study a basic element at the Library (3-star+ slimes of ANY class)."""
-        return self.academy.start_study(self.slime(sid), element)
+        s = self.slime(sid)
+        msg = self.academy.start_study(s, element)
+        if s.arch.discipline == "magic":
+            self.practise(s, config.PROF_STUDY)
+        return msg
 
     def learn_spell(self, sid: int, spell_key: str) -> str:
         return self.library.learn(self.slime(sid), spell_key)

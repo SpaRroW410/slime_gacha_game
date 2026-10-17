@@ -164,6 +164,10 @@ def build() -> list:
                                                 f"{c.GIFT_MORALE_COST} gel raises the whole party's morale by {c.GIFT_MORALE_GAIN}, {c.GIFT_PEACE_COST} gel settles quarrels inside the party, "
                                                 f"and potions are bought and drunk at once for {'/'.join(map(str, c.GIFT_POTION_PURPLE))} gel (grades 1-5). "
                                                 "In a manual battle the effect applies to the live fight."),
+            dict(name="Capstones and proficiency", text=f"A legendary 5-star that never specialized earns two class capstones for good. Each slime has a class "
+                                                         f"proficiency (0-100): the first capstone needs {c.PROF_ONE_CAPSTONE:.0f}, the second {c.PROF_BOTH_CAPSTONES:.0f}. "
+                                                         f"Fighting, sparring and (for magic classes) studying raise it; after {c.PROF_IDLE_DAYS} idle days it fades by "
+                                                         f"{c.PROF_DECAY:g} a day (never below {c.PROF_FLOOR:.0f}), and the second capstone goes first."),
             dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),

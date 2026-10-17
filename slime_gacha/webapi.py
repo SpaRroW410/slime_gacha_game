@@ -64,6 +64,11 @@ def slime_view(g: Game, s) -> dict:
                        for k in attributes.rarity_skills(s)],
         next_rarity_skill=(get_ability(attributes.RARITY_SKILLS[s.archetype][config.RARITIES.index(s.rarity)]).name
                            if s.rarity != "legendary" and s.archetype in attributes.RARITY_SKILLS else None),
+        prof=dict(value=round(s.class_prof), idle=s.prof_idle, earned=attributes.pure_earned(s), floor=config.PROF_FLOOR,
+                  both=config.PROF_BOTH_CAPSTONES, one=config.PROF_ONE_CAPSTONE,
+                  capstones=[dict(key=a.key, name=a.name, desc=a.description, usable=a.key in attributes.capstones(s),
+                                  need=(config.PROF_ONE_CAPSTONE if i == 0 else config.PROF_BOTH_CAPSTONES))
+                             for i, a in enumerate(attributes.PURE_CAPSTONES.get(s.archetype, ()))]),
         weapons=dict(memory=list(s.weapon_memory), slots=config.WEAPON_MEMORY, favourite=items_mod.favourite_family(s),
                      proficiency={f: dict(uses=s.proficiency.get(f, 0), level=items_mod.proficiency_level(s, f))
                                   for f in items_mod.FAMILIES if s.proficiency.get(f, 0) or f in s.weapon_memory}),

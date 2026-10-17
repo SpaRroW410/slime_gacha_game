@@ -78,6 +78,13 @@ def pit_xp_boost(avg_level: float) -> float:
     return max(1.0, (avg_level / 20) ** 0.75)
 
 XP_RARITY_MULT = {"common": 1, "uncommon": 2, "rare": 4, "epic": 8, "legendary": 16}   # doubles with every rarity
+# Class proficiency: how sharp a slime is at its original discipline (see attributes.capstones)
+PROF_START, PROF_FLOOR = 50.0, 20.0
+PROF_IDLE_DAYS = 3             # days without practice before proficiency starts to fade
+PROF_DECAY = 1.0               # lost per further idle day (never below PROF_FLOOR)
+PROF_BATTLE_GAIN, PROF_BATTLE_CAP = 0.3, 4.0     # per action taken in a fight, at most per fight
+PROF_SPAR_OWN, PROF_SPAR_OTHER, PROF_STUDY = 3.0, 1.0, 3.0
+PROF_BOTH_CAPSTONES, PROF_ONE_CAPSTONE = 70.0, 30.0   # proficiency needed for both / for the first pure capstone
 STAR_LEVELS = {                                   # level needed to ascend to 2 / 3 / 4 / 5 stars: rarer slimes level slower, so they need fewer
     "common": [10, 30, 60, 100], "uncommon": [10, 25, 50, 80], "rare": [10, 20, 40, 65],
     "epic": [10, 15, 30, 50], "legendary": [10, 12, 22, 35]}
@@ -246,7 +253,7 @@ OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
-SAVE_VERSION = 14
+SAVE_VERSION = 15
 DEFAULT_SAVE = "savegame.json"
 
 

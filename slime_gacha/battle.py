@@ -121,6 +121,7 @@ class Combatant:
     extra_turns: int = 0
     acted: bool = False             # has acted this round
     last_ability: str = ""
+    uses: int = 0                   # actions taken this fight (class practice)
 
     @property
     def alive(self) -> bool:
@@ -431,6 +432,7 @@ class BattleSystem:
                 log.append(f"  😮‍💨 {actor.emoji}{actor.name} is winded!")
             actor.stamina = max(0.0, actor.stamina - cost)
         actor.last_ability = ability.key
+        actor.uses += 1
         delay = fx.find(ability, "delay")
         if delay and ability.kind in ("damage", "drain", "poison"):
             self.delayed.append(dict(round=self.round + delay[1], actor=actor, ability=fx.strip_delay(ability), targets=list(targets)))
@@ -538,6 +540,8 @@ class BattleSystem:
                     if b in s.attuned and elements.mastery_cap(s):
                         top = config.MASTERY_XP[elements.mastery_cap(s) - 1]
                         s.mastery_xp[b] = min(top, s.mastery_xp.get(b, 0) + n * config.MASTERY_PER_CAST_XP)
+            s.class_prof = min(100.0, s.class_prof + min(config.PROF_BATTLE_CAP, c.uses * config.PROF_BATTLE_GAIN))
+            s.prof_idle = 0
             s.needs.add("energy", -10)
             s.needs.add("esteem", 10 if win else -6)
             survivors.append(s)
@@ -658,6 +662,7 @@ def _h_drain(bs, actor, ab, targets, everyone, log):
     for t in targets:
         dmg, _, _ = _damage_value(bs, actor, ab, t)
         t.hurt(dmg)
+        bs.last_hits[id(t)] = dmg
         heal = max(1, dmg // 2)
         actor.hp = min(actor.max_hp, actor.hp + heal)
         log.append(f"  {actor.emoji}{actor.name} siphons {dmg} from {t.name} and heals {heal}.")
@@ -727,7 +732,7 @@ def _utility_worth(bs, actor, ab, allies, foes) -> bool:
     if "tithe" in names:
         return any(c.minion for c in allies) and any(c.hp < c.max_hp * 0.6 for c in allies if not c.minion)
     if "cleanse" in names:
-        return any(fx._has_bad(c) for c in allies)
+        return any(fx._has_bad(c) for c in allies) or ("strip" in names and any(fx._has_good(c) for c in foes))
     if "strip" in names:
         return any(fx._has_good(c) for c in foes)
     if "shield" in names:

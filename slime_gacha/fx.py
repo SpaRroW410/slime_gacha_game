@@ -7,7 +7,9 @@ An `Ability.fx` is a tuple of effect tuples, applied after the ability's main ef
   ("mark", turns, bonus)           the target takes +bonus damage from everybody
   ("buff", name, amount, turns)    +amount to a stat (atk mag defense spd: multiplicative) or a combat mod (crit_rate,
   ("debuff", name, amount, turns)  crit_dmg, evasion, guard, resist, spell_power, lifesteal, regen: additive); debuff = minus
-  ("rewrite", stat, value, turns)  the target's stat is *set* to value for a while (Edit Source)
+  ("rewrite", stat, value, turns)  the target's stat is *set* to value for a while (Edit Source); stat "best" = whichever
+                                   of its attack / magic is higher; bosses are only affected for half as long
+  ("harvest", share)               after a drain: the party heals `share` of everything drained
   ("shield", mult)                 absorb damage worth mult x power x the caster's stat
   ("cleanse",)                     remove poison, bleed, stun and debuffs from the targets
   ("strip",)                       remove buffs, shields and stances from every foe (Debug)
@@ -185,8 +187,10 @@ def apply(bs, actor, ab, targets, everyone, log, cast_stat) -> None:
         elif kind == "rewrite":
             for t in targets:
                 if t.alive:
-                    t.stat_set[f[1]] = (f[2], f[3])
-                    log.append(f"  ✎ {actor.name} rewrites {t.name}'s {f[1]} to {f[2]} for {f[3]} turns!")
+                    stat = f[1] if f[1] != "best" else ("atk" if t.stats["atk"] >= t.stats["mag"] else "mag")
+                    turns = max(1, (f[3] + 1) // 2) if getattr(t.source, "boss", False) else f[3]
+                    t.stat_set[stat] = (f[2], turns)
+                    log.append(f"  ✎ {actor.name} rewrites {t.name}'s {stat} to {f[2]} for {turns} turns!")
         elif kind == "shield":
             for t in targets:
                 if t.alive:
@@ -253,6 +257,13 @@ def apply(bs, actor, ab, targets, everyone, log, cast_stat) -> None:
             for t in targets:
                 t.counter = (f[1], f[2])
             log.append(f"  ↩ {targets[0].name} takes a counter stance for {f[1]} turns.")
+        elif kind == "harvest":
+            total = sum(bs.last_hits.values())
+            heal = int(total * f[1])
+            for c in allies:
+                if not c.minion and c.alive:
+                    c.hp = min(c.max_hp, c.hp + heal)
+            log.append(f"  💚 The harvest heals the party for {heal}.")
         elif kind == "minion":
             if not any(c.minion and c.side == actor.side and c.alive for c in everyone):
                 from .abilities import Ability

@@ -147,8 +147,8 @@ th { color: var(--mute); font-weight: 600; font-size: .78rem; text-transform: up
 @media (max-width: 640px) { main { padding: 10px; } .drawer { width: 100vw; } header.top { padding: 6px 10px; } .modal { width: 98vw; max-height: 92vh; } }
 
 /* ---- calmer UI: info tooltips, segmented controls, popovers, live bar, guide ---- */
-.info { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 8px; padding: 0; border-radius: 50%; border: 1px solid var(--mute); background: transparent; color: var(--mute); font: italic 700 .72rem/1 Georgia, serif; cursor: help; vertical-align: middle; }
-.info:hover, .info:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+button.info { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 8px; padding: 0; border-radius: 50%; border: 1px solid var(--mute); background: transparent; color: var(--mute); font: italic 700 .72rem/1 Georgia, serif; cursor: help; vertical-align: middle; }
+button.info:hover, button.info:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
 #tip { position: fixed; z-index: 90; display: none; padding: 10px 12px; border-radius: 10px; background: var(--card); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: .85rem; line-height: 1.4; pointer-events: none; }
 .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--card2); border: 1px solid var(--line); margin: 0 0 12px; flex-wrap: wrap; }
 .seg button { border: 0; background: transparent; color: var(--mute); padding: 6px 12px; border-radius: 8px; cursor: pointer; font: inherit; font-size: .88rem; }

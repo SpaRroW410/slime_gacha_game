@@ -119,10 +119,10 @@ function showTip(el) {
 }
 function hideTip() { if (tipEl) tipEl.style.display = 'none'; tipPin = null; }
 function toggleTip(el) { if (tipPin === el.dataset.tip && tipEl && tipEl.style.display === 'block') hideTip(); else { showTip(el); tipPin = el.dataset.tip; } }
-document.addEventListener('mouseover', (e) => { const i = e.target.closest && e.target.closest('.info'); if (i && !tipPin) showTip(i); });
-document.addEventListener('mouseout', (e) => { const i = e.target.closest && e.target.closest('.info'); if (i && !tipPin) hideTip(); });
-document.addEventListener('focusin', (e) => { const i = e.target.closest && e.target.closest('.info'); if (i) showTip(i); });
-document.addEventListener('click', (e) => { if (!(e.target.closest && e.target.closest('.info'))) hideTip(); }, true);
+document.addEventListener('mouseover', (e) => { const i = e.target.closest && e.target.closest('button.info'); if (i && !tipPin) showTip(i); });
+document.addEventListener('mouseout', (e) => { const i = e.target.closest && e.target.closest('button.info'); if (i && !tipPin) hideTip(); });
+document.addEventListener('focusin', (e) => { const i = e.target.closest && e.target.closest('button.info'); if (i) showTip(i); });
+document.addEventListener('click', (e) => { if (!(e.target.closest && e.target.closest('button.info'))) hideTip(); }, true);
 async function loadCouncil(rerender = true) {
   if (!S.state?.slimes.length) { S.council = null; return; }
   const r = await backend.call('council', {});
@@ -321,6 +321,10 @@ function dFight(s, { st, free }) {
       ${s.next_star_attr ? `<small class="mute">Next at ${s.next_star_attr.star}★: ${esc(s.next_star_attr.label)} +${Math.round(s.next_star_attr.value * 100)}%</small>` : ''}
       ${s.rarity_skills.map((k) => `<div>✨ <b>${esc(k.name)}</b></div>`).join('')}
       ${s.next_rarity_skill ? `<small class="mute">Next rarity unlocks: ${esc(s.next_rarity_skill)}</small>` : ''}</div>`)}
+    ${s.prof && s.prof.capstones.length ? sect('Class proficiency', `Practice (fighting, sparring, studying magic) keeps it high; it fades after ${3} idle days. A legendary 5★ that never specialized earns two capstones: the first needs ${s.prof.one}, the second ${s.prof.both}.`, `<div class="stack" style="gap:4px">
+      ${bar(s.prof.value, 100, s.prof.value >= s.prof.both ? 'lvl-ok' : s.prof.value >= s.prof.one ? 'lvl-mid' : 'lvl-low', 'Proficiency', String(s.prof.value))}
+      ${s.prof.earned ? s.prof.capstones.map((c) => `<div>${c.usable ? '👑' : '🔒'} <b>${esc(c.name)}</b> <small class="mute">${esc(c.desc)}${c.usable ? '' : ` (needs proficiency ${c.need})`}</small></div>`).join('') : `<small class="mute">Capstones: ${s.prof.capstones.map((c) => esc(c.name)).join(', ')} — earned at legendary 5★ without ever specializing.</small>`}
+      ${s.prof.idle > 3 ? `<small class="mute">Idle for ${s.prof.idle} days: fading.</small>` : ''}</div>`) : ''}
     ${sect('Ascension', 'Rarity costs white gel; stars cost ascension stones. Both are permanent. The chamber destroys a slime for gel and stones.', `<div class="row">
       <button class="btn small ${s.ascend.next_rarity && st.wallet.white_gel >= s.ascend.rarity_cost ? 'primary' : ''}" data-act="slime_rarity" ${free && s.ascend.next_rarity && st.wallet.white_gel >= s.ascend.rarity_cost ? '' : 'disabled'}>✨ ${s.ascend.next_rarity ? `to ${s.ascend.next_rarity} · ${s.ascend.rarity_cost} ⚪` : 'Legendary'}</button>
       <button class="btn small ${s.ascend.star_cost && s.level >= s.ascend.star_level && st.ascension.total >= s.ascend.star_cost ? 'primary' : ''}" data-act="slime_star" ${free && s.ascend.star_cost && s.level >= s.ascend.star_level && st.ascension.total >= s.ascend.star_cost ? '' : 'disabled'} title="${s.ascend.star_cost ? `Needs level ${s.ascend.star_level} and ${s.ascend.star_cost} stones` : ''}">🌟 ${s.ascend.star_cost ? `to ${s.stars + 1}★ · Lv${s.ascend.star_level} · ${s.ascend.star_cost} 💎` : 'Max stars'}</button>

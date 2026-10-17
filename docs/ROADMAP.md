@@ -228,5 +228,6 @@ Legend: `[x]` done · `[ ]` todo
 - [x] Relic merge, gear scrap and gear merge in Town > Merge & destroy
 - [x] Battle effect mechanics (bleed, stun, mark, shield, revive, delay, ...) - step 1 of the 60-skill plan
 - [x] 24 rarity skills rebuilt on the new mechanics + 6 evolution skills (rank II at the second evolution) - step 2
-- [ ] Pure capstones with proficiency and decay (step 3), hybrid skills and capstones (step 4)
+- [x] Pure capstones (12) with class proficiency and decay - step 3
+- [ ] Hybrid skills and capstones, post-specialization drift (step 4)
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee
