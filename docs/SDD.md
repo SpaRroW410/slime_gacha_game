@@ -342,7 +342,7 @@ idea.
 - **Destruction Chamber** (building, 5 levels): destroys a slime for white gel (5 x 10^rarity x star factor) and stones (scaled by rarity and the stones its stars cost); a sacrifice with morale cost and sacrifice stress. Its relics return to the vault.
 - Not yet built: star attributes, rarity skills, weapon proficiency, potions (see ROADMAP M16).
 
-> **Update (stars & XP)**: a slime may ascend to 2/3/4/5 stars only at level 10/30/60/100 (`config.STAR_LEVELS`; level caps per stage are now 10/30/100). Rising in rarity resets stars to 1 (star attributes are derived from stars, so they lock until re-earned). XP per level doubles with each rarity (20/40/80/160/320 at level 1); stars no longer affect it.
+> **Update (stars & XP)**: a slime may ascend to 2/3/4/5 stars only at level 10/30/60/100 (`config.STAR_LEVELS`; level caps per stage are now 10/30/100). Rising in rarity resets stars to 1 (star attributes already unlocked are kept via `star_peak`, scale with the new rarity, and gain 10% per star above their unlocking star). XP per level doubles with each rarity (20/40/80/160/320 at level 1); stars no longer affect it.
 
 > **Update (level 100 balance)**: stats grow linearly to level 50, then at 60% per level (`config.stat_level`, level 100 counts as 80); the bestiary uses the same curve. Pit rewards (superseded by task 25): a won run pays `config.pit_xp_per_run` = the party's mean XP need / (`PIT_RUNS_PER_LEVEL` x (1 + 0.5 x rarity index)) x `PIT_DEPTH_XP[depth]`, so a common needs 3.5 runs per level, a legendary 10.5, whatever the level; floor 50 takes about 145-180 real hours at x3 for any rarity.
 

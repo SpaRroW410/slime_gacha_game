@@ -1052,8 +1052,8 @@ class Game:
         sugg = []
         if len(rows) >= 2:
             half = max(1, len(rows) // 2)
-            targets = [r["slime"] for r in rows[:half]][:5]
-            donors = [r["slime"] for r in rows[::-1][:half] if r["slime"].id != self.vice][:5]
+            targets = [r["slime"] for r in rows[:half] if not r["slime"].busy][:5]      # only slimes at home can be merged
+            donors = [r["slime"] for r in rows[::-1][:half] if r["slime"].id != self.vice and not r["slime"].busy][:5]
             for t in targets:
                 for d in donors:
                     if t is d:
@@ -1111,7 +1111,7 @@ class Game:
         return evolve(self.slime(sid), self.wallet)
 
     def merge(self, target_id: int, donor_id: int) -> List[str]:
-        t, d = self.slime(target_id), self.slime(donor_id)
+        t, d = self._free_slime(target_id), self._free_slime(donor_id)
         if d.id == self.vice:
             raise InvalidAction(f"{d.name} is the Vice Keeper and cannot be merged away. Dismiss them first.")
         compat = self.social.compat(t, d)
@@ -1549,13 +1549,14 @@ class Game:
         self.wallet.spend("white_gel", ascension.rarity_cost(s))
         old = s.max_hp
         s.rarity = up
-        s.stars = 1                              # a new rarity starts again at one star; star attributes are locked until re-earned
+        s.star_peak = max(s.star_peak, s.stars)  # unlocked star attributes are kept
+        s.stars = 1                              # a new rarity starts again at one star
         s.hp = max(1, min(s.max_hp, s.hp + s.max_hp - old))
         s.needs.add("esteem", 20)
         self.social.shift_morale(s, 10)
         self._xp("ascend", config.KEEPER_XP["ascend"])
-        return (f"✨ {s.name} ascends to {up}! (stats x{config.RARITY_STAT_MULT[up]}) Stars reset to 1: the star attributes "
-                f"are locked until it climbs again.")
+        return (f"✨ {s.name} ascends to {up}! (stats x{config.RARITY_STAT_MULT[up]}) Stars reset to 1, but the star attributes "
+                f"it unlocked are kept (and hit harder at the new rarity); more stars strengthen them further.")
 
     def ascend_slime_star(self, sid: int) -> str:
         """Add a star, paid in ascension stones (10 / 100 / 1000 / 10000 common-stone equivalents)."""
@@ -1569,6 +1570,7 @@ class Game:
         ascension.pay_stones(self.wallet, need)
         old = s.max_hp
         s.stars += 1
+        s.star_peak = max(s.star_peak, s.stars)
         s.hp += s.max_hp - old
         s.needs.add("esteem", 20)
         self.social.shift_morale(s, 10)

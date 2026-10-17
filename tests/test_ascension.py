@@ -1,7 +1,7 @@
 import random
 import unittest
 
-from slime_gacha import ascension, config
+from slime_gacha import ascension, attributes, config
 from slime_gacha.errors import InvalidAction, NotEnoughResources
 from slime_gacha.game import Game
 
@@ -132,6 +132,33 @@ class TestRarityAndStars(unittest.TestCase):
         s.state = "hunting"
         with self.assertRaises(InvalidAction):
             g.ascend_slime_rarity(s.id)
+
+
+class TestKeptAttributes(unittest.TestCase):
+    def test_star_attributes_survive_rarity_ascension_and_grow(self):
+        g = mk()
+        s = g.slimes()[0]
+        s.rarity, s.stars, s.star_peak = "common", 5, 5
+        before = {a["key"]: a["value"] for a in attributes.star_attributes(s)}
+        self.assertEqual(len(before), 4)
+        g.wallet.add("white_gel", 100)
+        g.ascend_slime_rarity(s.id)
+        self.assertEqual(s.stars, 1)
+        after = {a["key"]: a["value"] for a in attributes.star_attributes(s)}
+        self.assertEqual(set(after), set(before))
+        for k in before:
+            self.assertAlmostEqual(after[k], round(dict(attributes.STAR_ATTRS[s.archetype])[k] * config.STAR_ATTR_RARITY_BOOST["uncommon"], 3))
+        s.stars = 3
+        more = {a["key"]: a["value"] for a in attributes.star_attributes(s)}
+        self.assertGreater(more[list(after)[0]], after[list(after)[0]])    # extra stars strengthen the first one
+
+    def test_merge_needs_slimes_at_home(self):
+        g = mk()
+        a, b = g.slimes()[:2]
+        b.state = "hunting"
+        with self.assertRaises(InvalidAction):
+            g.merge(a.id, b.id)
+        self.assertTrue(all(not m["target"].busy and not m["donor"].busy for m in g.council()["merges"]))
 
 
 class TestMerge(unittest.TestCase):

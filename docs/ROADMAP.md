@@ -238,5 +238,8 @@ Legend: `[x]` done · `[ ]` todo.  The remaining work is tracked task by task in
 - [x] Drill tiers (Basic / Advanced / Master) unlocked by the Training Grounds level
 - [x] UI: the slime icon (three dots in a triangle) is the menu button; compact one-row header and tabs stay pinned while scrolling
 - [x] Slime body shape follows rarity inside the round rarity ring (dome, eared, droplet, crowned, royal crown with halo)
-- [ ] Occupations: slimes work as Chef, Blacksmith, Trainer and more (next job-type feature; see TASKS #26)
+- [ ] Occupations: slimes work as Chef, Blacksmith, Trainer and more - switchable, in town, no wages (see TASKS #26)
+- [ ] Descent reinforcements, mage call (purple gel), limited camping with ambush chance (see TASKS #27)
+- [x] Merge / destroy only for slimes at home or resting; Council suggestions skip slimes in the field
+- [x] Star attributes survive rarity ascension (kept via star_peak), scale with the new rarity, +10% per extra star
 - [ ] Animated arena (after floor 50), CLI turn prompts, optional flee
