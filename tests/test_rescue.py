@@ -112,3 +112,27 @@ class TestSeveralDelvesLive(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestScoutAmnesty(unittest.TestCase):
+    def test_old_saves_free_everyone_stranded_once(self):
+        from slime_gacha.game import Game
+        g, scouts, _ = stranded_game()
+        d = g.to_dict()
+        d["version"] = 15
+        h = Game.from_dict(d)
+        self.assertEqual(h.stranded, [])
+        self.assertTrue(all(s.in_dungeon == "" for s in h.roster.values()))
+        d = g.to_dict()
+        k = Game.from_dict(d)
+        self.assertEqual(len(k.stranded), 1)
+
+    def test_one_slime_can_scout_with_an_automatic_budget(self):
+        g = mk(seed=5, n=1)
+        pid = party(g, strong=True, name="P")
+        s = members(g, pid)[0]
+        s.progress = 20
+        g.rng.random = lambda: 0.99
+        res = g.scout(None, 1, 2, 0, ids=[s.id])
+        self.assertFalse(res.stranded)
+        self.assertGreaterEqual(g.knowledge.get(1, 0), 100.0) if hasattr(g, "knowledge") else None

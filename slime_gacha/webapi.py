@@ -276,7 +276,8 @@ def snapshot(g: Game) -> dict:
         buildings=g.building_report(),
         version=config.VERSION,
         stranded=[dict(id=e["id"], ids=e["ids"], names=[g.roster[i].name for i in e["ids"] if i in g.roster], first=e["first"], last=e["last"],
-                       stuck=e["stuck"], hours_left=g.stranded_left(e), rescue_hours=g.rescue_hours(e), food=g.rescue_food(e)) for e in g.stranded],
+                       stuck=e["stuck"], hours_left=g.stranded_left(e), rescue_hours=g.rescue_hours(e), food=g.rescue_food(e),
+                       path=g.rescue_path(e), need=max([f for f in range(1, e["stuck"]) if g._knowledge(f) < 100.0], default=0)) for e in g.stranded],
         modifiers={k: dict(name=m.name, emoji=m.emoji, desc=m.desc, boon=m.boon) for k, m in modifiers_mod.MODIFIERS.items()},
         jobs=_jobs_view(g),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
@@ -754,7 +755,7 @@ def _specialize(g, a):
 
 @command("scout_plan")
 def _scout_plan(g, a):
-    return [], g.scout_plan(_i(a, "pid"), _i(a, "first"), _i(a, "last"))
+    return [], g.scout_plan(a.get("pid"), _i(a, "first"), _i(a, "last"), a.get("ids"))
 
 
 def _finish_delve(r):
@@ -939,12 +940,12 @@ def _descend(g, a):
 
 @command("rescue")
 def _rescue(g, a):
-    return g.rescue(_i(a, "pid"), _i(a, "sid")), {}
+    return g.rescue(a.get("pid"), _i(a, "sid"), a.get("ids")), {}
 
 
 @command("scout")
 def _scout(g, a):
-    r = g.scout(_i(a, "pid"), _i(a, "first"), _i(a, "last", _i(a, "first")), _i(a, "hours", 8))
+    r = g.scout(a.get("pid"), _i(a, "first"), _i(a, "last", _i(a, "first")), _i(a, "hours", 0), a.get("ids"))
     return r.log, dict(before=r.before, after=r.after, survivors=r.survivors, complete=r.complete,
                        required=r.required, stranded=r.stranded)
 
@@ -954,6 +955,7 @@ def _grind(g, a):
     return _flow_result(g, "pit", g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)), manual=_manual(a), lure=bool(a.get("lure"))))
 
 
+@command("wave")
 @command("skirmish")
 def _skirmish(g, a):
     return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a)))

@@ -328,35 +328,50 @@ class Game:
     def stranded_left(self, e: dict) -> int:
         return max(0, e["deadline"] - self.tick_count)
 
+    def rescue_path(self, e: dict) -> List[int]:
+        """Floors a rescue party actually has to cross to reach the stranded scouts: the ones not yet fully scouted, down to
+        the floor they are stuck on. Floors already scouted are a known road and are skipped."""
+        path = [f for f in range(1, e["stuck"] + 1) if self._knowledge(f) < 100.0]
+        return path or [e["stuck"]]
+
     def rescue_hours(self, e: dict) -> int:
-        return config.RESCUE_BASE_HOURS + e["stuck"]
+        scouted = e["stuck"] - len(self.rescue_path(e))
+        return config.RESCUE_BASE_HOURS + len(self.rescue_path(e)) + int(math.ceil(scouted * config.RESCUE_KNOWN_FLOOR_HOURS))
 
     def rescue_food(self, e: dict) -> int:
         return int(math.ceil(self.rescue_hours(e) * config.SCOUT_FOOD_PER_HOUR))
 
-    def rescue(self, pid: int, sid: int) -> List[str]:
-        """Send a full party to bring overdue scouts home. The trip takes hours (it must beat the deadline), costs food,
-        and can be ambushed. Every rescuer must have cleared the floor above the one the scouts are stuck on. Success
-        depends on the rescuers' strength against the depth; a failed attempt leaves the scouts waiting (if time is
-        left) and can cost a rescuer's life."""
+    def rescue(self, pid: Optional[int], sid: int, ids: Optional[Sequence[int]] = None) -> List[str]:
+        """Send slimes (one is enough, or a party's members) to bring overdue scouts home. The trip takes hours (it must beat
+        the deadline), costs food, and can be ambushed. Floors already scouted are a known road: rescuers only need to have
+        cleared the floor above the first unscouted floor on the way, and the trip is shorter. Success depends on the
+        rescuers' strength against the depth; a failed attempt leaves the scouts waiting (if time is left) and can cost a
+        rescuer's life."""
         e = next((x for x in self.stranded if x["id"] == sid), None)
         if not e:
             raise InvalidAction("Nobody is waiting to be rescued.")
         hours = self.rescue_hours(e)
         if hours >= self.stranded_left(e):
             raise InvalidAction(f"It would take {hours}h to reach them, but they only have {self.stranded_left(e)}h left.")
-        party = self._ready_party(pid)
+        party = self._explorers(pid, ids)
+        if not party:
+            raise InvalidAction("Nobody is there to go.")
+        for s in party:
+            self._check_explorer(s)
+        unscouted = [f for f in range(1, e["stuck"]) if self._knowledge(f) < 100.0]
+        need = max(unscouted, default=0)                   # scouted floors are a known road: only the unscouted ones must have been walked
         laggard = min(party, key=lambda s: s.progress)
-        if laggard.progress < e["stuck"] - 1:
-            raise InvalidAction(f"{laggard.name} has only cleared floor {laggard.progress}; rescuers must have walked the "
-                                f"floors down to floor {e['stuck'] - 1}.")
+        if laggard.progress < need:
+            raise InvalidAction(f"{laggard.name} has only cleared floor {laggard.progress}; rescuers must have walked every "
+                                f"unscouted floor on the way (up to floor {need}).")
         self.wallet.spend("food", self.rescue_food(e))
         stuck = e["stuck"]
         danger = 1 + 0.06 * stuck
         strength = sum(s.power_rating() for s in party) / len(party) / (25 * danger)
         k = self._knowledge(stuck) / 100
         p_ok = min(0.95, config.RESCUE_BASE_CHANCE + 0.4 * min(1.5, strength) + 0.2 * k)
-        out = [f"🛟 {self.parties.get(pid).name} sets out to rescue the scouts stranded on floor {stuck} ({hours}h)."]
+        who = self.parties.get(pid).name if pid is not None and not ids else ", ".join(s.name for s in party)
+        out = [f"🛟 {who} sets out to rescue the scouts stranded on floor {stuck} ({hours}h)."]
         self._owed = 0.0
         self._set_flag(party, "rescue")
         out.extend("   " + x for x in self._spend(hours) if "died" in x)
@@ -1456,15 +1471,32 @@ class Game:
 
     # ---- battle -----------------------------------------------------------------
     def battle(self, pid: int, tier: int = 1, manual: bool = False):
-        """A full party fights a wave of tier-N enemies (one foe per party slot; tier 4 = boss).
-        Fallen slimes are gone for good. With manual=True it pauses for orders (returns None until it ends)."""
+        """The wave simulation: a full party fights a wave of tier-N monsters (one per party slot; tier 4 is a boss) as a
+        drill. Nobody dies and there is no XP or loot: it trains battle proficiency and teamwork. With manual=True it pauses
+        for orders (returns None until it ends)."""
         return self._play(self._skirmish_gen(pid, tier), "skirmish", manual, pid)
 
     def _skirmish_gen(self, pid: int, tier: int):
         self._require_full(pid)
         party = self._ready_party(pid)
         enemies = self.battles.generate_enemies(tier, self.parties.size)
-        return (yield from self._fight_gen(party, enemies, 0))
+        report = yield from self._battle_gen(party, enemies, permadeath=False, split_xp=False, xp_mult=0.0, loot=False)
+        self._after_battle(party, report, scale=0.5, wear=False)     # morale and feelings react; gear is not worn by a drill
+        events: List[str] = []
+        for s in party:
+            if s.id not in self.roster:
+                continue
+            s.hp = max(1, s.hp)                                     # a simulation: nobody is lost
+            attributes.practise(s, s.arch.discipline, config.WAVE_PROF * (1 + 0.5 * (tier - 1)) * (1.0 if report.victory else 0.6), 0.0)
+            s.needs.add("esteem", 3 if report.victory else 0)
+        for i, a in enumerate(party):                               # fighting side by side builds teamwork
+            for b in party[i + 1:]:
+                self.social.add_bond(a, b, config.WAVE_BOND)
+        report.log.append("🧪 Simulation over: nobody is hurt for real - battle proficiency gained.")
+        events.extend(self._spend(config.WAVE_TICKS))
+        report.log.extend(events)
+        self.journal.extend(events)
+        return report
 
     def _ready_party(self, pid: int) -> List[Slime]:
         self._require_full(pid)
@@ -1571,9 +1603,10 @@ class Game:
         if f:
             f["gen"].close()
 
-    def _after_battle(self, party, report: BattleReport, boss: bool = False, scale: float = 1.0) -> None:
+    def _after_battle(self, party, report: BattleReport, boss: bool = False, scale: float = 1.0, wear: bool = True) -> None:
         """Morale and bonds react to the outcome (deaths are handled when the dead are reaped)."""
-        report.log.extend(self._wear_items(party))
+        if wear:
+            report.log.extend(self._wear_items(party))
         alive = [s for s in party if s.hp > 0]
         lost = [s for s in party if s.hp <= 0 or s in report.fallen]
         if report.victory:
@@ -2899,27 +2932,54 @@ class Game:
                    + 0.15 * sum(s.archetype in ("rogue", "ranger") for s in party)
                    + config.OUTLOOK_PATHFINDER_SKILL * sum(outlook.has(s, "scout") for s in party))
 
-    def scout_plan(self, pid: int, first: int, last: int) -> dict:
+    def _explorers(self, pid: Optional[int] = None, ids: Optional[Sequence[int]] = None) -> List[Slime]:
+        """Who goes: the given slimes (one is enough, at most a party's worth), or the members of a party."""
+        if ids:
+            ids = list(dict.fromkeys(int(i) for i in ids))
+            if len(ids) > self.parties.size:
+                raise InvalidAction(f"At most {self.parties.size} slimes can go together.")
+            return [self.slime(i) for i in ids]
+        if pid is None:
+            raise InvalidAction("Choose who goes: one slime is enough.")
+        return self.party_members(pid)
+
+    @staticmethod
+    def _check_explorer(s: Slime) -> None:
+        if s.state != "idle" or s.in_dungeon:
+            raise InvalidAction(f"{s.name} is {s.in_dungeon and 'inside a dungeon' or s.state}, not available.")
+        if s.grounded:
+            raise InvalidAction(f"{s.name} is grounded after a brawl.")
+        if s.hp <= 0:
+            raise InvalidAction(f"{s.name} is down.")
+
+    def scout_plan(self, pid: Optional[int], first: int, last: int, ids: Optional[Sequence[int]] = None) -> dict:
         """Estimated hours to scout floors first..last to 100% (the true figure hides a 0.85-1.2x factor)."""
-        party = self.party_members(pid)
+        party = self._explorers(pid, ids) if (pid is not None or ids) else []
         skill = self.scout_skill(party) * (1 + 0.08 * self.keeper.rank("keen_eye")) if party else 1.0
         est = dungeon.scout_estimate(self.dungeon_seed, first, last, skill)
         est.update(skill=round(skill, 2), floors=last - first + 1,
                    food=int(math.ceil(est["safe"] * config.SCOUT_FOOD_PER_HOUR)))
         return est
 
-    def scout(self, pid: int, first: int, last: int, hours: int) -> "ScoutResult":
-        """Send a full party to scout floors first..last. Scouts must reach 100% knowledge of EVERY targeted floor
-        within `hours`; if they run out of time the whole party is lost (it leaves a half-finished note behind).
-        They finish and return as soon as they are done. Supplies (food per hour of the budget) are paid up front.
-        Every member must have cleared the floor above `first`. Ambushes can kill scouts (permanent)."""
+    def scout(self, pid: Optional[int], first: int, last: int, hours: int = 0, ids: Optional[Sequence[int]] = None) -> "ScoutResult":
+        """Send slimes (one is enough; or a party's members) to scout floors first..last. Scouts must reach 100% knowledge of
+        EVERY targeted floor within `hours` (0 = the safe budget the estimate recommends); floors they finish stay known. If they
+        run out of time they are stranded and need a rescue (see `rescue`). They return as soon as they are done. Supplies (food
+        per hour of the budget) are paid up front. Every scout must have cleared the floor above `first`. Ambushes can kill scouts
+        (permanent)."""
         if not 1 <= first <= last <= dungeon.MAX_FLOOR or last - first + 1 > config.SCOUT_MAX_FLOORS:
             raise InvalidAction(f"Scout 1-{config.SCOUT_MAX_FLOORS} consecutive floors between 1 and "
                                 f"{dungeon.MAX_FLOOR} (e.g. floors 3-5).")
+        party = self._explorers(pid, ids)
+        if not party:
+            raise InvalidAction("Nobody is there to go.")
+        for s in party:
+            self._check_explorer(s)
         hours = int(hours)
+        if hours <= 0:
+            hours = max(config.SCOUT_MIN_HOURS, int(self.scout_plan(pid, first, last, ids)["safe"]))
         if not config.SCOUT_MIN_HOURS <= hours <= config.SCOUT_MAX_HOURS:
             raise InvalidAction(f"The budget is {config.SCOUT_MIN_HOURS}-{config.SCOUT_MAX_HOURS} hours.")
-        party = self._ready_party(pid)
         laggard = min(party, key=lambda s: s.progress)
         if laggard.progress < first - 1:
             raise InvalidAction(f"{laggard.name} has only cleared floor {laggard.progress}; scouts must have walked "
@@ -2931,19 +2991,20 @@ class Game:
         total = sum(need)
         before = sum(self._knowledge(f) for f in floors) / len(floors)
         res = ScoutResult(first=first, last=last, hours=hours, required=round(total, 1), before=before, after=before)
-        res.log.append(f"🔭 Scouting floors {first}-{last} with a budget of {hours}h (skill x{skill:.2f}): the party must "
-                       f"finish everything or it is lost.")
+        res.log.append(f"🔭 Scouting floors {first}-{last} with a budget of {hours}h (skill x{skill:.2f}): the scouts must "
+                       f"finish everything or they are stranded.")
         self._owed = 0.0
         self._set_flag(party, "scout")
-        elapsed = 0
+        alive_scouts = lambda: [s for s in party if s.id in self.roster and s.in_dungeon == "scout"]
+        elapsed, now = 0, first
         for h in range(hours):
-            members = self._members_in("scout", pid)
+            members = alive_scouts()
             if not members or elapsed >= total:
                 break
             events = self._spend(1)
             elapsed += 1
             res.log.extend("   " + e for e in events if "died" in e)
-            members = self._members_in("scout", pid)
+            members = alive_scouts()
             if not members:
                 break
             cum, now = 0.0, last                       # which floor are they exploring this hour?
@@ -2966,7 +3027,7 @@ class Game:
                     self._drop_gear([v], [s for s in members if s is not v and s.hp > 0], members,
                                     "Hollow Descent", res.log)
                     self._reap(res.log)
-        survivors = self._members_in("scout", pid)
+        survivors = alive_scouts()
         res.survivors = len(survivors)
         res.complete = bool(survivors) and elapsed >= total
         if res.complete:
@@ -2983,7 +3044,8 @@ class Game:
             for f, hrs in zip(floors, need):
                 frac = max(0.0, min(1.0, (elapsed - cum) / hrs))
                 cum += hrs
-                self.intel[f] = max(self.intel.get(f, 0.0), round(100 * frac * config.SCOUT_NOTE_FRACTION, 1))
+                # a floor they finished is fully known; only the one they were still exploring becomes a half-finished note
+                self.intel[f] = max(self.intel.get(f, 0.0), 100.0 if frac >= 1.0 else round(100 * frac * config.SCOUT_NOTE_FRACTION, 1))
             if survivors:                              # out of time and supplies: overdue - a rescue party may still reach them
                 owed = int(math.ceil(self._owed)) if self.live else 0
                 self._owed = 0.0
@@ -2992,8 +3054,8 @@ class Game:
                                           stuck=now, needed=round(total), deadline=self.tick_count + owed + config.RESCUE_DEADLINE_HOURS))
                 self.next_stranded += 1
                 res.stranded = True
-                res.log.append(f"🆘 The exploration party is overdue: out of supplies on floor {now} (they needed ~{total:.0f}h, "
-                               f"they had {hours}h). Their half-finished note survives. Send a rescue party within "
+                res.log.append(f"🆘 The scouts are overdue: out of supplies on floor {now} (they needed ~{total:.0f}h, "
+                               f"they had {hours}h). What they finished stays known. Send rescuers within "
                                f"{config.RESCUE_DEADLINE_HOURS}h or they are lost.")
             else:
                 res.log.append(f"☠ The exploration party never came back. Their half-finished note survives "
@@ -3293,6 +3355,13 @@ class Game:
         g.next_stranded = d.get("next_stranded", 1)
         g.journal = d.get("journal", [])
         g.journal.extend(awakening.load_notes(g.slimes(), g.mood_rng))
+        if d.get("version", 0) < 16:                              # one-time amnesty: the scouting bugs of older versions stranded
+            g.stranded = []                                       # parties unfairly; everybody still stranded is freed on load
+            for sl in g.slimes():
+                if sl.in_dungeon in ("stranded", "rescue", "scout"):
+                    sl.in_dungeon = ""
+                    if sl.state in ("hunting", "studying") and not sl.hunt and not sl.task:
+                        sl.state = "idle"
         away = {i for e in g.expeditions for i in e["ids"]}      # a battle that was open when the game was saved is gone:
         for sl in g.slimes():                                     # free its party (the Descent keeps its own delve flags)
             if sl.in_dungeon in ("grind", "scout", "adventure", "quarry", "rescue") and sl.id not in away:

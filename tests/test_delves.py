@@ -237,7 +237,7 @@ class TestScouting(unittest.TestCase):
             with self.assertRaises(InvalidAction):
                 g.scout(pid, *bad)
         with self.assertRaises(InvalidAction):
-            g.scout(pid, 1, 2, 0)                       # budget below the minimum
+            g.scout(pid, 1, 2, 1)                       # budget below the minimum
         with self.assertRaises(InvalidAction):
             g.scout(pid, 3, 4, 8)                       # nobody has cleared floor 2
         short = g.create_party("short")
@@ -283,8 +283,9 @@ class TestScouting(unittest.TestCase):
         self.assertEqual(sorted(d["name"] for d in g.graveyard), sorted(names))
         self.assertEqual(g.inventory.items, {})                 # nobody left to carry the gear
         # a half-finished note survives: partial knowledge on the floors they reached
-        self.assertTrue(0 < g.intel.get(1, 0) <= 100 * config.SCOUT_NOTE_FRACTION)
-        self.assertNotEqual(g.intel.get(1, 0), 100.0)
+        partial = [f for f in (1, 2, 3, 4) if 0 < g.intel.get(f, 0) < 100.0]
+        self.assertTrue(partial and all(g.intel[f] <= 100 * config.SCOUT_NOTE_FRACTION for f in partial))   # the floor they were on
+        self.assertTrue(all(g.intel.get(f, 0) in (0, 100.0) or f in partial for f in (1, 2, 3, 4)))       # finished floors stay fully known
 
     def test_budget_between_estimate_and_truth(self):
         # the hidden per-floor factor means the nominal estimate can be too short

@@ -89,7 +89,7 @@ ROADMAP: List[Dict[str, object]] = [
     dict(id=23, group="Platform", title="Mod loader (plugins)", status="planned",
          text="A documented plugin API with an example adding a class, a skill and an enemy."),
     dict(id=18, group="Interface", title="Terminal manual battles and fleeing", status="planned",
-         text="Fight a skirmish by hand in the terminal edition; decide and document fleeing."),
+         text="Fight a wave simulation by hand in the terminal edition; decide and document fleeing."),
     dict(id=21, group="Quality", title="Balance pass with a simulation harness", status="planned",
          text="Extend the playtest tool to Pit depths, rarities, skills and capstones, and tune the numbers."),
     dict(id=22, group="Quality", title="Localisation", status="planned", text="String catalogs and a language switch."),
