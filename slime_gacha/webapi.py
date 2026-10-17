@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -38,7 +38,7 @@ def slime_view(g: Game, s) -> dict:
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
-        mood=s.mood_label(), power=round(s.power_rating(), 1), power_mult=round(s.power_multiplier(), 2),
+        mood=s.mood_label(), power=(tp := power_mod.total_power(s))["total"], power_parts=tp["parts"], power_mult=tp["multiplier"],
         morale=round(s.morale), morale_label=SocialEngine.morale_label(s.morale),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
         abilities=[dict(key=k, name=get_ability(k).name, element=get_ability(k).element,

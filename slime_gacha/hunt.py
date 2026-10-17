@@ -31,6 +31,8 @@ def register_zone(z: Zone) -> Zone:
 
 
 for _z in [
+    Zone("pond", "Dewdrop Pond", 1, 8, {"white_gel": (1, 2), "food": (0, 2)}, 6,
+         "A quick dip in the shallows: one hour, small gains.", 0.0),
     Zone("meadow", "Sunny Meadow", 3, 15, {"white_gel": (1, 3), "food": (1, 3)}, 15,
          "Gentle hills, fat bugs.", 0.01),
     Zone("grove", "Mushroom Grove", 5, 28, {"white_gel": (2, 5), "food": (2, 5), "essence": (0, 3)}, 30,
@@ -49,6 +51,19 @@ class HuntSystem:
     def __init__(self, wallet: ResourceManager, rng: random.Random):
         self.wallet = wallet
         self.rng = rng
+        self.on_finish = None            # Game sets: callable(slime, ok, group) - class proficiency and bonds from a hunt
+
+    def check(self, slime) -> None:
+        """May this slime be sent hunting? A sleeper can be woken and a post-holder pulled off the job (the caller does
+        that after this check passes); hurt, grounded and exhausted slimes cannot go."""
+        if slime.state not in ("idle", "sleeping", "working") or slime.in_dungeon:
+            raise InvalidAction(f"{slime.name} is {slime.in_dungeon and 'inside a dungeon' or slime.state}, not available.")
+        if slime.grounded:
+            raise InvalidAction(f"{slime.name} is grounded after a brawl. Mediate first.")
+        if slime.hp < slime.max_hp * config.MIN_HUNT_HP:
+            raise InvalidAction(f"{slime.name} is too wounded to hunt - rest first.")
+        if slime.needs.get("energy") < 20:
+            raise InvalidAction(f"{slime.name} is too tired to hunt.")
 
     def start(self, slime, zone_key: str) -> None:
         zone = ZONES.get(zone_key)
@@ -90,6 +105,7 @@ class HuntSystem:
         zone = ZONES.get(s.hunt.zone)
         progress = 1.0 - max(0, s.hunt.ticks_left) / s.hunt.total_ticks
         factor = 0.5 * progress if early else 1.0
+        group = s.hunt.group
         s.state, s.hunt = "idle", None
         # success odds: slime power versus zone danger
         ratio = s.power_rating() / zone.danger
@@ -118,7 +134,17 @@ class HuntSystem:
         purple_p = zone.purple_chance * (1.5 if stance == "explore" else 1.0) * factor
         if ok and self.rng.random() < purple_p:
             gains["purple_gel"] = 1
+        if ok and self.rng.random() < config.HUNT_SIDE_CHANCE * factor:        # a little of something else, rarely
+            side = self.rng.choice(("herb", "herb", "scrap", "stone_common"))
+            if side == "herb":
+                gains[f"herb_{self.rng.choice(config.HERBS)}"] = self.rng.randint(1, 2)
+            elif side == "scrap":
+                gains["scrap"] = self.rng.randint(1, 3)
+            else:
+                gains["stone_common"] = 1
         self.wallet.add_many(gains)
+        if self.on_finish:
+            self.on_finish(s, ok, group)
         s.needs.add("esteem", 12 if ok else -8)
         outlook.bump(s, "hunt")
         xp = int(zone.xp * (1.0 if ok else 0.4) * factor)

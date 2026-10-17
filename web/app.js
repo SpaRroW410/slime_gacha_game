@@ -344,6 +344,7 @@ function dOverview(s, { st, free, inDun }) {
   const care = (c, label, extra = '') => `<button class="btn small" data-act="do" data-c="${c}" ${inDun || extra ? 'disabled' : ''} ${inDun ? 'title="Inside a dungeon - you cannot tend to them"' : ''}>${label}</button>`;
   const zone = ui('zone', st.zones[0].key);
   return `<div class="kv">${[['HP', `${s.hp}/${s.max_hp}`], ['ATK', s.stats.atk], ['DEF', s.stats.defense], ['MAG', s.stats.mag], ['SPD', s.stats.spd], ['Power', s.power]].map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('')}</div>
+    <small class="mute">⚡ Total power <b>${s.power}</b> = (${Object.entries(s.power_parts).map(([k, v]) => `${k} ${v}`).join(' + ')}) × mood &amp; morale ${s.power_mult} ${info('Total power sums what the slime is (stats: class, level, rarity, stars, stage, gear, relics, potions) and what it can do (skills scaled by the stat they use, capstones and spell forms counting extra, star attributes, elemental mastery, fighting styles, class proficiency), then multiplies by its current mood and morale.')}</small>
     ${bar(s.hp, s.max_hp, 'hp', 'HP')}${bar(s.xp, s.xp_next, 'xp', 'XP', s.level >= s.level_cap ? 'level cap' : `${s.xp}/${s.xp_next}`)}
     ${bar(s.morale, 100, 'morale', `Morale — ${s.morale_label}`, `power ×${s.morale_factor}`)}
     ${bar(s.stamina, s.max_stamina, 'know', `⚡ Stamina`, `${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}
@@ -466,7 +467,7 @@ function parties() {
         ${!(p.in_delve || p.away) && p.members.length > 1 ? `<select data-ui="lead_${p.id}">${p.members.map((id) => `<option value="${id}" ${id === p.leader ? 'selected' : ''}>${esc(slimeById(id)?.name)}</option>`).join('')}</select><button class="btn small" data-act="set_leader" data-pid="${p.id}">Set leader</button>` : ''}
         ${p.temp ? badge('hunt party', 'info') : ''}</div>` : ''}
       <div class="row" style="margin:6px 0">${p.members.map((id) => mini(id, !(p.in_delve || p.away))).join('') || '<small class="mute">Empty</small>'}</div>
-      ${p.members.length > 1 ? `<p class="mute">Synergy <b class="${p.synergy >= 0 ? '' : ''}">${(p.synergy * 100).toFixed(1)}%</b> power (from average compatibility)</p>` : ''}
+      ${p.members.length > 1 ? `<p class="mute">Synergy <b>${(p.synergy * 100).toFixed(1)}%</b> power (from average compatibility) · ⚡ party power <b>${Math.round(p.members.reduce((a, id) => a + (slimeById(id)?.power || 0), 0) * (1 + p.synergy))}</b> ${info('The members\' total power added up, times the party synergy.')}</p>` : ''}
       <div class="row">
         ${!p.full && !(p.in_delve || p.away) ? `<button class="btn small" data-act="party_fill" data-pid="${p.id}">⚡ Fill with best free</button>` : ''}
         ${!(p.in_delve || p.away) ? `<select data-ui="add_${p.id}"><option value="">Add slime…</option>${freeSlimes.map((s) => `<option value="${s.id}">${esc(s.name)} (${esc(s.class_name)} Lv${s.level})</option>`).join('')}</select><button class="btn small" data-act="party_add" data-pid="${p.id}">Add</button>` : ''}
@@ -680,12 +681,24 @@ function hospitalView() {
     ${postPanel('doctor')}
     ${b.cost ? `<button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="hospital" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade the Hospital · ${cost(b.cost)}</button>` : ''}</div></div>`;
 }
+function pickSlime(key, filter, idx = 0) {
+  const list = S.state.slimes.filter(filter);
+  let cur = ui(key, list[Math.min(idx, list.length - 1)]?.id);
+  if (!list.some((s) => s.id == cur)) cur = list[Math.min(idx, list.length - 1)]?.id;
+  S.ui[key] = cur;
+  if (!list.length) return '<small class="mute">nobody is free</small>';
+  return `<select data-ui="${key}">${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} Lv${s.level} ${s.stars}★)${trainTags(s)}</option>`).join('')}</select>`;
+}
 function huntsView() {
   const st = S.state, j = st.jobs;
   const out = st.slimes.filter((s) => s.state === 'hunting');
   return `<div class="grid cols2">
-  <div class="panel stack"><h2>🏞 Hunts & foraging ${info('Hunting sends slimes outside for white gel, food and essence (and a rare purple gel). It costs no resources, only time and risk: a hurt or weak slime can be injured, and one that is too weak may come home with little. Foraging is the same thing done automatically.')}</h2>
-    <p class="mute">Slimes can hunt in three zones. A hunt costs nothing but time and a little health; the better a slime's power against the zone's danger, the safer and richer the haul. Send slimes from their card (Colony tab), a whole party from the Parties tab, or let the Vice Keeper organise big hunts.</p>
+  <div class="panel stack"><h2>🏞 Hunts & foraging ${info('Hunting sends slimes outside for white gel, food and essence (and a rare purple gel, plus now and then a herb, scrap or a common stone). A hunt also sharpens class proficiency. It costs no resources, only time and risk: a hurt or weak slime can be injured, and one that is too weak may come home with little. Foraging is the same thing done automatically.')}</h2>
+    <p class="mute">Slimes can hunt in four zones (from a one-hour dip to the Crust Road). A hunt costs nothing but time and a little health; the better a slime's power against the zone's danger, the safer and richer the haul. Send slimes from their card (Colony tab), a whole party from the Parties tab, or let the Vice Keeper organise big hunts.</p>
+    <div class="row"><label class="f">Zone <select data-ui="hz" data-rerender="1">${st.zones.map((z) => `<option value="${z.key}" ${z.key === ui('hz', st.zones[0].key) ? 'selected' : ''}>${esc(z.name)} (${z.duration}h)</option>`).join('')}</select></label>
+      ${pickSlime('hs', (s) => !s.in_dungeon && s.state !== 'hunting' && s.state !== 'studying' && !s.grounded)}<button class="btn primary" data-act="hunt_pick">🏞 Send hunting</button></div>
+    <div class="row">${partyOptions('hpid')}<button class="btn" data-act="hunt_party_pick">🏞 Hunt together</button><small class="mute">A party that hunts together grows closer (synergy).</small></div>
+    <small class="mute">Tags show who is asleep, hurt or at work: a sleeper wakes free if over half rested (else it costs mood); a worker leaves their post; a slime under 30% health cannot go.</small>
     <table><thead><tr><th>Zone</th><th>Time</th><th>Danger</th><th>Brings</th></tr></thead><tbody>${st.zones.map((z) => `<tr><td><b>${esc(z.name)}</b><br><small class="mute">${esc(z.desc)}</small></td><td>${z.duration}h</td><td>${z.danger}</td><td>${esc(Object.entries(z.rewards || {}).map(([k, v]) => `${(RES[k] || [k])[0]} ${Array.isArray(v) ? v.join('–') : v}`).join(' · '))}</td></tr>`).join('')}</tbody></table>
     <div class="row"><button class="btn small ${j.forage ? 'primary' : ''}" data-act="forage">🧺 Foraging: ${j.forage ? 'on' : 'off'}</button>
       <small class="mute">With foraging on, slimes that belong to no party, hold no post and have nothing to do hunt by themselves in the best zone they can clear safely (rested, fed and healthy only). Appointed chefs, blacksmiths, brewers and doctors forage on their own for one ${j.shift}-hour shift when their post has nothing to do — and can be called back at once.</small></div></div>
@@ -722,7 +735,7 @@ function mutationNotes(s) {
 /* What state a slime is in when picked for training: it changes what the training costs or gives. */
 function trainTags(s) {
   const tags = [];
-  if (s.state === 'sleeping') tags.push('😴 asleep: woken at a mood cost');
+  if (s.state === 'sleeping') tags.push(s.needs.energy > 50 ? `😴 asleep (rested ${s.needs.energy}%): wakes free` : `😴 asleep (energy ${s.needs.energy}%): ⚠ waking costs mood`);
   if (s.state === 'working') tags.push('👷 at work: leaves the job');
   if (s.hp < s.max_hp * 0.5) tags.push(s.hp <= 1 ? '🤕 downed' : '🤕 hurt: drills worth less');
   return tags.length ? ' · ' + tags.join(' · ') : '';
@@ -1169,8 +1182,12 @@ const A = {
   wait: (d) => act('wait', { hours: num(d.h) }, { slow: num(d.h) >= 24 }),
   autocare: () => act('auto_care', { on: !S.state.auto_care }),
   arena: (d) => { S.ui.arena = d.k; render(); },
-  do: (d) => act(d.c, { id: d.id ? num(d.id) : S.sel }),
+  do: (d) => { const sl = slimeById(d.id ? num(d.id) : S.sel);
+    if (d.c === 'wake' && sl && sl.state === 'sleeping' && sl.needs.energy <= 50) return confirmThen(`${sl.name} is still tired (energy ${sl.needs.energy}%).\n\nWaking a slime that has slept less than half its energy costs mood: morale drops and it gets angry. Wake it anyway?`, () => act('wake', { id: sl.id }));
+    return act(d.c, { id: d.id ? num(d.id) : S.sel }); },
   hunt: () => act('hunt', { id: S.sel, zone: ui('zone', S.state.zones[0].key) }),
+  hunt_pick: () => { const id = num(S.ui.hs); if (id) act('hunt', { id, zone: ui('hz', S.state.zones[0].key) }); },
+  hunt_party_pick: () => { const pid = num(S.ui.hpid); if (!pid) return toast('You need a full party at home.', true); act('party_hunt', { pid, zone: ui('hz', S.state.zones[0].key) }); },
   equip: (d) => act('equip', { id: S.sel, key: ui('eq_' + d.slot, Object.keys(S.state.gear.inventory).find((k) => S.state.gear.all.find((g) => g.key === k).slot === d.slot)) }),
   unequip: (d) => act('unequip', { id: S.sel, slot: d.slot }),
   slime_rarity: () => act('slime_rarity', { id: S.sel }),

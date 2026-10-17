@@ -212,7 +212,8 @@ REST_ENERGY = [14, 20, 26, 32, 40]      # energy per hour in the Rest Area by le
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
 # Library / mastery
 TASK_MIN_ENERGY = 25
-WAKE_MORALE, WAKE_ANGER = 6, 10       # waking a sleeping slime (to train, or on request) costs mood
+WAKE_MORALE, WAKE_ANGER = 6, 10       # waking a sleeping slime (to train, hunt, or on request) costs mood ...
+WAKE_FREE_ABOVE = 50                  # ... unless it is already rested: energy above this share wakes for free
 BRAWL_MORALE, BRAWL_ANGER = 15, 20    # a brawl leaves both fighters sour
 WOUNDED_BELOW, WOUNDED_DRILL = 0.5, 0.6   # a drill started below this share of max HP is worth this much
 
@@ -318,6 +319,8 @@ OUTLOOK_SCHOLAR_STUDY = 1.10
 OUTLOOK_SCHOLAR_RESEARCH = 0.05
 OUTLOOK_ESTEEM = 3             # esteem gained doing your favourite thing
 
+HUNT_PROF_OWN, HUNT_BOND = 1.5, 1.5          # a hunt sharpens class proficiency (x0.4 if it went badly); hunters in one group grow this much closer per pair
+HUNT_SIDE_CHANCE = 0.18        # chance a successful hunt also brings a little of another material (herbs, scrap, a common stone)
 MIN_HUNT_HP = 0.3           # fraction of max HP needed to be sent on a hunt
 
 # ---- Persistence ----------------------------------------------------------
