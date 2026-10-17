@@ -368,7 +368,7 @@ function dOverview(s, { st, free, inDun }) {
     ${s.buffs.length ? `<div class="row"><small class="mute">potion slots ${s.buffs.length}/${s.potion_slots}</small>${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}
     ${sect(`Needs ${s.dominant ? badge(WISH[s.dominant], 'warn') : badge('content', 'ok')}`, 'Needs fall over time. Unmet needs lower mood and morale, stir bad feelings and, at zero, hurt the slime. See the Guide tab for details.', Object.entries(s.needs).map(([k, v]) => bar(v, 100, 'need', NEED_NAME[k], v)).join(''))}
     ${sect('Care', inDun ? 'This slime is inside a dungeon: feeding, petting, sleeping and potions are not possible until it is back.' : 'Feeding, petting and rest. Not possible while a slime is inside a dungeon.', `<div class="row">
-      ${care('feed', '🍖 Feed', st.wallet.food > 0 ? '' : 'x')}${care('pet', '🤗 Pet')}
+      ${care('feed', '🍖 Feed', st.wallet.food > 0 ? '' : 'x')}${care('serve', '🍽 Serve a dish', st.jobs.kitchen.total > 0 ? '' : 'x')}${care('pet', '🤗 Pet')}
       ${s.state === 'sleeping' || s.state === 'resting' ? care('wake', s.state === 'sleeping' ? '⏰ Wake (mood −)' : '⏰ Wake') : care('sleep', '😴 Sleep', free ? '' : 'x')}
       <button class="btn small" data-act="do" data-c="rest" ${!inDun && free && s.state !== 'resting' ? '' : 'disabled'}>🛏️ Rest Area</button>
       ${s.can_evolve ? `<button class="btn small primary" data-act="do" data-c="evolve" ${free ? '' : 'disabled'}>🌟 Evolve (${s.evolve_cost} ✨)</button>` : ''}</div>
@@ -721,8 +721,10 @@ function kitchenView() {
   const st = S.state, k = st.jobs.kitchen, b = st.buildings.find((x) => x.key === 'kitchen');
   return `<div class="grid cols2">
   <div class="panel stack"><h2>🍳 Kitchen <small class="mute">L${b.level}/${b.max} · ${esc(b.now)}</small></h2>
-    <p class="mute">The chef cooks the recipe you choose into the pantry; hungry slimes eat the most nourishing dish from it before touching the food stores. Better chefs unlock better recipes and cook bigger batches.</p>
-    <div class="row">${chip(`🍽 Hungry now: ${k.hungry}`, k.hungry ? 'bad' : 'ok')}${chip(`🥘 Pantry ${k.total}/${k.cap}`, 'info')}${k.hungry_names.length ? `<small class="mute">${k.hungry_names.map(esc).join(', ')}</small>` : ''}</div>
+    <p class="mute">The chef cooks the recipe you choose into the pantry; hungry slimes eat the most nourishing dish from it by themselves (with auto-care on) before touching the food stores. You can also <b>serve</b> a dish by hand: 'Serve all hungry' below, a Serve button per hungry slime, or 'Serve a dish' on a slime's card. Better chefs unlock better recipes and cook bigger batches.</p>
+    <div class="row">${chip(`🍽 Hungry now: ${k.hungry}`, k.hungry ? 'bad' : 'ok')}${chip(`🥘 Pantry ${k.total}/${k.cap}`, 'info')}</div>
+    <div class="row"><button class="btn primary" data-act="serve_hungry" ${k.hungry && k.total ? '' : 'disabled'}>🍽 Serve all hungry</button><small class="mute">${k.total ? 'Hand out the best dishes in the pantry' : 'The pantry is empty'}${k.hungry ? '' : ' · nobody is hungry'}.</small></div>
+    ${k.hungry_list.map((h) => `<div class="row between panel flat"><span><b>${esc(h.name)}</b> <small class="mute">food ${h.food}%</small></span><button class="btn small" data-act="do" data-c="serve" data-id="${h.id}" ${k.total ? '' : 'disabled'}>🍽 Serve</button></div>`).join('')}
     ${postPanel('chef')}
     ${b.cost ? `<button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="kitchen" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade the Kitchen · ${cost(b.cost)}</button>` : ''}</div>
   <div class="panel stack"><h2>📖 Recipes</h2>
@@ -1325,6 +1327,7 @@ const A = {
   set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
   assign_job: (d) => { const id = num(S.ui['post_' + d.job]); if (id) act('assign_job', { id, job: d.job }); },
   forage: () => act('set_forage', { on: !S.state.jobs.forage }),
+  serve_hungry: () => act('serve_hungry'),
   wake_all: () => confirmThen('Wake everybody asleep in town?\n\nSlimes under 10% energy are left to sleep. Those under 50% energy wake grumpy (a mood cost).', () => act('wake_all')),
   stop_job: (d) => act('stop_job', { id: num(d.id) }),
   unground: (d) => act('unground', { id: num(d.id) }),
