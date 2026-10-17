@@ -389,9 +389,12 @@ def _cook(game, chef, events: List[str]) -> bool:
     return True
 
 
-def eat_from_pantry(game, slime) -> bool:
-    """A hungry slime takes the most nourishing dish in the pantry, if there is one."""
-    best = max((RECIPES[k] for k, n in game.pantry.items() if n > 0 and k in RECIPES), key=lambda r: r.nutrition, default=None)
+def eat_from_pantry(game, slime, key: Optional[str] = None) -> bool:
+    """A slime takes a dish from the pantry (the chosen one, else the most nourishing), if there is one."""
+    if key is not None:
+        best = RECIPES.get(key) if game.pantry.get(key, 0) > 0 else None
+    else:
+        best = max((RECIPES[k] for k, n in game.pantry.items() if n > 0 and k in RECIPES), key=lambda r: r.nutrition, default=None)
     if best is None:
         return False
     game.pantry[best.key] -= 1

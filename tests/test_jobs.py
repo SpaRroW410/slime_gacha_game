@@ -339,3 +339,20 @@ class TestViceKeeperWorks(unittest.TestCase):
         g.assign_job(w.id, "brewer")
         g.appoint_vice(w.id)                                   # a worker can also be made Vice Keeper
         self.assertEqual(g.vice, w.id)
+
+
+class TestServing(unittest.TestCase):
+    def test_dishes_can_be_served_by_hand(self):
+        g = quiet(rich(95))
+        a, b = slime(g), slime(g)
+        a.needs.set("food", 10)
+        b.needs.set("food", 20)
+        with self.assertRaises(InvalidAction):
+            g.serve(a.id)                                       # nothing cooked yet
+        g.pantry = {"stew": 1} if "stew" in jobs.RECIPES else {next(iter(jobs.RECIPES)): 1}
+        out = g.serve_hungry()
+        self.assertEqual(len([l for l in out if "served" in l]), 1)   # one dish: the hungriest gets it
+        self.assertGreater(a.needs.get("food"), 10)
+        self.assertEqual(b.needs.get("food"), 20)
+        self.assertIn("ran out", " ".join(out))
+        self.assertEqual(g.pantry, {})

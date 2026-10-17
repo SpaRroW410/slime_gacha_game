@@ -280,3 +280,10 @@ nav.tabs { position: sticky; top: 56px; z-index: 19; }
 .blob.f-affection .mouth { height: 6px; }
 .blob.f-affection::after { content: ""; position: absolute; left: 24%; right: 24%; top: 62%; height: 6px; background: radial-gradient(circle, rgba(255, 110, 150, .65) 0 3px, transparent 4px) left/50% 100% no-repeat, radial-gradient(circle, rgba(255, 110, 150, .65) 0 3px, transparent 4px) right/50% 100% no-repeat; z-index: 0; }
 .blob.f-guilt i { transform: translateY(2px); }
+
+/* iPhone Safari zooms the page in when a field with text under 16px gets focus, and then leaves it zoomed and off-centre
+   (the page looks narrower than the screen). 16px fields never trigger it; nothing may widen the page either. */
+@media (pointer: coarse) { select, input[type=number], input[type=text], input[type=search], textarea { font-size: 16px; } }
+html { overflow-x: clip; max-width: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { overflow-x: clip; max-width: 100vw; }
+nav.tabs, .topscroll { max-width: 100%; contain: inline-size; }

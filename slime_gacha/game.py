@@ -955,6 +955,29 @@ class Game:
         self._xp("care", config.KEEPER_XP["care"])
         return f"{s.name} nibbles happily (food {int(s.needs.get('food'))})."
 
+    def serve(self, sid: int, dish: Optional[str] = None) -> str:
+        """Serve a cooked dish from the pantry to one slime (the best one, or `dish`)."""
+        s = self._tend(sid)
+        if not self.pantry:
+            raise InvalidAction("The pantry is empty: appoint a chef in the Kitchen.")
+        if dish is not None and self.pantry.get(dish, 0) <= 0:
+            raise InvalidAction("That dish is not in the pantry.")
+        if s.needs.get("food") >= 100:
+            raise InvalidAction(f"{s.name} is already full.")
+        jobs.eat_from_pantry(self, s, dish)
+        s.needs.add("belonging", 2)
+        return f"🍽 {s.name} is served a hot meal (food {int(s.needs.get('food'))})."
+
+    def serve_hungry(self) -> List[str]:
+        """Serve every hungry slime at home a dish from the pantry, the hungriest first, while it lasts."""
+        out = []
+        for s in sorted(jobs.hungry(self), key=lambda o: o.needs.get("food")):
+            if not self.pantry:
+                out.append("The pantry ran out.")
+                break
+            out.append(self.serve(s.id))
+        return out or ["Nobody is hungry."]
+
     def sleep(self, sid: int) -> str:
         s = self._tend(sid)
         if s.busy:
