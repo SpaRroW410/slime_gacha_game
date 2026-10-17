@@ -5,8 +5,9 @@ of the Hollow Descent, and how long does it take to get there?* The reference pa
 Barbarian, Ranger, Mage, Medic and Rogue with **no gear, relics, potions, elements, bonds or morale effects**, stars following
 the rarity's star-level table, evolved to the stage its level allows, class proficiency 100 (capstones usable for legendaries).
 "Min level" is the lowest party level with a >= 70% win chance over 12 seeded fights per level tested ("scouted" adds the
-intel bonus). "Pit runs" is how many Gloop Pit depth-3 runs a party needs to reach that level from level 1 at the real wave XP
-(2 game hours each); the Descent's own XP is not counted, so this overstates the grind a little.
+intel bonus). "Pit runs" is how many Gloop Pit depth-3 runs a party needs to reach that level from level 1 under the real reward rule
+(`config.pit_xp_per_run`, 2 game hours each); "real hours" assumes the x3 dungeon rate. The Descent's own XP is not counted,
+so this overstates the grind a little.
 
 ## What the playtest found (and what was done)
 
@@ -25,63 +26,65 @@ intel bonus). "Pit runs" is how many Gloop Pit depth-3 runs a party needs to rea
 5. **Enemy area attacks matter.** An area attack hits all five slimes, so a floor with four area users deals about twenty times
    a single hit per round. An "area-aware" threat measure did not predict the required level better than HP x damage, so the
    simple one is used.
-6. **Time to floor 50 is long.** Common needs ~580 Pit runs (about 1,160 game hours, roughly 390 real hours at the x3 dungeon rate)
-   to reach level 63 from scratch; rare ~1,450 runs; legendary ~2,700 runs to level 22, because of the x2-per-rarity XP rule. The
-   Descent's own floor XP (about 4,100 per floor at 50) and Pit depth 4-5 shorten this, but the XP curve deserves a second look
-   (see task 25).
+6. **Time to floor 50 (fixed, task 25).** Pit XP used to follow the *level*, so a legendary at level 22 earned tiny rewards
+   against an XP bill 16x larger: common needed ~580 runs (~390 real hours at x3) and legendary ~2,700 runs. A won Pit run now
+   pays the XP a level costs divided by the runs a level should take (`PIT_RUNS_PER_LEVEL` = 3.5 for a common, +50% per rarity
+   step, deeper depths pay more: 0.6 / 0.8 / 1 / 1.3 / 1.7). Result for floor 50: common ~217 runs (~144 real hours),
+   rare ~273 (~182 h), legendary ~220 (~147 h): about a week of continuous dungeon time for any rarity (live mode keeps parties
+   working while the page is closed), instead of months.
 
 ## Tables (floors 1, 5, 10 ... 50; run with `--step 1` for every floor)
 
 ### Common
 
-| Floor | Boss | Min level, no intel | Min level, scouted | Pit runs to reach | ~game hours |
+| Floor | Boss | Min level, no intel | Min level, scouted | Pit runs to reach | ~real hours (x3) |
 |---|---|---|---|---|---|
-| 1 |  | 2 | 1 | 0 | 1 |
-| 5 | BOSS | 9 | 8 | 36 | 72 |
-| 10 | BOSS | 11 | 11 | 53 | 107 |
-| 15 | BOSS | 23 | 21 | 182 | 364 |
-| 20 | BOSS | 30 | 30 | 272 | 545 |
-| 25 | BOSS | 30 | 30 | 272 | 545 |
-| 30 | BOSS | 31 | 31 | 284 | 568 |
-| 35 | BOSS | 52 | 48 | 475 | 950 |
-| 40 | BOSS | 60 | 57 | 550 | 1100 |
-| 45 | BOSS | 61 | 60 | 560 | 1121 |
-| 50 | BOSS | 63 | 60 | 581 | 1163 |
+| 1 |  | 2 | 1 | 3 | 2 |
+| 5 | BOSS | 9 | 8 | 28 | 18 |
+| 10 | BOSS | 11 | 11 | 35 | 23 |
+| 15 | BOSS | 23 | 21 | 77 | 51 |
+| 20 | BOSS | 30 | 30 | 101 | 67 |
+| 25 | BOSS | 30 | 30 | 101 | 67 |
+| 30 | BOSS | 31 | 31 | 105 | 70 |
+| 35 | BOSS | 52 | 48 | 178 | 119 |
+| 40 | BOSS | 60 | 57 | 206 | 137 |
+| 45 | BOSS | 61 | 60 | 210 | 140 |
+| 50 | BOSS | 63 | 60 | 217 | 144 |
 
 ### Rare
 
-| Floor | Boss | Min level, no intel | Min level, scouted | Pit runs to reach | ~game hours |
+| Floor | Boss | Min level, no intel | Min level, scouted | Pit runs to reach | ~real hours (x3) |
 |---|---|---|---|---|---|
 | 1 |  | 1 | 1 | - | - |
-| 5 | BOSS | 6 | 5 | 60 | 121 |
-| 10 | BOSS | 9 | 8 | 144 | 289 |
-| 15 | BOSS | 16 | 15 | 391 | 782 |
-| 20 | BOSS | 20 | 20 | 571 | 1142 |
-| 25 | BOSS | 20 | 20 | 571 | 1142 |
-| 30 | BOSS | 25 | 25 | 831 | 1662 |
-| 35 | BOSS | 38 | 37 | 1383 | 2767 |
-| 40 | BOSS | 40 | 40 | 1454 | 2909 |
-| 45 | BOSS | 39 | 39 | 1420 | 2840 |
-| 50 | BOSS | 40 | 40 | 1454 | 2909 |
+| 5 | BOSS | 6 | 5 | 35 | 23 |
+| 10 | BOSS | 9 | 8 | 56 | 37 |
+| 15 | BOSS | 16 | 15 | 105 | 70 |
+| 20 | BOSS | 20 | 20 | 133 | 88 |
+| 25 | BOSS | 20 | 20 | 133 | 88 |
+| 30 | BOSS | 25 | 25 | 168 | 112 |
+| 35 | BOSS | 38 | 37 | 259 | 172 |
+| 40 | BOSS | 40 | 40 | 273 | 182 |
+| 45 | BOSS | 39 | 39 | 266 | 177 |
+| 50 | BOSS | 40 | 40 | 273 | 182 |
 
 ### Legendary
 
-| Floor | Boss | Min level, no intel | Min level, scouted | Pit runs to reach | ~game hours |
+| Floor | Boss | Min level, no intel | Min level, scouted | Pit runs to reach | ~real hours (x3) |
 |---|---|---|---|---|---|
 | 1 |  | 1 | 1 | - | - |
 | 5 | BOSS | 1 | 1 | - | - |
-| 10 | BOSS | 2 | 1 | 12 | 25 |
-| 15 | BOSS | 5 | 5 | 158 | 316 |
-| 20 | BOSS | 11 | 11 | 861 | 1722 |
-| 25 | BOSS | 10 | 10 | 706 | 1412 |
-| 30 | BOSS | 12 | 11 | 989 | 1979 |
-| 35 | BOSS | 22 | 22 | 2714 | 5428 |
-| 40 | BOSS | 22 | 22 | 2714 | 5428 |
-| 45 | BOSS | 22 | 21 | 2714 | 5428 |
-| 50 | BOSS | 22 | 22 | 2714 | 5428 |
+| 10 | BOSS | 2 | 1 | 10 | 7 |
+| 15 | BOSS | 5 | 5 | 42 | 28 |
+| 20 | BOSS | 11 | 11 | 105 | 70 |
+| 25 | BOSS | 10 | 10 | 94 | 63 |
+| 30 | BOSS | 12 | 11 | 115 | 77 |
+| 35 | BOSS | 22 | 22 | 220 | 147 |
+| 40 | BOSS | 22 | 22 | 220 | 147 |
+| 45 | BOSS | 22 | 21 | 220 | 147 |
+| 50 | BOSS | 22 | 22 | 220 | 147 |
 
 ## Follow-ups
 
-- Re-tune Pit XP (or add depth-4/5 rewards) so reaching floor 50 takes weeks, not months, of play; decide how much of the climb should come from the Descent itself (task 25).
+- Decide how much of the climb should come from the Descent itself (its floor XP is small next to the Pit now).
 - Re-run this harness after every balance change and run `--smoothness` as the regression check.
 - Playtest with gear, relics, elements and potions (the real game) and with `--rarity epic`.

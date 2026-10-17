@@ -8,8 +8,8 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
   *Done when:* the real descent to floor 50 has been played through (with gear, elements, scouting) and the follow-ups below are closed.
 - [x] **24. Floor threat smoothing (from the playtest)** — floors are pulled into a threat band around a curve (`dungeon._smooth`); `python3 tools/playtest.py --smoothness` is the regression check. Floor 32 ~63-82 -> ~45; floor 50 for commons ~78 -> ~63.
   *Done when:* met (mean deviation 0.16 against a 0.22 limit). The late-boss walls at levels ~52-63 come from the star/stage steps, not from threat.
-- [ ] **25. Time-to-floor-50 economy (from the playtest)** — rework Pit XP / Descent XP so the climb takes weeks, not months.
-  *Done when:* a common party reaches floor 50 in a target number of real hours at the x3 dungeon rate, and legendary parties are not 4x slower than that.
+- [x] **25. Time-to-floor-50 economy (from the playtest)** — a won Pit run pays the XP need over the runs a level should take (`config.pit_xp_per_run`): floor 50 in ~144 / ~182 / ~147 real hours at x3 for common / rare / legendary (was ~390 / ~960 / ~1,800).
+  *Done when:* met; `tests/test_economy.py` pins the rule and the < 200 hour ceiling.
 
 ## Gameplay
 - [ ] **2. More specialization paths** — three-way hybrids, evolving specializations, slimes asking for jobs.  *Done when:* at least two new hybrid paths exist with skills and capstones, tested.

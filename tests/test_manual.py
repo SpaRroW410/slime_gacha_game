@@ -162,13 +162,16 @@ class TestXpCurve(unittest.TestCase):
 
 
 class TestLevelHundredBalance(unittest.TestCase):
-    def test_stat_growth_slows_above_fifty_and_pit_xp_keeps_pace(self):
+    def test_stat_growth_slows_above_fifty_and_pit_pays_by_xp_need(self):
         from slime_gacha import config
         self.assertEqual(config.stat_level(50), 50)
         self.assertAlmostEqual(config.stat_level(100), 80)
-        self.assertEqual(config.pit_xp_boost(10), 1.0)
-        self.assertGreater(config.pit_xp_boost(100), config.pit_xp_boost(60))
-        self.assertGreater(config.pit_xp_boost(100), 3.0)
+        need = config.xp_to_next(60)
+        per = config.pit_xp_per_run(need, 0, 3)
+        self.assertAlmostEqual(need / per, config.PIT_RUNS_PER_LEVEL)                       # runs per level at depth 3
+        self.assertAlmostEqual(need / config.pit_xp_per_run(need, 4, 3), config.PIT_RUNS_PER_LEVEL * 3)   # legendary: x3
+        self.assertLess(config.pit_xp_per_run(need, 0, 1), per)
+        self.assertGreater(config.pit_xp_per_run(need, 0, 5), per)
 
     def test_a_level_hundred_party_still_beats_the_pit_and_levels_in_reasonable_runs(self):
         from slime_gacha import config

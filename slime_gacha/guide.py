@@ -136,7 +136,7 @@ def build() -> list:
                  ", ".join(f"{k - 1}>{k}: {v}" for k, v in c.STAR_ASCEND_STONES.items()) +
                  f" (common equivalents; {c.STONE_MERGE} stones merge into one of the next rarity)."),
             dict(name="XP needed per level", text="Doubles with each rarity: x" +
-                 ", x".join(f"{v:g} ({k})" for k, v in c.XP_RARITY_MULT.items()) + ". Stars do not change it. Above level 50 stats grow at 60% per level, and the Pit pays more XP the higher your party's level."),
+                 ", x".join(f"{v:g} ({k})" for k, v in c.XP_RARITY_MULT.items()) + ". Stars do not change it. The Pit pays by the XP a level costs: a common needs about 3.5 won runs per level, +50% per rarity step, and deeper depths pay more. Above level 50 stats grow at 60% per level, and the Pit pays more XP the higher your party's level."),
             dict(name="Merging", text=f"A donor's collected XP and {c.MERGE_STAT_SHARE:.0%} of its stats are absorbed; the share shrinks as an "
                                       f"attribute grows (down to {c.MERGE_SHARE_FLOOR:.0%}). The donor is consumed."),
             dict(name="Evolution", text="At the level cap a slime may evolve (costs essence) and raises its cap.")]),

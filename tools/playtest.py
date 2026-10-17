@@ -99,15 +99,18 @@ def smoothness(rarity: str = "common", seeds=range(1, 7), trials: int = 6):
 
 
 def pit_runs_to(level_from: int, level_to: int, rarity: str, depth: int = 3) -> float:
-    """Pit runs a common-pace party needs to climb levels (uses the real wave XP)."""
-    rng = random.Random(3)
-    theme = dungeon.pit_theme(SEED, 0)
+    """Pit runs a party of that rarity needs to climb levels, from the real reward rule (config.pit_xp_per_run)."""
+    idx = config.RARITIES.index(rarity)
     total = 0.0
     for lv in range(level_from, level_to):
-        waves = [sum(e.xp for e in dungeon.grind_wave(lv, depth, 5, rng, theme)) for _ in range(6)]
-        per_run = statistics.mean(waves) * config.GRIND_XP_MULT * config.pit_xp_boost(lv)
-        total += config.xp_to_next(lv, rarity) / max(1.0, per_run)
+        need = config.xp_to_next(lv, rarity)
+        total += need / config.pit_xp_per_run(need, idx, depth)
     return total
+
+
+def real_hours(runs: float) -> float:
+    """Wall-clock hours at the dungeon rate (x3 per real hour) for that many Pit runs."""
+    return runs * config.GRIND_TICKS / config.LIVE_DUNGEON_RATE
 
 
 def main():
@@ -126,9 +129,9 @@ def main():
         sys.exit(0 if mean <= 0.22 and p90 <= 0.45 else 1)
     lines = [f"# Floor playtest ({a.rarity} party of {', '.join(CLASSES)}; no gear, relics or potions)", "",
              f"Minimum party level with a >= 70% chance to win each floor ({a.trials} seeded fights per level tested; "
-             f"stars follow the {a.rarity} star-level table). Pit hours = game hours of Gloop Pit depth-3 runs "
-             f"({config.GRIND_TICKS}h each) to reach that level from level 1.", "",
-             "| Floor | Boss | Min level, no intel | Min level, scouted | Pit runs to reach | ~game hours |",
+             f"stars follow the {a.rarity} star-level table). Pit runs = Gloop Pit depth-3 runs "
+             f"({config.GRIND_TICKS} game hours each) to reach that level from level 1; real hours assume the x{config.LIVE_DUNGEON_RATE:g} dungeon rate.", "",
+             "| Floor | Boss | Min level, no intel | Min level, scouted | Pit runs to reach | ~real hours (x3) |",
              "|---|---|---|---|---|---|"]
     rows = []
     for f in range(1, dungeon.MAX_FLOOR + 1):
@@ -140,7 +143,7 @@ def main():
         runs = pit_runs_to(1, blind, a.rarity) if blind else None
         rows.append((f, boss, blind, scouted, runs))
         lines.append(f"| {f} | {'BOSS' if boss else ''} | {blind if blind else '>100'} | {scouted if scouted else '>100'} | "
-                     f"{int(runs) if runs else '-'} | {int(runs * config.GRIND_TICKS) if runs else '-'} |")
+                     f"{int(runs) if runs else '-'} | {int(real_hours(runs)) if runs else '-'} |")
         print(lines[-1], file=sys.stderr)
     lv = [r[2] for r in rows if r[2]]
     lines += ["", "## Reading it", ""]
