@@ -31,6 +31,10 @@ VICE_MIN_STARS = 3
 VICE_MEDIATE_CHANCE = 0.3        # per hour, for each quarrel the vice keeper can reach
 VICE_FEED_BELOW = 25             # feeds a reachable slime that is this hungry
 NAME_MAX = 24
+# Floor threat smoothing (tools/playtest.py found a few floors with 2-4x the threat of their neighbours)
+FLOOR_THREAT_TARGET = 6500.0      # (sum of enemy HP) x (sum of enemy damage) / growth(floor)^2, for a party of five
+FLOOR_THREAT_BAND = (0.8, 1.25)   # ordinary floors keep their flavour inside this band around the target
+BOSS_THREAT_BAND = (0.9, 1.3)
 LEADER_POWER = 0.03              # party synergy bonus from a good leader (scaled by the leader's morale)
 LEADER_MEDIATE_CHANCE = 0.15     # per hour, a party leader settles a quarrel inside the party while they are away
 VICE_HUNT_MAX_PARTIES = 3

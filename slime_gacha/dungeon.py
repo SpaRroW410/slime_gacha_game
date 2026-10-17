@@ -11,7 +11,7 @@ yesterday's), and every run inside a day draws a different mix.
 """
 import random
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Dict, List, Optional, Tuple
 
 from . import bestiary, config, elements, terrain as terr
@@ -140,6 +140,35 @@ def _title(t: terr.Terrain, pattern: str, enemies: List[Enemy]) -> str:
 _PLANS: Dict[Tuple[int, int], List[FloorInfo]] = {}
 
 
+def threat(enemies: List[Enemy]) -> float:
+    """(sum of HP) x (sum of damage): what a party has to chew through times what it must survive."""
+    return sum(e.stats["hp"] for e in enemies) * sum(max(e.stats["atk"], e.stats["mag"]) for e in enemies)
+
+
+def threat_ratio(enemies: List[Enemy], floor: int, size: int) -> float:
+    """Threat relative to the target curve for this floor (1.0 = on the curve)."""
+    return threat(enemies) / (config.FLOOR_THREAT_TARGET * bestiary.growth(floor) ** 2 * (size / 5.0) ** 2)
+
+
+def _smooth(enemies: List[Enemy], floor: int, size: int, boss: bool) -> List[Enemy]:
+    """Pull floors whose total threat is far from the curve back into a band (monster families differ wildly: five
+    stone giants were several times a normal floor). Variety is kept inside the band."""
+    lo, hi = config.BOSS_THREAT_BAND if boss else config.FLOOR_THREAT_BAND
+    ratio = threat_ratio(enemies, floor, size)
+    wanted = min(hi, max(lo, ratio))
+    if abs(wanted - ratio) < 1e-9:
+        return enemies
+    s = (wanted / ratio) ** 0.5                       # HP and damage each move by the square root of the correction
+    out = []
+    for e in enemies:
+        st = dict(e.stats)
+        st["hp"] = float(max(1, int(st["hp"] * s)))
+        for k in ("atk", "mag"):
+            st[k] = round(st[k] * s, 1)
+        out.append(replace(e, stats=st))
+    return out
+
+
 def _generate_floors(seed: int, size: int) -> List[FloorInfo]:
     plans: List[FloorInfo] = []
     recent: List[tuple] = []
@@ -153,6 +182,7 @@ def _generate_floors(seed: int, size: int) -> List[FloorInfo]:
             rng = random.Random(seed * 1000003 + f * 7919 + size)
             for _ in range(2 * (size // 5)):
                 enemies.append(bestiary.build_enemy(rng.choice(pool), f))
+            enemies = _smooth(enemies, f, size, True)
             sig = (t.key, tuple(sorted(Counter(e.key for e in enemies).items())))
             plans.append(FloorInfo(f, t, enemies, "boss", f"{boss.name}'s lair - {t.name}", sig, True))
             prev_terrain = t.key
@@ -174,6 +204,7 @@ def _generate_floors(seed: int, size: int) -> List[FloorInfo]:
             if sig not in recent and len({e.key for e in enemies}) >= 2:
                 break
         t, pattern, enemies, sig = best
+        enemies = _smooth(enemies, f, size, False)
         plans.append(FloorInfo(f, t, enemies, pattern, _title(t, pattern, enemies), sig))
         prev_terrain = t.key
         recent = (recent + [sig])[-4:]

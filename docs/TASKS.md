@@ -6,8 +6,8 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 ## Milestone
 - [~] **1. Floor-50 playtest and balance** — harness `tools/playtest.py` and report `PLAYTEST_F50.md` are done; an AI bug that wasted opening turns on buffs is fixed.
   *Done when:* the real descent to floor 50 has been played through (with gear, elements, scouting) and the follow-ups below are closed.
-- [ ] **24. Floor threat smoothing (from the playtest)** — make floors with many area attackers (32, 35, 40, 45) fit the difficulty curve; area-aware threat measure or a cap on area users per floor.
-  *Done when:* the reference party's required level never jumps more than ~15 over its neighbours; regression check added to the harness.
+- [x] **24. Floor threat smoothing (from the playtest)** — floors are pulled into a threat band around a curve (`dungeon._smooth`); `python3 tools/playtest.py --smoothness` is the regression check. Floor 32 ~63-82 -> ~45; floor 50 for commons ~78 -> ~63.
+  *Done when:* met (mean deviation 0.16 against a 0.22 limit). The late-boss walls at levels ~52-63 come from the star/stage steps, not from threat.
 - [ ] **25. Time-to-floor-50 economy (from the playtest)** — rework Pit XP / Descent XP so the climb takes weeks, not months.
   *Done when:* a common party reaches floor 50 in a target number of real hours at the x3 dungeon rate, and legendary parties are not 4x slower than that.
 

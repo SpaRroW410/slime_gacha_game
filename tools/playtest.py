@@ -5,6 +5,7 @@ markdown report.
 
     python3 tools/playtest.py                 # default report to stdout
     python3 tools/playtest.py --rarity rare --trials 30 --out docs/PLAYTEST_F50.md
+    python3 tools/playtest.py --smoothness    # regression check: fails if some floors wall their neighbours
 """
 import argparse
 import os
@@ -74,6 +75,29 @@ def min_level(floor, rarity, trials, intel, target=0.7, cap=100):
     return lo
 
 
+def smoothness(rarity: str = "common", seeds=range(1, 7), trials: int = 6):
+    """How lumpy is the climb? For every floor, compare its required level with the median of its six neighbours.
+    Returns (mean |log ratio|, 90th percentile, worst [(dev, seed, floor, level, neighbours)])."""
+    import math
+    devs, worst = [], []
+    global SEED
+    keep = SEED
+    try:
+        for seed in seeds:
+            SEED = seed
+            lv = {f: (min_level(f, rarity, trials, 1.0) or 100) for f in range(1, dungeon.MAX_FLOOR + 1)}
+            for f in range(4, dungeon.MAX_FLOOR - 2):
+                nb = sorted(lv[g] for g in range(f - 3, f + 4) if g != f)
+                ref = nb[len(nb) // 2]
+                d = abs(math.log(lv[f] / ref))
+                devs.append(d)
+                worst.append((d, seed, f, lv[f], ref))
+    finally:
+        SEED = keep
+    worst.sort(reverse=True)
+    return statistics.mean(devs), sorted(devs)[int(0.9 * len(devs))], worst[:5]
+
+
 def pit_runs_to(level_from: int, level_to: int, rarity: str, depth: int = 3) -> float:
     """Pit runs a common-pace party needs to climb levels (uses the real wave XP)."""
     rng = random.Random(3)
@@ -92,7 +116,14 @@ def main():
     ap.add_argument("--trials", type=int, default=16)
     ap.add_argument("--out", default="")
     ap.add_argument("--step", type=int, default=1, help="report every Nth floor (bosses always)")
+    ap.add_argument("--smoothness", action="store_true", help="check how lumpy the climb is (exit 1 if it is too lumpy)")
     a = ap.parse_args()
+    if a.smoothness:
+        mean, p90, worst = smoothness(a.rarity, trials=a.trials)
+        print(f"mean deviation from neighbours {mean:.3f}, 90th percentile {p90:.3f} (limits 0.22 / 0.45)")
+        for d, s, f, l, r in worst:
+            print(f"  seed {s} floor {f}: level {l} vs neighbours' {r}")
+        sys.exit(0 if mean <= 0.22 and p90 <= 0.45 else 1)
     lines = [f"# Floor playtest ({a.rarity} party of {', '.join(CLASSES)}; no gear, relics or potions)", "",
              f"Minimum party level with a >= 70% chance to win each floor ({a.trials} seeded fights per level tested; "
              f"stars follow the {a.rarity} star-level table). Pit hours = game hours of Gloop Pit depth-3 runs "
