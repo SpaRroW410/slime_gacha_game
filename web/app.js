@@ -441,6 +441,10 @@ function gacha() {
       ${b(1, 'white_gel', '⚪ Pull ×1', '')}${b(10, 'white_gel', '⚪ Pull ×10', '')}
       ${b(1, 'purple_gel', '🟣 Pull ×1', 'purple')}${b(10, 'purple_gel', '🟣 Pull ×10', 'purple')}
     </div></div>
+  <div class="panel flat stack" style="margin:10px 0"><b>🟣 Fuse purple gel ${info('White gel can be fused into purple gel at ' + r.gel_merge + ' white per purple. Purple gel pays for rare-odds pulls, lures, retreats and the mage call.')}</b>
+    <div class="row"><button class="btn small ${w.white_gel >= r.gel_merge ? 'primary' : ''}" data-act="merge_gel" data-n="1" ${w.white_gel >= r.gel_merge ? '' : 'disabled'}>${r.gel_merge} ⚪ → 1 🟣</button>
+      <button class="btn small" data-act="merge_gel" data-n="10" ${w.white_gel >= r.gel_merge * 10 ? '' : 'disabled'}>${r.gel_merge * 10} ⚪ → 10 🟣</button>
+      <button class="btn small" data-act="merge_gel" data-n="max" ${w.white_gel >= r.gel_merge ? '' : 'disabled'}>Fuse all possible</button></div></div>
   ${S.pull ? `<div class="pull-grid">${S.pull.map((s, i) => `<div class="pull-card ${s.rarity}" style="animation-delay:${i * 90}ms">${avatar(s)}<div class="nm"><b>${esc(s.name)}</b></div>
       <div class="sub mute">${esc(s.class_name)}</div><div>${stars(s.stars)}</div>${chip(s.rarity, s.rarity)}
       <div class="sub mute">${s.traits.join(', ')}</div></div>`).join('')}</div>` : ''}`;
@@ -780,18 +784,18 @@ function academy() {
   const dgain = dsl?.prof?.drill?.[yd.key]?.[tier - 1] || 0;
   const trainingFacility = `<div class="panel stack"><h2>🥋 Training facility — proficiency</h2>
     <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable) in the yard of its own discipline: the <b>Blade Yard</b> for sword classes, the <b>Archery Range</b> for rangers, the <b>Mana Pool</b> for casters. The Training Grounds level boosts it and unlocks stronger drills (Advanced at level 3, Master at level 5); a drill is worth less as a slime nears mastery. <b>No stars needed</b>: a slime that has just risen in rarity (back to one star) cannot study new elements at the Library, but it can still drill here.</p>
-    <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${yard === d.key ? 'sel' : ''}" data-act="yard" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><small class="mute" style="display:block">${esc(d.feeds.join(', '))}</small></div>`).join('')}</div>
+    <div class="grid cards3">${st.disciplines.map((d) => `<div class="panel flat scard ${yard === d.key ? 'sel' : ''}" data-act="yard" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><small class="mute" style="display:block">${esc(d.feeds.join(', '))}</small></div>`).join('')}</div>
     <h4>🧑‍🏫 Trainers ${info('One trainer per discipline (2★ or more). An appointed trainer speeds up proficiency and fighting-style gains for drills and sparring in their discipline. The bonus grows with the trainer\'s level and the Training Grounds level.')}</h4>
     ${st.disciplines.map((d) => { const k = 'trainer_' + d.key; return `<div class="row"><small class="mute">${esc(d.emoji)} ${esc(d.name)}: ${st.jobs.trainer[d.key] ? `+${st.jobs.trainer[d.key]}% proficiency and style gains` : 'no trainer appointed'}</small></div>${postPanel(k)}`; }).join('')}
     <div class="row"><label class="f">Drill <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)} · ${t.ticks}h · ${esc(cost(t.cost))}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select></label></div>
     <div class="row"><b>Slime:</b> ${slimeSel('dsl', avail)}<button class="btn primary" data-act="drill" ${dsl ? '' : 'disabled'}>${esc(tr.name)} (${tr.ticks}h)</button></div>
     ${dsl ? `<small class="mute">${esc(dsl.name)}: ${dsl.prof ? `proficiency ${dsl.prof.value}` : ''} · ${dgain > 0 ? `this drill is worth about +${dgain}` : `the ${esc(yd.name)} is not their discipline: only a little general practice`}</small>` : ''}
     <div class="row"><b>Party:</b> ${partyOptions('dppid')}<button class="btn" data-act="drill_party">Everyone drills</button></div></div>`;
-  return `<div class="grid cols2">
+  return `<div class="grid acad">
   ${trainingFacility}
   <div class="panel stack"><h2>⚔ Sparring — fighting styles ${info('A duel costs 2 white gel. Two parties sparring as teams cost a flat 3 white gel (not per pair). Each takes 3 hours. A sleeping slime is woken first (mood cost: morale and a flash of anger); a slime at a job leaves it (that shift is lost); a slime below half health is too hurt to spar and drills for less. Check the tags in the pickers.')}</h2>
     <p class="mute">Training is not for XP. Slimes duel each other (non-lethal; the loser is left at <b>1 HP</b> — heal them at the Rest Area) to develop a <b>fighting style</b> with permanent combat perks. Costs ${cost(st.mercy.spar_cost)} per duel and ${st.mercy.train_ticks}h. Training Grounds L${tg.level}: ${esc(tg.now)}.</p>
-    <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${arena === d.key ? 'sel' : ''}" data-act="arena" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><div class="sub">${esc(d.style)}</div><small class="mute">${esc(d.perk)}</small></div>`).join('')}</div>
+    <div class="grid cards3">${st.disciplines.map((d) => `<div class="panel flat scard ${arena === d.key ? 'sel' : ''}" data-act="arena" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><div class="sub">${esc(d.style)}</div><small class="mute">${esc(d.perk)}</small></div>`).join('')}</div>
     <div class="row"><b>Duel:</b> ${duelA} vs ${duelB}<button class="btn primary" data-act="spar" ${duelOk ? '' : 'disabled'}>Spar · 2 ⚪</button></div>
     ${away ? `<small class="mute">${away} slime${away > 1 ? 's are' : ' is'} away (dungeon, hunt or study) and not listed.</small>` : ''}
     <div class="row"><b>Party vs party:</b> ${partyA} vs ${partyB}<button class="btn" data-act="spar_parties" ${partyOk ? '' : 'disabled'}>Parties spar · 3 ⚪</button>${info('Two full parties at home fight each other, non-lethally, for a flat 3 white gel (not per pair) and 3 hours. Every member gains fighting-style XP and class proficiency, and the members of each party grow closer, which raises party synergy. The loser is left low on health (the Hospital heals them).')}</div>
@@ -1203,6 +1207,7 @@ const A = {
   keeper_use: (d) => act('keeper_use', { key: d.key }),
   bud: (d) => confirmThen('Have a child? It costs ' + cost(S.state.family.bud_cost) + '.', () => act('bud', { a: num(d.a), b: num(d.b) })),
   autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
+  merge_gel: (d) => act('merge_gel', { n: d.n === 'max' ? Math.floor(S.state.wallet.white_gel / S.state.rates.gel_merge) : num(d.n) }),
   pit_lure: () => { S.ui.pit_lure = !ui('pit_lure', false); render(); },
   adv_lure: () => { S.ui.adv_lure = !ui('adv_lure', false); render(); },
   adv_toggle: (d) => { const ids = new Set((ui('adv_ids', []) || []).map(num)); const id = num(d.id); ids.has(id) ? ids.delete(id) : ids.add(id); S.ui.adv_ids = [...ids].slice(0, S.state.gear.adventure.max_party); render(); },

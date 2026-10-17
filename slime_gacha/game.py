@@ -1764,6 +1764,15 @@ class Game:
         self._xp("ascend", config.KEEPER_XP["ascend"])
         return f"🌟 {s.name} ascends to {s.stars} stars!"
 
+    def merge_gel(self, n: int = 1) -> str:
+        """Fuse white gel into purple gel: GEL_MERGE white gel per purple."""
+        n = int(n)
+        if n < 1:
+            raise InvalidAction("Merge at least one.")
+        self.wallet.spend("white_gel", config.GEL_MERGE * n)
+        self.wallet.add("purple_gel", n)
+        return f"🟣 {config.GEL_MERGE * n} white gel fuse into {n} purple gel."
+
     def merge_stone_rarity(self, rarity: str) -> str:
         if rarity not in config.RARITIES:
             raise InvalidAction(f"Unknown rarity '{rarity}'.")

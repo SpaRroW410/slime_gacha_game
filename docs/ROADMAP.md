@@ -239,7 +239,8 @@ Legend: `[x]` done · `[ ]` todo.  The remaining work is tracked task by task in
 - [x] UI: the slime icon (three dots in a triangle) is the menu button; compact one-row header and tabs stay pinned while scrolling
 - [x] Slime body shape follows rarity inside the round rarity ring (dome, eared, droplet, crowned, royal crown with halo)
 - [x] Appointments in each building's own tab: 3 trainers (Training Grounds), librarian (Library), blacksmith (Armory), brewer (Alchemy), chef (Kitchen, recipes + pantry), doctor (new Hospital); 3-hour shifts, idle workers forage and can be called back; Rest Area = energy, Hospital = health (TASKS #26)
-- [x] Hunts & foraging sub-tab in Dungeons
+- [x] Hunts & foraging sub-tab in Dungeons; hunts give class proficiency and party bonds, a one-hour Dewdrop Pond and rare side materials
+- [x] Total power breakdown on cards and parties; 100 white gel fuse into 1 purple gel; Academy layout fixed (two even columns, no phone overflow)
 - [x] Rescue parties for overdue scouts (stranded for 24h); several delves at once with their own timers
 - [x] Emergency Retreat from the Descent mid-segment: purple gel, morale, a deadly-risk flight
 - [x] Floor modifiers (fog, darkness, ...) and wayside stops with a rest and a shop between floors
