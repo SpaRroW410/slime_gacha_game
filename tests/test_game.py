@@ -428,6 +428,7 @@ class TestGrindDungeon(unittest.TestCase):
         g, pid = self._party()
         for s in g.party_members(pid):
             s.hp = 1
+            g.refusal = lambda *a, **k: ""
             s.max_stats = (lambda f: (lambda: {**f(), "atk": 1.0, "mag": 0.0, "defense": 0.0, "hp": 40.0}))(s.max_stats)
         res = g.grind(pid, 5, 1)
         self.assertEqual(g.graveyard, [])
@@ -475,6 +476,9 @@ class TestGrindDungeon(unittest.TestCase):
             g.conflicts.conflicts.clear()
             for s in g.slimes():
                 s.grounded = False
+                s.hp = s.max_hp
+                s.emotions.clear()
+                for k in list(s.needs.v): s.needs.v[k] = 90.0
             runs += len(g.grind(pid, 4, 5, auto_rest=True).runs)
         self.assertGreaterEqual(runs, 30)
         self.assertEqual(g.graveyard, [])
@@ -500,6 +504,7 @@ class TestDeath(unittest.TestCase):
         pid = full_party(g, rarity="common", xp=0)
         for s in g.party_members(pid):
             s.hp = 1                              # near death: in a real fight someone would not make it
+        g.refusal = lambda *a, **k: ""        # (they would normally refuse so hurt)
         before = set(g.roster)
         g.battle(pid, 2)
         self.assertEqual(g.graveyard, [])

@@ -249,3 +249,34 @@ nav.tabs { position: sticky; top: 56px; z-index: 19; }
 .ptag.t4 { color: #ff9d5c; border-color: #ff9d5c88; }
 .srow .ptag { right: -8px; top: -5px; font-size: .62rem; padding: 1px 4px; }
 .scard .figwrap { margin: 0 auto; }
+
+/* Faces: every slime has a mouth; the face follows its mood (m-*) unless a strong feeling (f-*) takes over. */
+.blob .mouth { position: absolute; left: 50%; top: 66%; width: 16px; height: 8px; transform: translateX(-50%); border: 2.5px solid #10201a; border-top: 0; border-radius: 0 0 16px 16px; z-index: 1; }
+.blob.big .mouth { width: 26px; height: 13px; border-width: 3.5px; }
+.blob.sm .mouth { width: 10px; height: 5px; border-width: 2px; }
+.blob.m-ecstatic .mouth, .blob.f-joy .mouth { height: 11px; width: 20px; background: #10201a; border-radius: 0 0 20px 20px; }
+.blob.m-ecstatic i, .blob.f-joy i { height: 5px !important; border-radius: 10px 10px 0 0; top: 44%; }
+.blob.m-okay .mouth { height: 0; border: 0; border-bottom: 2.5px solid #10201a; border-radius: 0; width: 12px; }
+.blob.m-grumpy .mouth, .blob.m-miserable .mouth, .blob.f-sadness .mouth, .blob.f-loneliness .mouth, .blob.f-guilt .mouth { border: 2.5px solid #10201a; border-bottom: 0; border-radius: 12px 12px 0 0; height: 6px; width: 14px; top: 71%; }
+.blob.m-grumpy i:nth-child(1), .blob.f-anger i:nth-child(1), .blob.f-determination i:nth-child(1) { transform: rotate(-14deg); }
+.blob.m-grumpy i:nth-child(2), .blob.f-anger i:nth-child(2), .blob.f-determination i:nth-child(2) { transform: rotate(14deg); }
+.blob.m-miserable i, .blob.f-sadness i, .blob.f-loneliness i, .blob.f-guilt i { height: 6px !important; }
+.blob.m-miserable::after, .blob.f-sadness::after { content: ""; position: absolute; left: 30%; top: 56%; width: 4px; height: 8px; background: #6cc8ff; border-radius: 50%; z-index: 2; }
+.blob.m-sleeping i { height: 2px !important; top: 48%; border-radius: 2px; }
+.blob.m-sleeping .mouth { height: 4px; width: 6px; border-radius: 50%; border: 2px solid #10201a; }
+/* feelings */
+.blob.f-anger .mouth { height: 0; border: 0; border-top: 3px solid #10201a; border-radius: 0; width: 14px; top: 70%; }
+.blob.f-anger .body { box-shadow: 0 0 0 2px rgba(255, 70, 60, .55), 0 5px 0 -2px color-mix(in srgb, var(--c) 50%, #000); }
+.blob.f-determination .mouth { height: 0; border: 0; border-bottom: 3px solid #10201a; border-radius: 0; width: 13px; }
+.blob.f-fear i, .blob.f-dread i, .blob.f-wonder i { width: 9px; height: 12px; top: 38%; }
+.blob.f-fear .mouth, .blob.f-dread .mouth, .blob.f-wonder .mouth { width: 8px; height: 9px; border-radius: 50%; border: 2.5px solid #10201a; top: 68%; }
+.blob.f-dread .mouth { background: #10201a; }
+.blob.f-dread .body { filter: saturate(.6) brightness(.85); }
+.blob.f-anxiety .mouth { height: 0; width: 14px; border: 0; border-bottom: 2.5px dotted #10201a; border-radius: 0; }
+.blob.f-anxiety::after { content: ""; position: absolute; right: 22%; top: 28%; width: 4px; height: 7px; background: #9bd8ff; border-radius: 50% 50% 50% 50% / 30% 30% 70% 70%; z-index: 2; }
+.blob.f-pride .mouth { width: 12px; height: 7px; border-radius: 0 0 14px 4px; transform: translateX(-30%) rotate(-8deg); }
+.blob.f-pride i { height: 6px !important; top: 44%; }
+.blob.f-calm i { height: 2px !important; top: 48%; border-radius: 2px; }
+.blob.f-affection .mouth { height: 6px; }
+.blob.f-affection::after { content: ""; position: absolute; left: 24%; right: 24%; top: 62%; height: 6px; background: radial-gradient(circle, rgba(255, 110, 150, .65) 0 3px, transparent 4px) left/50% 100% no-repeat, radial-gradient(circle, rgba(255, 110, 150, .65) 0 3px, transparent 4px) right/50% 100% no-repeat; z-index: 0; }
+.blob.f-guilt i { transform: translateY(2px); }

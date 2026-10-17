@@ -105,11 +105,9 @@ def holder(game, key: str):
 def why_not(game, slime, key: str) -> str:
     """Why this slime cannot take the post right now ("" = it can)."""
     job = get(key)
-    if slime.id == game.vice:
-        return "the Vice Keeper has no time for a trade"
     if slime.job == key:
         return "already holds this post"
-    if slime.state not in ("idle", "working", "hunting") or slime.in_dungeon:
+    if slime.state not in ("idle", "working", "hunting", "sleeping", "resting") or slime.in_dungeon:
         return f"is {slime.in_dungeon and 'inside a dungeon' or slime.state}"
     if slime.state == "hunting" and not slime.job:
         return "is out hunting"
@@ -119,6 +117,8 @@ def why_not(game, slime, key: str) -> str:
         return f"needs {job.min_stars}+ stars"
     if job.classes and slime.archetype not in job.classes:
         return "only " + "/".join(job.classes) + "s may hold this post"
+    if (why := game.refusal(slime, "job")):
+        return why
     if slime.needs.get("energy") < config.TASK_MIN_ENERGY:
         return "is too tired"
     party = game.parties.party_of(slime.id)
@@ -136,12 +136,15 @@ def assign(game, slime, key: str) -> str:
     if len(others) >= slots(game, key):
         raise InvalidAction(f"All {slots(game, key)} place(s) for the {job.name.lower()} are taken. "
                             f"{'Upgrade the ' + BUILDINGS.get(job.building).name + ' or ' if not job.discipline else ''}dismiss someone first.")
+    woke = ""
+    if slime.state == "sleeping":
+        woke = game._rouse(slime) + " "
     if slime.job:
         stop(game, slime)
     if slime.state == "hunting":
         game.hunts.recall(slime)
     slime.job, slime.job_clock, slime.state = key, 0, "working"
-    return f"{slime.name} takes up the post of {job.name.lower()} (level {level(slime, key)})."
+    return woke + f"{slime.name} takes up the post of {job.name.lower()} (level {level(slime, key)})."
 
 
 def stop(game, slime) -> str:

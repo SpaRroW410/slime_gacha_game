@@ -394,6 +394,7 @@ class TestDailyPit(unittest.TestCase):
         g.tick(24)
         for s in g.party_members(pid):
             s.state, s.hp = "idle", s.max_hp
+            for k in list(s.needs.v): s.needs.v[k] = 90.0
         r2 = g.grind(pid, 2, 1)
         self.assertTrue(any("Today's Pit (day 2)" in l for l in r2.summary))
         self.assertNotEqual(theme0.title, dungeon.pit_theme(g.dungeon_seed, 1).title)

@@ -225,6 +225,10 @@ AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Res
 # Library / mastery
 TASK_MIN_ENERGY = 25
 WAKE_MORALE, WAKE_ANGER = 6, 10       # waking a sleeping slime (to train, hunt, or on request) costs mood ...
+REFUSE_ENERGY = 10                  # a slime below this energy refuses any post or expedition (and is skipped by 'wake everyone')
+REFUSE_HP = {"job": 0.25, "dungeon": 0.40}   # ... one hurt below this share of its HP refuses (a post / an expedition)
+REFUSE_MOOD = 0.20                  # ... one in a bleak mood (miserable) refuses
+REFUSE_ANGER = 80                   # ... and one in a rage
 WAKE_FREE_ABOVE = 50                  # ... unless it is already rested: energy above this share wakes for free
 BRAWL_MORALE, BRAWL_ANGER = 15, 20    # a brawl leaves both fighters sour
 WOUNDED_BELOW, WOUNDED_DRILL = 0.5, 0.6   # a drill started below this share of max HP is worth this much

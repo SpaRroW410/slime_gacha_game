@@ -90,7 +90,9 @@ def build() -> list:
         dict(title="Needs and mood", icon="🫧", blurb="The five needs decide how a slime feels, whether it asks for care, "
              "and how well it fights.", items=[dict(name=n, text=t) for n, t in need_rows] + [
             dict(name="Mood", text=f"Mood is the weighted average of the needs that currently matter (the first unmet tier and "
-                                   f"below). It scales battle power from x{c.MOOD_POWER_MIN} (miserable) to x{c.MOOD_POWER_MAX} (ecstatic).")]),
+                                   f"below). It scales battle power from x{c.MOOD_POWER_MIN} (miserable) to x{c.MOOD_POWER_MAX} (ecstatic)."),
+            dict(name="Refusing orders", text=f"A slime can refuse a post or an expedition (the Descent, Pit, Rift, Quarry, hunts, scouting, rescues): when its energy is under {c.REFUSE_ENERGY}%, when it is badly hurt (under {int(c.REFUSE_HP['job'] * 100)}% HP for a post, {int(c.REFUSE_HP['dungeon'] * 100)}% for an expedition), in a bleak mood, or in a rage. Pickers show who refuses and why. Merging and sacrifice never ask. Town > Buildings has a 'Wake everybody' button that leaves slimes under {c.REFUSE_ENERGY}% energy asleep; a tired one wakes grumpy."),
+            dict(name="Faces", text="Every slime shows its mood on its face: from a wide grin (ecstatic) to a tearful frown (miserable), eyes shut when asleep. A strong feeling (50 or more) takes over the face: angry brows, wide-eyed fear, a smug smirk, blushing affection, a calm smile and so on.")]),
         dict(title="Morale", icon="🎖️", blurb="'Fight readiness' of a slime, 0-100.", items=[
             dict(name="What it does", text=f"Scales battle power from x{c.MORALE_POWER_MIN} to x{c.MORALE_POWER_MAX}. Below {c.MORALE_BROKEN} "
                                            f"a slime is broken and may freeze in battle ({c.MORALE_FREEZE_CHANCE:.0%} per turn)."),

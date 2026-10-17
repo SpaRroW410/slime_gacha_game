@@ -38,6 +38,7 @@ def slime_view(g: Game, s) -> dict:
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
+        refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
         mood=s.mood_label(), power=(tp := power_mod.total_power(s))["total"], power_tag=power_mod.display(tp["total"]), power_parts=tp["parts"], power_mult=tp["multiplier"],
         morale=round(s.morale), morale_label=SocialEngine.morale_label(s.morale),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
@@ -408,6 +409,11 @@ def _sleep(g, a):
 @command("wake")
 def _wake(g, a):
     return _msg(g.wake(_i(a, "id")))
+
+
+@command("wake_all")
+def _wake_all(g, a):
+    return g.wake_all(), {}
 
 
 @command("pet")
