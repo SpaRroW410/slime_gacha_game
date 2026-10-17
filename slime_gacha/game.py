@@ -14,7 +14,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
+from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
@@ -1470,30 +1470,59 @@ class Game:
                                 f"parties must be full.")
 
     # ---- battle -----------------------------------------------------------------
-    def battle(self, pid: int, tier: int = 1, manual: bool = False):
-        """The wave simulation: a full party fights a wave of tier-N monsters (one per party slot; tier 4 is a boss) as a
-        drill. Nobody dies and there is no XP or loot: it trains battle proficiency and teamwork. With manual=True it pauses
-        for orders (returns None until it ends)."""
-        return self._play(self._skirmish_gen(pid, tier), "skirmish", manual, pid)
+    def battle(self, pid: int, tier: int = 1, manual: bool = False, lo: Optional[int] = None, hi: Optional[int] = None,
+               waves: int = 1):
+        """The wave simulation: a full party fights `waves` waves of monsters (one per party slot) as a drill. Nobody dies
+        and there is no loot. Monsters are of a level between `lo` and `hi` (a floor-equivalent, 1-50); the XP is fixed by
+        the monsters and their level (no randomness, no rarity factor). Without lo/hi it uses the monsters of `tier` (4 is a
+        boss). It also trains battle proficiency and teamwork. With manual=True it pauses for orders (returns None until
+        it ends)."""
+        return self._play(self._skirmish_gen(pid, tier, lo, hi, waves), "skirmish", manual, pid)
 
-    def _skirmish_gen(self, pid: int, tier: int):
+    def wave_enemies(self, tier: int, lo: Optional[int], hi: Optional[int]):
+        if lo is None and hi is None:
+            return self.battles.generate_enemies(tier, self.parties.size)
+        lo = max(1, min(config.WAVE_MAX_LEVEL, lo or 1))
+        hi = max(lo, min(config.WAVE_MAX_LEVEL, hi or lo))
+        out = []
+        for _ in range(self.parties.size):
+            lvl = self.rng.randint(lo, hi)
+            pool = bestiary.pool_for_any(lvl)
+            out.append(bestiary.build_enemy(self.rng.choice(pool), lvl, pit=True))
+        return out
+
+    def _skirmish_gen(self, pid: int, tier: int, lo: Optional[int] = None, hi: Optional[int] = None, waves: int = 1):
         self._require_full(pid)
+        waves = max(1, min(config.WAVE_MAX_WAVES, int(waves)))
         party = self._ready_party(pid)
-        enemies = self.battles.generate_enemies(tier, self.parties.size)
-        report = yield from self._battle_gen(party, enemies, permadeath=False, split_xp=False, xp_mult=0.0, loot=False)
-        self._after_battle(party, report, scale=0.5, wear=False)     # morale and feelings react; gear is not worn by a drill
+        total_xp, won, log = 0, 0, []
+        report = None
+        for w in range(waves):
+            enemies = self.wave_enemies(tier, lo, hi)
+            report = yield from self._battle_gen(party, enemies, permadeath=False, split_xp=True, xp_mult=config.WAVE_XP_MULT, loot=False)
+            self._after_battle(party, report, scale=0.5, wear=False)     # morale and feelings react; gear is not worn by a drill
+            total_xp += report.xp
+            log.extend([f"🌊 Wave {w + 1}/{waves}"] + report.log if waves > 1 else report.log)
+            for s in party:
+                if s.id in self.roster:
+                    s.hp = max(1, s.hp)                             # a simulation: nobody is lost
+            if not report.victory:
+                break
+            won += 1
+        report.log = log
+        report.xp = total_xp
         events: List[str] = []
+        level_f = 1 + 0.5 * (tier - 1) if lo is None else 1 + (((lo or 1) + (hi or lo or 1)) / 2 - 1) / 20
         for s in party:
             if s.id not in self.roster:
                 continue
-            s.hp = max(1, s.hp)                                     # a simulation: nobody is lost
-            attributes.practise(s, s.arch.discipline, config.WAVE_PROF * (1 + 0.5 * (tier - 1)) * (1.0 if report.victory else 0.6), 0.0)
-            s.needs.add("esteem", 3 if report.victory else 0)
+            attributes.practise(s, s.arch.discipline, config.WAVE_PROF * level_f * won, 0.0)
+            s.needs.add("esteem", 3 if won else 0)
         for i, a in enumerate(party):                               # fighting side by side builds teamwork
             for b in party[i + 1:]:
-                self.social.add_bond(a, b, config.WAVE_BOND)
-        report.log.append("🧪 Simulation over: nobody is hurt for real - battle proficiency gained.")
-        events.extend(self._spend(config.WAVE_TICKS))
+                self.social.add_bond(a, b, config.WAVE_BOND * won)
+        report.log.append(f"🧪 Simulation over ({won}/{waves} waves won): nobody is hurt for real - {total_xp} XP and battle proficiency gained.")
+        events.extend(self._spend(config.WAVE_TICKS * waves))
         report.log.extend(events)
         self.journal.extend(events)
         return report

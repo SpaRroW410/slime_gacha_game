@@ -958,7 +958,7 @@ def _grind(g, a):
 @command("wave")
 @command("skirmish")
 def _skirmish(g, a):
-    return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a)))
+    return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a), a.get("lo") and _i(a, "lo"), a.get("hi") and _i(a, "hi"), _i(a, "waves", 1)))
 
 
 # ---- session -----------------------------------------------------------------------------------------------

@@ -300,7 +300,7 @@ class TestBattle(unittest.TestCase):
         rep = g.battle(pid, 4)
         self.assertIn(rep.winner, ("foes", None))
 
-    def test_wave_simulation_trains_proficiency_without_xp_or_loot(self):
+    def test_wave_simulation_trains_proficiency_and_pays_fixed_xp_without_loot(self):
         g = fresh(2)
         pid = full_party(g)
         white = g.wallet.get("white_gel")
@@ -308,8 +308,18 @@ class TestBattle(unittest.TestCase):
         rep = g.battle(pid, 1)
         self.assertTrue(rep.victory)
         self.assertEqual(g.wallet.get("white_gel"), white)           # a simulation: no loot ...
-        self.assertEqual(rep.xp, 0)                                  # ... and no XP
+        self.assertGreater(rep.xp, 0)                                # ... but a fixed XP
         self.assertTrue(all(s.class_prof > profs[s.id] for s in g.party_members(pid)))
+
+    def test_wave_levels_and_waves(self):
+        g = fresh(2)
+        pid = full_party(g)
+        lo = sum(e.xp for e in g.wave_enemies(1, 2, 2))
+        hi = sum(e.xp for e in g.wave_enemies(1, 30, 30))
+        self.assertGreater(hi, lo)                                   # deeper monsters are worth more
+        rep = g.battle(pid, 1, lo=1, hi=2, waves=3)
+        self.assertIn("Wave 3/3", "\n".join(rep.log))
+        self.assertTrue(all(s.hp >= 1 for s in g.party_members(pid)))
 
     def test_necromancer_summons(self):
         g = fresh(8)

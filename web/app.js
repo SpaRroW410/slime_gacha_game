@@ -591,9 +591,9 @@ function dungeonsAll() {
         <button class="btn small ${ui('pit_lure', false) ? 'primary' : ''}" data-act="pit_lure" title="Richer prey: x${d.pit.lure_xp} XP and x${d.pit.lure_gear} gear drops">${ui('pit_lure', false) ? '✔ ' : ''}Lure (${d.pit.lure_cost} 🟣/run)</button>
         <button class="btn primary" data-act="grind">Commit</button>${cmdToggle()}</div>
       <small class="mute">Depth 3 = enemies at your party's average level; 1 is easier, 5 is harder and pays more XP. A <b>lure</b> (${d.pit.lure_cost} 🟣 per run) draws richer prey: <b>×${d.pit.lure_xp} XP</b> and <b>×${d.pit.lure_gear} chance of gear</b>; it stops when the purple gel runs out.</small></div>`;
-  const wave = `<div class="panel stack"><h2>🧪 Wave simulation ${info('A training drill, not a real fight: a full party at home fights a wave of monsters of the chosen tier (tier 4 is a boss) and nobody can die. There is no XP and no loot. It trains battle (class) proficiency, builds teamwork between the members, and takes 2 hours. You can take command of every turn, like any other fight.')}</h2>
-      <p class="mute">A full party fights a <b>wave of monsters</b> as a simulation: <b>nobody dies</b>, no XP, no loot — it trains <b>battle proficiency</b> and teamwork. Higher tiers train more.</p>
-      <div class="row">${partyOptions('kpid')}<select data-ui="tier">${[1, 2, 3, 4].map((t) => `<option value="${t}" ${t == tier ? 'selected' : ''}>Tier ${t}${t === 4 ? ' (boss)' : ''}</option>`).join('')}</select><button class="btn primary" data-act="skirmish">Run the simulation</button>${cmdToggle()}</div></div>`;
+  const wave = `<div class="panel stack"><h2>🧪 Wave simulation ${info('A training drill, not a real fight: a full party at home fights waves of monsters whose level lies between the minimum and maximum you set (1-50), and nobody can die. Each wave takes 2 hours. The XP is fixed by the monsters and their level (deeper monsters pay more, no luck or rarity involved, split between the members); there is no loot. It also trains battle (class) proficiency and builds teamwork. If the party loses a wave the simulation stops. You can take command of every turn, like any other fight.')}</h2>
+      <p class="mute">A full party fights a <b>wave of monsters</b> as a simulation: <b>nobody dies</b>, no loot. Pick the <b>monster level range</b> and the <b>number of waves</b>; the XP is fixed by the monsters and their level.</p>
+      <div class="row">${partyOptions('kpid')}<label>Min lvl <input type="number" data-ui="wlo" min="1" max="50" value="${num(ui('wlo', 1), 1)}" style="width:4.5em"></label><label>Max lvl <input type="number" data-ui="whi" min="1" max="50" value="${num(ui('whi', 5), 5)}" style="width:4.5em"></label><label>Waves <input type="number" data-ui="waves" min="1" max="5" value="${num(ui('waves', 1), 1)}" style="width:3.5em"></label><button class="btn primary" data-act="skirmish">Run the simulation</button>${cmdToggle()}</div></div>`;
   return { descent, stranded, scouting, pit, wave };
 }
 
@@ -1328,7 +1328,8 @@ const A = {
     if (!pid) return toast('You need a full party.', true);
     confirmThen(`Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose morale and drop their gear (no XP is lost).`, () => act('grind', { pid, depth, runs, manual: manualOn(), lure: !!ui('pit_lure', false) }, { slow: !manualOn(), title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
-    act('skirmish', { pid, tier: num(ui('tier', 1), 1), manual: manualOn() }, { title: 'Wave simulation' }); },
+    const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
+    act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn() }, { title: 'Wave simulation' }); },
   yard: (d) => { S.ui.yard = d.k; render(); },
   drill: () => act('drill', { id: num(ui('dsl')), discipline: ui('yard', 'sword'), tier: num(ui('dtier', 1), 1) }),
   drill_party: () => { const pid = num(ui('dppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
