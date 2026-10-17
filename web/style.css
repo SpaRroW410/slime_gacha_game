@@ -44,6 +44,15 @@ main { flex: 1; padding: 16px; max-width: 1280px; width: 100%; margin: 0 auto; }
 .grid { display: grid; gap: var(--gap); }
 .cols2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .cols3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+/* Academy: one column on a phone, two even columns from tablet width up (the panels differ in length: top-align them) */
+.acad { grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 820px) { .acad { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* the three discipline cards stay side by side at any width */
+.cards3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cards3 .scard { padding: 8px 6px; font-size: .9rem; }
+.cards3 .scard small, .cards3 .scard .sub { overflow-wrap: anywhere; }
+label.f, .panel select { min-width: 0; max-width: 100%; }
+.panel select { text-overflow: ellipsis; }
 .roster { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; box-shadow: var(--shadow); }
 .panel.flat { box-shadow: none; background: var(--card2); }
@@ -231,3 +240,12 @@ header.top .logo { flex: none; font-size: 1.05rem; }
 .topscroll > * { flex: none; }
 nav.tabs { position: sticky; top: 56px; z-index: 19; }
 @media (max-width: 640px) { header.top { padding: 0 8px; gap: 6px; } header.top .logo { font-size: .95rem; } }
+
+/* three-digit power tag beside a slime's figure */
+.figwrap { position: relative; display: inline-block; }
+.ptag { position: absolute; right: -10px; top: -6px; font: 700 .7rem/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .02em; padding: 2px 5px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--mute); pointer-events: none; }
+.ptag.t2 { color: var(--text); }
+.ptag.t3 { color: #ffd45a; border-color: #ffd45a66; }
+.ptag.t4 { color: #ff9d5c; border-color: #ff9d5c88; }
+.srow .ptag { right: -8px; top: -5px; font-size: .62rem; padding: 1px 4px; }
+.scard .figwrap { margin: 0 auto; }

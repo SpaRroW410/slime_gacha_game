@@ -13,6 +13,7 @@ const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '�
 const SUBS = {
   dungeons: [['descent', 'Hollow Descent'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['hunts', 'Hunts & foraging']],
   town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
+  academy: [['training', '🥋 Training & sparring'], ['library', '📚 Library & spells']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'stranded', 'rescue'];
@@ -56,6 +57,9 @@ function avatar(s, cls = '') {
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
   return `<div class="blob ${s.rarity} ${st} ${cls}" style="--c:${c}"><div class="body"><i></i><i></i></div><span class="em">${s.emoji}</span></div>`;
 }
+/* The three-digit power tag (001-999) shown beside a slime's figure; the full number and parts are on its card. */
+const ptag = (s) => `<span class="ptag t${Math.min(4, Math.floor(s.power_tag / 250) + 1)}" title="Total power ${s.power}">⚡${String(s.power_tag).padStart(3, '0')}</span>`;
+const figure = (s, cls = '') => `<span class="figwrap">${avatar(s, cls)}${ptag(s)}</span>`;
 function ghost(g) { // graveyard entry
   const c = CLASS_COLORS[g.archetype] || hashColor(g.archetype);
   return `<div class="blob sm dead" style="--c:${c}"><div class="body"><i></i><i></i></div></div>`;
@@ -294,7 +298,7 @@ function colony() {
 function srow(s) {
   const a = awayOf(s.id);
   const tag = s.in_dungeon ? `🕳 ${esc(s.in_dungeon)}` : s.state !== 'idle' ? esc(s.state) : '';
-  return `<div class="srow ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">${avatar(s, 'sm')}
+  return `<div class="srow ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">${figure(s, 'sm')}
     <span class="sname">${s.is_vice ? '🎖 ' : ''}${esc(s.name)}</span><span class="smeta">${esc(s.class_name)} · ${s.stars}★ ${esc(s.rarity)} · Lv${s.level}</span>
     <span class="shp">${bar(s.hp, s.max_hp, 'hp')}</span>
     <span class="stag">${a ? `⏳ ${etaHtml(a)}` : tag}${s.party ? ` 👥 ${esc(partyById(s.party)?.name || '')}` : ''}${s.hp < s.max_hp * 0.4 ? ' 🩹' : ''}${s.dominant && !s.busy ? ' ❗' : ''}</span></div>`;
@@ -314,7 +318,7 @@ function card(s) {
   if (s.morale_label === 'broken') b.push(badge('broken morale', 'bad'));
   if (s.outlook) b.push(badge(`${s.outlook.emoji} ${s.outlook.name}`, 'info'));
   return `<div class="scard ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">
-    ${avatar(s)}
+    ${figure(s)}
     <div class="nm">${esc(s.name)}</div><div class="sub">${esc(s.title)} · Lv${s.level}</div>
     <div>${stars(s.stars)}</div>
     ${bar(s.hp, s.max_hp, 'hp')}
@@ -332,7 +336,7 @@ function drawer(s) {
   return `<aside class="drawer">
     <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button> <input type="color" class="colpick" data-colorid="${s.id}" value="${s.color || CLASS_COLORS[s.archetype] || '#5be0a0'}" title="Slime colour (ring colour stays with rarity)"> ${s.color ? `<button class="btn small" data-act="set_color" data-id="${s.id}" data-reset="1" title="Back to class colour">↺</button>` : ''}</h2><button class="btn small" data-act="closesel">✕</button></div>
     ${s.grounded ? `<div class="row panel flat"><small>🚫 Grounded after a brawl: no hunts, drills or parties until the quarrel is mediated.</small><button class="btn small" data-act="unground" data-id="${s.id}">Let out</button></div>` : ''}
-    <div class="row" style="margin:8px 0">${avatar(s, 'big')}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
+    <div class="row" style="margin:8px 0">${figure(s, 'big')}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
       <div class="mute">${s.state}${s.in_dungeon ? ' · inside ' + s.in_dungeon : ''} · mood ${s.mood}${s.party ? ' · 👥 ' + esc(partyById(s.party)?.name) : ''}</div></div></div>
     <div class="seg dtabs">${tabs.map(([k, n]) => `<button class="${dt === k ? 'on' : ''}" data-act="dtab" data-t="${k}">${n}</button>`).join('')}</div>
     ${body}
@@ -344,6 +348,7 @@ function dOverview(s, { st, free, inDun }) {
   const care = (c, label, extra = '') => `<button class="btn small" data-act="do" data-c="${c}" ${inDun || extra ? 'disabled' : ''} ${inDun ? 'title="Inside a dungeon - you cannot tend to them"' : ''}>${label}</button>`;
   const zone = ui('zone', st.zones[0].key);
   return `<div class="kv">${[['HP', `${s.hp}/${s.max_hp}`], ['ATK', s.stats.atk], ['DEF', s.stats.defense], ['MAG', s.stats.mag], ['SPD', s.stats.spd], ['Power', s.power]].map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('')}</div>
+    <small class="mute">⚡ Total power <b>${s.power}</b> = (${Object.entries(s.power_parts).map(([k, v]) => `${k} ${v}`).join(' + ')}) × mood &amp; morale ${s.power_mult} ${info('Total power sums what the slime is (stats: class, level, rarity, stars, stage, gear, relics, potions) and what it can do (skills scaled by the stat they use, capstones and spell forms counting extra, star attributes, elemental mastery, fighting styles, class proficiency), then multiplies by its current mood and morale.')}</small>
     ${bar(s.hp, s.max_hp, 'hp', 'HP')}${bar(s.xp, s.xp_next, 'xp', 'XP', s.level >= s.level_cap ? 'level cap' : `${s.xp}/${s.xp_next}`)}
     ${bar(s.morale, 100, 'morale', `Morale — ${s.morale_label}`, `power ×${s.morale_factor}`)}
     ${bar(s.stamina, s.max_stamina, 'know', `⚡ Stamina`, `${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}
@@ -440,6 +445,10 @@ function gacha() {
       ${b(1, 'white_gel', '⚪ Pull ×1', '')}${b(10, 'white_gel', '⚪ Pull ×10', '')}
       ${b(1, 'purple_gel', '🟣 Pull ×1', 'purple')}${b(10, 'purple_gel', '🟣 Pull ×10', 'purple')}
     </div></div>
+  <div class="panel flat stack" style="margin:10px 0"><b>🟣 Fuse purple gel ${info('White gel can be fused into purple gel at ' + r.gel_merge + ' white per purple. Purple gel pays for rare-odds pulls, lures, retreats and the mage call.')}</b>
+    <div class="row"><button class="btn small ${w.white_gel >= r.gel_merge ? 'primary' : ''}" data-act="merge_gel" data-n="1" ${w.white_gel >= r.gel_merge ? '' : 'disabled'}>${r.gel_merge} ⚪ → 1 🟣</button>
+      <button class="btn small" data-act="merge_gel" data-n="10" ${w.white_gel >= r.gel_merge * 10 ? '' : 'disabled'}>${r.gel_merge * 10} ⚪ → 10 🟣</button>
+      <button class="btn small" data-act="merge_gel" data-n="max" ${w.white_gel >= r.gel_merge ? '' : 'disabled'}>Fuse all possible</button></div></div>
   ${S.pull ? `<div class="pull-grid">${S.pull.map((s, i) => `<div class="pull-card ${s.rarity}" style="animation-delay:${i * 90}ms">${avatar(s)}<div class="nm"><b>${esc(s.name)}</b></div>
       <div class="sub mute">${esc(s.class_name)}</div><div>${stars(s.stars)}</div>${chip(s.rarity, s.rarity)}
       <div class="sub mute">${s.traits.join(', ')}</div></div>`).join('')}</div>` : ''}`;
@@ -466,7 +475,7 @@ function parties() {
         ${!(p.in_delve || p.away) && p.members.length > 1 ? `<select data-ui="lead_${p.id}">${p.members.map((id) => `<option value="${id}" ${id === p.leader ? 'selected' : ''}>${esc(slimeById(id)?.name)}</option>`).join('')}</select><button class="btn small" data-act="set_leader" data-pid="${p.id}">Set leader</button>` : ''}
         ${p.temp ? badge('hunt party', 'info') : ''}</div>` : ''}
       <div class="row" style="margin:6px 0">${p.members.map((id) => mini(id, !(p.in_delve || p.away))).join('') || '<small class="mute">Empty</small>'}</div>
-      ${p.members.length > 1 ? `<p class="mute">Synergy <b class="${p.synergy >= 0 ? '' : ''}">${(p.synergy * 100).toFixed(1)}%</b> power (from average compatibility)</p>` : ''}
+      ${p.members.length > 1 ? `<p class="mute">Synergy <b>${(p.synergy * 100).toFixed(1)}%</b> power (from average compatibility) · ⚡ party power <b>${Math.round(p.members.reduce((a, id) => a + (slimeById(id)?.power || 0), 0) * (1 + p.synergy))}</b> ${info('The members\' total power added up, times the party synergy.')}</p>` : ''}
       <div class="row">
         ${!p.full && !(p.in_delve || p.away) ? `<button class="btn small" data-act="party_fill" data-pid="${p.id}">⚡ Fill with best free</button>` : ''}
         ${!(p.in_delve || p.away) ? `<select data-ui="add_${p.id}"><option value="">Add slime…</option>${freeSlimes.map((s) => `<option value="${s.id}">${esc(s.name)} (${esc(s.class_name)} Lv${s.level})</option>`).join('')}</select><button class="btn small" data-act="party_add" data-pid="${p.id}">Add</button>` : ''}
@@ -680,12 +689,24 @@ function hospitalView() {
     ${postPanel('doctor')}
     ${b.cost ? `<button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="hospital" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade the Hospital · ${cost(b.cost)}</button>` : ''}</div></div>`;
 }
+function pickSlime(key, filter, idx = 0) {
+  const list = S.state.slimes.filter(filter);
+  let cur = ui(key, list[Math.min(idx, list.length - 1)]?.id);
+  if (!list.some((s) => s.id == cur)) cur = list[Math.min(idx, list.length - 1)]?.id;
+  S.ui[key] = cur;
+  if (!list.length) return '<small class="mute">nobody is free</small>';
+  return `<select data-ui="${key}">${list.map((s) => `<option value="${s.id}" ${s.id == cur ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)} Lv${s.level} ${s.stars}★)${trainTags(s)}</option>`).join('')}</select>`;
+}
 function huntsView() {
   const st = S.state, j = st.jobs;
   const out = st.slimes.filter((s) => s.state === 'hunting');
   return `<div class="grid cols2">
-  <div class="panel stack"><h2>🏞 Hunts & foraging ${info('Hunting sends slimes outside for white gel, food and essence (and a rare purple gel). It costs no resources, only time and risk: a hurt or weak slime can be injured, and one that is too weak may come home with little. Foraging is the same thing done automatically.')}</h2>
-    <p class="mute">Slimes can hunt in three zones. A hunt costs nothing but time and a little health; the better a slime's power against the zone's danger, the safer and richer the haul. Send slimes from their card (Colony tab), a whole party from the Parties tab, or let the Vice Keeper organise big hunts.</p>
+  <div class="panel stack"><h2>🏞 Hunts & foraging ${info('Hunting sends slimes outside for white gel, food and essence (and a rare purple gel, plus now and then a herb, scrap or a common stone). A hunt also sharpens class proficiency. It costs no resources, only time and risk: a hurt or weak slime can be injured, and one that is too weak may come home with little. Foraging is the same thing done automatically.')}</h2>
+    <p class="mute">Slimes can hunt in four zones (from a one-hour dip to the Crust Road). A hunt costs nothing but time and a little health; the better a slime's power against the zone's danger, the safer and richer the haul. Send slimes from their card (Colony tab), a whole party from the Parties tab, or let the Vice Keeper organise big hunts.</p>
+    <div class="row"><label class="f">Zone <select data-ui="hz" data-rerender="1">${st.zones.map((z) => `<option value="${z.key}" ${z.key === ui('hz', st.zones[0].key) ? 'selected' : ''}>${esc(z.name)} (${z.duration}h)</option>`).join('')}</select></label>
+      ${pickSlime('hs', (s) => !s.in_dungeon && s.state !== 'hunting' && s.state !== 'studying' && !s.grounded)}<button class="btn primary" data-act="hunt_pick">🏞 Send hunting</button></div>
+    <div class="row">${partyOptions('hpid')}<button class="btn" data-act="hunt_party_pick">🏞 Hunt together</button><small class="mute">A party that hunts together grows closer (synergy).</small></div>
+    <small class="mute">Tags show who is asleep, hurt or at work: a sleeper wakes free if over half rested (else it costs mood); a worker leaves their post; a slime under 30% health cannot go.</small>
     <table><thead><tr><th>Zone</th><th>Time</th><th>Danger</th><th>Brings</th></tr></thead><tbody>${st.zones.map((z) => `<tr><td><b>${esc(z.name)}</b><br><small class="mute">${esc(z.desc)}</small></td><td>${z.duration}h</td><td>${z.danger}</td><td>${esc(Object.entries(z.rewards || {}).map(([k, v]) => `${(RES[k] || [k])[0]} ${Array.isArray(v) ? v.join('–') : v}`).join(' · '))}</td></tr>`).join('')}</tbody></table>
     <div class="row"><button class="btn small ${j.forage ? 'primary' : ''}" data-act="forage">🧺 Foraging: ${j.forage ? 'on' : 'off'}</button>
       <small class="mute">With foraging on, slimes that belong to no party, hold no post and have nothing to do hunt by themselves in the best zone they can clear safely (rested, fed and healthy only). Appointed chefs, blacksmiths, brewers and doctors forage on their own for one ${j.shift}-hour shift when their post has nothing to do — and can be called back at once.</small></div></div>
@@ -711,6 +732,12 @@ function guide() {
 }
 
 /* ---------------------------------------------------------------- academy */
+function academy() {
+  const all = academyAll();
+  const lib = '<div class="panel stack"><h2>📚 Library', spec = '<div class="panel stack"><h2>🧬 Specialization';
+  if (sub('academy') === 'library') return subnav('academy') + `<div class="grid acad">${cut(all, lib, spec)}</div>`;
+  return subnav('academy') + cut(all, null, lib) + cut(all, spec, null);
+}
 function mutationNotes(s) {
   const defs = S.state.spell_defs;
   const rows = s.spells.map((k) => defs[k]).filter((d) => d && d.forms && d.forms.length).map((d) => {
@@ -722,12 +749,12 @@ function mutationNotes(s) {
 /* What state a slime is in when picked for training: it changes what the training costs or gives. */
 function trainTags(s) {
   const tags = [];
-  if (s.state === 'sleeping') tags.push('😴 asleep: woken at a mood cost');
+  if (s.state === 'sleeping') tags.push(s.needs.energy > 50 ? `😴 asleep (rested ${s.needs.energy}%): wakes free` : `😴 asleep (energy ${s.needs.energy}%): ⚠ waking costs mood`);
   if (s.state === 'working') tags.push('👷 at work: leaves the job');
   if (s.hp < s.max_hp * 0.5) tags.push(s.hp <= 1 ? '🤕 downed' : '🤕 hurt: drills worth less');
   return tags.length ? ' · ' + tags.join(' · ') : '';
 }
-function academy() {
+function academyAll() {
   const st = S.state;
   const arena = ui('arena', 'sword');
   const slimeSel = (key, filter = () => true, extra = '', idx = 0) => {
@@ -767,18 +794,18 @@ function academy() {
   const dgain = dsl?.prof?.drill?.[yd.key]?.[tier - 1] || 0;
   const trainingFacility = `<div class="panel stack"><h2>🥋 Training facility — proficiency</h2>
     <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable) in the yard of its own discipline: the <b>Blade Yard</b> for sword classes, the <b>Archery Range</b> for rangers, the <b>Mana Pool</b> for casters. The Training Grounds level boosts it and unlocks stronger drills (Advanced at level 3, Master at level 5); a drill is worth less as a slime nears mastery. <b>No stars needed</b>: a slime that has just risen in rarity (back to one star) cannot study new elements at the Library, but it can still drill here.</p>
-    <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${yard === d.key ? 'sel' : ''}" data-act="yard" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><small class="mute" style="display:block">${esc(d.feeds.join(', '))}</small></div>`).join('')}</div>
+    <div class="grid cards3">${st.disciplines.map((d) => `<div class="panel flat scard ${yard === d.key ? 'sel' : ''}" data-act="yard" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><small class="mute" style="display:block">${esc(d.feeds.join(', '))}</small></div>`).join('')}</div>
     <h4>🧑‍🏫 Trainers ${info('One trainer per discipline (2★ or more). An appointed trainer speeds up proficiency and fighting-style gains for drills and sparring in their discipline. The bonus grows with the trainer\'s level and the Training Grounds level.')}</h4>
     ${st.disciplines.map((d) => { const k = 'trainer_' + d.key; return `<div class="row"><small class="mute">${esc(d.emoji)} ${esc(d.name)}: ${st.jobs.trainer[d.key] ? `+${st.jobs.trainer[d.key]}% proficiency and style gains` : 'no trainer appointed'}</small></div>${postPanel(k)}`; }).join('')}
     <div class="row"><label class="f">Drill <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)} · ${t.ticks}h · ${esc(cost(t.cost))}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select></label></div>
     <div class="row"><b>Slime:</b> ${slimeSel('dsl', avail)}<button class="btn primary" data-act="drill" ${dsl ? '' : 'disabled'}>${esc(tr.name)} (${tr.ticks}h)</button></div>
     ${dsl ? `<small class="mute">${esc(dsl.name)}: ${dsl.prof ? `proficiency ${dsl.prof.value}` : ''} · ${dgain > 0 ? `this drill is worth about +${dgain}` : `the ${esc(yd.name)} is not their discipline: only a little general practice`}</small>` : ''}
     <div class="row"><b>Party:</b> ${partyOptions('dppid')}<button class="btn" data-act="drill_party">Everyone drills</button></div></div>`;
-  return `<div class="grid cols2">
+  return `<div class="grid acad">
   ${trainingFacility}
   <div class="panel stack"><h2>⚔ Sparring — fighting styles ${info('A duel costs 2 white gel. Two parties sparring as teams cost a flat 3 white gel (not per pair). Each takes 3 hours. A sleeping slime is woken first (mood cost: morale and a flash of anger); a slime at a job leaves it (that shift is lost); a slime below half health is too hurt to spar and drills for less. Check the tags in the pickers.')}</h2>
     <p class="mute">Training is not for XP. Slimes duel each other (non-lethal; the loser is left at <b>1 HP</b> — heal them at the Rest Area) to develop a <b>fighting style</b> with permanent combat perks. Costs ${cost(st.mercy.spar_cost)} per duel and ${st.mercy.train_ticks}h. Training Grounds L${tg.level}: ${esc(tg.now)}.</p>
-    <div class="grid cols3">${st.disciplines.map((d) => `<div class="panel flat scard ${arena === d.key ? 'sel' : ''}" data-act="arena" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><div class="sub">${esc(d.style)}</div><small class="mute">${esc(d.perk)}</small></div>`).join('')}</div>
+    <div class="grid cards3">${st.disciplines.map((d) => `<div class="panel flat scard ${arena === d.key ? 'sel' : ''}" data-act="arena" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><div class="sub">${esc(d.style)}</div><small class="mute">${esc(d.perk)}</small></div>`).join('')}</div>
     <div class="row"><b>Duel:</b> ${duelA} vs ${duelB}<button class="btn primary" data-act="spar" ${duelOk ? '' : 'disabled'}>Spar · 2 ⚪</button></div>
     ${away ? `<small class="mute">${away} slime${away > 1 ? 's are' : ' is'} away (dungeon, hunt or study) and not listed.</small>` : ''}
     <div class="row"><b>Party vs party:</b> ${partyA} vs ${partyB}<button class="btn" data-act="spar_parties" ${partyOk ? '' : 'disabled'}>Parties spar · 3 ⚪</button>${info('Two full parties at home fight each other, non-lethally, for a flat 3 white gel (not per pair) and 3 hours. Every member gains fighting-style XP and class proficiency, and the members of each party grow closer, which raises party synergy. The loser is left low on health (the Hospital heals them).')}</div>
@@ -1169,8 +1196,12 @@ const A = {
   wait: (d) => act('wait', { hours: num(d.h) }, { slow: num(d.h) >= 24 }),
   autocare: () => act('auto_care', { on: !S.state.auto_care }),
   arena: (d) => { S.ui.arena = d.k; render(); },
-  do: (d) => act(d.c, { id: d.id ? num(d.id) : S.sel }),
+  do: (d) => { const sl = slimeById(d.id ? num(d.id) : S.sel);
+    if (d.c === 'wake' && sl && sl.state === 'sleeping' && sl.needs.energy <= 50) return confirmThen(`${sl.name} is still tired (energy ${sl.needs.energy}%).\n\nWaking a slime that has slept less than half its energy costs mood: morale drops and it gets angry. Wake it anyway?`, () => act('wake', { id: sl.id }));
+    return act(d.c, { id: d.id ? num(d.id) : S.sel }); },
   hunt: () => act('hunt', { id: S.sel, zone: ui('zone', S.state.zones[0].key) }),
+  hunt_pick: () => { const id = num(S.ui.hs); if (id) act('hunt', { id, zone: ui('hz', S.state.zones[0].key) }); },
+  hunt_party_pick: () => { const pid = num(S.ui.hpid); if (!pid) return toast('You need a full party at home.', true); act('party_hunt', { pid, zone: ui('hz', S.state.zones[0].key) }); },
   equip: (d) => act('equip', { id: S.sel, key: ui('eq_' + d.slot, Object.keys(S.state.gear.inventory).find((k) => S.state.gear.all.find((g) => g.key === k).slot === d.slot)) }),
   unequip: (d) => act('unequip', { id: S.sel, slot: d.slot }),
   slime_rarity: () => act('slime_rarity', { id: S.sel }),
@@ -1186,6 +1217,7 @@ const A = {
   keeper_use: (d) => act('keeper_use', { key: d.key }),
   bud: (d) => confirmThen('Have a child? It costs ' + cost(S.state.family.bud_cost) + '.', () => act('bud', { a: num(d.a), b: num(d.b) })),
   autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
+  merge_gel: (d) => act('merge_gel', { n: d.n === 'max' ? Math.floor(S.state.wallet.white_gel / S.state.rates.gel_merge) : num(d.n) }),
   pit_lure: () => { S.ui.pit_lure = !ui('pit_lure', false); render(); },
   adv_lure: () => { S.ui.adv_lure = !ui('adv_lure', false); render(); },
   adv_toggle: (d) => { const ids = new Set((ui('adv_ids', []) || []).map(num)); const id = num(d.id); ids.has(id) ? ids.delete(id) : ids.add(id); S.ui.adv_ids = [...ids].slice(0, S.state.gear.adventure.max_party); render(); },

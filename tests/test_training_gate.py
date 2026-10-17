@@ -13,21 +13,28 @@ from tests.test_jobs import slime
 
 
 class TestTrainingGate(unittest.TestCase):
-    def test_waking_a_sleeper_costs_mood(self):
+    def test_waking_a_tired_sleeper_costs_mood_but_a_rested_one_is_free(self):
         g = rich(41)
         s = slime(g)
         s.state = "sleeping"
+        s.needs.set("energy", 30)
         morale = s.morale
         out = g.wake(s.id)
         self.assertEqual(s.state, "idle")
         self.assertLess(s.morale, morale)
         self.assertIn("grumpy", out)
+        r = slime(g)
+        r.state = "sleeping"
+        r.needs.set("energy", 60)
+        morale = r.morale
+        g.wake(r.id)
+        self.assertEqual((r.state, r.morale), ("idle", morale))
 
     def test_a_drill_wakes_a_sleeper_and_pulls_a_worker_off_the_job(self):
         g = rich(42)
         a, b = slime(g, "barbarian"), slime(g, "medic")
         a.state = "sleeping"
-        a.needs.set("energy", 60)
+        a.needs.set("energy", 40)
         morale = a.morale
         msg = g.drill(a.id, "sword")
         self.assertIn("grumpy", msg)
@@ -67,6 +74,67 @@ class TestTrainingGate(unittest.TestCase):
         gel = g.wallet.get("white_gel")
         g.spar(a.id, b.id, "sword")
         self.assertEqual(gel - g.wallet.get("white_gel"), 2)
+
+
+class TestHunts(unittest.TestCase):
+    def test_the_pond_is_a_one_hour_hunt(self):
+        from slime_gacha.hunt import ZONES
+        self.assertEqual(ZONES.get("pond").duration, 1)
+        self.assertEqual(min(z.duration for z in ZONES), 1)
+
+    def test_a_hunt_sharpens_class_proficiency(self):
+        g = rich(48)
+        g.needs.auto_care = False
+        s = slime(g, "barbarian")
+        s.class_prof = 30.0
+        g.hunt(s.id, "pond")
+        g.tick(1)
+        self.assertGreater(s.class_prof, 30.0)
+
+    def test_a_party_that_hunts_together_grows_closer(self):
+        g = rich(49)
+        g.needs.auto_care = False
+        pid = party(g, name="H")
+        a, b = members(g, pid)[:2]
+        bond = g.social.bond(a, b)
+        g.party_hunt(pid, "pond")
+        groups = {s.hunt.group for s in members(g, pid)}
+        self.assertEqual(len(groups), 1)
+        self.assertNotIn(0, groups)
+        g.tick(1)
+        self.assertGreater(g.social.bond(a, b), bond)
+
+    def test_hunts_now_and_then_bring_other_materials(self):
+        from slime_gacha.hunt import HuntSystem
+        g = rich(50)
+        g.needs.auto_care = False
+        s = slime(g, "barbarian")
+        s.stage = 2
+        from slime_gacha.growth import add_xp
+        add_xp(s, 10 ** 6)
+        s.hp = s.max_hp
+        other = {k: 0 for k in ("scrap", "stone_common", "herb_green", "herb_red", "herb_blue", "herb_yellow")}
+        g.rng.random = lambda: 0.0                       # best rolls: the side loot always comes
+        g.rng.randint = lambda lo, hi: hi
+        g.hunt(s.id, "meadow")
+        before = {k: g.wallet.get(k) for k in other}
+        g.tick(3)
+        self.assertTrue(any(g.wallet.get(k) > before[k] for k in other))
+
+    def test_a_sleeper_and_a_worker_can_be_sent_and_a_hurt_slime_cannot(self):
+        g = rich(51)
+        g.needs.auto_care = False
+        a, b, c = slime(g), slime(g), slime(g, "barbarian")
+        a.state, a.needs.v["energy"] = "sleeping", 70
+        morale = a.morale
+        g.hunt(a.id, "pond")
+        self.assertEqual((a.state, a.morale), ("hunting", morale))       # rested: woken free
+        g.assign_job(b.id, "chef")
+        g.hunt(b.id, "pond")
+        self.assertEqual((b.state, b.job), ("hunting", ""))
+        c.hp = 1
+        with self.assertRaises(InvalidAction):
+            g.hunt(c.id, "pond")
 
 
 class TestBrawlMood(unittest.TestCase):

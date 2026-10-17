@@ -72,6 +72,7 @@ class Game:
         self.needs = NeedsEngine(self.wallet, self.rng)
         self.conflicts = ConflictEngine(self.rng)
         self.hunts = HuntSystem(self.wallet, self.rng)
+        self.hunts.on_finish = lambda s, ok, group: self._hunt_done(s, ok, group)
         self.battles = BattleSystem(self.rng, self.wallet)
         self.flow = None                       # the manual-capable battle in progress (memory only, never saved)
         self.buildings = BuildingManager(self.wallet)
@@ -816,7 +817,7 @@ class Game:
                 self.parties.add(p.id, s.id)
             lead = v if i == 0 else max((self.roster[m] for m in p.members), key=lambda s: (s.level, s.morale))
             p.leader = lead.id
-            for line in self.party_hunt(p.id, zone):
+            for line in self.party_hunt(p.id, zone, self.hunt_group):
                 out.append("   " + line)
             for m in p.members:
                 s = self.roster.get(m)
@@ -945,11 +946,14 @@ class Game:
         return f"{s.name} dozes off."
 
     def _rouse(self, s: Slime) -> str:
-        """Wake a sleeper: it is not pleased (mood cost)."""
+        """Wake a sleeper. A slime that has already slept past half its energy wakes for free; one still tired is
+        not pleased (mood cost)."""
         s.state = "idle"
+        if s.needs.get("energy") >= config.WAKE_FREE_ABOVE:
+            return f"{s.name} wakes up, well rested."
         self.social.shift_morale(s, -config.WAKE_MORALE)
         emotions.feel(s, "anger", config.WAKE_ANGER)
-        return f"😠 {s.name} is woken up and is grumpy about it (morale -{config.WAKE_MORALE})."
+        return f"😠 {s.name} is woken up while still tired and is grumpy about it (morale -{config.WAKE_MORALE})."
 
     def wake(self, sid: int) -> str:
         s = self._tend(sid)
@@ -990,11 +994,25 @@ class Game:
         return f"You pet {s.name}. Blorp! (mood: {s.mood_label()})"
 
     # ---- hunting -----------------------------------------------------------------
-    def hunt(self, sid: int, zone: str) -> str:
+    def hunt(self, sid: int, zone: str, group: int = 0) -> str:
         s = self.slime(sid)
+        ZONES.get(zone)
+        self.hunts.check(s)
+        notes = self._prepare_trainees([s])                     # a sleeper is woken (mood cost if still tired), a worker leaves the post
         self.hunts.start(s, zone)
+        if group:
+            s.hunt.group = group
         z = ZONES.get(zone)
-        return f"{s.name} heads to {z.name} for {z.duration} hours."
+        return " ".join(notes + [f"{s.name} heads to {z.name} for {z.duration} hours."])
+
+    def _hunt_done(self, s: Slime, ok: bool, group: int) -> None:
+        """A hunt is practice too: class proficiency for the hunter, and hunters of one group (a party, or the Vice
+        Keeper's hunt) grow closer, which lifts their party synergy."""
+        self.practise_discipline(s, s.arch.discipline, config.HUNT_PROF_OWN * (1.0 if ok else 0.4), 0.0)
+        if group:
+            for o in self.slimes():
+                if o.id != s.id and o.hunt and o.hunt.group == group:
+                    self.social.add_bond(s, o, config.HUNT_BOND)
 
     def recall(self, sid: int) -> str:
         s = self.slime(sid)
@@ -1416,13 +1434,16 @@ class Game:
     def party_members(self, pid: int) -> List[Slime]:
         return [self.slime(i) for i in self.parties.get(pid).members]
 
-    def party_hunt(self, pid: int, zone: str) -> List[str]:
-        """Send every member of a full party hunting (each hunts individually)."""
+    def party_hunt(self, pid: int, zone: str, group: int = 0) -> List[str]:
+        """Send every member of a full party hunting (each hunts individually, but as one group: its members bond)."""
         self._require_full(pid)
         out = []
+        if not group:
+            self.hunt_group += 1
+            group = self.hunt_group
         for s in self.party_members(pid):
             try:
-                out.append(self.hunt(s.id, zone))
+                out.append(self.hunt(s.id, zone, group))
             except InvalidAction as e:
                 out.append(f"✋ {e}")
         return out
@@ -1742,6 +1763,15 @@ class Game:
         self.social.shift_morale(s, 10)
         self._xp("ascend", config.KEEPER_XP["ascend"])
         return f"🌟 {s.name} ascends to {s.stars} stars!"
+
+    def merge_gel(self, n: int = 1) -> str:
+        """Fuse white gel into purple gel: GEL_MERGE white gel per purple."""
+        n = int(n)
+        if n < 1:
+            raise InvalidAction("Merge at least one.")
+        self.wallet.spend("white_gel", config.GEL_MERGE * n)
+        self.wallet.add("purple_gel", n)
+        return f"🟣 {config.GEL_MERGE * n} white gel fuse into {n} purple gel."
 
     def merge_stone_rarity(self, rarity: str) -> str:
         if rarity not in config.RARITIES:
