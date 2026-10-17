@@ -325,3 +325,17 @@ class TestRefusals(unittest.TestCase):
         a.state = "sleeping"
         g.assign_job(a.id, "doctor")
         self.assertEqual(a.state, "working")
+
+
+class TestViceKeeperWorks(unittest.TestCase):
+    def test_the_vice_keeper_can_hold_a_post_and_still_reach_slimes_at_home(self):
+        g = quiet(rich(94))
+        v, other = slime(g, "medic", stars=4), slime(g, "rogue")
+        g.appoint_vice(v.id)
+        g.assign_job(v.id, "doctor")
+        self.assertEqual((v.state, v.job), ("working", "doctor"))
+        self.assertTrue(g.vice_reaches(other))
+        w = slime(g, "medic", stars=4)
+        g.assign_job(w.id, "brewer")
+        g.appoint_vice(w.id)                                   # a worker can also be made Vice Keeper
+        self.assertEqual(g.vice, w.id)

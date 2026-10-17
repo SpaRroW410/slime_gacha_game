@@ -672,7 +672,6 @@ function town() {
 const inTown = (s) => !s.in_dungeon && (['idle', 'working', 'sleeping', 'resting'].includes(s.state) || (s.state === 'hunting' && !!s.job));
 /* Why this slime cannot take the post ('' = it can). */
 function holdWhy(s, j) {
-  if (s.is_vice) return 'Vice Keeper';
   if (s.job && s.job.key === j.key) return 'already holds it';
   if (s.grounded) return 'grounded';
   if (s.stars < j.min_stars) return `needs ${j.min_stars}★`;
@@ -992,7 +991,7 @@ function viceExtras(v) {
 }
 function viceKeeperPanel() {
   const st = S.state, v = st.vice;
-  const elig = st.slimes.filter((s) => s.stars >= st.vice_min_stars && !s.busy && !s.is_vice);
+  const elig = st.slimes.filter((s) => s.stars >= st.vice_min_stars && (!s.busy || s.state === 'working') && !s.is_vice);
   let cur = ui('vice_pick', elig[0]?.id);
   if (!elig.some((s) => s.id == cur)) cur = elig[0]?.id;
   S.ui.vice_pick = cur;

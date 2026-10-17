@@ -105,8 +105,6 @@ def holder(game, key: str):
 def why_not(game, slime, key: str) -> str:
     """Why this slime cannot take the post right now ("" = it can)."""
     job = get(key)
-    if slime.id == game.vice:
-        return "the Vice Keeper has no time for a trade"
     if slime.job == key:
         return "already holds this post"
     if slime.state not in ("idle", "working", "hunting", "sleeping", "resting") or slime.in_dungeon:

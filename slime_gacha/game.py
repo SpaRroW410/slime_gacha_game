@@ -717,7 +717,7 @@ class Game:
         s = self.slime(sid)
         if s.stars < config.VICE_MIN_STARS:
             raise InvalidAction(f"A Vice Keeper must have at least {config.VICE_MIN_STARS} stars.")
-        if s.busy:
+        if s.busy and s.state != "working":                 # a Vice Keeper may hold a post in town too
             raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
         old = self.vice_slime()
         self.vice = s.id
@@ -738,9 +738,10 @@ class Game:
         v = self.vice_slime()
         if v is None or v.id == s.id:
             return False
-        if not s.busy and not v.busy:
+        v_away = v.busy and v.state != "working"           # a Vice Keeper at a post in town is still at home
+        if not s.busy and not v_away:
             return True
-        if not (s.busy and v.busy):
+        if not (s.busy and v_away):
             return False
         if v.hunt and s.hunt and v.hunt.group and v.hunt.group == s.hunt.group:
             return True                                    # one hunt, several parties: the Vice Keeper leads them all
