@@ -226,15 +226,8 @@ class TestOutlook(unittest.TestCase):
         won_or_lost_same = abs(ratio_a / ratio_b - 1) < 0.5
         self.assertTrue(won_or_lost_same)                                # same order of magnitude
 
-    def test_grinder_loses_less_when_knocked_out(self):
-        g = rich()
-        a, b = mk(g), mk(g)
-        for s in (a, b):
-            s.level, s.xp, s.total_xp = 6, 100, 1000
-        a.exp["pit"] = 9
-        la = lose_xp(a, config.GRIND_DEATH_XP_LOSS * config.OUTLOOK_GRINDER_LOSS)
-        lb = lose_xp(b, config.GRIND_DEATH_XP_LOSS)
-        self.assertLess(la, lb)
+    def test_grinder_loses_less_morale_when_knocked_out(self):
+        self.assertGreater(config.GRIND_DEATH_MORALE * config.OUTLOOK_GRINDER_MORALE, config.GRIND_DEATH_MORALE)
 
     def test_grinder_in_a_real_pit_session(self):
         g = rich(5)

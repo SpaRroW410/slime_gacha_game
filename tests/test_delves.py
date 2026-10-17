@@ -265,7 +265,7 @@ class TestScouting(unittest.TestCase):
         self.assertTrue(three.complete)
         self.assertTrue(all(g.intel[f] == 100.0 for f in (1, 2, 3, 4)))
 
-    def test_not_100_percent_means_the_party_dies(self):
+    def test_not_100_percent_strands_the_party_and_unrescued_they_are_lost(self):
         g = rich(8)
         pid = party(g, strong=True)
         names = [s.name for s in members(g, pid)]
@@ -275,9 +275,12 @@ class TestScouting(unittest.TestCase):
         plan = g.scout_plan(pid, 1, 4)
         res = g.scout(pid, 1, 4, max(2, int(plan["low"] * 0.5)))
         self.assertFalse(res.complete)
+        self.assertTrue(res.stranded)
+        self.assertEqual(len(g.roster), 5)                      # overdue, not dead yet: a rescue party may still come
+        self.assertTrue(any("overdue" in l for l in res.log))
+        g.tick(config.RESCUE_DEADLINE_HOURS)
         self.assertEqual(len(g.roster), 0)
         self.assertEqual(sorted(d["name"] for d in g.graveyard), sorted(names))
-        self.assertTrue(any("never came back" in l for l in res.log))
         self.assertEqual(g.inventory.items, {})                 # nobody left to carry the gear
         # a half-finished note survives: partial knowledge on the floors they reached
         self.assertTrue(0 < g.intel.get(1, 0) <= 100 * config.SCOUT_NOTE_FRACTION)
@@ -392,7 +395,7 @@ class TestPitPenalties(unittest.TestCase):
         self.assertEqual(lose_xp(s, 0.9), 5)            # never below level 1
         self.assertEqual((s.level, s.xp), (1, 0))
 
-    def test_knocked_out_slime_loses_xp_morale_and_gear_but_lives(self):
+    def test_knocked_out_slime_loses_morale_and_gear_but_never_xp(self):
         g = rich(13)
         pid = self._weak_party(g)
         ms = members(g, pid)
@@ -407,7 +410,7 @@ class TestPitPenalties(unittest.TestCase):
         self.assertEqual(g.graveyard, [])               # nobody died
         for s in ms:
             if s.name in res.runs[0].knocked_out:
-                self.assertLess(s.total_xp, before[s.id][0])
+                self.assertGreaterEqual(s.total_xp, before[s.id][0])      # an XP farm: no negative XP
                 self.assertLess(s.morale, before[s.id][1] - 15)
                 self.assertEqual(s.gear, {})
         self.assertTrue(g.pit_lost)                     # the gear stayed in the Pit

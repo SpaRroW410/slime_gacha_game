@@ -22,9 +22,9 @@ def hybrid(g, cls="mage", spec="battlemage", disc="sword", rarity="legendary", s
 
 
 class TestHybridSkills(unittest.TestCase):
-    def test_nine_hybrid_capstones_one_per_spec(self):
+    def test_twelve_hybrid_capstones_one_per_spec(self):
         self.assertEqual(set(specialization.HYBRID_CAPSTONES), set(specialization.SPECS))
-        self.assertEqual(len(specialization.HYBRID_CAPSTONES), 9)
+        self.assertEqual(len(specialization.HYBRID_CAPSTONES), 12)
 
     def test_capstone_needs_legendary_five_star_and_scales_with_second_proficiency(self):
         g = rich(61)
@@ -89,6 +89,42 @@ class TestHybridSkills(unittest.TestCase):
         log = []
         bs._turn(a, [a, t], log)
         self.assertTrue(any("copies" in l for l in log))
+
+
+class TestArcherPaths(unittest.TestCase):
+    PATHS = (("medic", "dawn_archer", "mending_arrow", "dawnfall_volley"),
+             ("necromancer", "plague_archer", "plague_arrow", "pestilence_rain"),
+             ("rogue", "nightstalker", "silent_shot", "death_from_shadows"))
+
+    def test_class_paths_into_archery_resolve_with_signature_and_capstone(self):
+        g = rich(64)
+        for cls, spec, sig, cap in self.PATHS:
+            s = g.gacha.make_slime("common", cls)
+            self.assertEqual(specialization.spec_for(s, "archery").key, spec)
+            h = hybrid(g, cls=cls, spec=spec, disc="archery")
+            self.assertEqual(attributes.hybrid_capstone(h), cap)
+            self.assertIn(sig, h.known_abilities())
+            self.assertIn(cap, h.known_abilities())
+
+    def test_other_classes_keep_their_old_archery_paths(self):
+        g = rich(65)
+        self.assertEqual(specialization.spec_for(g.gacha.make_slime("common", "mage"), "archery").key, "hexshot")
+        self.assertEqual(specialization.spec_for(g.gacha.make_slime("common", "barbarian"), "archery").key, "swashbuckler")
+
+    def test_new_skills_work_in_battle(self):
+        bs = BattleSystem(random.Random(4))
+        a, t, friend = mk("A", "party"), mk("T", "foes", hp=1000), mk("F", "party")
+        friend.hp = 20
+        use(bs, a, get_ability("mending_arrow"), [t], [a, t, friend], [])
+        self.assertGreater(friend.hp, 20)
+        t2, t3 = mk("T2", "foes", hp=1000), mk("T3", "foes", hp=1000)
+        use(bs, a, get_ability("pestilence_rain"), [t2, t3], [a, t2, t3], [])
+        self.assertTrue(t2.poison and t3.poison)
+        use(bs, a, get_ability("plague_arrow"), [t], [a, t], [])
+        self.assertTrue(t.poison)
+        before = t.hp
+        use(bs, a, get_ability("death_from_shadows"), [t], [a, t], [])
+        self.assertLess(t.hp, before)
 
 
 class TestSecondProficiencyAndDrift(unittest.TestCase):

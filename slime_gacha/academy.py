@@ -73,6 +73,7 @@ class AcademySystem:
         self.rng = rng
         self.library = library
         self.buildings = buildings
+        self.trainer_mult = lambda discipline: 1.0       # Game sets: the appointed trainer's bonus (jobs.trainer_bonus)
 
     # -- shared ----------------------------------------------------------------
     def _begin(self, slime, kind: str, ticks: int, cost: Dict[str, int], **args) -> None:
@@ -207,7 +208,7 @@ class AcademySystem:
             raise InvalidAction(f"The {name} needs the Training Grounds at level {need} (it is level {have}).")
         return name, ticks, cost, mult, style
 
-    def start_drill(self, slime, discipline: str, tier: int = 1) -> str:
+    def start_drill(self, slime, discipline: str, tier: int = 1, wound: float = 1.0) -> str:
         """A solo drill in the Blade Yard / Archery Range / Mana Pool. No star requirement: even a slime that has just
         risen in rarity (and is back to one star) can sharpen its class proficiency here, though it learns nothing new.
         Higher tiers (Advanced, Master) unlock with the Training Grounds and give far more, for more time and cost."""
@@ -215,7 +216,7 @@ class AcademySystem:
         d = sparring.DISCIPLINES.get(discipline)
         name, ticks, cost, _, _ = self.drill_tier(tier)
         self._check_free(slime)
-        self._begin(slime, "drill", ticks, cost, discipline=d.key, tier=tier)
+        self._begin(slime, "drill", ticks, cost, discipline=d.key, tier=tier, wound=wound)
         return f"{slime.name} heads to the {d.name} for the {name.lower()} ({ticks}h)."
 
     def drill_gain(self, slime, discipline: str, tier: int = 1) -> float:
@@ -225,15 +226,15 @@ class AcademySystem:
         if own is None:
             return 0.0
         mult = config.DRILL_TIERS[tier - 1][4]
-        return round(config.PROF_DRILL * mult * self.buildings.style_mult() * max(0.1, 1 - own / 110.0), 2)
+        return round(config.PROF_DRILL * mult * self.buildings.style_mult() * self.trainer_mult(discipline) * max(0.1, 1 - own / 110.0), 2)
 
     def _finish_drill(self, s, events: List[str]) -> None:
         from . import attributes, sparring
         d = sparring.DISCIPLINES.get(s.task["discipline"])
         tier = s.task.get("tier", 1)
-        gain = self.drill_gain(s, d.key, tier)
+        gain = self.drill_gain(s, d.key, tier) * s.task.get("wound", 1.0)
         which = attributes.practise(s, d.key, gain, 0.5)
-        sparring.gain_style_xp(s, d.key, config.DRILL_STYLE_XP * config.DRILL_TIERS[tier - 1][5] * self.buildings.style_mult(),
+        sparring.gain_style_xp(s, d.key, config.DRILL_STYLE_XP * config.DRILL_TIERS[tier - 1][5] * self.buildings.style_mult() * self.trainer_mult(d.key),
                                self.buildings.style_cap())
         s.needs.add("energy", -8)
         s.needs.add("esteem", 4)

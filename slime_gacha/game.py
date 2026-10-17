@@ -14,7 +14,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import jobs, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
+from . import jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
@@ -45,6 +45,7 @@ class ScoutResult:
     before: float = 0.0
     after: float = 0.0
     survivors: int = 0
+    stranded: bool = False
     log: List[str] = field(default_factory=list)
 
 
@@ -76,6 +77,8 @@ class Game:
         self.buildings = BuildingManager(self.wallet)
         self.library = Library(self.wallet, self.buildings)
         self.academy = AcademySystem(self.wallet, self.rng, self.library, self.buildings)
+        self.academy.trainer_mult = lambda discipline: jobs.trainer_bonus(self, discipline)
+        self.needs.meal_hook = lambda s: jobs.eat_from_pantry(self, s)
         self.social = SocialEngine(self.conflicts, self.buildings)
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
         self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
@@ -98,6 +101,11 @@ class Game:
         self.wall_last: Optional[float] = None
         self.wall_frac = 0.0
         self.expeditions: List[dict] = []              # live mode: parties away until a game tick
+        self.pantry: Dict[str, int] = {}               # cooked servings by recipe (jobs.py: chef and kitchen)
+        self.recipe_pref = "auto"                      # the recipe the chef cooks ("auto" = the best one)
+        self.forge_progress, self.forge_next = 0, "weapon"   # the blacksmith's slow forging (jobs._craft)
+        self.stranded: List[dict] = []                 # overdue scouts waiting for a rescue party (see scout / rescue)
+        self.next_stranded = 1
         self._owed = 0.0                               # hours the current session still has to pay (live mode)
         self.clock_fn = time.time
         self.keeper = keeper_mod.Keeper()
@@ -302,6 +310,89 @@ class Game:
                     events.append("🏠 " + ", ".join(s.name for s in back[:5]) + (" and friends" if len(back) > 5 else "")
                                   + " return from the dungeon.")
 
+    def _stranded_tick(self, events: List[str]) -> None:
+        """Overdue scouts who are not reached in time are lost."""
+        for e in list(self.stranded):
+            members = [self.roster[i] for i in e["ids"] if i in self.roster and self.roster[i].in_dungeon == "stranded"]
+            if not members:
+                self.stranded.remove(e)
+            elif self.tick_count >= e["deadline"]:
+                self.stranded.remove(e)
+                for s in members:
+                    s.hp, s.death_cause = 0, f"lost scouting floors {e['first']}-{e['last']} (stranded on floor {e['stuck']})"
+                self._drop_gear(members, [], members, "Hollow Descent", events)
+                self._reap(events)
+                events.append(f"☠ Nobody came for the stranded scouts on floor {e['stuck']}. They are lost.")
+
+    def stranded_left(self, e: dict) -> int:
+        return max(0, e["deadline"] - self.tick_count)
+
+    def rescue_hours(self, e: dict) -> int:
+        return config.RESCUE_BASE_HOURS + e["stuck"]
+
+    def rescue_food(self, e: dict) -> int:
+        return int(math.ceil(self.rescue_hours(e) * config.SCOUT_FOOD_PER_HOUR))
+
+    def rescue(self, pid: int, sid: int) -> List[str]:
+        """Send a full party to bring overdue scouts home. The trip takes hours (it must beat the deadline), costs food,
+        and can be ambushed. Every rescuer must have cleared the floor above the one the scouts are stuck on. Success
+        depends on the rescuers' strength against the depth; a failed attempt leaves the scouts waiting (if time is
+        left) and can cost a rescuer's life."""
+        e = next((x for x in self.stranded if x["id"] == sid), None)
+        if not e:
+            raise InvalidAction("Nobody is waiting to be rescued.")
+        hours = self.rescue_hours(e)
+        if hours >= self.stranded_left(e):
+            raise InvalidAction(f"It would take {hours}h to reach them, but they only have {self.stranded_left(e)}h left.")
+        party = self._ready_party(pid)
+        laggard = min(party, key=lambda s: s.progress)
+        if laggard.progress < e["stuck"] - 1:
+            raise InvalidAction(f"{laggard.name} has only cleared floor {laggard.progress}; rescuers must have walked the "
+                                f"floors down to floor {e['stuck'] - 1}.")
+        self.wallet.spend("food", self.rescue_food(e))
+        stuck = e["stuck"]
+        danger = 1 + 0.06 * stuck
+        strength = sum(s.power_rating() for s in party) / len(party) / (25 * danger)
+        k = self._knowledge(stuck) / 100
+        p_ok = min(0.95, config.RESCUE_BASE_CHANCE + 0.4 * min(1.5, strength) + 0.2 * k)
+        out = [f"🛟 {self.parties.get(pid).name} sets out to rescue the scouts stranded on floor {stuck} ({hours}h)."]
+        self._owed = 0.0
+        self._set_flag(party, "rescue")
+        out.extend("   " + x for x in self._spend(hours) if "died" in x)
+        members = [s for s in party if s.id in self.roster]
+        p_hit = min(0.6, config.SCOUT_AMBUSH_BASE * 2 * danger / max(0.5, strength) * (1 - 0.7 * k))
+        if members and self.rng.random() < p_hit:
+            v = self.rng.choice(members)
+            dmg = max(1, int(v.max_hp * self.rng.uniform(0.15, 0.40) * danger))
+            v.hp -= dmg
+            out.append(f"   ambushed on the way! {v.name} takes {dmg} damage.")
+            if v.hp <= 0:
+                v.death_cause = "killed on a rescue mission in the Hollow Descent"
+                self._drop_gear([v], [s for s in members if s is not v and s.hp > 0], members, "Hollow Descent", out)
+                self._reap(out)
+        members = [s for s in party if s.id in self.roster]
+        scouts = [self.roster[i] for i in e["ids"] if i in self.roster and self.roster[i].in_dungeon == "stranded"]
+        if members and scouts and self.rng.random() < p_ok:
+            self.stranded.remove(e)
+            for s in scouts:
+                s.hp = max(1, s.hp)
+                self.social.shift_morale(s, 5)
+                emotions.feel(s, "joy", 15)
+            for s in members:
+                self.social.shift_morale(s, 6)
+                outlook.bump(s, "delve")
+            self._xp("scout", config.KEEPER_XP["scout"])
+            out.append(f"✅ The rescuers reach the scouts and bring {len(scouts)} slime(s) home.")
+            self._set_flag(scouts, "rescue")
+            self._owed = hours
+            self._release(members + scouts)
+        else:
+            out.append("✖ The rescuers could not break through to the scouts." if members else "☠ The rescue party is gone.")
+            self._owed = hours
+            self._release(members)
+        self.journal.extend(out)
+        return out
+
     def remaining_hours(self, ready_tick: int) -> float:
         return max(0.0, ready_tick - self.tick_count - self.wall_frac)
 
@@ -325,6 +416,7 @@ class Game:
             self.conflicts.tick(self.slimes(), events)
             self._reap(events)
             self._return_expeditions(events)
+            self._stranded_tick(events)
             self._stamina_tick()
             self._emotion_tick(events)
             if self.tick_count % 24 == config.RELATIONS_HOUR:
@@ -560,7 +652,7 @@ class Game:
         """Care (feeding, petting, sleeping, talking, potions) is impossible while a slime is inside a dungeon -
         unless the Vice Keeper is in there with them."""
         s = self.slime(sid)
-        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry") and not self.vice_reaches(s):
+        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry", "stranded") and not self.vice_reaches(s):
             raise InvalidAction(f"{s.name} is inside a dungeon - you cannot tend to them until they are back.")
         return s
 
@@ -852,11 +944,30 @@ class Game:
         s.state = "sleeping"
         return f"{s.name} dozes off."
 
+    def _rouse(self, s: Slime) -> str:
+        """Wake a sleeper: it is not pleased (mood cost)."""
+        s.state = "idle"
+        self.social.shift_morale(s, -config.WAKE_MORALE)
+        emotions.feel(s, "anger", config.WAKE_ANGER)
+        return f"😠 {s.name} is woken up and is grumpy about it (morale -{config.WAKE_MORALE})."
+
     def wake(self, sid: int) -> str:
         s = self._tend(sid)
-        if s.state in ("sleeping", "resting"):
+        if s.state == "sleeping":
+            return self._rouse(s)
+        if s.state == "resting":
             s.state = "idle"
         return f"{s.name} wakes up."
+
+    def _prepare_trainees(self, slimes: List[Slime]) -> List[str]:
+        """Before sparring or a drill: sleepers are woken (mood cost) and workers leave their job (the shift is lost)."""
+        out = []
+        for s in slimes:
+            if s.state == "sleeping":
+                out.append(self._rouse(s))
+            elif s.state == "working":
+                out.append(f"{s.name} leaves the {jobs.JOBS[s.job].name.lower() if s.job in jobs.JOBS else 'job'} for training. " + jobs.stop(self, s))
+        return out
 
     def set_behavior(self, sid: int, stance: str) -> str:
         if stance not in BEHAVIORS:
@@ -887,6 +998,8 @@ class Game:
 
     def recall(self, sid: int) -> str:
         s = self.slime(sid)
+        if s.job and s.state == "hunting":
+            return jobs.recall(self, s)                       # a worker out foraging goes straight back to the post
         self.hunts.recall(s)
         self.academy.cancel(s)
         return f"{s.name} was called back."
@@ -894,65 +1007,91 @@ class Game:
     # ---- sparring (fighting styles) -------------------------------------------------
     def spar(self, a_id: int, b_id: int, discipline: str) -> SparResult:
         """Two slimes duel non-lethally in the chosen arena (sword / archery / magic) to develop a fighting
-        STYLE. No XP; the loser is left at 1 HP (use the Rest Area). Costs 2 white gel and 3 hours."""
-        return self._spar_group([(self.slime(a_id), self.slime(b_id))], None, discipline)
+        STYLE. No XP; the loser is left at 1 HP (use the Rest Area). Costs 2 white gel and 3 hours (a whole party session is a flat 3)."""
+        return self._spar_group([(self.slime(a_id), self.slime(b_id))], None, discipline, config.SPAR_COST)
 
-    def spar_party(self, pid: int, discipline: str) -> SparResult:
-        """Everyone in a full party spars in random pairs; an odd slime out trains on a dummy."""
-        self._require_full(pid)
-        members = self.party_members(pid)
-        self.rng.shuffle(members)
-        pairs = [(members[i], members[i + 1]) for i in range(0, len(members) - 1, 2)]
-        odd = members[-1] if len(members) % 2 else None
-        return self._spar_group(pairs, odd, discipline)
+    def spar_parties(self, pid_a: int, pid_b: int, discipline: str) -> SparResult:
+        """Two full parties fight each other (non-lethal) to knit together and sharpen their class: every member
+        earns fighting-style XP and class proficiency, and the members of each party grow closer (bonds, so party
+        synergy rises). Costs a flat 3 white gel and 3 hours for the whole session."""
+        if pid_a == pid_b:
+            raise InvalidAction("Pick two different parties.")
+        d = sparring.DISCIPLINES.get(discipline)
+        for pid in (pid_a, pid_b):
+            self._require_full(pid)
+        team_a, team_b = self.party_members(pid_a), self.party_members(pid_b)
+        everyone = team_a + team_b
+        for s in everyone:
+            sparring.check_ready(s)
+        cap = self.buildings.style_cap()
+        if all(sparring.style_level(s, d.key) >= cap for s in everyone):
+            raise InvalidAction(f"Everyone is already at the {d.style} ceiling (level {cap}) - upgrade the Training Grounds.")
+        self.wallet.spend_many(config.SPAR_PARTY_COST)
+        res = SparResult()
+        res.summary.extend(self._prepare_trainees(everyone))
+        syn_a, syn_b = self.social.synergy(team_a), self.social.synergy(team_b)
+        rep = self.battles.team_spar(team_a, team_b, syn_a, syn_b)
+        res.reports.append(rep)
+        names = (self.parties.get(pid_a).name, self.parties.get(pid_b).name)
+        winner = 0 if rep.winner == "party" else 1
+        res.summary.append(f"{d.emoji} {names[winner]} beat {names[1 - winner]} in {rep.rounds} rounds")
+        for i, team in enumerate((team_a, team_b)):
+            before = self.social.synergy(team)
+            for x in range(len(team)):                    # teamwork: every pair in the party grows closer
+                for y in range(x + 1, len(team)):
+                    self.social.add_bond(team[x], team[y], config.SPAR_PARTY_BOND)
+            for s in team:
+                self._spar_reward(res, s, d, i == winner, cap)
+            res.summary.append(f"   {names[i]}'s synergy {before - 1:+.1%} -> {self.social.synergy(team) - 1:+.1%}")
+        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train")
+        res.summary.extend("   " + e for e in events if "died" in e)
+        self.journal.extend(events)
+        return res
 
-    def _spar_group(self, pairs, dummy_slime, discipline: str) -> SparResult:
+    def _spar_reward(self, res: SparResult, s: Slime, d, won: Optional[bool], cap: int, dummy: bool = False) -> None:
+        """Style XP, class proficiency and a little morale for one sparring slime."""
+        mult = self.buildings.style_mult() * jobs.trainer_bonus(self, d.key)        # an appointed trainer speeds it up
+        before = sparring.style_level(s, d.key)
+        xp = sparring.style_xp_for(s, d.key, won, mult, dummy)
+        if outlook.has(s, "spar"):
+            xp *= config.OUTLOOK_DUELIST_STYLE
+        outlook.bump(s, "spar")
+        tb = jobs.trainer_bonus(self, d.key)
+        self.practise_discipline(s, d.key, config.PROF_SPAR_OWN * tb, config.PROF_SPAR_OTHER)
+        after = sparring.gain_style_xp(s, d.key, xp, cap)
+        self.social.shift_morale(s, 2 + (2 if won else 0))
+        note = f"+{xp:.0f} {d.style} xp"
+        if after > before:
+            note += f" ⬆ {d.style} level {after}!"
+        elif after >= cap and sparring.style_level(s, d.key) >= cap:
+            note += " (Training Grounds ceiling)"
+        res.summary.append(f"   {s.name}: {note}")
+
+    def _spar_group(self, pairs, dummy_slime, discipline: str, cost: Dict[str, int]) -> SparResult:
         d = sparring.DISCIPLINES.get(discipline)
         cap = self.buildings.style_cap()
-        everyone = [s for p in pairs for s in p] + ([dummy_slime] if dummy_slime else [])
+        everyone = [s for p in pairs for s in p]
         if len({s.id for s in everyone}) != len(everyone):
             raise InvalidAction("A slime can't spar with themselves.")
         for s in everyone:
             sparring.check_ready(s)
+        notes = self._prepare_trainees(everyone)
         if all(sparring.style_level(s, d.key) >= cap for s in everyone):
             raise InvalidAction(f"Everyone is already at the {d.style} ceiling (level {cap}) - upgrade the "
                                 f"Training Grounds.")
-        self.wallet.spend_many({k: v * (len(pairs) + (1 if dummy_slime else 0))
-                                for k, v in config.SPAR_COST.items()})
+        self.wallet.spend_many(cost)
         res = SparResult()
-        mult = self.buildings.style_mult()
-
-        def reward(s, won, dummy=False):
-            before = sparring.style_level(s, d.key)
-            xp = sparring.style_xp_for(s, d.key, won, mult, dummy)
-            if outlook.has(s, "spar"):
-                xp *= config.OUTLOOK_DUELIST_STYLE
-            outlook.bump(s, "spar")
-            self.practise_discipline(s, d.key, config.PROF_SPAR_OWN, config.PROF_SPAR_OTHER)
-            after = sparring.gain_style_xp(s, d.key, xp, cap)
-            self.social.shift_morale(s, 2 + (2 if won else 0))
-            note = f"+{xp:.0f} {d.style} xp"
-            if after > before:
-                note += f" ⬆ {d.style} level {after}!"
-            elif after >= cap and sparring.style_level(s, d.key) >= cap:
-                note += " (Training Grounds ceiling)"
-            res.summary.append(f"   {s.name}: {note}")
-
+        res.summary.extend(notes)
         for a, b in pairs:
             rep = self.battles.duel(a, b)
             res.reports.append(rep)
             win, lose = (a, b) if rep.winner == "party" else (b, a)
             res.summary.append(f"{d.emoji} {win.name} beat {lose.name} in {rep.rounds} rounds "
                                f"({lose.name} left at {lose.hp} HP)")
-            reward(win, True)
-            reward(lose, False)
+            self._spar_reward(res, win, d, True, cap)
+            self._spar_reward(res, lose, d, False, cap)
             self.social.add_bond(a, b, config.SPAR_BOND)
-        if dummy_slime:
-            res.summary.append(f"{d.emoji} {dummy_slime.name} drills on a training dummy")
-            reward(dummy_slime, None, dummy=True)
-            dummy_slime.needs.add("energy", -4)
-        who = {x for pr in pairs for x in pr} | ({dummy_slime} if dummy_slime else set())
-        events = self._occupy([x for x in who if x.id in self.roster], config.SPAR_TICKS, "train")
+        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train")
         res.summary.extend("   " + e for e in events if "died" in e)
         self.journal.extend(events)
         return res
@@ -1078,7 +1217,12 @@ class Game:
 
     def drill(self, sid: int, discipline: str, tier: int = 1) -> str:
         """Send a slime to drill (sword / archery / magic) for proficiency. See AcademySystem.start_drill."""
-        return self.academy.start_drill(self.slime(sid), discipline, tier)
+        s = self.slime(sid)
+        sparring.check_ready_basic(s)
+        wound = config.WOUNDED_DRILL if s.hp < s.max_hp * config.WOUNDED_BELOW else 1.0
+        notes = self._prepare_trainees([s])
+        msg = self.academy.start_drill(s, discipline, tier, wound)
+        return " ".join(notes + [msg]) + (" (hurt: this drill is worth less)" if wound < 1.0 else "")
 
     def drill_party(self, pid: int, discipline: str, tier: int = 1) -> List[str]:
         self.academy.drill_tier(tier)                       # refuse early if the tier is locked
@@ -1652,6 +1796,18 @@ class Game:
                 ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in y.items()) + ".",
                 f"   The colony mourns. Sacrifice stress is now {self.sacrifice_stress:.1f}."]
 
+    def _farm_loot(self, foes: int, log: List[str]) -> None:
+        """Every farming dungeon (Pit, Rift, Quarry) also hands out a little of the other resources, rarely."""
+        got: Dict[str, int] = {}
+        for _ in range(foes):
+            if self.rng.random() < config.FARM_LOOT_CHANCE:
+                key = self.rng.choice(list(config.FARM_LOOT))
+                lo, hi = config.FARM_LOOT[key]
+                got[key] = got.get(key, 0) + self.rng.randint(lo, hi)
+        if got:
+            self.wallet.add_many(got)
+            log.append("🎁 Also found " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in got.items()) + ".")
+
     def _stone_side_drop(self, where: str, foes: int, log: List[str]) -> None:
         """Other dungeons hide the odd common stone."""
         n = sum(1 for _ in range(foes) if self.rng.random() < config.STONE_SIDE_DROP.get(where, 0) * (1 + 0.2 * self.keeper.rank("stonecutter")))
@@ -1732,6 +1888,24 @@ class Game:
                     k = max(keys, key=lambda k: sum(equipment.GEAR.get(k).stats.values()))
                     log.append("🎒 " + self.inventory.equip(s, k))
 
+    def brew_for_post(self, brewer: Slime) -> List[str]:
+        """The appointed brewer's shift: brew the basic or mixed potion the colony is shortest of, within its means
+        (at most 66% of each ingredient stock, like slimes helping themselves)."""
+        lab = self.buildings.level("alchemy")
+        wanted = []
+        for s in self.slimes():
+            wanted += list(self._LIKES.get(s.archetype, ()))
+        wanted += list(potions.KINDS)[:4]
+        stock = lambda k: sum(n for kk, n in self.potions.items() if kk.split(":")[0] == k)
+        for kind in sorted(set(wanted), key=lambda k: (stock(k), k)):
+            if stock(kind) >= config.AUTONOMY_BREW_STOCK + 2:
+                continue
+            for grade in range(lab, 0, -1):
+                c = potions.cost(kind, grade)
+                if all(v <= self.wallet.get(k) * self.share for k, v in c.items()):
+                    return ["⚗️ " + x for x in self._brew_core(brewer, kind, grade, wait=False)]
+        return []
+
     def _auto_brew(self, log: List[str]) -> None:
         """Once a day a free slime (magical ones first) brews a potion the colony is short of, spending at most 66%
         of each ingredient stock."""
@@ -1805,7 +1979,7 @@ class Game:
             return
         zones = sorted(ZONES, key=lambda z: -z.duration)
         for s in self.slimes():
-            if (s.state != "idle" or s.in_dungeon or s.grounded or s.id == self.vice or s.hp <= 0
+            if (s.state != "idle" or s.job or s.in_dungeon or s.grounded or s.id == self.vice or s.hp <= 0
                     or self.parties.party_of(s.id) or s.hp < s.max_hp * config.FORAGE_MIN_HP
                     or s.needs.get("energy") < config.FORAGE_MIN_ENERGY or s.needs.get("food") < config.FORAGE_MIN_FOOD):
                 continue
@@ -1824,6 +1998,9 @@ class Game:
     def brew(self, sid: int, kind: str, grade: int, wait: bool = True) -> List[str]:
         """A slime brews a potion in the Alchemy Lab (takes 2 hours per grade). Lab level caps the grade."""
         s = self._free_slime(sid)
+        return self._brew_core(s, kind, grade, wait)
+
+    def _brew_core(self, s: Slime, kind: str, grade: int, wait: bool = True) -> List[str]:
         if kind not in potions.KINDS:
             raise InvalidAction(f"Unknown potion '{kind}'.")
         if not 1 <= grade <= 5:
@@ -2231,6 +2408,7 @@ class Game:
                                 f"{v} {k.replace('_', ' ')}" for k, v in got.items()) + "!")
                 if rep.victory:
                     self._herb_drop(kind, len(enemies), events, theme.terrain)
+                    self._farm_loot(len(enemies), events)
                 if rep.victory and kind != "quarry":
                     self._stone_side_drop("adventure", len(enemies), events)
                     for _ in enumerate(enemies):
@@ -2247,7 +2425,7 @@ class Game:
                     line += f", KO: {', '.join(rep.knocked_out)}"
                 res.summary.append(line)
                 res.summary.extend("   " + e for e in events if any(w in e for w in
-                                   ("Found", "Mined", "stone", "herb", "shatters", "knocked", "died")))
+                                   ("Found", "Mined", "stone", "herb", "shatters", "knocked", "died", "Also found")))
                 self.journal.extend(events)
                 if rep.winner == "foes":
                     res.stop_reason = "the whole party was knocked out"
@@ -2339,6 +2517,46 @@ class Game:
             self.social.shift_morale(s, 2)
         return f"{self.parties.get(pid).name} climbs out of the Hollow Descent after {d['hours']}h."
 
+    def retreat_cost(self, pid: int) -> int:
+        """Purple gel an emergency retreat costs: a base fee plus one per segment of depth."""
+        d = self.delves[pid]
+        return config.RETREAT_PURPLE_BASE + d["floor"] // config.MAIN_BOSS_EVERY
+
+    def retreat_ambush_chance(self, pid: int) -> float:
+        d = self.delves[pid]
+        return min(0.7, config.RETREAT_AMBUSH * (1 + 0.05 * d["floor"]) * (1 - 0.6 * self._knowledge(d["floor"]) / 100))
+
+    def retreat(self, pid: int) -> List[str]:
+        """Break off and flee mid-segment: the Descent's one costed way out (the checkpoint exit stays free).
+        Costs purple gel and morale, leaves the party shaken (stamina drained), and the flight can be ambushed -
+        deaths are permanent. Every floor the party cleared stays cleared for each slime; to go back down they must
+        enter again from a checkpoint (floor 1 or the floor after a boss)."""
+        d = self.delves.get(pid)
+        if not d:
+            raise InvalidAction("That party is not inside the dungeon.")
+        if self.can_leave(pid):
+            raise InvalidAction("The party stands at a checkpoint: it can simply leave for free.")
+        self._delve_wait(d)
+        party = self._members_in("main", pid)
+        cost = self.retreat_cost(pid)
+        self.wallet.spend("purple_gel", cost)
+        out = [f"🏃 {self.parties.get(pid).name} breaks off and flees the Hollow Descent from floor {d['floor']} ({cost} purple gel)."]
+        if self.rng.random() < self.retreat_ambush_chance(pid):
+            self._ambush_strike(pid, party, d["floor"], out, "Ambushed during the retreat!", "killed fleeing the Hollow Descent")
+        survivors = self._members_in("main", pid)
+        for s in survivors:
+            self.social.shift_morale(s, -config.RETREAT_MORALE)
+            s.needs.add("esteem", -10)
+            s.stamina_frac = min(s.stamina_frac, 0.3)
+        self._clear_flag(survivors)
+        self.delves.pop(pid, None)
+        if survivors:
+            out.append(f"   {len(survivors)} slime(s) stumble out, shaken and exhausted.")
+        else:
+            out.append("☠ Nobody made it out.")
+        self.journal.extend(out)
+        return out
+
     def delve_status(self, pid: int) -> dict:
         d = self.delves.get(pid)
         if not d:
@@ -2403,8 +2621,12 @@ class Game:
         info = dungeon.floor_info(self.dungeon_seed, floor, self.parties.size)
         enemies = info.enemies
         delver_share = sum(outlook.has(s, "delve") for s in party) / max(1, len(party))
+        boons = [tuple(b) for q in pids for b in self.delves[q].get("boons", [])]
+        for q in pids:
+            self.delves[q]["boons"] = []                      # supplies from a wayside stop last one fight
         report = yield from self._battle_gen(party, enemies, intel=(1 + config.INTEL_POWER_BONUS * k / 100)
-                                             * (1 + config.OUTLOOK_DELVER_POWER * delver_share), terrain=info.terrain)
+                                             * (1 + config.OUTLOOK_DELVER_POWER * delver_share), terrain=info.terrain,
+                                             modifier=modifiers.get(info.modifier), boons=boons)
         boss = dungeon.is_boss_floor(floor)
         report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}{' (BOSS)' if boss else ''}: {info.title} "
                              f"[knowledge {k:.0f}%]" + (f" - {len(pids)} parties fight together" if len(pids) > 1 else ""))
@@ -2460,9 +2682,78 @@ class Game:
                     self.delves[q]["ready_tick"] = self.tick_count + spent
                 if not self._members_in("main", q):        # everyone starved / died in the meantime
                     self.delves.pop(q, None)
+        self._owed = 0.0
         report.log.extend(events)
         self.journal.extend(events)
         return report
+
+    # ---- wayside stops: a little shop and a safe rest between floors ------------------------------------------
+    STOP_ITEMS = {
+        "salve": ("Healing Salve", 8, "Heals the whole party for 35% of max HP."),
+        "ration": ("Trail Ration", 4, "5 Food for the colony's stores."),
+        "ward": ("Ward Charm", 10, "+15% defense for the next fight."),
+        "whetstone": ("Whetstone", 10, "+15% attack for the next fight."),
+    }
+
+    def _stop(self, pid: int) -> dict:
+        d = self.delves.get(pid)
+        if not d:
+            raise InvalidAction("That party is not inside the dungeon.")
+        if not dungeon.has_stop(d["floor"]):
+            raise InvalidAction(f"There is no wayside stop on floor {d['floor']}.")
+        st = d.get("stop")
+        if not st or st.get("floor") != d["floor"]:
+            st = d["stop"] = dict(floor=d["floor"], bought=[], rested=False)
+        return st
+
+    def stop_price(self, pid: int, item: str) -> int:
+        d = self.delves[pid]
+        return max(1, int(self.STOP_ITEMS[item][1] * (1 + d["floor"] / 10)))
+
+    def stop_view(self, pid: int) -> Optional[dict]:
+        d = self.delves.get(pid)
+        if not d or not dungeon.has_stop(d["floor"]):
+            return None
+        st = self._stop(pid)
+        return dict(rested=st["rested"], items=[dict(key=k, name=v[0], desc=v[2], cost=self.stop_price(pid, k), bought=k in st["bought"])
+                                                for k, v in self.STOP_ITEMS.items()])
+
+    def stop_rest(self, pid: int) -> str:
+        """A safe rest at the wayside stop (once per stop): the party mends half its health for 3 hours, no ambush."""
+        st = self._stop(pid)
+        self._delve_wait(self.delves[pid])
+        if st["rested"]:
+            raise InvalidAction("The party has already rested at this stop.")
+        party = self._members_in("main", pid)
+        for s in party:
+            s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.STOP_REST_HEAL))
+            s.stamina_frac = min(1.0, s.stamina_frac + 0.3)
+        st["rested"] = True
+        self._owed = 0.0
+        self._spend(config.STOP_REST_HOURS)
+        self.delves[pid]["hours"] += config.STOP_REST_HOURS
+        if self.live:
+            self.delves[pid]["ready_tick"] = self.tick_count + config.STOP_REST_HOURS
+        return f"🏕 {self.parties.get(pid).name} rests safely at the wayside stop ({config.STOP_REST_HOURS}h)."
+
+    def stop_buy(self, pid: int, item: str) -> str:
+        st = self._stop(pid)
+        if item not in self.STOP_ITEMS:
+            raise InvalidAction(f"The stop does not sell '{item}'.")
+        if item in st["bought"]:
+            raise InvalidAction("Sold out: the stop has one of each.")
+        name = self.STOP_ITEMS[item][0]
+        self.wallet.spend("white_gel", self.stop_price(pid, item))
+        st["bought"].append(item)
+        party = self._members_in("main", pid)
+        if item == "salve":
+            for s in party:
+                s.hp = min(s.max_hp, s.hp + int(s.max_hp * 0.35))
+        elif item == "ration":
+            self.wallet.add("food", 5)
+        else:
+            self.delves[pid].setdefault("boons", []).append(("defense", 0.15) if item == "ward" else ("atk", 0.15))
+        return f"🛒 Bought a {name}."
 
     def camp_limit(self, pid: int) -> int:
         """Hours a party may camp on its current floor: the floor number, stretched by how well the floor is known."""
@@ -2542,15 +2833,7 @@ class Game:
             p = min(0.7, config.CAMP_AMBUSH_BASE * (1 + 0.1 * d["floor"]) * (1 - 0.6 * self._knowledge(d["floor"]) / 100)
                     * (1 - config.CAMP_RELIEF_MAX * self.relief(pid)))
             if self.rng.random() < p:
-                v = self.rng.choice(party)
-                dmg = max(1, int(v.max_hp * self.rng.uniform(*config.CAMP_AMBUSH_DAMAGE) * (1 + 0.05 * d["floor"])))
-                v.hp -= dmg
-                out.append(f"⚠ An ambush at camp! {v.name} takes {dmg} damage.")
-                if v.hp <= 0:
-                    v.death_cause = "ambushed while camping in the Hollow Descent"
-                    self._drop_gear([v], [s for s in party if s is not v and s.hp > 0], party, "Hollow Descent", out)
-                    self._reap(out)
-                    self._shift_morale_party(self._members_in("main", pid), -6)
+                self._ambush_strike(pid, party, d["floor"], out, "An ambush at camp!", "ambushed while camping in the Hollow Descent")
         if not self._members_in("main", pid):
             out.append("☠ The whole party has fallen in the Hollow Descent.")
             self.delves.pop(pid, None)
@@ -2562,6 +2845,18 @@ class Game:
         self._owed = 0.0
         self.journal.extend(out)
         return out
+
+    def _ambush_strike(self, pid: int, party: List[Slime], floor: int, out: List[str], headline: str, cause: str) -> None:
+        """Something strikes one member of a party inside the Descent. It can be fatal (deaths are permanent)."""
+        v = self.rng.choice(party)
+        dmg = max(1, int(v.max_hp * self.rng.uniform(*config.CAMP_AMBUSH_DAMAGE) * (1 + 0.05 * floor)))
+        v.hp -= dmg
+        out.append(f"⚠ {headline} {v.name} takes {dmg} damage.")
+        if v.hp <= 0:
+            v.death_cause = cause
+            self._drop_gear([v], [s for s in party if s is not v and s.hp > 0], party, "Hollow Descent", out)
+            self._reap(out)
+            self._shift_morale_party(self._members_in("main", pid), -6)
 
     def _shift_morale_party(self, party, delta: float) -> None:
         for s in party:
@@ -2659,13 +2954,20 @@ class Game:
                 frac = max(0.0, min(1.0, (elapsed - cum) / hrs))
                 cum += hrs
                 self.intel[f] = max(self.intel.get(f, 0.0), round(100 * frac * config.SCOUT_NOTE_FRACTION, 1))
-            if survivors:                              # out of time and supplies: nobody comes back
-                for s in survivors:
-                    s.hp, s.death_cause = 0, f"lost scouting floors {first}-{last} (needed ~{total:.0f}h)"
-                self._drop_gear(survivors, [], survivors, "Hollow Descent", res.log)
-                self._reap(res.log)
-            res.log.append(f"☠ The exploration party never came back. Their half-finished note survives "
-                           f"(they needed ~{total:.0f}h, they had {hours}h).")
+            if survivors:                              # out of time and supplies: overdue - a rescue party may still reach them
+                owed = int(math.ceil(self._owed)) if self.live else 0
+                self._owed = 0.0
+                self._set_flag(survivors, "stranded")
+                self.stranded.append(dict(id=self.next_stranded, ids=[s.id for s in survivors], first=first, last=last,
+                                          stuck=now, needed=round(total), deadline=self.tick_count + owed + config.RESCUE_DEADLINE_HOURS))
+                self.next_stranded += 1
+                res.stranded = True
+                res.log.append(f"🆘 The exploration party is overdue: out of supplies on floor {now} (they needed ~{total:.0f}h, "
+                               f"they had {hours}h). Their half-finished note survives. Send a rescue party within "
+                               f"{config.RESCUE_DEADLINE_HOURS}h or they are lost.")
+            else:
+                res.log.append(f"☠ The exploration party never came back. Their half-finished note survives "
+                               f"(they needed ~{total:.0f}h, they had {hours}h).")
         res.after = sum(self._knowledge(f) for f in floors) / len(floors)
         self.journal.extend(res.log)
         return res
@@ -2687,15 +2989,15 @@ class Game:
                 f"{get_ability(spec.ability).name}. {spec.description}")
 
     # ---- grinding dungeon: The Gloop Pit (committed session of N runs) -----------------------------
-    def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True, manual: bool = False):
+    def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True, manual: bool = False, lure: bool = False):
         """Commit the party to a Pit session (see _grind_gen). With manual=True it pauses for orders in every
         fight (returns None until the whole session ends); you can hand it back to the slimes at any time."""
-        return self._play(self._grind_gen(pid, depth, runs), "pit", manual, pid)
+        return self._play(self._grind_gen(pid, depth, runs, lure), "pit", manual, pid)
 
-    def _grind_gen(self, pid: int, depth: int = 3, runs: int = 1):
+    def _grind_gen(self, pid: int, depth: int = 3, runs: int = 1, lure: bool = False):
         """Commit the party to `runs` Pit fights at `depth` (enemy level = party average + depth - 3).
         Once in, they only leave when all runs are done or the whole party is knocked out; they camp (sleep,
-        eat) between runs when hurt. A slime that goes down is not dead, but loses XP and morale and DROPS ITS
+        eat) between runs when hurt. A slime that goes down is not dead: it loses morale (never XP) and DROPS ITS
         GEAR: survivors may bring it back (chance from party synergy), else it stays in the Pit's lost-and-found
         until a later victory digs it up. (`auto_rest` is kept for compatibility: camping is always automatic.)"""
         if not 1 <= depth <= config.GRIND_DEPTHS:
@@ -2726,13 +3028,21 @@ class Game:
                 for s in members:
                     if s.state in ("sleeping", "resting"):
                         s.state = "idle"
+                lured = False
+                if lure:                                        # 1 purple gel per run; the lure stops when the gel runs out
+                    if self.wallet.get("purple_gel") >= config.PIT_LURE_COST:
+                        self.wallet.spend("purple_gel", config.PIT_LURE_COST)
+                        lured = True
+                    else:
+                        lure = False
+                        res.summary.append("   (out of purple gel: no more lures)")
                 avg = sum(s.level for s in members) / len(members)
                 theme = dungeon.pit_theme(self.dungeon_seed, self.day)
                 enemies = dungeon.grind_wave(avg, depth, self.parties.size, self.rng, theme)
                 want = config.pit_xp_per_run(sum(s.xp_needed(s.level) for s in members) / len(members),
                                              sum(config.RARITIES.index(s.rarity) for s in members) / len(members), depth)
                 rep = yield from self._battle_gen(members, enemies, permadeath=False, split_xp=False,
-                                                  xp_mult=want / max(1.0, sum(e.xp for e in enemies)), terrain=theme.terrain)
+                                                  xp_mult=want * (config.PIT_LURE_XP if lured else 1.0) / max(1.0, sum(e.xp for e in enemies)), terrain=theme.terrain)
                 rep.log.insert(0, f"🕳 The Gloop Pit - depth {depth} (enemy lvl ~{dungeon.grind_level(avg, depth)}) - "
                                   f"today: {theme.title}")
                 if n == 1 or theme.day != last_day:
@@ -2745,10 +3055,9 @@ class Game:
                 standing = [s for s in members if s not in downed]
                 for s in downed:
                     grinder = outlook.has(s, "pit")
-                    lost = lose_xp(s, config.GRIND_DEATH_XP_LOSS * (config.OUTLOOK_GRINDER_LOSS if grinder else 1))
                     mloss = config.GRIND_DEATH_MORALE * (config.OUTLOOK_GRINDER_MORALE if grinder else 1)
-                    self.social.shift_morale(s, mloss)
-                    events.append(f"💫 {s.name} was knocked out: -{lost} xp, morale {mloss:+.0f}.")
+                    self.social.shift_morale(s, mloss)                          # an XP farm: a knock-out costs morale, never XP
+                    events.append(f"💫 {s.name} was knocked out: morale {mloss:+.0f}.")
                 for s in members:                               # everyone who went in gains Pit experience
                     outlook.bump(s, "pit")
                 for s in standing:
@@ -2757,9 +3066,10 @@ class Game:
                 self._drop_gear(downed, standing, members, "Gloop Pit", events)
                 self._ko_wear(downed, events)
                 if rep.victory:
-                    self._gear_drop(1 if depth <= 3 else 2, config.GEAR_DROP_PIT, events)
+                    self._gear_drop(1 if depth <= 3 else 2, config.GEAR_DROP_PIT * (config.PIT_LURE_GEAR if lured else 1.0), events)
                     self._stone_side_drop("grind", len(enemies), events)
                     self._herb_drop("grind", len(enemies), events, theme.terrain)
+                    self._farm_loot(len(enemies), events)
                     self._recover_pit_gear(members, events)
                 events.extend(self._spend(config.GRIND_TICKS))
                 rep.log.extend(events)
@@ -2773,7 +3083,7 @@ class Game:
                 res.summary.append(line)
                 res.summary.extend("   " + l.strip() for l in rep.log if "reached level" in l or "learned" in l)
                 res.summary.extend("   " + e for e in events if any(w in e for w in
-                                   ("knocked", "carries", "left behind", "digs", "found", "died")))
+                                   ("knocked", "carries", "left behind", "digs", "found", "died", "Also found")))
                 self.journal.extend(events)
                 if rep.winner == "foes":
                     res.stop_reason = "the whole party was knocked out"
@@ -2845,7 +3155,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -2946,10 +3256,15 @@ class Game:
         g.relations.load(d.get("relations"), set(g.roster))
         g.expeditions = [dict(e, ids=[i for i in e["ids"] if i in g.roster]) for e in d.get("expeditions", [])]
         g.expeditions = [e for e in g.expeditions if e["ids"]]
+        g.pantry = {k: int(v) for k, v in d.get("pantry", {}).items()}
+        g.recipe_pref = d.get("recipe_pref", "auto")
+        g.forge_progress, g.forge_next = d.get("forge_progress", 0), d.get("forge_next", "weapon")
+        g.stranded = [e for e in d.get("stranded", []) if any(i in g.roster for i in e["ids"])]
+        g.next_stranded = d.get("next_stranded", 1)
         g.journal = d.get("journal", [])
         g.journal.extend(awakening.load_notes(g.slimes(), g.mood_rng))
         away = {i for e in g.expeditions for i in e["ids"]}      # a battle that was open when the game was saved is gone:
         for sl in g.slimes():                                     # free its party (the Descent keeps its own delve flags)
-            if sl.in_dungeon in ("grind", "scout", "adventure", "quarry") and sl.id not in away:
+            if sl.in_dungeon in ("grind", "scout", "adventure", "quarry", "rescue") and sl.id not in away:
                 sl.in_dungeon = ""
         return g

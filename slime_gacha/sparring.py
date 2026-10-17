@@ -67,8 +67,11 @@ def gain_style_xp(slime, discipline: str, amount: float, cap_level: int) -> int:
     return style_level(slime, discipline)
 
 
+TRAINABLE_STATES = ("idle", "sleeping", "working")
+
+
 def check_ready(slime) -> None:
-    if slime.state != "idle" or slime.in_dungeon:
+    if slime.state not in TRAINABLE_STATES or slime.in_dungeon:       # a sleeper can be woken, a worker pulled off the job
         raise InvalidAction(f"{slime.name} is {slime.in_dungeon and 'inside a dungeon' or slime.state}, not available.")
     if slime.grounded:
         raise InvalidAction(f"{slime.name} is grounded after a brawl. Mediate first.")
@@ -76,6 +79,16 @@ def check_ready(slime) -> None:
         raise InvalidAction(f"{slime.name} is too tired to spar.")
     if slime.hp < slime.max_hp * config.SPAR_MIN_HP:
         raise InvalidAction(f"{slime.name} is too hurt to spar - visit the Rest Area.")
+
+
+def check_ready_basic(slime) -> None:
+    """A drill's gate: like sparring, but a wounded slime may still drill (for less)."""
+    if slime.state not in TRAINABLE_STATES or slime.in_dungeon:
+        raise InvalidAction(f"{slime.name} is {slime.in_dungeon and 'inside a dungeon' or slime.state}, not available.")
+    if slime.grounded:
+        raise InvalidAction(f"{slime.name} is grounded after a brawl. Mediate first.")
+    if slime.needs.get("energy") < config.TASK_MIN_ENERGY:
+        raise InvalidAction(f"{slime.name} is too tired.")
 
 
 def style_xp_for(slime, discipline: str, won: Optional[bool], grounds_mult: float, dummy: bool = False) -> float:

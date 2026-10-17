@@ -75,6 +75,20 @@ def effectiveness(attacker: str, defender: str) -> float:
     return 1.0
 
 
+def matchup(attacker: str, defender: str, weak=(), resists=()) -> float:
+    """Damage multiplier for an element against a defender with its own element plus extra weaknesses and resistances
+    (a monster family can be weak to or resist several elements). Compound elements count through their components.
+    Weakness x1.5, resistance x0.7, never beyond x0.5 / x2.0 in total."""
+    m = effectiveness(attacker, defender)
+    if attacker:
+        comps = {attacker} | set(components(attacker))
+        if comps & set(weak):
+            m *= config.ELEMENT_ADVANTAGE
+        if comps & set(resists):
+            m *= config.ELEMENT_DISADVANTAGE
+    return round(max(0.5, min(2.0, m)), 3)
+
+
 # ---- mastery rules (functions of a slime's stars/class) ------------------------------------
 def can_master(slime) -> bool:
     return slime.stars >= config.MASTERY_MIN_STARS

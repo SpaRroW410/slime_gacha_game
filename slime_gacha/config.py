@@ -161,13 +161,15 @@ GRIND_MIN_HP = 0.4              # auto-grind stops when anyone drops below this 
 # ---- Sparring (fighting styles), rest area, morale, bonds, buildings --------------------
 # Training is NOT for XP: slimes spar against each other to develop a fighting STYLE. Spars are non-lethal
 # (loser is left at 1 HP) and cost no XP; the Rest Area heals everybody back to full.
-SPAR_COST = {"white_gel": 2}
+SPAR_COST = {"white_gel": 2}          # one duel
+SPAR_PARTY_COST = {"white_gel": 3}    # a whole party session, flat (not per pair)
 SPAR_TICKS = 3
 SPAR_STYLE_XP = 15              # style xp per spar (winner x1.3, own-discipline x1.5, grounds level bonus)
 SPAR_WINNER_MULT = 1.3
 SPAR_DUMMY_MULT = 0.5           # odd slime out trains on a dummy at half rate (no HP loss)
 SPAR_MIN_HP = 0.4
 SPAR_BOND = 3
+SPAR_PARTY_BOND = 4             # every pair inside a party that spars as a team grows this much closer
 STYLE_AFFINITY_MULT = 1.5       # practising the discipline that matches your class
 STYLE_XP = [30, 80, 150, 250, 400, 600, 850, 1150, 1500, 2000]   # cumulative xp for style level 1..10
 STYLE_SWORD_DAMAGE = 0.03       # per level: +3% attack-stat damage ...
@@ -206,9 +208,13 @@ SACRIFICE_TARGET_PENALTY = 6
 SACRIFICE_TARGET_PENALTY_MAX = 30
 # Rest Area: heals fast; capacity and speed depend on its level (see buildings.py)
 REST_ENERGY_GAIN = 10
+REST_ENERGY = [14, 20, 26, 32, 40]      # energy per hour in the Rest Area by level (HP heals at the base sleeping rate)
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
 # Library / mastery
 TASK_MIN_ENERGY = 25
+WAKE_MORALE, WAKE_ANGER = 6, 10       # waking a sleeping slime (to train, or on request) costs mood
+BRAWL_MORALE, BRAWL_ANGER = 15, 20    # a brawl leaves both fighters sour
+WOUNDED_BELOW, WOUNDED_DRILL = 0.5, 0.6   # a drill started below this share of max HP is worth this much
 
 # ---- Occupations (jobs.py) ------------------------------------------------------------------
 JOB_XP_STEP = 5                # rounds of work for level 2; level n needs JOB_XP_STEP * (n-1)^2
@@ -218,6 +224,11 @@ CHEF_GUESTS, CHEF_MEAL_SHARE = 2, 0.6      # hungry slimes fed per round (+1 per
 SMITH_ITEMS, SMITH_MEND_SHARE = 3, 0.15    # items mended per round (+1 per 2 levels); share of max durability restored
 FORAGE_MIN_HP, FORAGE_MIN_ENERGY, FORAGE_MIN_FOOD = 0.7, 50, 35   # an idle slime sets out only when this rested and fed
 FORAGE_SAFETY = 1.5            # ... and only in a zone whose danger is at most power / this
+TRAINER_BONUS, TRAINER_BONUS_PER_LEVEL = 0.15, 0.03   # a trainer's proficiency / style gain bonus (+ per level above 1)
+CRAFT_SHIFTS, CRAFT_COST_SHARE = 4, 0.6       # a blacksmith forges every 4 shifts, at this share of the shop price
+CRAFT_RELIC_COST = {"scrap": 6, "white_gel": 15}
+PANTRY_PER_LEVEL, HUNGRY_BELOW = 12, 50       # servings the pantry holds per Kitchen level; food need below which a slime counts as hungry
+HOSPITAL_HEAL = [0.04, 0.06, 0.08, 0.10, 0.12]    # share of max HP a doctor heals every injured slime each hour, by Hospital level
 LIBRARIAN_LORE_XP = 6.0         # mastery XP a round of cataloguing gives one attuned slime (x power)
 TRAINER_PUPILS, TRAINER_GAIN = 1, 3.0      # pupils per round (+1 per 4 levels); base class-proficiency gain
 MASTERY_MIN_STARS = 3           # elemental mastery unlocks at 3 stars, for ANY class
@@ -250,21 +261,28 @@ CAMP_HEAL_PER_HOUR = 0.08       # share of max HP a sleeping party recovers per 
 CAMP_AMBUSH_BASE = 0.10         # per hour of camping inside the Descent (scaled by floor, cut by intel)
 CAMP_RELIEF_MAX = 0.5          # ambush chance falls by up to this share while another party closes in from below
 CAMP_RELIEF_REACH = 3          # ... starting this many floors below
+STOP_REST_HEAL, STOP_REST_HOURS = 0.5, 3   # a wayside stop's safe rest: share of max HP healed, hours taken
+RETREAT_PURPLE_BASE, RETREAT_AMBUSH, RETREAT_MORALE = 2, 0.35, 12   # emergency retreat: purple gel base fee (+1 per 5 floors), ambush chance, morale lost
 CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
+RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35   # overdue scouts wait this long; trip = base + floor hours; base success chance
 SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 240
 SCOUT_RATE = 0.10               # knowledge: k' = 100 - (100 - k) * exp(-RATE * skill * hours)
 SCOUT_AMBUSH_BASE = 0.12        # per hour in the segment, vs party strength, cut by what is already known
 DELVE_PASSIVE_INTEL = 1.5       # % knowledge gained per hour spent inside the dungeon
 INTEL_POWER_BONUS = 0.10        # fully scouted segment: +10% power and safer camps
 INTEL_LEVELS = [20, 40, 60, 80, 100]
-# Grinding-dungeon defeat: lose xp and morale, drop equipment (survivors may bring it back)
-GRIND_DEATH_XP_LOSS = 0.4       # fraction of the xp needed for the next level
+# Grinding-dungeon defeat: lose morale (never XP - it is an XP farm) and drop equipment (survivors may bring it back)
+GRIND_DEATH_XP_LOSS = 0.4       # (unused by the Pit now; kept for the lose_xp helper's tests)
 GRIND_DEATH_MORALE = -25
 GEAR_RECOVERY_BASE = 0.5
 GEAR_RECOVERY_SYNERGY_SLOPE = 5.0       # chance = 0.5 + 5 * (party synergy - 1) (+ friendship with the fallen)
 GEAR_RECOVERY_MIN, GEAR_RECOVERY_MAX = 0.10, 0.95
 PIT_LOST_RECOVER = 0.15         # a later Pit victory may find one item left behind earlier
 GEAR_DROP_PIT, GEAR_DROP_MAIN = 0.15, 0.30
+FARM_LOOT_CHANCE = 0.05          # per defeated foe in a farming dungeon (Pit, Rift, Quarry): a little of another resource
+FARM_LOOT = {"white_gel": (1, 3), "food": (1, 3), "essence": (1, 1), "scrap": (1, 2)}
+PIT_LURE_COST = 1               # purple gel per Pit run for a lure ...
+PIT_LURE_XP, PIT_LURE_GEAR = 1.5, 3.0    # ... which brings out richer prey: x XP and x gear-drop chance
 
 # ---- Per-slime dungeon progress, exits, scouting by floor ---------------------------------
 # Every slime tracks the deepest floor it has CLEARED (`progress`). To enter floor f every member needs

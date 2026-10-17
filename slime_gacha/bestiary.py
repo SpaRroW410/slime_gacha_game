@@ -300,6 +300,28 @@ def _loot(floor: float, mult: float, pit: bool) -> Dict[str, tuple]:
     return loot
 
 
+# Beyond its own element (the water > fire > wind > earth > water cycle), a family can be weak to or resist several
+# elements: family -> (weak to, resists). Compound elements count through their components.
+FAMILY_TRAITS: Dict[str, Tuple[Tuple[str, ...], Tuple[str, ...]]] = {
+    "undead": (("fire",), ("water", "earth")),
+    "spirit": (("earth",), ("wind", "fire")),
+    "fungus": (("fire",), ("earth", "water")),
+    "golem": (("water",), ("fire", "earth")),
+    "sea": (("earth",), ("water", "fire")),
+    "aerial": (("earth",), ("wind",)),
+    "swamp": (("fire",), ("water", "earth")),
+    "dragonkin": (("water",), ("fire", "wind")),
+    "imp": (("water",), ("fire",)),
+    "scarab": (("water",), ("earth", "fire")),
+    "troll": (("fire",), ("earth",)),
+    "giant": (("wind",), ("earth",)),
+}
+
+
+def traits_of(family: str) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    return FAMILY_TRAITS.get(family, ((), ()))
+
+
 def build_enemy(m: Monster, floor: int, elite: float = 1.0, pit: bool = False) -> Enemy:
     """A monster as it exists on `floor` (elite > 1 for leaders)."""
     hp, atk, d, mag, spd, xp, loot = ROLES[m.role]
@@ -310,7 +332,7 @@ def build_enemy(m: Monster, floor: int, elite: float = 1.0, pit: bool = False) -
     purple = 0.0 if pit else min(0.4, (0.01 + 0.0012 * floor) * loot)
     return Enemy(m.key, m.name, m.emoji, 1 + (floor - 1) // 10, stats, list(m.abilities),
                  max(1, int(12 * xp * u["g"] ** 0.9 * elite)), _loot(floor, loot, pit), purple, 1, m.element,
-                 m.family, m.role, False)
+                 m.family, m.role, False, *traits_of(m.family))
 
 
 def build_boss(b: Boss, floor: Optional[int] = None) -> Enemy:

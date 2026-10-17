@@ -143,7 +143,7 @@ def sparring_menu(g: Game) -> None:
     who = _ask("spar [s]ingle duel or a whole [p]arty: ").lower()[:1]
     if who == "p":
         show_parties(g)
-        res = g.spar_party(_int("party #: "), d)
+        res = g.spar_parties(_int("first party #: "), _int("second party #: "), d)
     else:
         show_roster(g)
         res = g.spar(_int("first slime id: "), _int("second slime id: "), d)
@@ -307,7 +307,7 @@ def show_intel(g: Game, first: int = 1, last: int = None) -> None:
 def dungeon_menu(g: Game) -> None:
     th = dungeon.pit_theme(g.dungeon_seed, g.day)
     print("  [1] The Gloop Pit      - committed grinding session: no leaving until all runs are done or the whole party is down.\n"
-          "                           A downed slime loses XP + morale and drops its gear (survivors may bring it back).\n"
+          "                           A downed slime loses morale (not XP) and drops its gear (survivors may bring it back).\n"
           f"                           TODAY (day {g.day + 1}): {th.terrain.emoji} {th.title} - {terrain_mod.describe(th.terrain)}")
     print("  [2] The Hollow Descent - ROUGH, permadeath. Walk the floors in order; you may only leave after a BOSS floor\n"
           f"                           (every {config.MAIN_BOSS_EVERY}). Each slime must have cleared the floors above; other parties may re-walk them.")
@@ -335,6 +335,7 @@ def dungeon_menu(g: Game) -> None:
                   f"knowledge of this floor {st['knowledge']:.0f}%, party: "
                   + ", ".join(f"{s.name} {s.hp}/{s.max_hp}" for s in st["members"]))
             act = _ask("  [f]ight next floor / [c]amp / [i]ntel / " + ("[x] LEAVE (checkpoint) / " if st["can_leave"] else "")
+                       + ("[r]etreat (" + str(g.retreat_cost(pid)) + " purple gel, risky) / " if not st["can_leave"] else "")
                        + "[b]ack to menu (the party stays inside!): ").lower()[:1]
             if act == "f":
                 print("\n".join(g.delve_next(pid).log[-18:]))
@@ -344,6 +345,9 @@ def dungeon_menu(g: Game) -> None:
                 show_intel(g, st["floor"], st["floor"] + 4)
             elif act == "x":
                 print("  " + g.leave_dungeon(pid))
+                break
+            elif act == "r":
+                print("\n".join("  " + x for x in g.retreat(pid)))
                 break
             else:
                 break
@@ -723,7 +727,7 @@ def run_demo(seed: int) -> None:
         s.grounded = False
         s.hp, s.state = s.max_hp, "idle"
         s.needs.v["energy"] = s.needs.v["food"] = 100
-    res = g.spar_party(1, "sword")
+    res = g.spar(g.party_members(1)[0].id, g.party_members(1)[1].id, "sword")
     print("\n".join("  " + x for x in res.summary[:9]))
     print("  HP after sparring: " + ", ".join(f"{s.name} {s.hp}/{s.max_hp}" for s in g.party_members(1)))
     print("  " + g.party_rest(1))
@@ -753,7 +757,7 @@ def run_demo(seed: int) -> None:
     for c in list(g.conflicts.conflicts)[:2]:
         print("  " + g.mediate(c.id, "talk"))
 
-    print("\n== 6. GRINDING DUNGEON: a committed Gloop Pit session (downed slimes drop gear, lose XP + morale) ==")
+    print("\n== 6. GRINDING DUNGEON: a committed Gloop Pit session (downed slimes drop gear and lose morale) ==")
     g.conflicts.conflicts.clear()   # keep the demo uninterrupted by brawls
     g.wallet.add("food", 60)
     g.wallet.add("white_gel", 200)

@@ -66,12 +66,14 @@ register_building(Building("chamber", "Destruction Chamber", "🔥", 5,
 register_building(Building("alchemy", "Alchemy Lab", "⚗️", 5,
                            "Slimes brew potions here. The lab level caps the potion grade (1-5).", _costs(85, 12)))
 
+register_building(Building("hospital", "Hospital", "🏥", 5,
+                           "Wards for the injured: a medic doctor heals everyone hurt at home. Level sets the places and the healing.", _costs(80, 12)))
 register_building(Building("kitchen", "Kitchen", "🍳", 5,
                            "A warm hearth where chefs cook: places for chefs and better meals.", _costs(75, 10)))
 
-JOB_HOSTS = {"kitchen": "Chef", "armory": "Blacksmith", "library": "Librarian", "training_grounds": "Trainer"}
+JOB_HOSTS = {"kitchen": "Chef", "armory": "Blacksmith", "library": "Librarian", "training_grounds": "Trainers", "alchemy": "Brewer", "hospital": "Doctor"}
 
-REST_HEAL = [0.30, 0.45, 0.60, 0.80, 1.00]       # fraction of max HP healed per hour, by level
+REST_HEAL = [config.SLEEP_HP_REGEN] * 5            # HP heals at the base sleeping rate at every level (energy is what the Rest Area improves)
 
 
 class BuildingManager:
@@ -102,20 +104,22 @@ class BuildingManager:
     def describe(self, key: str, level: int = None) -> str:
         lv = level or self.level(key)
         base = {
-            "rest_area": lambda: f"holds {self.rest_capacity(lv)} slimes, heals {int(REST_HEAL[lv - 1] * 100)}% HP/hour",
+            "rest_area": lambda: f"holds {self.rest_capacity(lv)} slimes, restores {config.REST_ENERGY[lv - 1]} energy/hour (HP heals at the normal rate)",
             "training_grounds": lambda: f"style level cap {self.style_cap(lv)}, style XP x{self.style_mult(lv):.2f}",
             "library": lambda: (f"study x{self.study_mult(lv):.2f}, research +{int(self.research_bonus(lv) * 100)}%, "
                                 f"{config.MAX_SPELLS + self.extra_spell_slots(lv)} spell slots"
                                 f"{', Restricted Section open' if self.tier3_open(lv) else ''}"),
             "chamber": lambda: f"destroyed slimes yield x{ascension.chamber_factor(lv):.1f}",
             "alchemy": lambda: f"brews potions up to grade {lv}",
-            "kitchen": lambda: "hot meals for the colony",
+            "kitchen": lambda: f"pantry holds {config.PANTRY_PER_LEVEL * lv} servings",
+            "hospital": lambda: f"doctor heals the injured {int(config.HOSPITAL_HEAL[lv - 1] * 100)}% HP/hour",
             "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",
             "barracks": lambda: (f"morale +{self.morale_target_bonus(lv)}, drift {self.morale_drift(lv):.2f}/h, "
                                  f"bonds x{self.bond_mult(lv):.2f}, synergy x{self.synergy_mult(lv):.2f}"),
         }.get(key, lambda: BUILDINGS.get(key).description)()
         if key in JOB_HOSTS:
-            base += f" · {self.job_slots(key, lv)} {JOB_HOSTS[key].lower()} place{'s' if self.job_slots(key, lv) > 1 else ''}, jobs x{self.job_mult(key, lv):.1f}"
+            n = 3 if key == "training_grounds" else self.job_slots(key, lv)
+            base += f" · {n} {JOB_HOSTS[key].lower()} place{'s' if n > 1 else ''}, posts x{self.job_mult(key, lv):.1f}"
         return base
 
     def job_slots(self, key: str, lv: int = None) -> int:
@@ -186,7 +190,7 @@ def rest_tick(slimes: List, buildings: BuildingManager, events: List[str]) -> No
             continue
         if s.needs.get("food") > 0:                       # a starving slime cannot heal
             s.hp = min(s.max_hp, s.hp + max(1, int(round(s.max_hp * buildings.rest_heal()))))
-        s.needs.add("energy", config.REST_ENERGY_GAIN)
+        s.needs.add("energy", config.REST_ENERGY[buildings.level("rest_area") - 1])
         s.morale = min(100.0, s.morale + 2 + buildings.level("rest_area"))
         if s.needs.get("food") <= 0:                      # hungry slimes get kicked out to find food
             s.state = "idle"

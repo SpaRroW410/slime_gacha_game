@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -33,7 +33,7 @@ def slime_view(g: Game, s) -> dict:
         id=s.id, name=s.name, archetype=s.archetype, class_name=a.name, emoji=a.emoji, title=s.title(),
         rarity=s.rarity, stars=s.stars, level=s.level, level_cap=s.level_cap, stage=s.stage,
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
-        job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji) if s.job else None),
+        job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji, foraging=(s.state == "hunting")) if s.job else None),
         job_levels={k: jobs_mod.level(s, k) for k in jobs_mod.JOBS},
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
@@ -43,7 +43,8 @@ def slime_view(g: Game, s) -> dict:
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
         abilities=[dict(key=k, name=get_ability(k).name, element=get_ability(k).element,
                         kind=get_ability(k).kind) for k in s.known_abilities()],
-        spells=list(s.spells), attuned=list(s.attuned),
+        spells=list(s.spells), spell_stage={k: spells.mutation_stage(get_ability(k), elements.slime_mastery(s, get_ability(k).element)) for k in s.spells if get_ability(k).element},
+        attuned=list(s.attuned),
         mastery={b: elements.basic_level(s, b) for b in s.attuned},
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         mastery_paused=(elements.stars_to_resume(s) if elements.mastery_paused(s) else None),
@@ -141,10 +142,10 @@ def _outlook_view(s):
 
 def ability_view(a) -> dict:
     return dict(key=a.key, name=a.name, kind=a.kind, power=a.power, target=a.target, cooldown=a.cooldown,
-                element=a.element, tier=a.tier, creator=a.creator, description=a.description)
+                element=a.element, tier=a.tier, creator=a.creator, description=a.description, forms=spells.mutation_view(a))
 
 
-_AWAY_PLACE = dict(grind="🫧 Gloop Pit", adventure="🧭 Wayfarer's Rift", quarry="💎 Starfall Quarry", scout="🔭 Scouting",
+_AWAY_PLACE = dict(rescue="🛟 Rescue mission", stranded="🆘 Stranded", grind="🫧 Gloop Pit", adventure="🧭 Wayfarer's Rift", quarry="💎 Starfall Quarry", scout="🔭 Scouting",
                    lab="⚗️ Alchemy Lab", train="🥊 Training Grounds", main="🕳 Hollow Descent")
 
 
@@ -175,6 +176,10 @@ def away_view(g: Game) -> list:
             tasks.setdefault((s.task.get("kind", "study"), s.task.get("ticks_left", 0)), []).append(s.id)
     for (kind, left), ids in tasks.items():
         out.append(item("study", "🥋 Drilling" if kind == "drill" else f"📚 {str(kind).replace('_', ' ').title()}", ids, left))
+    for e in g.stranded:
+        ids = [i for i in e["ids"] if i in g.roster]
+        if ids:
+            out.append(item("stranded", f"🆘 Stranded scouts, floor {e['stuck']}", ids, g.stranded_left(e), sid=e["id"]))
     for key, j in jobs_mod.JOBS.items():
         ids = [s.id for s in jobs_mod.workers(g) if s.job == key]
         if ids:
@@ -191,6 +196,34 @@ def away_view(g: Game) -> list:
             out.append(item("delve", f"🕳 Hollow Descent, floor {d['floor']}", ids, left if left > 0 else None,
                             pid=pid, ready=left <= 0))
     return out
+
+
+def _jobs_view(g: Game) -> dict:
+    posts = []
+    for j in jobs_mod.JOBS.values():
+        hold = jobs_mod.workers(g, j.key)
+        posts.append(dict(key=j.key, name=j.name, emoji=j.emoji, desc=j.desc, talents=list(j.talents), min_stars=j.min_stars,
+                          classes=list(j.classes), discipline=j.discipline, forages=j.forages, building=j.building,
+                          bname=BUILDINGS.get(j.building).name, bemoji=BUILDINGS.get(j.building).emoji,
+                          blevel=g.buildings.level(j.building), slots=jobs_mod.slots(g, j.key), used=len(hold),
+                          mult=round(g.buildings.job_mult(j.building), 2),
+                          holders=[dict(id=s.id, name=s.name, level=jobs_mod.level(s, j.key), state=s.state,
+                                        foraging=(s.state == "hunting")) for s in hold]))
+    hurt, wounded = jobs_mod.injured(g)
+    hungry = jobs_mod.hungry(g)
+    chef = jobs_mod.holder(g, "chef")
+    return dict(
+        forage=g.forage, shift=jobs_mod.SHIFT_HOURS, posts=posts,
+        trainer={d: round((jobs_mod.trainer_bonus(g, d) - 1) * 100) for d in jobs_mod.TRAINERS},
+        kitchen=dict(pref=g.recipe_pref, pantry=dict(g.pantry), total=jobs_mod.pantry_total(g), cap=jobs_mod.pantry_cap(g),
+                     hungry=len(hungry), hungry_names=[s.name for s in hungry[:8]], chef_level=(jobs_mod.level(chef, "chef") if chef else 0),
+                     recipes=[dict(key=r.key, name=r.name, emoji=r.emoji, cost=r.cost, nutrition=r.nutrition, servings=r.servings,
+                                   morale=r.morale, level=r.level, stock=g.pantry.get(r.key, 0)) for r in jobs_mod.RECIPES.values()]),
+        hospital=dict(injured=len(hurt), wounded=len(wounded), names=[s.name for s in sorted(hurt, key=lambda s: s.hp / s.max_hp)[:8]],
+                      rate=round(config.HOSPITAL_HEAL[g.buildings.level("hospital") - 1] * 100), on_duty=bool(jobs_mod.holder(g, "doctor"))),
+        forge=dict(progress=g.forge_progress, shifts=config.CRAFT_SHIFTS, next=g.forge_next, relic_cost=dict(config.CRAFT_RELIC_COST),
+                   share=config.CRAFT_COST_SHARE),
+    )
 
 
 def snapshot(g: Game) -> dict:
@@ -241,11 +274,10 @@ def snapshot(g: Game) -> dict:
                        max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
-        jobs=dict(forage=g.forage, list=[dict(key=j.key, name=j.name, emoji=j.emoji, cycle=j.cycle, desc=j.description, talents=list(j.talents),
-                                                  building=BUILDINGS.get(j.building).name, bemoji=BUILDINGS.get(j.building).emoji,
-                                                  blevel=g.buildings.level(j.building), slots=jobs_mod.slots(g, j.key),
-                                                  used=len(jobs_mod.workers(g, j.key)), mult=round(g.buildings.job_mult(j.building), 2))
-                                             for j in jobs_mod.JOBS.values()]),
+        stranded=[dict(id=e["id"], ids=e["ids"], names=[g.roster[i].name for i in e["ids"] if i in g.roster], first=e["first"], last=e["last"],
+                       stuck=e["stuck"], hours_left=g.stranded_left(e), rescue_hours=g.rescue_hours(e), food=g.rescue_food(e)) for e in g.stranded],
+        modifiers={k: dict(name=m.name, emoji=m.emoji, desc=m.desc, boon=m.boon) for k, m in modifiers_mod.MODIFIERS.items()},
+        jobs=_jobs_view(g),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
         conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason,
                         away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
@@ -254,10 +286,12 @@ def snapshot(g: Game) -> dict:
         dungeon=dict(
             best_floor=g.best_floor, boss_every=config.MAIN_BOSS_EVERY, floors=g.intel_report(),
             max_floor=dungeon.MAX_FLOOR, cleared=g.descent_cleared,
-            pit=_pit_view(g),
+            pit=dict(_pit_view(g), lure_cost=config.PIT_LURE_COST, lure_xp=config.PIT_LURE_XP, lure_gear=config.PIT_LURE_GEAR),
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
                                    boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
                                    knowledge=g._knowledge(d["floor"]),
+                                   retreat=dict(cost=g.retreat_cost(pid), ambush=round(g.retreat_ambush_chance(pid), 2)),
+                                   stop=g.stop_view(pid), modifier=((dungeon.floor_modifier(g.dungeon_seed, d["floor"]) or None) if dungeon.intel_level(g._knowledge(d["floor"])) >= 2 else None),
                                    camp_left=g.camp_left(pid), camp_limit=g.camp_limit(pid), relief=round(g.relief(pid), 2),
                                    joinable=g.joinable(pid), callers=[s.id for s in g.callers(pid)], call_cost=g.call_cost(d["floor"]),
                                    ready_in=(max(0, d.get("ready_tick", 0) - g.tick_count) if g.live else 0),
@@ -472,9 +506,9 @@ def _spar(g, a):
     return r.summary, dict(battle=[_battle(x) for x in r.reports])
 
 
-@command("spar_party")
-def _spar_party(g, a):
-    r = g.spar_party(_i(a, "pid"), a.get("discipline", ""))
+@command("spar_parties")
+def _spar_parties(g, a):
+    r = g.spar_parties(_i(a, "pid"), _i(a, "other"), a.get("discipline", ""))
     return r.summary, dict(battle=[_battle(x) for x in r.reports])
 
 
@@ -692,6 +726,11 @@ def _enter(g, a):
     return _msg(g.enter_dungeon(_i(a, "pid"), int(start) if start not in (None, "") else None))
 
 
+@command("retreat")
+def _retreat(g, a):
+    return g.retreat(_i(a, "pid")), {}
+
+
 @command("leave_dungeon")
 def _leave(g, a):
     return _msg(g.leave_dungeon(_i(a, "pid")))
@@ -760,6 +799,15 @@ def _merge_gear(g, a):
 @command("assign_job")
 def _assign_job(g, a):
     return [g.assign_job(_i(a, "id"), str(a.get("job", "")))], {}
+
+
+@command("set_recipe")
+def _set_recipe(g, a):
+    key = str(a.get("recipe", "auto"))
+    if key != "auto" and key not in jobs_mod.RECIPES:
+        raise InvalidAction(f"Unknown recipe '{key}'.")
+    g.recipe_pref = key
+    return [f"The chef will cook {'the best recipe available' if key == 'auto' else jobs_mod.RECIPES[key].name}."], {}
 
 
 @command("stop_job")
@@ -832,6 +880,16 @@ def _delve_next(g, a):
     return _flow_result(g, "delve", g.delve_next(_i(a, "pid"), _manual(a), [int(x) for x in a.get("join", [])]))
 
 
+@command("delve_stop_rest")
+def _delve_stop_rest(g, a):
+    return [g.stop_rest(_i(a, "pid"))], {}
+
+
+@command("delve_stop_buy")
+def _delve_stop_buy(g, a):
+    return [g.stop_buy(_i(a, "pid"), str(a.get("item", "")))], {}
+
+
 @command("call_reinforcements")
 def _call_reinforcements(g, a):
     return [g.call_reinforcements(_i(a, "pid"), _i(a, "rid"))], {}
@@ -868,16 +926,21 @@ def _descend(g, a):
     return [r.log[0]], dict(battle=[_battle(r)])
 
 
+@command("rescue")
+def _rescue(g, a):
+    return g.rescue(_i(a, "pid"), _i(a, "sid")), {}
+
+
 @command("scout")
 def _scout(g, a):
     r = g.scout(_i(a, "pid"), _i(a, "first"), _i(a, "last", _i(a, "first")), _i(a, "hours", 8))
     return r.log, dict(before=r.before, after=r.after, survivors=r.survivors, complete=r.complete,
-                       required=r.required)
+                       required=r.required, stranded=r.stranded)
 
 
 @command("grind")
 def _grind(g, a):
-    return _flow_result(g, "pit", g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)), manual=_manual(a)))
+    return _flow_result(g, "pit", g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)), manual=_manual(a), lure=bool(a.get("lure"))))
 
 
 @command("skirmish")

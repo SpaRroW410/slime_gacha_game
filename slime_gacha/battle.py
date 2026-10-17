@@ -6,12 +6,12 @@ Add a new ability *kind* by writing a handler and adding it to KIND_HANDLERS.
 """
 import random
 from dataclasses import dataclass, field, replace
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from . import config
 from .abilities import Ability, get_ability
 from . import attributes, elements, emotions, fx, items as items_mod, terrain as terrain_mod
-from . import sparring
+from . import modifiers, sparring, spells
 from .archetypes import STAT_KEYS
 from .growth import add_xp
 from .registry import Registry
@@ -35,6 +35,8 @@ class Enemy:
     family: str = ""             # goblin, direwolf, orc ... (see bestiary.py)
     role: str = ""
     boss: bool = False
+    weak: Tuple[str, ...] = ()       # extra elements it is weak to (family traits, see bestiary.FAMILY_TRAITS)
+    resists: Tuple[str, ...] = ()    # extra elements it resists
 
 
 ENEMIES: "Registry[Enemy]" = Registry("enemy")
@@ -97,6 +99,8 @@ class Combatant:
     poison: tuple = (0, 0)          # (turns, dmg per turn)
     mastery: Dict[str, int] = field(default_factory=dict)   # basic element -> mastery level (slimes)
     element: str = ""               # enemy's own element
+    weak: tuple = ()                # enemy's extra weaknesses / resistances (elements)
+    resists: tuple = ()
     casts: Dict[str, int] = field(default_factory=dict)     # elemental casts this battle (mastery xp)
     style: Dict[str, int] = field(default_factory=dict)     # fighting-style levels (sparring.py)
     morale: float = 60.0
@@ -129,6 +133,10 @@ class Combatant:
     @property
     def alive(self) -> bool:
         return self.hp > 0 and not self.yielded
+
+    def matchup(self, element: str) -> float:
+        """Damage multiplier an attack of `element` gets against this combatant."""
+        return elements.matchup(element, self.element, self.weak, self.resists)
 
     def hurt(self, amount: float) -> None:
         if self.shield > 0:
@@ -211,7 +219,7 @@ class BattleSystem:
     @staticmethod
     def from_enemy(e: Enemy) -> Combatant:
         return Combatant(e.name, e.emoji, "foes", dict(e.stats), float(e.stats["hp"]), list(e.abilities),
-                         "attack", 1.0, e, element=e.element)
+                         "attack", 1.0, e, element=e.element, weak=tuple(e.weak), resists=tuple(e.resists))
 
     # -- main loop -----------------------------------------------------------
     def run(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
@@ -224,7 +232,8 @@ class BattleSystem:
         return run.report
 
     def start(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
-              xp_mult: float = 1.0, synergy: float = 1.0, terrain=None, manual: bool = False) -> "BattleRun":
+              xp_mult: float = 1.0, synergy: float = 1.0, terrain=None, manual: bool = False,
+              modifier=None, boons=()) -> "BattleRun":
         """Set a battle up and return it un-advanced; BattleRun.advance() plays it until a manual slime must choose."""
         totals: Dict[str, int] = {}
         for e in enemies:
@@ -244,6 +253,13 @@ class BattleSystem:
                f"{', '.join(c.emoji + c.name for c in foes)}"]
         if terrain:
             log.append(f"🌍 {terrain.emoji} {terrain.name}: {terrain_mod.describe(terrain)}")
+        if modifier:
+            log.extend(modifiers.apply(modifier, mine, foes))
+        for name, amount in boons:                          # bought at a wayside stop: lasts this fight
+            for c in mine:
+                fx.add_buff(c, name, amount, modifiers.WHOLE_FIGHT)
+        if boons:
+            log.append("🎒 Supplies from the wayside stop: " + ", ".join(f"{n} +{round(a * 100)}%" for n, a in boons))
         for s_ in party:
             note = emotions.battle_note(s_)
             if note:
@@ -375,6 +391,26 @@ class BattleSystem:
         rep.winner_slime = a if winner == "party" else b
         return rep
 
+    def team_spar(self, party_a, party_b, syn_a: float = 1.0, syn_b: float = 1.0) -> "BattleReport":
+        """Non-lethal friendly match between two whole parties. No XP, no loot; whoever reaches 1 HP yields, and
+        everybody's HP is written back (losers are left low). The caller handles style XP, proficiency and bonds."""
+        ca = [self.from_slime(s, syn_a, "party") for s in party_a]
+        cb = [self.from_slime(s, syn_b, "foes") for s in party_b]
+        for c in ca + cb:
+            c.nonlethal = True
+            c.stamina_max = 0.0
+        log = ["🥊 Party spar: " + ", ".join(c.emoji + c.name for c in ca) + "  vs  " + ", ".join(c.emoji + c.name for c in cb)]
+        self.terrain = None
+        rounds, winner = self._simulate(ca + cb, log, config.DUEL_ROUND_CAP)
+        if winner is None:                      # round cap: the healthier side takes it on points
+            share = lambda cs: sum(c.hp for c in cs) / max(1.0, sum(c.max_hp for c in cs))
+            winner = "party" if share(ca) >= share(cb) else "foes"
+        log.append(f"🏅 {'The first' if winner == 'party' else 'The second'} party wins the spar!")
+        for s, c in list(zip(party_a, ca)) + list(zip(party_b, cb)):
+            s.hp = max(1, int(c.hp))
+            s.needs.add("energy", -8)
+        return BattleReport(log, winner, rounds)
+
     @staticmethod
     def _side_alive(everyone, side) -> bool:
         return any(c.alive and c.side == side and not c.minion for c in everyone)
@@ -440,6 +476,8 @@ class BattleSystem:
         sc = actor.cap_scale.get(ability.key) or (actor.cap_scale.get(orig_key) if orig_key in actor.cap_scale else None)
         if sc:
             ability = fx.scale(ability, sc)
+        if ability.element and ability.tier >= 2:
+            ability = spells.mutate(ability, elements.effective_mastery(actor.mastery, ability.element))
         actor.last_ability = ability.key
         if orig_key in actor.hybrid:
             actor.spec_uses += 1
@@ -497,7 +535,7 @@ class BattleSystem:
                 n = len(foes) if a.target == "all_enemies" else 1
                 bonus = 1.2 if a.kind == "poison" and not any(f.poison[0] for f in foes) else 1.0
                 weakest = min(foes, key=lambda f: f.hp)
-                return (a.power * n * bonus * elements.effectiveness(a.element, weakest.element)
+                return (a.power * n * bonus * weakest.matchup(a.element)
                         * _mastery_mult(actor, a))
             return max(offense, key=score)
         return get_ability("splat")      # everyone can bonk
@@ -613,7 +651,7 @@ def _damage_value(bs: BattleSystem, actor, ability, target):
     pierce = {f[1]: f[2] for f in ability.fx if f[0] == "pierce"}
     raw = ability.power * _cast_stat(actor, ability) * _mastery_mult(actor, ability) * _terrain_mult(bs, ability) \
         - 0.5 * target.stat("defense") * (1 - pierce.get("def", 0.0))
-    eff = elements.effectiveness(ability.element, target.element)
+    eff = target.matchup(ability.element)
     raw = max(1.0, raw) * bs.rng.uniform(0.9, 1.1) * eff * _style_attack(actor, ability)
     raw *= max(0.6, 1 - config.STYLE_SWORD_GUARD * target.style.get("sword", 0))       # parrying
     if actor.winded:
@@ -851,7 +889,7 @@ class BattleRun:
             out.append(dict(key=a.key, name=a.name, kind=a.kind, element=a.element, power=a.power,
                             target=a.target, cooldown=cd, cost=cost,
                             winded=bool(actor.stamina_max and actor.stamina < cost), ready=cd == 0,
-                            eff=({i: round(elements.effectiveness(a.element, c.element), 2) for i, c in foes}
+                            eff=({i: round(c.matchup(a.element), 2) for i, c in foes}
                                  if a.element and a.target in ("enemy", "all_enemies") else {})))
         return out
 
