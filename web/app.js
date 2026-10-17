@@ -135,6 +135,7 @@ const confirmThen = (msg, fn) => { if (window.confirm(msg)) fn(); };
 function render() {
   const app = document.getElementById('app');
   if (!S.state) { app.innerHTML = welcome(); return; }
+  if (S.state !== S._seen) { S._seen = S.state; S.stateAt = Date.now(); }   // the moment the timers were measured
   const keep = window.scrollY;
   const st = S.state;
   const fp = st.free_pull;
@@ -156,6 +157,7 @@ function render() {
   ${S.stockOpen ? `<div class="popover" id="stockpop"><div class="row" style="gap:6px">${stock.map(([k, v]) => chip(`${RES[k]?.[0] || ''} ${RES[k]?.[1] || k}: <b>${v}</b>`)).join('')}</div></div>` : ''}
   <nav class="tabs">${TABS.map(([k, n]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-t="${k}">${n}${tabBadge(k)}</button>`).join('')}</nav>
   ${liveBar()}
+  ${awayBar()}
   <main>${tabContent()}</main>
   <section style="padding:0 16px 20px;max-width:1280px;margin:0 auto;width:100%"><details><summary class="mute">Event log</summary><div class="feed">${S.feed.map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Nothing yet.</small>'}</div></details></section>
   ${S.sel && slimeById(S.sel) ? `<div class="scrim" data-act="closesel"></div>${drawer(slimeById(S.sel))}` : ''}
@@ -181,10 +183,41 @@ function liveBar() {
   if (clk.mode !== 'live') return '';
   const rate = clk.rate_now || clk.lobby_rate;
   const mins = (h) => { const m = Math.round(h / rate * 60); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`; };
-  const items = clk.expeditions.map((e) => `🏃 ${esc(e.names.slice(0, 3).join(', '))}${e.names.length > 3 ? '…' : ''} back in ~${mins(e.hours)}`);
-  Object.entries(st.dungeon.delves).forEach(([pid, d]) => { if (d.ready_in > 0) items.push(`🕳 ${esc(partyById(+pid)?.name || 'Party')} busy for ~${mins(d.ready_in)}`); });
-  return `<div class="livebar"><span>⏱ Live time — home ×${clk.lobby_rate}, dungeons ×${clk.dungeon_rate}</span>${items.map((i) => `<span class="chip">${i}</span>`).join('')}</div>`;
+  return `<div class="livebar"><span>⏱ Live time — home ×${clk.lobby_rate}, dungeons ×${clk.dungeon_rate}${rate ? ` · now ×${rate}` : ''}</span></div>`;
 }
+
+/* ---- timers for everything that keeps slimes away (hunts, study, dungeon trips, scouting, the Descent) ----
+   Live mode: a real-time countdown that ticks every second; turn mode: the game hours left (advance time to finish). */
+const fmtSec = (sec) => { sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return h ? `${h}h ${String(m).padStart(2, '0')}m` : m ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`; };
+const awayItems = () => (S.state && S.state.away) || [];
+const awayOf = (id) => awayItems().find((a) => a.ids.includes(id));
+function etaHtml(a) {
+  if (a.kind === 'delve' && a.ready) return '<span class="eta">ready for the next floor</span>';
+  if (a.real_sec != null) {
+    const left = a.real_sec - (Date.now() - (S.stateAt || Date.now())) / 1000;
+    return `<span class="eta" data-sec="${a.real_sec}">${fmtSec(left)}</span>`;
+  }
+  if (a.hours != null) return `<span class="eta">${Math.ceil(a.hours)}h left</span>`;
+  return '<span class="eta">inside</span>';
+}
+function awayBar() {
+  const items = awayItems();
+  if (!items.length) return '';
+  return `<div class="awaybar"><b>⏳ Away</b>${items.map((a) => `<span class="chip" title="${esc(a.names.join(', '))}">${esc(a.label)} · ${esc(a.names.slice(0, 3).join(', '))}${a.names.length > 3 ? ` +${a.names.length - 3}` : ''} · ${etaHtml(a)}</span>`).join('')}</div>`;
+}
+let syncSoon = 0;
+function tickEtas() {
+  if (!S.state) return;
+  let expired = false;
+  document.querySelectorAll('.eta[data-sec]').forEach((el) => {
+    const left = Number(el.dataset.sec) - (Date.now() - (S.stateAt || Date.now())) / 1000;
+    el.textContent = left > 0 ? fmtSec(left) : 'any moment…';
+    if (left <= 0) expired = true;
+  });
+  if (expired && Date.now() - syncSoon > 8000) { syncSoon = Date.now(); syncLive(true); }
+}
+setInterval(tickEtas, 1000);
 
 /* Calm the page: long explanatory paragraphs under headings become (i) tooltips; dungeons say only whether death is possible. */
 const DEATH = [[/Hollow Descent/, true, 'Death is permanent'], [/Scouting/, true, 'The whole party is lost if scouting fails'],
@@ -253,6 +286,7 @@ function card(s) {
   const b = [];
   if (s.in_dungeon) b.push(badge('🕳 ' + s.in_dungeon, 'bad'));
   else if (s.state !== 'idle') b.push(badge(s.state, s.state === 'hunting' ? 'info' : ''));
+  { const a = awayOf(s.id); if (a) b.push(badge(`⏳ ${etaHtml(a)}`, 'warn')); }
   if (s.party) b.push(badge('👥 ' + esc(partyById(s.party)?.name || s.party)));
   if (s.hp < s.max_hp * 0.4) b.push(badge('wounded', 'warn'));
   if (s.grounded) b.push(badge('grounded', 'bad'));
@@ -406,13 +440,14 @@ function parties() {
       <small class="mute">Parties are fixed at <b>${st.party_size}</b> slimes. Only full parties can battle, hunt together or scout. A slime belongs to one party.</small></div>
     <div class="grid cols2" style="margin-top:12px">${st.parties.map((p) => `<div class="panel">
       <div class="row between"><h3>${esc(p.name)} ${p.in_delve ? badge('🕳 inside dungeon', 'bad') : ''}</h3>${chip(`${p.members.length}/${st.party_size}`, p.full ? 'ok' : 'warn')}</div>
-      <div class="row" style="margin:6px 0">${p.members.map((id) => mini(id, !p.in_delve)).join('') || '<small class="mute">Empty</small>'}</div>
+      ${[...new Set(p.members.map(awayOf).filter(Boolean))].map((a) => `<div class="chip warn" style="margin-bottom:4px">${esc(a.label)} · ${etaHtml(a)}</div>`).join('')}
+      <div class="row" style="margin:6px 0">${p.members.map((id) => mini(id, !(p.in_delve || p.away))).join('') || '<small class="mute">Empty</small>'}</div>
       ${p.members.length > 1 ? `<p class="mute">Synergy <b class="${p.synergy >= 0 ? '' : ''}">${(p.synergy * 100).toFixed(1)}%</b> power (from average compatibility)</p>` : ''}
       <div class="row">
-        ${!p.full && !p.in_delve ? `<button class="btn small" data-act="party_fill" data-pid="${p.id}">⚡ Fill with best free</button>` : ''}
-        ${!p.in_delve ? `<select data-ui="add_${p.id}"><option value="">Add slime…</option>${freeSlimes.map((s) => `<option value="${s.id}">${esc(s.name)} (${esc(s.class_name)} Lv${s.level})</option>`).join('')}</select><button class="btn small" data-act="party_add" data-pid="${p.id}">Add</button>` : ''}
+        ${!p.full && !(p.in_delve || p.away) ? `<button class="btn small" data-act="party_fill" data-pid="${p.id}">⚡ Fill with best free</button>` : ''}
+        ${!(p.in_delve || p.away) ? `<select data-ui="add_${p.id}"><option value="">Add slime…</option>${freeSlimes.map((s) => `<option value="${s.id}">${esc(s.name)} (${esc(s.class_name)} Lv${s.level})</option>`).join('')}</select><button class="btn small" data-act="party_add" data-pid="${p.id}">Add</button>` : ''}
       </div>
-      ${!p.in_delve ? `<div class="row" style="margin-top:8px">
+      ${!(p.in_delve || p.away) ? `<div class="row" style="margin-top:8px">
         <button class="btn small" data-act="party_rest" data-pid="${p.id}" ${p.members.length ? '' : 'disabled'}>🛏️ Rest</button>
         <select data-ui="pzone">${st.zones.map((z) => `<option value="${z.key}" ${z.key === zone ? 'selected' : ''}>${esc(z.name)}</option>`).join('')}</select>
         <button class="btn small" data-act="party_hunt" data-pid="${p.id}" ${p.full ? '' : 'disabled'}>🏞 Hunt together</button>
@@ -1054,18 +1089,19 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.mo
 
 /* ---------------------------------------------------------------- boot */
 /* Live time: let the wall clock move the colony while the page is open (every 30 s, when nothing is being edited). */
-setInterval(async () => {
+async function syncLive(force = false) {
   if (!backend || !S.state || S.busy || S.modal || S.state.battle || S.state.clock.mode !== 'live') return;
   const el = document.activeElement;
-  if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+  if (!force && el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
   const r = await backend.call('sync', {});
   if (!r.ok) return;
   const moved = r.state.tick !== S.state.tick;
   S.state = r.state;
   if (r.log && r.log.length) pushLog(r.log);
   if (r.save) saveLocal(r.save);
-  if (moved || r.state.clock.expeditions.length || Object.keys(r.state.dungeon.delves).length) render();
-}, 30000);
+  if (moved || force || r.state.away.length || Object.keys(r.state.dungeon.delves).length) render();
+}
+setInterval(() => syncLive(), 30000);
 
 (async function boot() {
   const msg = (t) => { const el = document.getElementById('boot-msg'); if (el) el.textContent = t; };

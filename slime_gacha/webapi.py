@@ -138,16 +138,60 @@ def ability_view(a) -> dict:
                 element=a.element, tier=a.tier, creator=a.creator, description=a.description)
 
 
+_AWAY_PLACE = dict(grind="🫧 Gloop Pit", adventure="🧭 Wayfarer's Rift", quarry="💎 Starfall Quarry", scout="🔭 Scouting",
+                   lab="⚗️ Alchemy Lab", train="🥊 Training Grounds", main="🕳 Hollow Descent")
+
+
+def away_view(g: Game) -> list:
+    """Everything that keeps slimes away from the colony, with the time left. `hours` are game hours; in live mode
+    `real_sec` is the wall-clock estimate at the current speed (the browser counts it down)."""
+    rate = g.clock_rate() if g.live else None
+
+    def item(kind, label, ids, hours, **extra):
+        hours = max(0.0, float(hours)) if hours is not None else None
+        return dict(kind=kind, label=label, ids=list(ids), names=[g.roster[i].name for i in ids if i in g.roster],
+                    hours=(round(hours, 2) if hours is not None else None),
+                    real_sec=(round(hours / rate * 3600) if (rate and hours is not None) else None), **extra)
+
+    out = []
+    hunts = {}
+    for s in g.slimes():
+        if s.hunt and s.state == "hunting":
+            hunts.setdefault((s.hunt.zone, s.hunt.ticks_left), []).append(s.id)
+    for (zone, left), ids in hunts.items():
+        z = next((z for z in ZONES if z.key == zone), None)
+        out.append(item("hunt", f"🏹 Hunting: {z.name if z else zone}", ids, left))
+    tasks = {}
+    for s in g.slimes():
+        if s.task and s.state == "studying":
+            tasks.setdefault((s.task.get("kind", "study"), s.task.get("ticks_left", 0)), []).append(s.id)
+    for (kind, left), ids in tasks.items():
+        out.append(item("study", f"📚 {str(kind).replace('_', ' ').title()}", ids, left))
+    for e in g.expeditions:
+        ids = [i for i in e["ids"] if i in g.roster]
+        if ids:
+            where = _AWAY_PLACE.get(g.roster[ids[0]].in_dungeon, "🕳 Dungeon")
+            out.append(item("expedition", where, ids, g.remaining_hours(e["until"]) if g.live else None))
+    for pid, d in g.delves.items():
+        ids = [m.id for m in g._members_in("main", pid)]
+        if ids:
+            left = g.remaining_hours(d.get("ready_tick", 0)) if g.live else 0
+            out.append(item("delve", f"🕳 Hollow Descent, floor {d['floor']}", ids, left if left > 0 else None,
+                            pid=pid, ready=left <= 0))
+    return out
+
+
 def snapshot(g: Game) -> dict:
     slimes = [slime_view(g, s) for s in g.slimes()]
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
                     synergy=round(g.party_synergy(p.id) - 1, 4) if len(p.members) > 1 else 0.0,
-                    in_delve=p.id in g.delves,
+                    in_delve=p.id in g.delves, away=any(g.slime(i).busy for i in p.members),
                     entry=(g.entry_options(p.id) if p.members else [1]),
                     min_progress=min((g.slime(i).progress for i in p.members), default=0))
                for p in g.parties.parties.values()]
     run = g.battle_run()
     return dict(
+        away=away_view(g),
         battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid")) if run else None),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),

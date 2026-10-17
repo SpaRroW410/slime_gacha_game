@@ -185,3 +185,6 @@ main h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
 .arena .arena-log { max-height: 150px; overflow-y: auto; margin-top: 8px; }
 @keyframes pulse { to { box-shadow: 0 0 10px 1px var(--bad); } }
 @media (max-width: 640px) { .arena .field { grid-template-columns: 1fr 1fr; } .arena .vs { display: none; } }
+
+.awaybar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 6px 16px; max-width: 1280px; margin: 0 auto; font-size: .82rem; }
+.eta { font-variant-numeric: tabular-nums; font-weight: 600; }
