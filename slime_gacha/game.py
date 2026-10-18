@@ -1634,7 +1634,29 @@ class Game:
         self.parties.remove(sid)
         return f"{self.slime(sid).name} leaves their party."
 
+    def party_activity(self, pid: int) -> str:
+        """What the party as a whole is away doing (the Descent, a rescue, scouting, the Pit/Rift/Quarry, a wave simulation, party
+        sparring or party training), or "". Members busy alone (a job, a hunt, a drill, a duel) do not count."""
+        if pid in self.delves:
+            return "in the Hollow Descent"
+        party_arenas = {bld.PARTY_ARENA, bld.PARTY_YARD}
+        in_arena = {i for e in self.expeditions if e.get("arena") in party_arenas for i in e["ids"]}
+        names = dict(main="in the Hollow Descent", grind="in the Gloop Pit", adventure="in the Wayfarer's Rift", quarry="in the Starfall Quarry",
+                     scout="scouting", rescue="on a rescue", stranded="stranded", wave="in a wave simulation")
+        for i in self.parties.get(pid).members:
+            s = self.roster.get(i)
+            if not s:
+                continue
+            if s.in_dungeon in names:
+                return names[s.in_dungeon]
+            if s.in_dungeon == "train" and i in in_arena:
+                return "training or sparring as a party"
+        return ""
+
     def party_disband(self, pid: int) -> None:
+        why = self.party_activity(pid)
+        if why:
+            raise InvalidAction(f"{self.parties.get(pid).name} is away {why}: disband it when it is back.")
         self.parties.disband(pid)
 
     def party_autofill(self, pid: int) -> int:

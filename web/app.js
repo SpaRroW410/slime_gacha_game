@@ -548,7 +548,8 @@ function parties() {
         <button class="btn small" data-act="party_rest" data-pid="${p.id}" ${p.members.length ? '' : 'disabled'}>🛏️ Rest</button>
         <select data-ui="pzone">${st.zones.map((z) => `<option value="${z.key}" ${z.key === zone ? 'selected' : ''}>${esc(z.name)}</option>`).join('')}</select>
         <button class="btn small" data-act="party_hunt" data-pid="${p.id}" ${p.full ? '' : 'disabled'}>🏞 Hunt together</button>
-        <button class="btn small danger" data-act="party_disband" data-pid="${p.id}">Disband</button></div>` : ''}
+        </div>` : ''}
+      <div class="row" style="margin-top:8px"><button class="btn small danger" data-act="party_disband" data-pid="${p.id}" ${p.activity ? 'disabled' : ''} title="${p.activity ? esc(`Away ${p.activity}: disband it when it is back`) : 'Break the party up (the slimes stay)'}">Disband${p.activity ? ` (away ${esc(p.activity)})` : ''}</button></div>
     </div>`).join('') || '<p class="mute">No parties yet.</p>'}</div>`;
 }
 
