@@ -418,3 +418,15 @@ class TestQuickCare(unittest.TestCase):
         self.assertTrue(any("full" in l for l in out))
         g.sleep_tired()
         self.assertEqual(d.state, "sleeping")
+
+
+class TestDismissMidShift(unittest.TestCase):
+    def test_an_unfinished_shift_does_no_work(self):
+        g = quiet(rich(99))
+        chef = slime(g, "medic", stars=2)
+        g.assign_job(chef.id, "chef")
+        g.tick(jobs.SHIFT_HOURS - 1)
+        g.stop_job(chef.id)
+        self.assertEqual((chef.state, chef.job, g.pantry), ("idle", "", {}))        # nothing was cooked
+        g.tick(jobs.SHIFT_HOURS)
+        self.assertEqual(g.pantry, {})

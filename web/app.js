@@ -100,19 +100,29 @@ async function currentSave() {
 /* Export: the share sheet where there is one (iPhone: "Save to Files"), else a download link added to the page (Safari needs
    it attached) and kept alive long enough; the text can also be copied. */
 async function exportSave() {
-  const save = await currentSave();
+  /* iPhone Safari only opens the share sheet inside the tap itself: take the save without waiting (the last response, else the
+     browser copy) and call share() before any await. Only a game with no save yet has to ask the backend first. */
+  let save = S.lastSave || loadLocal();
+  if (!save) save = await currentSave();
   if (!save) return toast('Nothing to export yet: play a little first.', true);
   const text = JSON.stringify(save), name = `slime-gacha-save-day${S.state?.day ?? ''}.json`;
-  try {
-    const file = new File([text], name, { type: 'application/json' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Slime Gacha save' }); lsSet(LS_EXPORT, Date.now()); return toast('Save shared.'); }
-  } catch (e) { if (e && e.name === 'AbortError') return; }
+  let file = null;
+  try { file = new File([text], name, { type: 'application/json' }); } catch (e) { /* old browser */ }
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'Slime Gacha save' }); lsSet(LS_EXPORT, Date.now()); return toast('Save shared.'); }
+    catch (e) { if (e && e.name === 'AbortError') return; /* otherwise fall through to a download */ }
+  }
   try {
     const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-    const a = document.createElement('a'); a.href = url; a.download = name; a.style.display = 'none'; document.body.appendChild(a); a.click();
-    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 30000);
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (ios) { window.open(url, '_blank'); toast('The save opened in a new tab: use Share > Save to Files. Or use “Copy save text”.'); }
+    else {
+      const a = document.createElement('a'); a.href = url; a.download = name; a.style.display = 'none'; document.body.appendChild(a); a.click();
+      setTimeout(() => a.remove(), 1000);
+      toast('Save exported. If nothing downloaded, use “Copy save text”.');
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
     lsSet(LS_EXPORT, Date.now());
-    toast('Save exported. If nothing downloaded, use “Copy save text”.');
   } catch (e) { toast('Export failed: use “Copy save text” instead.', true); }
 }
 async function act(cmd, args = {}, opt = {}) {
@@ -403,7 +413,8 @@ function dOverview(s, { st, free, inDun }) {
         const callWhy = inDun ? 'Away in the Descent, a scouting trip or a monster wave: it cannot be called back' : !callable ? 'Nothing to call back from' : '';
         return `<button class="btn small" data-act="do" data-c="rest" ${canMove && !inRest && !restFull ? '' : 'disabled'} title="${inRest ? 'Already in the Rest Area' : restFull ? 'The Rest Area is full' : ''}">🛏️ Rest Area (${st.rest.used}/${st.rest.cap})</button>
         <button class="btn small" data-act="do" data-c="hospital" ${canMove && !inWard && !hospFull && s.hp < s.max_hp ? '' : 'disabled'} title="${inWard ? 'Already in the Hospital' : hospFull ? 'The Hospital is full' : s.hp >= s.max_hp ? 'Not hurt' : hosp.on_duty ? 'A doctor is on duty: patients heal 30% faster than in the Rest Area' : 'No doctor: patients heal about 5% faster than in the Rest Area'}">🏥 Hospital (${hosp.used}/${hosp.beds})</button>
-        <button class="btn small" data-act="do" data-c="recall" ${callable ? '' : 'disabled'} title="${esc(callWhy)}">📞 Call back</button>`;
+        <button class="btn small" data-act="do" data-c="recall" ${callable ? '' : 'disabled'} title="${esc(callWhy)}">📞 Call back</button>
+        ${s.job ? `<button class="btn small danger" data-act="stop_job" data-id="${s.id}" data-confirm="1" data-jn="${esc(s.job.name)}" title="Take ${esc(s.name)} off the ${esc(s.job.name)} post. The shift in progress is lost: no work is done for it.">🧰 Dismiss from work (${esc(s.job.name)})</button>` : ''}`;
       })()}
       ${s.can_evolve ? `<button class="btn small primary" data-act="do" data-c="evolve" ${free ? '' : 'disabled'}>🌟 Evolve (${s.evolve_cost} ✨)</button>` : ''}</div>
       ${st.potions.stock.length ? `<div class="row"><select data-ui="pot_sel">${st.potions.stock.map((p) => `<option value="${p.kind}:${p.grade}">${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}</option>`).join('')}</select><button class="btn small" data-act="use_potion" ${inDun ? 'disabled' : ''}>Drink</button></div>` : ''}`)}
@@ -587,7 +598,7 @@ function dungeonsAll() {
     ${d.cleared ? '<div class="panel flat">👑 <b>The Parched King has fallen.</b> The Descent is conquered — but the floors remain for training and scouting.</div>' : ''}
     ${delves.map(([pid, v]) => { const p = partyById(+pid); return `<div class="panel flat"><div class="row between"><b>${esc(p?.name)}</b>${chip(`floor ${v.floor} · exit after boss ${v.boss_floor}`, v.can_leave ? 'ok' : 'bad')}</div>
       <p class="mute">${v.hours}h inside · this floor ${v.knowledge.toFixed(0)}% known · clearing it takes ~${v.next_hours} game hour${v.next_hours === 1 ? '' : 's'}${S.state.clock.mode === 'live' ? ` (~${Math.max(1, Math.round(v.next_hours / S.state.clock.dungeon_rate * 60))} real min)` : ''}</p>
-      ${v.ready_in > 0 ? `<div class="chip bad">⏱ busy — back in ~${Math.max(1, Math.round(v.ready_in / (S.state.clock.rate_now || 1) * 60))} real min</div>` : ''}
+      ${v.ready_in > 0 ? `<div class="chip bad">⏱ busy — ${S.state.clock.mode === 'live' ? `back in ~${Math.max(1, Math.round(v.ready_in / (S.state.clock.rate_now || 1) * 60))} real min` : `${v.ready_in}h to go (press +1h / +4h)`}</div>` : ''}
       <div class="row">${v.members.map((id) => mini(id)).join('')}</div>
       <div class="row" style="margin-top:6px"><button class="btn primary" data-act="delve_next" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight floor ${v.floor}</button>${cmdToggle()}
         ${v.joinable.map((q) => `<button class="btn primary" data-act="delve_next" data-pid="${pid}" data-join="${q}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight together with ${esc(partyById(q)?.name)}</button>`).join('')}
@@ -646,6 +657,27 @@ function cut(html, from, to) {
   const a = from ? html.indexOf(from) : 0, b = to ? html.indexOf(to) : html.length;
   return html.slice(Math.max(0, a), b < 0 ? html.length : b);
 }
+/* Which party (or group of slimes) is away and how long it has left. */
+const partyNameOf = (ids) => { const p = (S.state.parties || []).find((q) => ids.every((i) => q.members.includes(i))) || (S.state.parties || []).find((q) => ids.some((i) => q.members.includes(i))); return p ? p.name : null; };
+function insideList(items, empty = 'Nobody is inside right now.') {
+  if (!items.length) return `<small class="mute">${empty}</small>`;
+  return items.map((a) => `<div class="row between"><span>${esc(a.label)} · <b>${esc(partyNameOf(a.ids) || a.names.slice(0, 3).join(', '))}</b>${partyNameOf(a.ids) ? ` <small class="mute">(${esc(a.names.join(', '))})</small>` : ''}</span>${etaHtml(a)}</div>`).join('');
+}
+/* The Descent: every party inside with its floor and timer. Parties on the same floor fight together, so the one that arrived last sets the timer. */
+function descentInside() {
+  const st = S.state, delves = Object.entries(st.dungeon.delves);
+  if (!delves.length) return '<small class="mute">No party is inside the Descent.</small>';
+  const away = awayItems().filter((a) => a.kind === 'delve');
+  const byPid = (pid) => away.find((a) => a.pid === +pid);
+  const rows = delves.map(([pid, v]) => { const a = byPid(pid); return `<div class="row between"><span>🕳 <b>${esc(partyById(+pid)?.name || 'Party')}</b> · floor ${v.floor}</span>${a ? etaHtml(a) : ''}</div>`; }).join('');
+  const floors = {};
+  delves.forEach(([pid, v]) => { (floors[v.floor] = floors[v.floor] || []).push(pid); });
+  const groups = Object.entries(floors).filter(([, ps]) => ps.length > 1).map(([floor, ps]) => {
+    const last = ps.map((pid) => byPid(pid)).filter(Boolean).sort((x, y) => (y.hours || 0) - (x.hours || 0))[0];
+    return `<small class="mute" style="display:block">👥 ${ps.map((pid) => esc(partyById(+pid)?.name || '')).join(' + ')} are together on floor ${floor}: they can fight when the last party to arrive is ready ${last ? etaHtml(last) : ''}</small>`;
+  }).join('');
+  return rows + groups;
+}
 function dungeons() {
   const v = sub('dungeons');
   const p = dungeonsAll();
@@ -657,7 +689,10 @@ function dungeons() {
   else if (v === 'hunts') body = huntsView();
   else if (v === 'wave') body = `<div class="grid cols2">${p.wave}</div>`;
   else body = riftView();
-  return subnav('dungeons') + body;
+  const here = { pit: ['Gloop Pit'], quarry: ['Starfall'], scouting: ['Scouting', 'Stranded', 'Rescue'], wave: ['Wave simulation'], rift: ["Wayfarer"] }[v];
+  const strip = v === 'descent' ? `<div class="panel stack" style="margin-top:12px"><h4>Parties inside</h4>${descentInside()}</div>`
+    : here ? `<div class="panel stack" style="margin-top:12px"><h4>Inside now</h4>${insideList(awayItems().filter((a) => (a.kind === 'expedition' || a.kind === 'stranded') && here.some((h) => a.label.includes(h))))}</div>` : '';
+  return subnav('dungeons') + body + strip;
 }
 function slimePickRow(a) {
   const st = S.state;
@@ -889,7 +924,12 @@ function academyAll() {
   const lvl = (k) => st.facilities[k];
   /* A facility's header: level, how full it is; and below it who is in it with the time left. */
   const facHead = (k) => { const f = lvl(k); return `<div class="row between"><b>${f.emoji} ${esc(f.name)}</b><span class="row">${chip(`L${f.level}`, 'info')}${chip(`${f.users.length}/${f.capacity} places`, f.users.length >= f.capacity ? 'bad' : 'ok')}</span></div>`; };
-  const facUsers = (k, what) => { const f = lvl(k); return `<small class="mute" style="display:block">${what}: ${f.users.length ? f.users.map((u) => `<b>${esc(u.name)}</b> ${etaFor(u.id)}`).join(' · ') : 'nobody'}. <i>Upgrade it in Town &gt; Buildings for more places.</i></small>`; };
+  const facUsers = (k, what) => {
+    const f = lvl(k), byParty = {};
+    f.users.forEach((u) => { (byParty[u.party || ''] = byParty[u.party || ''] || []).push(u); });
+    const parts = Object.entries(byParty).map(([party, us]) => `${party ? `<b>${esc(party)}</b> (${us.map((u) => esc(u.name)).join(', ')})` : us.map((u) => `<b>${esc(u.name)}</b>`).join(', ')} ${etaFor(us[0].id)}`);
+    return `<small class="mute" style="display:block">${what}: ${parts.length ? parts.join(' · ') : 'nobody'}. <i>Upgrade it in Town &gt; Buildings for more places.</i></small>`;
+  };
   const full = (k) => lvl(k).users.length >= lvl(k).capacity;
   const partyA = partyOptions('sppid');
   const partyB = partyOptions('sppid2', true, false, S.ui.sppid);
@@ -1406,7 +1446,7 @@ const A = {
   forage: () => act('set_forage', { on: !S.state.jobs.forage }),
   serve_hungry: () => act('serve_hungry'),
   wake_all: () => confirmThen('Wake everybody asleep in town?\n\nSlimes under 10% energy are left to sleep. Those under 50% energy wake grumpy (a mood cost).', () => act('wake_all')),
-  stop_job: (d) => act('stop_job', { id: num(d.id) }),
+  stop_job: (d) => d.confirm ? confirmThen(`Dismiss this slime from the ${d.jn} post?\n\nThe shift in progress is not finished: no work is done for it (nothing is cooked, forged or brewed, no herbs are found).`, () => act('stop_job', { id: num(d.id) })) : act('stop_job', { id: num(d.id) }),
   unground: (d) => act('unground', { id: num(d.id) }),
   rename_party: (d) => { const n = window.prompt('New name for the party ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_party', { pid: num(d.pid), name: n }); },
   set_leader: (d) => act('set_leader', { pid: num(d.pid), id: num(S.ui['lead_' + d.pid]) }),

@@ -271,3 +271,44 @@ class TestApi(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDeferredTurn(unittest.TestCase):
+    """Turn mode as the web game plays it: a session keeps its slimes away, time moves only when the player waits."""
+
+    def test_a_spar_keeps_the_duelists_away_until_the_hours_are_waited_out(self):
+        from tests.test_delves import party
+        g = mk(seed=3, n=6)
+        g.deferred_turn = True
+        a, b = g.slimes()[:2]
+        t0 = g.tick_count
+        g.spar(a.id, b.id, "sword")
+        self.assertEqual(g.tick_count, t0)                       # no automatic time
+        self.assertEqual(a.in_dungeon, "train")
+        self.assertEqual(g.remaining_hours(g.expeditions[0]["until"]), config.SPAR_TICKS)
+        g.tick(config.SPAR_TICKS)
+        self.assertEqual((a.in_dungeon, g.expeditions), ("", []))
+
+    def test_a_wave_simulation_takes_its_hours_in_live_and_deferred_modes(self):
+        from tests.test_delves import party
+        for live in (True, False):
+            g = mk(seed=5, n=6, live=live)
+            g.deferred_turn = True
+            pid = party(g, strong=True)
+            g.rng.random = lambda: 0.9
+            g.battle(pid, 1, waves=2)
+            self.assertEqual(sum(e["hours"] for e in g.expeditions), config.WAVE_TICKS * 2)
+
+    def test_the_next_floor_waits_for_the_hours(self):
+        from tests.test_delves import party
+        from slime_gacha.errors import InvalidAction
+        g = mk(seed=5, n=6)
+        g.deferred_turn = True
+        pid = party(g, strong=True)
+        g.enter_dungeon(pid)
+        g.rng.random = lambda: 0.9
+        g.delve_next(pid)
+        with self.assertRaises(InvalidAction):
+            g.delve_next(pid)
+        g.tick(g.delves[pid]["ready_tick"] - g.tick_count)
+        g.delve_next(pid)

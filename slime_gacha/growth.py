@@ -24,6 +24,9 @@ def add_xp(slime, amount: int) -> List[str]:
         slime.hp += slime.max_hp - old_max            # gain the new max HP
         slime.needs.add("esteem", 15)
         log.append(f"⬆ {slime.name} reached level {slime.level}!")
+        from . import ascension
+        if slime.stars < config.MAX_STARS and slime.level == ascension.star_level(slime):
+            log.append(f"   🌟 {slime.name} can now ascend to {slime.stars + 1} stars (profile > Ascension: {ascension.star_cost(slime)} stones).")
         for lvl, key in slime.arch.abilities.items():
             if lvl == slime.level:
                 log.append(f"   {slime.name} learned {get_ability(key).name}!")
