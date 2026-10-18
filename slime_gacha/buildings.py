@@ -131,7 +131,7 @@ class BuildingManager:
             **{k: (lambda lv=lv: f"{lv} duel{'s' if lv > 1 else ''} at once ({2 * lv} slimes)") for k in SPAR_ARENAS.values()},
             PARTY_ARENA: lambda: f"{lv} team match{'es' if lv > 1 else ''} at once ({lv} x 2 parties)",
             "kitchen": lambda: f"pantry holds {config.PANTRY_PER_LEVEL * lv} servings",
-            "hospital": lambda: f"doctor heals the injured {int(config.HOSPITAL_HEAL[lv - 1] * 100)}% HP/hour",
+            "hospital": lambda: f"{config.HOSPITAL_BEDS[lv - 1]} ward beds (patients heal +{int(config.WARD_NO_DOCTOR_BONUS * 100)}%, +{int(config.WARD_DOCTOR_BONUS * 100)}% with a doctor); a doctor heals the injured at home {int(config.HOSPITAL_HEAL[lv - 1] * 100)}% HP/hour",
             "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",
             "barracks": lambda: (f"morale +{self.morale_target_bonus(lv)}, drift {self.morale_drift(lv):.2f}/h, "
                                  f"bonds x{self.bond_mult(lv):.2f}, synergy x{self.synergy_mult(lv):.2f}"),
@@ -202,10 +202,24 @@ class BuildingManager:
                 self.levels[k] = max(1, min(int(v), BUILDINGS.get(k).max_level))
 
 
-def rest_tick(slimes: List, buildings: BuildingManager, events: List[str]) -> None:
-    """Slimes in the Rest Area recover a share of max HP per hour; they leave once healed and rested."""
+def rest_tick(slimes: List, buildings: BuildingManager, events: List[str], ward=(), doctor_on: bool = False) -> None:
+    """Slimes in the Rest Area recover a share of max HP per hour; they leave once healed and rested. Patients in the
+    Hospital ward heal faster than in the Rest Area (a little with nobody on duty, much more with a doctor) and leave once healed."""
     for s in slimes:
         if s.state != "resting" or not s.alive:
+            continue
+        if s.id in ward:
+            bonus = config.WARD_DOCTOR_BONUS if doctor_on else config.WARD_NO_DOCTOR_BONUS
+            if s.needs.get("food") > 0:
+                s.hp = min(s.max_hp, s.hp + max(1, int(round(s.max_hp * buildings.rest_heal() * (1 + bonus)))))
+            s.needs.add("energy", config.REST_ENERGY[0])
+            s.morale = min(100.0, s.morale + 2)
+            if s.needs.get("food") <= 0:
+                s.state = "idle"
+                events.append(f"{s.name} leaves the Hospital - too hungry to heal!")
+            elif s.hp >= s.max_hp:
+                s.state = "idle"
+                events.append(f"🏥 {s.name} leaves the Hospital fully healed.")
             continue
         if s.needs.get("food") > 0:                       # a starving slime cannot heal
             s.hp = min(s.max_hp, s.hp + max(1, int(round(s.max_hp * buildings.rest_heal()))))

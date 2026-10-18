@@ -393,7 +393,16 @@ function dOverview(s, { st, free, inDun }) {
     ${sect('Care', inDun ? 'This slime is inside a dungeon: feeding, petting, sleeping and potions are not possible until it is back.' : 'Feeding, petting and rest. Not possible while a slime is inside a dungeon.', `<div class="row">
       ${care('feed', '🍖 Feed', st.wallet.food > 0 ? '' : 'x')}${care('serve', '🍽 Serve a dish', st.jobs.kitchen.total > 0 ? '' : 'x')}${care('pet', '🤗 Pet')}
       ${s.state === 'sleeping' || s.state === 'resting' ? care('wake', s.state === 'sleeping' ? '⏰ Wake (mood −)' : '⏰ Wake') : care('sleep', '😴 Sleep', free ? '' : 'x')}
-      <button class="btn small" data-act="do" data-c="rest" ${!inDun && free && s.state !== 'resting' ? '' : 'disabled'}>🛏️ Rest Area</button>
+      ${(() => {
+        const restFull = st.rest.used >= st.rest.cap, hosp = st.jobs.hospital, hospFull = hosp.used >= hosp.beds;
+        const inRest = s.state === 'resting' && !s.ward, inWard = s.state === 'resting' && s.ward;
+        const canMove = !inDun && (free || s.state === 'resting');
+        const callable = ['hunting', 'studying', 'resting'].includes(s.state) && !inDun;
+        const callWhy = inDun ? 'Away in the Descent, a scouting trip or a monster wave: it cannot be called back' : !callable ? 'Nothing to call back from' : '';
+        return `<button class="btn small" data-act="do" data-c="rest" ${canMove && !inRest && !restFull ? '' : 'disabled'} title="${inRest ? 'Already in the Rest Area' : restFull ? 'The Rest Area is full' : ''}">🛏️ Rest Area (${st.rest.used}/${st.rest.cap})</button>
+        <button class="btn small" data-act="do" data-c="hospital" ${canMove && !inWard && !hospFull && s.hp < s.max_hp ? '' : 'disabled'} title="${inWard ? 'Already in the Hospital' : hospFull ? 'The Hospital is full' : s.hp >= s.max_hp ? 'Not hurt' : hosp.on_duty ? 'A doctor is on duty: patients heal 30% faster than in the Rest Area' : 'No doctor: patients heal about 5% faster than in the Rest Area'}">🏥 Hospital (${hosp.used}/${hosp.beds})</button>
+        <button class="btn small" data-act="do" data-c="recall" ${callable ? '' : 'disabled'} title="${esc(callWhy)}">📞 Call back</button>`;
+      })()}
       ${s.can_evolve ? `<button class="btn small primary" data-act="do" data-c="evolve" ${free ? '' : 'disabled'}>🌟 Evolve (${s.evolve_cost} ✨)</button>` : ''}</div>
       ${st.potions.stock.length ? `<div class="row"><select data-ui="pot_sel">${st.potions.stock.map((p) => `<option value="${p.kind}:${p.grade}">${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}</option>`).join('')}</select><button class="btn small" data-act="use_potion" ${inDun ? 'disabled' : ''}>Drink</button></div>` : ''}`)}
     ${sect('Orders', 'Stance decides what the slime does in a fight. Hunting sends it out for gel, food and essence.', `<div class="row"><label class="f">Stance <select data-act-change="stance">${st.stances.map((x) => `<option ${x === s.behavior ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>
@@ -607,7 +616,7 @@ function dungeonsAll() {
         ${chips('rescue_ids', rescueIds)}
         <button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left || !rescueIds.length ? 'disabled' : ''}>🛟 Send rescue (${rescueIds.length})</button></div>`).join('')}</div>` : '';
   const scouting = `<div class="panel stack"><h2>🔭 Scouting ${info('Scouts learn specific floors (any run of floors up to the limit, not only multiples of 5). They must reach 100% of every floor they were sent to within the hour budget; floors they finish stay known even if they run out of time. Leave the budget empty to use the safe budget from the estimate. One slime is enough; more only helps if they are good scouts.')}</h2>
-      <p class="mute">Send <b>one to ${st.party_size}</b> slimes (no party needed) to learn floors (1 to ${d.scout_max_floors} at a time). Scouts must reach <b>100% of every targeted floor</b> within the budget, or they are stranded until rescued. Each scout must have cleared the floor above the first one scouted.</p>
+      <p class="mute">Send <b>one to ${st.party_size}</b> slimes (no party needed) to learn floors (1 to ${d.scout_max_floors} at a time). Scouts must reach <b>100% of every targeted floor</b> within the budget, or they are stranded until rescued. The floor above the first one scouted must be <b>cleared by every scout or already scouted</b>, so even a level-1 slime can go on over known floors.</p>
       ${chips('scout_ids', scoutIds)}
       <div class="row"><label class="f">Floors <input type="number" min="1" max="${d.max_floor}" value="${sfirst}" data-ui="sfirst" style="width:64px"> to <input type="number" min="1" max="${d.max_floor}" value="${slast}" data-ui="slast" style="width:64px"></label>
         <button class="btn small" data-act="scout_plan" ${scoutIds.length ? '' : 'disabled'}>📏 Estimate</button></div>
@@ -913,6 +922,7 @@ function academyAll() {
       <div class="row"><b>Party vs party:</b> ${partyA} vs ${partyB}<label class="f">Style <select data-ui="pstyle">${st.disciplines.map((d) => `<option value="${d.key}" ${d.key === pstyle ? 'selected' : ''}>${esc(d.emoji)} ${esc(d.style)}</option>`).join('')}</select></label>
         <button class="btn" data-act="spar_parties" ${partyOk && partyFree ? '' : 'disabled'}>Parties spar · 3 ⚪</button>${info('Two full parties at home fight each other, non-lethally, for a flat 3 white gel (not per pair) and 3 hours. Every member gains fighting-style XP and class proficiency, and the members of each party grow closer, which raises party synergy. The loser is left low on health (the Hospital heals them).')}</div>
       <small class="mute">${partyOk ? (partyFree ? 'Two parties fight as teams to knit together and sharpen their class.' : 'The Party Arena has no room for two more parties: wait or upgrade it.') : 'You need two full parties at home to spar them against each other. Make them in the Parties tab.'}</small>
+      <div class="row"><b>Train together:</b> ${partyOptions('ptpid')}<button class="btn primary" data-act="party_train" ${lvl(partyK).capacity - lvl(partyK).users.length >= st.party_size && S.ui.ptpid ? '' : 'disabled'}>🥋 ${esc(tr.name)} together (${tr.ticks}h)</button>${info('A whole party drills side by side in the Party Arena: every member raises class proficiency in its own discipline and every pair grows closer, which raises party synergy. One drill cost for the whole party; the drill tier is the one chosen above.')}</div>
       ${facUsers(partyK, 'In the arena')}</div></div>`;
   return `<div class="grid acad">
   ${trainingFacility}
@@ -1080,7 +1090,7 @@ function sacrificeView() {
       ${bar(Math.min(st.stress, 5), 5, 'morale', 'Sacrifice stress', st.stress)}
       <div class="row"><label class="f">Target (keeps living) ${t}</label><label class="f">Donor (consumed) ${d}</label></div>
       ${tid === did && free.length >= 2 ? '<small class="mute">Choose two different slimes.</small>' : ''}
-      ${pv ? `<div class="panel flat"><b>${esc(dsl?.name)} → ${esc(tsl?.name)}</b>: +${pv.xp} XP · compatibility ${pv.compat >= 0 ? '+' : ''}${pv.compat} (${esc(pv.label)}) · colony morale cost about ${pv.grief}</div>` : '<small class="mute">Press Preview to see the XP, compatibility and morale cost.</small>'}
+      ${pv ? `<div class="panel flat"><b>${esc(dsl?.name)} → ${esc(tsl?.name)}</b>: +${pv.xp} XP · compatibility ${pv.compat >= 0 ? '+' : ''}${pv.compat} (${esc(pv.label)}) · ${pv.relief ? 'the colony would be relieved: <b>no morale change</b>' : `colony morale cost about ${pv.grief}`}</div>` : '<small class="mute">Press Preview to see the XP, compatibility and morale cost.</small>'}
       <div class="row"><button class="btn" data-act="merge_preview" ${ok ? '' : 'disabled'}>🔍 Preview</button>
         <button class="btn danger" data-act="merge" data-t="${tid}" data-d="${did}" data-tn="${esc(tsl?.name)}" data-dn="${esc(dsl?.name)}" data-xp="${pv ? pv.xp : '?'}" data-g="${pv ? pv.grief : '?'}" ${ok ? '' : 'disabled'}>Merge</button></div></div>
     <div class="panel stack"><h2>🔥 Destroy a slime</h2>
@@ -1410,6 +1420,7 @@ const A = {
     const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
     act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn() }, { title: 'Wave simulation' }); },
   drill: (d) => act('drill', { id: num(ui('dsl_' + d.d)), discipline: d.d, tier: num(ui('dtier', 1), 1) }),
+  party_train: () => { const pid = num(S.ui.ptpid); if (!pid) return toast('You need a full party at home.', true); act('party_train', { pid, tier: num(ui('dtier', 1), 1) }, { slow: true }); },
   spar: (d) => { const a = num(ui('spa_' + d.d)), b = num(ui('spb_' + d.d)); act('spar', { a, b, discipline: d.d }, { title: 'Sparring match' }); },
   spar_parties: () => { const pid = num(S.ui.sppid), other = num(S.ui.sppid2); if (!pid || !other) return toast('You need two full parties at home.', true);
     act('spar_parties', { pid, other, discipline: ui('pstyle', 'sword') }, { title: 'Party spar', slow: true }); },

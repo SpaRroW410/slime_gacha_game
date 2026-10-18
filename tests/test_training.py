@@ -281,3 +281,17 @@ class TestFacilities(unittest.TestCase):
         with self.assertRaises(InvalidAction):
             g.spar(ss[2].id, ss[3].id, "archery")                # one duel at level 1
         self.assertEqual(g.facility_users("spar_sword"), [])
+
+
+class TestPartyTraining(unittest.TestCase):
+    def test_a_party_trains_together_for_proficiency_and_synergy(self):
+        g = rich(141)
+        pid = party(g)
+        members = g.party_members(pid)
+        for s in members:
+            s.class_prof = 40.0
+        before = g.social.synergy(members)
+        out = g.party_train(pid)
+        self.assertTrue(any("trains together" in o for o in out))
+        self.assertTrue(all(s.class_prof > 40.0 for s in members))
+        self.assertGreater(g.social.synergy(members), before)

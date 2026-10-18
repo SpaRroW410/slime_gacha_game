@@ -38,7 +38,7 @@ def slime_view(g: Game, s) -> dict:
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
-        refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
+        ward=s.id in g.ward, refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
         mood=s.mood_label(), power=(tp := power_mod.total_power(s))["total"], power_tag=power_mod.display(tp["total"]), power_parts=tp["parts"], power_mult=tp["multiplier"],
         morale=round(s.morale), morale_label=SocialEngine.morale_label(s.morale),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
@@ -221,7 +221,8 @@ def _jobs_view(g: Game) -> dict:
                      recipes=[dict(key=r.key, name=r.name, emoji=r.emoji, cost=r.cost, nutrition=r.nutrition, servings=r.servings,
                                    morale=r.morale, level=r.level, stock=g.pantry.get(r.key, 0)) for r in jobs_mod.RECIPES.values()]),
         hospital=dict(injured=len(hurt), wounded=len(wounded), names=[s.name for s in sorted(hurt, key=lambda s: s.hp / s.max_hp)[:8]],
-                      rate=round(config.HOSPITAL_HEAL[g.buildings.level("hospital") - 1] * 100), on_duty=bool(jobs_mod.holder(g, "doctor"))),
+                      rate=round(config.HOSPITAL_HEAL[g.buildings.level("hospital") - 1] * 100), on_duty=bool(jobs_mod.holder(g, "doctor")),
+                      beds=config.HOSPITAL_BEDS[g.buildings.level("hospital") - 1], used=g.ward_count()),
         forge=dict(progress=g.forge_progress, shifts=config.CRAFT_SHIFTS, next=g.forge_next, relic_cost=dict(config.CRAFT_RELIC_COST),
                    share=config.CRAFT_COST_SHARE),
     )
@@ -423,6 +424,11 @@ def _sleep(g, a):
 @command("wake")
 def _wake(g, a):
     return _msg(g.wake(_i(a, "id")))
+
+
+@command("hospital")
+def _hospital(g, a):
+    return _msg(g.admit(_i(a, "id")))
 
 
 @command("wake_all")
@@ -900,6 +906,11 @@ def _resolve_challenge(g, a):
 @command("drill")
 def _drill(g, a):
     return [g.drill(_i(a, "id"), str(a.get("discipline", "")), _i(a, "tier", 1))], {}
+
+
+@command("party_train")
+def _party_train(g, a):
+    return g.party_train(_i(a, "pid"), _i(a, "tier", 1)), {}
 
 
 @command("drill_party")

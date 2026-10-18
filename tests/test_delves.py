@@ -138,7 +138,8 @@ class TestDelve(unittest.TestCase):
         pid = party(g, strong=True)
         g.enter_dungeon(pid)
         g.delve_next(pid)
-        g.recall(members(g, pid)[0].id)
+        with self.assertRaises(InvalidAction):
+            g.recall(members(g, pid)[0].id)                  # nobody can be called back from the Descent
         self.assertEqual(members(g, pid)[0].in_dungeon, "main")
 
     def test_wipe_ends_the_delve_and_deaths_are_permanent(self):
@@ -593,11 +594,15 @@ class TestSacrificeStress(unittest.TestCase):
         g.tick(config.SACRIFICE_STRESS_DECAY_TICKS * 4)
         self.assertEqual(g.sacrifice_stress, 0.0)
 
-    def test_council_cost_estimate_rises_with_stress(self):
+    def test_a_manual_merge_costs_more_when_the_colony_is_stressed_but_the_councils_pick_costs_nothing(self):
         g = self._colony()
-        calm = g.council()["merges"][0]["grief"]
+        m = g.council()["merges"][0]
+        self.assertEqual(m["grief"], 0)                                    # the council's own pick upsets nobody
+        d = next(s for s in g.slimes() if s.id != m["donor"].id and not g.unwelcome(s))
+        t = next(s for s in g.slimes() if s.id != d.id)
+        calm = g.social.grief(d, g.slimes(), 1.0)
         g.sacrifice_stress = 2.0
-        self.assertGreater(g.council()["merges"][0]["grief"], calm * 1.5)
+        self.assertGreater(g.social.grief(d, g.slimes(), 1 + config.SACRIFICE_STRESS_AMP * 2.0), calm * 1.5)
 
 
 if __name__ == "__main__":
