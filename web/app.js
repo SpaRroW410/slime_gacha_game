@@ -850,6 +850,7 @@ function academyAll() {
   const nameOf = (k) => st.spell_defs[k]?.name || k;
   const tg = st.buildings.find((b) => b.key === 'training_grounds');
   const dsl = slimeById(num(ui('dsl', st.slimes.find(avail)?.id)));
+  if (S.ui.yard_for !== dsl?.id) { delete S.ui.yard; S.ui.yard_for = dsl?.id; }   // a new slime starts in its own yard
   const yard = ui('yard', dsl?.discipline || 'sword');
   const yd = st.disciplines.find((d) => d.key === yard) || st.disciplines[0];
   const tiers = st.drill.tiers;
@@ -863,9 +864,9 @@ function academyAll() {
     <h4>🧑‍🏫 Trainers ${info('One trainer per discipline (2★ or more). An appointed trainer speeds up proficiency and fighting-style gains for drills and sparring in their discipline. The bonus grows with the trainer\'s level and the Training Grounds level.')}</h4>
     ${st.disciplines.map((d) => { const k = 'trainer_' + d.key; return `<div class="row"><small class="mute">${esc(d.emoji)} ${esc(d.name)}: ${st.jobs.trainer[d.key] ? `+${st.jobs.trainer[d.key]}% proficiency and style gains` : 'no trainer appointed'}</small></div>${postPanel(k)}`; }).join('')}
     <div class="row"><label class="f">Drill <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)} · ${t.ticks}h · ${esc(cost(t.cost))}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select></label></div>
-    <div class="row"><b>Slime:</b> ${slimeSel('dsl', avail)}<button class="btn primary" data-act="drill" ${dsl ? '' : 'disabled'}>${esc(tr.name)} (${tr.ticks}h)</button></div>
+    <div class="row"><b>Slime:</b> ${slimeSel('dsl', avail, 'data-rerender="1"')}<button class="btn primary" data-act="drill" ${dsl ? '' : 'disabled'}>${esc(tr.name)} (${tr.ticks}h)</button></div>
     ${dsl ? `<small class="mute">${esc(dsl.name)}: ${dsl.prof ? `proficiency ${dsl.prof.value}` : ''} · ${dgain > 0 ? `this drill is worth about +${dgain}` : `the ${esc(yd.name)} is not their discipline: only a little general practice`}</small>` : ''}
-    <div class="row"><b>Party:</b> ${partyOptions('dppid')}<button class="btn" data-act="drill_party">Everyone drills</button></div></div>`;
+    <div class="row"><b>Party:</b> ${partyOptions('dppid')}<button class="btn" data-act="drill_party" title="Each member drills in the yard of its own discipline">Everyone drills (own yards)</button></div></div>`;
   return `<div class="grid acad">
   ${trainingFacility}
   <div class="panel stack"><h2>⚔ Sparring — fighting styles ${info('A duel costs 2 white gel. Two parties sparring as teams cost a flat 3 white gel (not per pair). Each takes 3 hours. A sleeping slime is woken first (mood cost: morale and a flash of anger); a slime at a job leaves it (that shift is lost); a slime below half health is too hurt to spar and drills for less. Check the tags in the pickers.')}</h2>
@@ -1369,9 +1370,9 @@ const A = {
     const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
     act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn() }, { title: 'Wave simulation' }); },
   yard: (d) => { S.ui.yard = d.k; render(); },
-  drill: () => act('drill', { id: num(ui('dsl')), discipline: ui('yard', 'sword'), tier: num(ui('dtier', 1), 1) }),
+  drill: () => act('drill', { id: num(ui('dsl')), discipline: ui('yard', slimeById(num(ui('dsl')))?.discipline || ''), tier: num(ui('dtier', 1), 1) }),
   drill_party: () => { const pid = num(ui('dppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
-    act('drill_party', { pid, discipline: ui('yard', 'sword'), tier: num(ui('dtier', 1), 1) }); },
+    act('drill_party', { pid, discipline: '', tier: num(ui('dtier', 1), 1) }); },
   spar: () => { const a = num(ui('spa', S.state.slimes[0]?.id)), b = num(ui('spb', S.state.slimes[1]?.id)); act('spar', { a, b, discipline: ui('arena', 'sword') }, { title: 'Sparring match' }); },
   spar_parties: () => { const pid = num(S.ui.sppid), other = num(S.ui.sppid2); if (!pid || !other) return toast('You need two full parties at home.', true);
     act('spar_parties', { pid, other, discipline: ui('arena', 'sword') }, { title: 'Party spar', slow: true }); },

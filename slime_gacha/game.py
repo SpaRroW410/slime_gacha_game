@@ -1309,13 +1309,15 @@ class Game:
     def drill(self, sid: int, discipline: str, tier: int = 1) -> str:
         """Send a slime to drill (sword / archery / magic) for proficiency. See AcademySystem.start_drill."""
         s = self.slime(sid)
+        discipline = discipline or s.arch.discipline          # no yard named: the slime's own
         sparring.check_ready_basic(s)
         wound = config.WOUNDED_DRILL if s.hp < s.max_hp * config.WOUNDED_BELOW else 1.0
         notes = self._prepare_trainees([s])
         msg = self.academy.start_drill(s, discipline, tier, wound)
         return " ".join(notes + [msg]) + (" (hurt: this drill is worth less)" if wound < 1.0 else "")
 
-    def drill_party(self, pid: int, discipline: str, tier: int = 1) -> List[str]:
+    def drill_party(self, pid: int, discipline: str = "", tier: int = 1) -> List[str]:
+        """Everyone in a party drills; with no yard named each member drills in the yard of its own discipline."""
         self.academy.drill_tier(tier)                       # refuse early if the tier is locked
         out = []
         for s in self.party_members(pid):

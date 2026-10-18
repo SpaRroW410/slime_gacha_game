@@ -35,6 +35,14 @@ class TestTrainingFacility(unittest.TestCase):
         s.class_prof = 40.0
         return g, s
 
+    def test_a_drill_with_no_yard_named_uses_the_slimes_own_discipline(self):
+        g, s = self.mk(cls="ranger")
+        g.drill(s.id, "")
+        self.assertEqual(s.task["discipline"], "archery")
+        g2, m = self.mk(seed=104, cls="mage")
+        g2.drill(m.id, "")
+        self.assertEqual(m.task["discipline"], "magic")
+
     def test_a_drill_takes_time_costs_gel_and_raises_proficiency(self):
         g, s = self.mk()
         white = g.wallet.get("white_gel")
