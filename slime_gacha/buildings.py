@@ -71,6 +71,22 @@ register_building(Building("hospital", "Hospital", "🏥", 5,
 register_building(Building("kitchen", "Kitchen", "🍳", 5,
                            "A warm hearth where chefs cook: places for chefs and better meals.", _costs(75, 10)))
 
+# Training and sparring facilities: each has its own building, and its level sets how many slimes can use it at once.
+register_building(Building("blade_yard", "Blade Yard", "⚔️", 5, "Drill yard for sword classes: a bigger yard trains more slimes at once.", _costs(70, 10)))
+register_building(Building("archery_range", "Archery Range", "🏹", 5, "Drill yard for rangers: a bigger range trains more slimes at once.", _costs(70, 10)))
+register_building(Building("mana_pool", "Mana Pool", "🔮", 5, "Drill pool for casters: a bigger pool trains more slimes at once.", _costs(70, 10)))
+register_building(Building("spar_sword", "Sword Arena", "🗡️", 5, "Duelling ring for the sword style: a bigger ring holds more duels at once.", _costs(90, 12)))
+register_building(Building("spar_archery", "Archery Arena", "🎯", 5, "Duelling ring for the archery style: a bigger ring holds more duels at once.", _costs(90, 12)))
+register_building(Building("spar_magic", "Spell Arena", "🪄", 5, "Duelling ring for the magic style: a bigger ring holds more duels at once.", _costs(90, 12)))
+register_building(Building("spar_party", "Party Arena", "🏟️", 5, "A grand arena where whole parties spar as teams: each level holds one more team match at once. Costly to build.",
+                           _costs(260, 40, purple_from=3)))
+
+# which building serves which discipline (sword / archery / magic) for drills and for duels; party sparring has its own
+DRILL_YARDS = {"sword": "blade_yard", "archery": "archery_range", "magic": "mana_pool"}
+SPAR_ARENAS = {"sword": "spar_sword", "archery": "spar_archery", "magic": "spar_magic"}
+PARTY_ARENA = "spar_party"
+FACILITIES = list(DRILL_YARDS.values()) + list(SPAR_ARENAS.values()) + [PARTY_ARENA]
+
 JOB_HOSTS = {"kitchen": "Chef", "armory": "Blacksmith", "library": "Librarian", "training_grounds": "Trainers", "alchemy": "Brewer", "hospital": "Doctor"}
 
 REST_HEAL = [config.SLEEP_HP_REGEN] * 5            # HP heals at the base sleeping rate at every level (energy is what the Rest Area improves)
@@ -111,6 +127,9 @@ class BuildingManager:
                                 f"{', Restricted Section open' if self.tier3_open(lv) else ''}"),
             "chamber": lambda: f"destroyed slimes yield x{ascension.chamber_factor(lv):.1f}",
             "alchemy": lambda: f"brews potions up to grade {lv}",
+            **{k: (lambda lv=lv: f"trains {2 * lv} slimes at once") for k in DRILL_YARDS.values()},
+            **{k: (lambda lv=lv: f"{lv} duel{'s' if lv > 1 else ''} at once ({2 * lv} slimes)") for k in SPAR_ARENAS.values()},
+            PARTY_ARENA: lambda: f"{lv} team match{'es' if lv > 1 else ''} at once ({lv} x 2 parties)",
             "kitchen": lambda: f"pantry holds {config.PANTRY_PER_LEVEL * lv} servings",
             "hospital": lambda: f"doctor heals the injured {int(config.HOSPITAL_HEAL[lv - 1] * 100)}% HP/hour",
             "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",

@@ -108,6 +108,7 @@ class Game:
         self.stranded: List[dict] = []                 # overdue scouts waiting for a rescue party (see scout / rescue)
         self.next_stranded = 1
         self._owed = 0.0                               # hours the current session still has to pay (live mode)
+        self._arena: Optional[str] = None              # the sparring facility the current session uses (live mode bookkeeping)
         self.clock_fn = time.time
         self.keeper = keeper_mod.Keeper()
         self.relations = relationships.RelationshipEngine()
@@ -282,22 +283,46 @@ class Game:
         self._owed += hours
         return []
 
-    def _occupy(self, slimes, hours: float, kind: str) -> List[str]:
+    # ---- training and sparring facilities ----------------------------------------------------------------------
+    def facility_capacity(self, key: str) -> int:
+        """Slimes a facility holds at once: yards and duelling rings take two per level, the Party Arena a team match per level."""
+        lv = self.buildings.level(key)
+        return 2 * self.parties.size * lv if key == bld.PARTY_ARENA else 2 * lv
+
+    def facility_users(self, key: str) -> List[Slime]:
+        """Who is using a facility right now (drilling in a yard, or sparring in a ring until the time is paid)."""
+        if key in bld.DRILL_YARDS.values():
+            disc = next(d for d, k in bld.DRILL_YARDS.items() if k == key)
+            return [s for s in self.slimes() if s.state == "studying" and s.task and s.task.get("kind") == "drill" and s.task.get("discipline") == disc]
+        ids = {i for e in self.expeditions if e.get("arena") == key for i in e["ids"]}
+        return [self.roster[i] for i in ids if i in self.roster]
+
+    def _check_room(self, key: str, n: int) -> None:
+        b = bld.BUILDINGS.get(key)
+        room = self.facility_capacity(key) - len(self.facility_users(key))
+        if n > room:
+            raise InvalidAction(f"The {b.name} is full (level {self.buildings.level(key)} holds {self.facility_capacity(key)}): "
+                                f"{room} place(s) free, {n} needed. Upgrade it in Town > Buildings or wait.")
+
+    def _occupy(self, slimes, hours: float, kind: str, arena: Optional[str] = None) -> List[str]:
         """A home activity that takes time: turn mode lets the colony live those hours now; live mode keeps the
         slimes busy until the wall clock has paid for them."""
         if not self.live:
             return self.tick(int(hours))
         self._set_flag(slimes, kind)
         self._owed = hours
+        self._arena = arena
         self._release(slimes)
         return []
 
     def _release(self, party) -> None:
         """End of a session: free the party now (turn mode) or when its time has been paid (live mode)."""
         owed, self._owed = int(math.ceil(self._owed)), 0.0
+        arena, self._arena = self._arena, None
         alive = [s for s in party if s.id in self.roster]
         if self.live and owed > 0 and alive:
-            self.expeditions.append(dict(ids=[s.id for s in alive], until=self.tick_count + owed, hours=owed))
+            self.expeditions.append(dict(ids=[s.id for s in alive], until=self.tick_count + owed, hours=owed,
+                                         **({"arena": arena} if arena else {})))
         else:
             self._clear_flag(party)
 
@@ -1114,6 +1139,7 @@ class Game:
         everyone = team_a + team_b
         for s in everyone:
             sparring.check_ready(s)
+        self._check_room(bld.PARTY_ARENA, len(everyone))
         cap = self.buildings.style_cap()
         if all(sparring.style_level(s, d.key) >= cap for s in everyone):
             raise InvalidAction(f"Everyone is already at the {d.style} ceiling (level {cap}) - upgrade the Training Grounds.")
@@ -1134,7 +1160,7 @@ class Game:
             for s in team:
                 self._spar_reward(res, s, d, i == winner, cap)
             res.summary.append(f"   {names[i]}'s synergy {before - 1:+.1%} -> {self.social.synergy(team) - 1:+.1%}")
-        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train")
+        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train", bld.PARTY_ARENA)
         res.summary.extend("   " + e for e in events if "died" in e)
         self.journal.extend(events)
         return res
@@ -1166,6 +1192,8 @@ class Game:
             raise InvalidAction("A slime can't spar with themselves.")
         for s in everyone:
             sparring.check_ready(s)
+        arena = bld.SPAR_ARENAS[d.key]
+        self._check_room(arena, len(everyone))
         notes = self._prepare_trainees(everyone)
         if all(sparring.style_level(s, d.key) >= cap for s in everyone):
             raise InvalidAction(f"Everyone is already at the {d.style} ceiling (level {cap}) - upgrade the "
@@ -1182,7 +1210,7 @@ class Game:
             self._spar_reward(res, win, d, True, cap)
             self._spar_reward(res, lose, d, False, cap)
             self.social.add_bond(a, b, config.SPAR_BOND)
-        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train")
+        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train", arena)
         res.summary.extend("   " + e for e in events if "died" in e)
         self.journal.extend(events)
         return res
@@ -1309,13 +1337,18 @@ class Game:
     def drill(self, sid: int, discipline: str, tier: int = 1) -> str:
         """Send a slime to drill (sword / archery / magic) for proficiency. See AcademySystem.start_drill."""
         s = self.slime(sid)
+        discipline = discipline or s.arch.discipline          # no yard named: the slime's own
         sparring.check_ready_basic(s)
+        if discipline not in bld.DRILL_YARDS:
+            raise InvalidAction("Pick a yard: sword, archery or magic.")
+        self._check_room(bld.DRILL_YARDS[discipline], 1)
         wound = config.WOUNDED_DRILL if s.hp < s.max_hp * config.WOUNDED_BELOW else 1.0
         notes = self._prepare_trainees([s])
         msg = self.academy.start_drill(s, discipline, tier, wound)
         return " ".join(notes + [msg]) + (" (hurt: this drill is worth less)" if wound < 1.0 else "")
 
-    def drill_party(self, pid: int, discipline: str, tier: int = 1) -> List[str]:
+    def drill_party(self, pid: int, discipline: str = "", tier: int = 1) -> List[str]:
+        """Everyone in a party drills; with no yard named each member drills in the yard of its own discipline."""
         self.academy.drill_tier(tier)                       # refuse early if the tier is locked
         out = []
         for s in self.party_members(pid):
