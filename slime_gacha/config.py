@@ -132,9 +132,8 @@ PROF_BOTH_CAPSTONES, PROF_ONE_CAPSTONE = 70.0, 30.0   # proficiency needed for b
 PROF_SPEC_START = 30.0
 PROF_SPEC_BATTLE_GAIN = 0.5    # per hybrid skill used in a fight (capped by PROF_BATTLE_CAP)
 HYBRID_CAPSTONE_MAX = 0.6      # hybrid capstones reach at most this share of a pure capstone's strength
-STAR_LEVELS = {                                   # level needed to ascend to 2 / 3 / 4 / 5 stars: rarer slimes level slower, so they need fewer
-    "common": [10, 30, 60, 100], "uncommon": [10, 25, 50, 80], "rare": [10, 20, 40, 65],
-    "epic": [10, 15, 30, 50], "legendary": [10, 12, 22, 35]}
+_STAR_LEVELS = [10, 25, 50, 80]
+STAR_LEVELS = {r: list(_STAR_LEVELS) for r in ("common", "uncommon", "rare", "epic", "legendary")}   # level needed to ascend to 2 / 3 / 4 / 5 stars: the same for every rarity
 STAR_STONE_MULT = {"common": 1, "uncommon": 1.5, "rare": 2, "epic": 3, "legendary": 4}   # stones for a star scale with rarity
 STAR_ATTR_RARITY_BOOST = {"common": 1.0, "uncommon": 1.3, "rare": 1.7, "epic": 2.2, "legendary": 3.0}   # star attributes hit harder
 

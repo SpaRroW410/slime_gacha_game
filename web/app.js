@@ -657,6 +657,27 @@ function cut(html, from, to) {
   const a = from ? html.indexOf(from) : 0, b = to ? html.indexOf(to) : html.length;
   return html.slice(Math.max(0, a), b < 0 ? html.length : b);
 }
+/* Which party (or group of slimes) is away and how long it has left. */
+const partyNameOf = (ids) => { const p = (S.state.parties || []).find((q) => ids.every((i) => q.members.includes(i))) || (S.state.parties || []).find((q) => ids.some((i) => q.members.includes(i))); return p ? p.name : null; };
+function insideList(items, empty = 'Nobody is inside right now.') {
+  if (!items.length) return `<small class="mute">${empty}</small>`;
+  return items.map((a) => `<div class="row between"><span>${esc(a.label)} · <b>${esc(partyNameOf(a.ids) || a.names.slice(0, 3).join(', '))}</b>${partyNameOf(a.ids) ? ` <small class="mute">(${esc(a.names.join(', '))})</small>` : ''}</span>${etaHtml(a)}</div>`).join('');
+}
+/* The Descent: every party inside with its floor and timer. Parties on the same floor fight together, so the one that arrived last sets the timer. */
+function descentInside() {
+  const st = S.state, delves = Object.entries(st.dungeon.delves);
+  if (!delves.length) return '<small class="mute">No party is inside the Descent.</small>';
+  const away = awayItems().filter((a) => a.kind === 'delve');
+  const byPid = (pid) => away.find((a) => a.pid === +pid);
+  const rows = delves.map(([pid, v]) => { const a = byPid(pid); return `<div class="row between"><span>🕳 <b>${esc(partyById(+pid)?.name || 'Party')}</b> · floor ${v.floor}</span>${a ? etaHtml(a) : ''}</div>`; }).join('');
+  const floors = {};
+  delves.forEach(([pid, v]) => { (floors[v.floor] = floors[v.floor] || []).push(pid); });
+  const groups = Object.entries(floors).filter(([, ps]) => ps.length > 1).map(([floor, ps]) => {
+    const last = ps.map((pid) => byPid(pid)).filter(Boolean).sort((x, y) => (y.hours || 0) - (x.hours || 0))[0];
+    return `<small class="mute" style="display:block">👥 ${ps.map((pid) => esc(partyById(+pid)?.name || '')).join(' + ')} are together on floor ${floor}: they can fight when the last party to arrive is ready ${last ? etaHtml(last) : ''}</small>`;
+  }).join('');
+  return rows + groups;
+}
 function dungeons() {
   const v = sub('dungeons');
   const p = dungeonsAll();
@@ -668,7 +689,10 @@ function dungeons() {
   else if (v === 'hunts') body = huntsView();
   else if (v === 'wave') body = `<div class="grid cols2">${p.wave}</div>`;
   else body = riftView();
-  return subnav('dungeons') + body;
+  const here = { pit: ['Gloop Pit'], quarry: ['Starfall'], scouting: ['Scouting', 'Stranded', 'Rescue'], wave: ['Wave simulation'], rift: ["Wayfarer"] }[v];
+  const strip = v === 'descent' ? `<div class="panel stack" style="margin-top:12px"><h4>Parties inside</h4>${descentInside()}</div>`
+    : here ? `<div class="panel stack" style="margin-top:12px"><h4>Inside now</h4>${insideList(awayItems().filter((a) => (a.kind === 'expedition' || a.kind === 'stranded') && here.some((h) => a.label.includes(h))))}</div>` : '';
+  return subnav('dungeons') + body + strip;
 }
 function slimePickRow(a) {
   const st = S.state;
@@ -900,7 +924,12 @@ function academyAll() {
   const lvl = (k) => st.facilities[k];
   /* A facility's header: level, how full it is; and below it who is in it with the time left. */
   const facHead = (k) => { const f = lvl(k); return `<div class="row between"><b>${f.emoji} ${esc(f.name)}</b><span class="row">${chip(`L${f.level}`, 'info')}${chip(`${f.users.length}/${f.capacity} places`, f.users.length >= f.capacity ? 'bad' : 'ok')}</span></div>`; };
-  const facUsers = (k, what) => { const f = lvl(k); return `<small class="mute" style="display:block">${what}: ${f.users.length ? f.users.map((u) => `<b>${esc(u.name)}</b> ${etaFor(u.id)}`).join(' · ') : 'nobody'}. <i>Upgrade it in Town &gt; Buildings for more places.</i></small>`; };
+  const facUsers = (k, what) => {
+    const f = lvl(k), byParty = {};
+    f.users.forEach((u) => { (byParty[u.party || ''] = byParty[u.party || ''] || []).push(u); });
+    const parts = Object.entries(byParty).map(([party, us]) => `${party ? `<b>${esc(party)}</b> (${us.map((u) => esc(u.name)).join(', ')})` : us.map((u) => `<b>${esc(u.name)}</b>`).join(', ')} ${etaFor(us[0].id)}`);
+    return `<small class="mute" style="display:block">${what}: ${parts.length ? parts.join(' · ') : 'nobody'}. <i>Upgrade it in Town &gt; Buildings for more places.</i></small>`;
+  };
   const full = (k) => lvl(k).users.length >= lvl(k).capacity;
   const partyA = partyOptions('sppid');
   const partyB = partyOptions('sppid2', true, false, S.ui.sppid);

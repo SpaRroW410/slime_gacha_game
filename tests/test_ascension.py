@@ -118,7 +118,7 @@ class TestRarityAndStars(unittest.TestCase):
         s = g.slimes()[0]
         s.rarity, s.stars, s.level = "common", 1, 9
         g.wallet.add("stone_common", 20000)
-        for stars, lv in ((1, 10), (2, 30), (3, 60), (4, 100)):
+        for stars, lv in ((1, 10), (2, 25), (3, 50), (4, 80)):
             s.stars, s.level = stars, lv - 1
             with self.assertRaises(InvalidAction):
                 g.ascend_slime_star(s.id)
@@ -136,13 +136,13 @@ class TestRarityAndStars(unittest.TestCase):
         g = mk()
         s = g.slimes()[0]
         s.rarity, s.stars = "legendary", 2
-        self.assertEqual(ascension.star_level(s), 12)               # common would need 30
+        self.assertEqual(ascension.star_level(s), 25)               # the same level for every rarity
         self.assertEqual(ascension.star_cost(s), 400)               # 100 x4
-        s.level = 11
+        s.level = 24
         g.wallet.add("stone_common", 400)
         with self.assertRaises(InvalidAction):
             g.ascend_slime_star(s.id)
-        s.level = 12
+        s.level = 25
         g.ascend_slime_star(s.id)
         self.assertEqual(s.stars, 3)
         s.rarity = "common"

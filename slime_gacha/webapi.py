@@ -331,7 +331,7 @@ def snapshot(g: Game) -> dict:
                           desc=d.description, feeds=[a.name for a in all_archetypes() if a.discipline == d.key])
                      for d in sparring.DISCIPLINES],
         facilities={k: dict(name=bld_mod.BUILDINGS.get(k).name, emoji=bld_mod.BUILDINGS.get(k).emoji, level=g.buildings.level(k),
-                            capacity=g.facility_capacity(k), users=[dict(id=s.id, name=s.name) for s in g.facility_users(k)])
+                            capacity=g.facility_capacity(k), users=[dict(id=s.id, name=s.name, party=(lambda p: p.name if p else None)(g.parties.party_of(s.id))) for s in g.facility_users(k)])
                     for k in bld_mod.FACILITIES},
         facility_yards=bld_mod.DRILL_YARDS, party_yard=bld_mod.PARTY_YARD, facility_arenas=bld_mod.SPAR_ARENAS, party_arena=bld_mod.PARTY_ARENA,
         drill=dict(base=config.PROF_DRILL, grounds=g.buildings.level("training_grounds"),
