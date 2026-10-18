@@ -2663,8 +2663,8 @@ class Game:
         sids = list(dict.fromkeys(sids))
         if not 1 <= len(sids) <= config.ADV_MAX_PARTY:
             raise InvalidAction(f"An adventuring party has 1-{config.ADV_MAX_PARTY} slimes.")
-        if not 1 <= runs <= config.ADV_MAX_RUNS:
-            raise InvalidAction(f"Runs must be 1-{config.ADV_MAX_RUNS}.")
+        if runs < 1:
+            raise InvalidAction("Runs must be at least 1.")
         party = [self.slime(i) for i in sids]
         for s in party:
             if s.state != "idle" or s.in_dungeon:
@@ -2677,6 +2677,10 @@ class Game:
         res.summary.extend("   " + x for x in pre)
         self._owed = 0.0
         self._set_flag(party, kind)
+        if runs > config.ADV_MAX_RUNS:
+            res.summary.append(f"   (a session lasts at most {config.SESSION_MAX_HOURS}h: {config.ADV_MAX_RUNS} runs instead of {runs})")
+        runs = min(runs, config.ADV_MAX_RUNS)
+        used = 0                                                # hours of the day's session spent, camping included
         try:
             for n in range(1, runs + 1):
                 members = [s for s in party if s.id in self.roster]
@@ -2684,8 +2688,13 @@ class Game:
                     res.stop_reason = "the whole party is gone"
                     break
                 if any(s.hp < s.max_hp * config.GRIND_MIN_HP or s.stamina_frac < config.STAMINA_CAMP_AT for s in members):
-                    res.summary.append(f"   (camped {self._camp(members)}h)")
+                    hours = self._camp(members, max(0, config.SESSION_MAX_HOURS - used - config.ADV_TICKS))
+                    used += hours
+                    res.summary.append(f"   (camped {hours}h)")
                     members = [s for s in party if s.id in self.roster]
+                if used + config.ADV_TICKS > config.SESSION_MAX_HOURS:
+                    res.stop_reason = f"the day's session is over ({config.SESSION_MAX_HOURS}h, camping included)"
+                    break
                 for s in members:
                     if s.state in ("sleeping", "resting"):
                         s.state = "idle"
@@ -2730,6 +2739,7 @@ class Game:
                             events.append(f"🎁 Found {it.label()}"
                                           + (" - " + ", ".join(it.mod_text(m) for m in it.mods) if it.mods else "") + "!")
                 events.extend(self._spend(config.ADV_TICKS))
+                used += config.ADV_TICKS
                 rep.log.extend(events)
                 res.runs.append(rep)
                 tag = "Victory" if rep.victory else "Defeat" if rep.winner == "foes" else "Draw"
@@ -3359,19 +3369,27 @@ class Game:
         res.summary.extend("   " + x for x in pre)
         self._owed = 0.0
         self._set_flag(party, "grind")
+        if runs > config.GRIND_MAX_RUNS:
+            res.summary.append(f"   (a session lasts at most {config.SESSION_MAX_HOURS}h: {config.GRIND_MAX_RUNS} runs instead of {runs})")
+        runs = min(max(1, runs), config.GRIND_MAX_RUNS)
+        used = 0                                                # hours of the day's session spent, camping included
         try:
-            for n in range(1, max(1, runs) + 1):
+            for n in range(1, runs + 1):
                 members = [s for s in party if s.id in self.roster]
                 if not members:
                     res.stop_reason = "the whole party is gone"
                     break
                 if any(s.hp < s.max_hp * config.GRIND_MIN_HP or s.stamina_frac < config.STAMINA_CAMP_AT for s in members):
-                    hours = self._camp(members)
+                    hours = self._camp(members, max(0, config.SESSION_MAX_HOURS - used - config.GRIND_TICKS))
+                    used += hours
                     res.summary.append(f"   (camped {hours}h)")
                     members = [s for s in party if s.id in self.roster]
                     if not members:
                         res.stop_reason = "the whole party is gone"
                         break
+                if used + config.GRIND_TICKS > config.SESSION_MAX_HOURS:
+                    res.stop_reason = f"the day's session is over ({config.SESSION_MAX_HOURS}h, camping included)"
+                    break
                 for s in members:
                     if s.state in ("sleeping", "resting"):
                         s.state = "idle"
@@ -3419,6 +3437,7 @@ class Game:
                     self._farm_loot(len(enemies), events)
                     self._recover_pit_gear(members, events)
                 events.extend(self._spend(config.GRIND_TICKS))
+                used += config.GRIND_TICKS
                 rep.log.extend(events)
                 res.runs.append(rep)
                 tag = "Victory" if rep.victory else "Defeat" if rep.winner == "foes" else "Draw"

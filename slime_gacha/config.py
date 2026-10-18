@@ -356,7 +356,9 @@ ADV_XP_MULT = 0.25               # the Rift is for loot, not xp
 ADV_MONSTER_LEVEL = 1            # monsters are this many levels above the party average
 ADV_FOE_RATIO = 0.75             # foes per slime (a small party meets proportionally fewer)
 ADV_TICKS = 2
-ADV_MAX_RUNS = 40
+SESSION_MAX_HOURS = 24            # no farming session (Pit, Rift, Quarry) lasts longer than one game day, camping included
+ADV_MAX_RUNS = SESSION_MAX_HOURS // ADV_TICKS     # = 12 runs of 2 hours
+GRIND_MAX_RUNS = SESSION_MAX_HOURS // GRIND_TICKS
 ADV_DROP_PER_FOE = 0.45          # chance per defeated foe to drop a relic
 ADV_LURE_COST = 1                # purple gel per run for a lure ...
 ADV_LURE_BOOST = 4.0             # ... which multiplies the non-common relic weights

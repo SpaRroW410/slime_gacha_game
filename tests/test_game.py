@@ -424,6 +424,18 @@ class TestGrindDungeon(unittest.TestCase):
         g.conflicts.conflicts.clear()
         return g, pid
 
+    def test_a_pit_session_never_lasts_more_than_a_day_camping_included(self):
+        g, pid = self._party(4)
+        g.wallet.add("food", 5000)
+        for s in g.party_members(pid):
+            s.level, s.hp = 3, 1                                  # hurt: the party has to camp
+        g.refusal = lambda *a, **k: ""                          # (they would normally refuse so hurt)
+        res = g.grind(pid, 3, 60)
+        camped = sum(int(x.split("camped ")[1].split("h")[0]) for x in res.summary if "(camped " in x)
+        self.assertLessEqual(len(res.runs) * config.GRIND_TICKS + camped, config.SESSION_MAX_HOURS)
+        self.assertLessEqual(len(res.runs), config.GRIND_MAX_RUNS)
+        self.assertTrue(any("a session lasts at most" in x for x in res.summary))
+
     def test_nobody_dies_even_when_crushed(self):
         g, pid = self._party()
         for s in g.party_members(pid):

@@ -101,9 +101,9 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-19",
-                 text="Dungeon, sparring and training sessions now keep the party away with the hours left (turn mode moves only when you wait), "
-                      "wave simulations take their time in live mode, slimes can be dismissed from work in their profile, and save export opens the share sheet on phones.")
+WHATS_NEW = dict(id="2026-10-20",
+                 text="Farming sessions (Pit, Rift, Quarry) now last at most one day, camping included, and show how long they take before you start; "
+                      "hospital patients are labelled 'hospital' instead of 'resting'.")
 
 
 def build() -> Dict[str, object]:
