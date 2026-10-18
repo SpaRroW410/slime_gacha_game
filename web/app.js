@@ -73,7 +73,7 @@ function ghost(g) { // graveyard entry
 }
 
 /* ---------------------------------------------------------------- persistence + api */
-function saveLocal(save) { try { localStorage.setItem(LS_KEY, JSON.stringify({ save, at: Date.now() })); } catch (e) { /* storage may be blocked */ } }
+function saveLocal(save) { S.lastSave = save; try { localStorage.setItem(LS_KEY, JSON.stringify({ save, at: Date.now() })); } catch (e) { /* storage may be blocked */ } }
 function loadLocal() { try { const r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r).save : null; } catch (e) { return null; } }
 
 function toast(msg, err = false) {
@@ -91,6 +91,29 @@ function pushLog(lines) {
   S.feed = S.feed.slice(0, 120);
 }
 
+/* The save as it is right now: what the last response carried, else the browser copy, else ask the game for it. */
+async function currentSave() {
+  let save = S.lastSave || loadLocal();
+  if (!save) { try { const r = await backend.call('state', {}); save = r && r.save; } catch (e) { /* no game yet */ } }
+  return save || null;
+}
+/* Export: the share sheet where there is one (iPhone: "Save to Files"), else a download link added to the page (Safari needs
+   it attached) and kept alive long enough; the text can also be copied. */
+async function exportSave() {
+  const save = await currentSave();
+  if (!save) return toast('Nothing to export yet: play a little first.', true);
+  const text = JSON.stringify(save), name = `slime-gacha-save-day${S.state?.day ?? ''}.json`;
+  try {
+    const file = new File([text], name, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Slime Gacha save' }); return toast('Save shared.'); }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = name; a.style.display = 'none'; document.body.appendChild(a); a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 30000);
+    toast('Save exported. If nothing downloaded, use “Copy save text”.');
+  } catch (e) { toast('Export failed: use “Copy save text” instead.', true); }
+}
 async function act(cmd, args = {}, opt = {}) {
   if (S.busy) return null;
   S.busy = true;
@@ -1255,6 +1278,7 @@ function modalHtml() {
         <button class="btn small ${S.state.potions.autonomy ? 'primary' : ''}" data-act="autonomy" title="Slimes use up to 66% of your stocks by themselves">🤖 Autonomy ${S.state.potions.autonomy ? 'on' : 'off'}</button></div>
       <h4 style="margin:6px 0 0">Save</h4>
       <button class="btn" data-act="export">⬇ Export save (.json)</button>
+      <button class="btn" data-act="copy_save">📋 Copy save text</button>
       <label class="btn" style="display:block">⬆ Import save<input type="file" accept=".json,application/json" data-import hidden></label>
       <button class="btn danger" data-act="newgame2">🗑 Start a new colony</button>
       <small class="mute">Backend: ${esc(S.backendName)}. Your colony is saved automatically in this browser.</small></div></div>`;
@@ -1409,9 +1433,9 @@ const A = {
   newgame: () => act('new_game', { seed: ui('seed') ? num(ui('seed')) : null, party_size: num(ui('psize', 5), 5) }).then(() => { S.tab = 'colony'; S.sel = null; S.pull = null; render(); }),
   newgame2: () => confirmThen('Abandon this colony and start over? The current save will be overwritten.', () => { S.modal = null; S.state = null; S.feed = []; render(); }),
   continue: async () => { const save = loadLocal(); const r = await backend.call('load', { save }); if (r.ok) { S.state = r.state; render(); } else toast(r.error, true); },
-  export: () => { const save = loadLocal(); if (!save) return toast('Nothing to export yet.', true);
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(save)], { type: 'application/json' }));
-    a.download = 'slime-gacha-save.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); },
+  export: () => exportSave(),
+  copy_save: async () => { const save = await currentSave(); if (!save) return toast('Nothing to copy yet.', true);
+    try { await navigator.clipboard.writeText(JSON.stringify(save)); toast('Save copied: paste it into a text file or a note.'); } catch (e) { toast('Copying is blocked here: use Export.', true); } },
 };
 
 document.addEventListener('click', (e) => {
