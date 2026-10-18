@@ -147,13 +147,13 @@ def ability_view(a) -> dict:
 
 
 _AWAY_PLACE = dict(rescue="🛟 Rescue mission", stranded="🆘 Stranded", grind="🫧 Gloop Pit", adventure="🧭 Wayfarer's Rift", quarry="💎 Starfall Quarry", scout="🔭 Scouting",
-                   lab="⚗️ Alchemy Lab", train="🥊 Training Grounds", main="🕳 Hollow Descent")
+                   lab="⚗️ Alchemy Lab", wave="🧪 Wave simulation", train="🥊 Training Grounds", main="🕳 Hollow Descent")
 
 
 def away_view(g: Game) -> list:
     """Everything that keeps slimes away from the colony, with the time left. `hours` are game hours; in live mode
     `real_sec` is the wall-clock estimate at the current speed (the browser counts it down)."""
-    rate = g.clock_rate() if g.live else None
+    rate = g.clock_rate() if g.live else None          # (turn mode: hours only, no real-time estimate)
 
     def item(kind, label, ids, hours, **extra):
         hours = max(0.0, float(hours)) if hours is not None else None
@@ -189,11 +189,11 @@ def away_view(g: Game) -> list:
         ids = [i for i in e["ids"] if i in g.roster]
         if ids:
             where = _AWAY_PLACE.get(g.roster[ids[0]].in_dungeon, "🕳 Dungeon")
-            out.append(item("expedition", where, ids, g.remaining_hours(e["until"]) if g.live else None))
+            out.append(item("expedition", where, ids, g.remaining_hours(e["until"]) if g.timed else None))
     for pid, d in g.delves.items():
         ids = [m.id for m in g._members_in("main", pid)]
         if ids:
-            left = g.remaining_hours(d.get("ready_tick", 0)) if g.live else 0
+            left = g.remaining_hours(d.get("ready_tick", 0)) if g.timed else 0
             out.append(item("delve", f"🕳 Hollow Descent, floor {d['floor']}", ids, left if left > 0 else None,
                             pid=pid, ready=left <= 0))
     return out
@@ -298,7 +298,7 @@ def snapshot(g: Game) -> dict:
                                    stop=g.stop_view(pid), modifier=((dungeon.floor_modifier(g.dungeon_seed, d["floor"]) or None) if dungeon.intel_level(g._knowledge(d["floor"])) >= 2 else None),
                                    camp_left=g.camp_left(pid), camp_limit=g.camp_limit(pid), relief=round(g.relief(pid), 2),
                                    joinable=g.joinable(pid), callers=[s.id for s in g.callers(pid)], call_cost=g.call_cost(d["floor"]),
-                                   ready_in=(max(0, d.get("ready_tick", 0) - g.tick_count) if g.live else 0),
+                                   ready_in=(max(0, d.get("ready_tick", 0) - g.tick_count) if g.timed else 0),
                                    next_hours=dungeon.clear_hours(d["floor"], sum(s.level for s in g._members_in("main", pid)) / max(1, len(g._members_in("main", pid))), g._knowledge(d["floor"]), max(1, len(g._members_in("main", pid)))),
                                    members=[m.id for m in g._members_in("main", pid)])
                     for pid, d in g.delves.items()},
@@ -310,8 +310,8 @@ def snapshot(g: Game) -> dict:
                    rate_now=(g.clock_rate() if g.live else None),
                    expeditions=[dict(names=[g.roster[i].name for i in e["ids"] if i in g.roster],
                                      hours=max(0, e["until"] - g.tick_count),
-                                     real_min=round(max(0, e["until"] - g.tick_count) / max(1e-9, g.clock_rate()) * 60))
-                                for e in g.expeditions] if g.live else []),
+                                     real_min=(round(max(0, e["until"] - g.tick_count) / max(1e-9, g.clock_rate()) * 60) if g.live else None))
+                                for e in g.expeditions] if g.timed else []),
         stress=round(g.sacrifice_stress, 2),
         gift=dict(morale=config.GIFT_MORALE_COST, morale_gain=config.GIFT_MORALE_GAIN, peace=config.GIFT_PEACE_COST,
                   potion=config.GIFT_POTION_PURPLE, merge_gear=config.GEAR_MERGE_COUNT, scrap=config.GEAR_SCRAP_REFUND),
@@ -1015,6 +1015,7 @@ class Session:
     def new_game(self, seed: Optional[int] = None, party_size: int = 5) -> None:
         self.game = Game(seed, int(party_size))
         self.game.forage = True
+        self.game.deferred_turn = True                 # turn mode: sessions keep the party away until the player waits
 
     def call(self, cmd: str, args: Optional[dict] = None) -> dict:
         args = args or {}
@@ -1024,6 +1025,7 @@ class Session:
                 return self._ok(["A new colony begins. The Last Gacha Well hums..."], {})
             if cmd == "load":
                 self.game = Game.from_dict(args["save"])
+                self.game.deferred_turn = True
                 return self._ok(["Save loaded."], {})
             if self.game is None:
                 return dict(ok=False, error="No game in progress.", log=[], result={}, state=None, save=None)

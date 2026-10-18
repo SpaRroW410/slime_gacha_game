@@ -109,6 +109,7 @@ class Game:
         self.stranded: List[dict] = []                 # overdue scouts waiting for a rescue party (see scout / rescue)
         self.next_stranded = 1
         self._owed = 0.0                               # hours the current session still has to pay (live mode)
+        self.deferred_turn = False                     # turn mode: sessions keep their slimes away until the player waits the time out
         self._arena: Optional[str] = None              # the sparring facility the current session uses (live mode bookkeeping)
         self.clock_fn = time.time
         self.keeper = keeper_mod.Keeper()
@@ -229,6 +230,13 @@ class Game:
     def live(self) -> bool:
         return self.time_mode == "live"
 
+    @property
+    def timed(self) -> bool:
+        """Do dungeon, sparring and training sessions keep their slimes away until the time is paid? True in live mode, and in
+        turn mode when `deferred_turn` is on (the web game): then time only moves when the player waits, and the party shows
+        the hours still to go. Off (the engine default), turn mode lets the colony live those hours at once."""
+        return self.live or self.deferred_turn
+
     def set_time_mode(self, mode: str, scale: float = None) -> str:
         if mode not in ("turn", "live"):
             raise InvalidAction("Time mode must be 'turn' or 'live'.")
@@ -239,7 +247,7 @@ class Game:
         if mode == "live" and not self.live:
             self.wall_last, self.wall_frac = self.clock_fn(), 0.0
         self.time_mode = mode
-        if mode == "turn":
+        if mode == "turn" and not self.deferred_turn:
             self.expeditions_flush()
             return "Turn-based time: time passes when you say so."
         return (f"Live time: {config.LIVE_LOBBY_RATE * self.time_scale:g} game hour(s) per real hour at home, "
@@ -279,7 +287,7 @@ class Game:
     def _spend(self, hours: float) -> List[str]:
         """Pay the time a dungeon activity takes: turn mode ticks the colony now; live mode keeps the party away
         and lets the wall clock bring the colony forward."""
-        if not self.live:
+        if not self.timed:
             return self.tick(int(hours)) if hours >= 1 else []
         self._owed += hours
         return []
@@ -310,7 +318,7 @@ class Game:
     def _occupy(self, slimes, hours: float, kind: str, arena: Optional[str] = None) -> List[str]:
         """A home activity that takes time: turn mode lets the colony live those hours now; live mode keeps the
         slimes busy until the wall clock has paid for them."""
-        if not self.live:
+        if not self.timed:
             return self.tick(int(hours))
         self._set_flag(slimes, kind)
         self._owed = hours
@@ -323,7 +331,7 @@ class Game:
         owed, self._owed = int(math.ceil(self._owed)), 0.0
         arena, self._arena = self._arena, None
         alive = [s for s in party if s.id in self.roster]
-        if self.live and owed > 0 and alive:
+        if self.timed and owed > 0 and alive:
             self.expeditions.append(dict(ids=[s.id for s in alive], until=self.tick_count + owed, hours=owed,
                                          **({"arena": arena} if arena else {})))
         else:
@@ -1693,6 +1701,16 @@ class Game:
         party = self._ready_party(pid)
         total_xp, won, log = 0, 0, []
         report = None
+        self._owed = 0.0
+        self._set_flag(party, "wave")
+        try:
+            report = yield from self._wave_rounds(party, tier, lo, hi, waves, total_xp, won, log)
+        finally:
+            self._release(party)
+        return report
+
+    def _wave_rounds(self, party, tier, lo, hi, waves, total_xp, won, log):
+        report = None
         for w in range(waves):
             enemies = self.wave_enemies(tier, lo, hi)
             report = yield from self._battle_gen(party, enemies, permadeath=False, split_xp=True, xp_mult=config.WAVE_XP_MULT, loot=False)
@@ -2872,7 +2890,9 @@ class Game:
     def _delve_wait(self, d: dict) -> None:
         """Live mode: a party that has just cleared a floor (or camped) is busy until the clock catches up."""
         left = d.get("ready_tick", 0) - self.tick_count
-        if self.live and left > 0:
+        if self.timed and left > 0:
+            if not self.live:
+                raise InvalidAction(f"The party is still busy: {left} game hour(s) to go (use +1h / +4h to let time pass).")
             real_min = left / max(1e-9, self.clock_rate()) * 60
             raise InvalidAction(f"The party is still busy: about {left} game hour(s), roughly "
                                 f"{real_min:.0f} real minute(s) at the current speed.")
@@ -2888,7 +2908,7 @@ class Game:
         if not d:
             return []
         return [q for q, e in self.delves.items() if q != pid and e["floor"] == d["floor"]
-                and not (self.live and e.get("ready_tick", 0) > self.tick_count) and self._members_in("main", q)]
+                and not (self.timed and e.get("ready_tick", 0) > self.tick_count) and self._members_in("main", q)]
 
     def _delve_gen(self, pid: int, join: Sequence[int] = ()):
         d = self.delves.get(pid)
@@ -2973,7 +2993,7 @@ class Game:
         for q in pids:
             if q in self.delves:
                 self.delves[q]["hours"] += spent
-                if self.live:
+                if self.timed:
                     self.delves[q]["ready_tick"] = self.tick_count + spent
                 if not self._members_in("main", q):        # everyone starved / died in the meantime
                     self.delves.pop(q, None)
@@ -3027,7 +3047,7 @@ class Game:
         self._owed = 0.0
         self._spend(config.STOP_REST_HOURS)
         self.delves[pid]["hours"] += config.STOP_REST_HOURS
-        if self.live:
+        if self.timed:
             self.delves[pid]["ready_tick"] = self.tick_count + config.STOP_REST_HOURS
         return f"🏕 {self.parties.get(pid).name} rests safely at the wayside stop ({config.STOP_REST_HOURS}h)."
 
@@ -3135,7 +3155,7 @@ class Game:
         for s in self._members_in("main", pid):
             if s.state == "sleeping":
                 s.state = "idle"
-        if self.live and pid in self.delves:
+        if self.timed and pid in self.delves:
             self.delves[pid]["ready_tick"] = self.tick_count + int(math.ceil(self._owed))
         self._owed = 0.0
         self.journal.extend(out)
@@ -3282,7 +3302,7 @@ class Game:
                 # a floor they finished is fully known; only the one they were still exploring becomes a half-finished note
                 self.intel[f] = max(self.intel.get(f, 0.0), 100.0 if frac >= 1.0 else round(100 * frac * config.SCOUT_NOTE_FRACTION, 1))
             if survivors:                              # out of time and supplies: overdue - a rescue party may still reach them
-                owed = int(math.ceil(self._owed)) if self.live else 0
+                owed = int(math.ceil(self._owed)) if self.timed else 0
                 self._owed = 0.0
                 self._set_flag(survivors, "stranded")
                 self.stranded.append(dict(id=self.next_stranded, ids=[s.id for s in survivors], first=first, last=last,
@@ -3424,7 +3444,7 @@ class Game:
     def _camp_hour(self, members) -> List[str]:
         """One hour of rest in the field. Turn mode lets the colony live that hour; live mode applies the rest to
         the party directly (the colony only moves with the wall clock) and charges the hour to the session."""
-        if not self.live:
+        if not self.timed:
             return self.tick(1)
         for s in members:
             if s.id in self.roster:

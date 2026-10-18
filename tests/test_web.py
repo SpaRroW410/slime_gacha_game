@@ -110,6 +110,9 @@ class TestCommands(unittest.TestCase):
         self.assertTrue(r["ok"])
         self.assertTrue(r["result"]["battle"][0]["log"])
         self.assertFalse(s.call("spar", {"a": a, "b": a, "discipline": "sword"})["ok"])
+        away = s.call("state")["state"]["away"]
+        self.assertTrue(any(x["kind"] == "expedition" and x["hours"] > 0 for x in away))     # the duellists are away with the hours left
+        s.call("wait", {"hours": 3})
         r = s.call("skirmish", {"pid": 1, "tier": 1})
         self.assertTrue(r["ok"])
         bat = r["result"]["battle"][0]
@@ -128,13 +131,19 @@ class TestCommands(unittest.TestCase):
         self.assertIn("complete", r["result"])
         self.assertFalse(s.call("scout", {"pid": 1, "first": 1, "last": 2, "hours": 1})["ok"])   # below the minimum
         self.assertFalse(s.call("scout", {"pid": 1, "first": 5, "last": 5, "hours": 8})["ok"])   # floors not walked
+        s.call("wait", {"hours": 48})                                                          # the scouts come home
         for sl in s.game.slimes():
             sl.hp, sl.state, sl.grounded = sl.max_hp, "idle", False
+            sl.needs.v.update({k: 90.0 for k in sl.needs.v})
+            sl.emotions.clear()
         g = s.call("grind", {"pid": 1, "depth": 2, "runs": 2})
         self.assertTrue(g["ok"], g["error"])
         self.assertTrue(g["result"]["battle"])
+        s.call("wait", {"hours": 72})
         for sl in s.game.slimes():
             sl.hp, sl.state, sl.grounded = sl.max_hp, "idle", False
+            sl.needs.v.update({k: 90.0 for k in sl.needs.v})
+            sl.emotions.clear()
         e = s.call("enter_dungeon", {"pid": 1})
         self.assertTrue(e["ok"], e["error"])
         self.assertIn("1", e["state"]["dungeon"]["delves"])
@@ -145,9 +154,13 @@ class TestCommands(unittest.TestCase):
         n = s.call("delve_next", {"pid": 1})
         self.assertTrue(n["ok"])
         self.assertTrue(n["result"]["battle"][0]["log"])
+        busy = n["state"]["dungeon"]["delves"]["1"]["ready_in"]
+        self.assertGreater(busy, 0)                                                             # the floor took game hours: the party is away
+        s.call("wait", {"hours": busy})                                                         # ... until they pass
         c = s.call("delve_camp", {"pid": 1, "hours": 2})
         self.assertTrue(c["ok"] or "not inside" in c["error"])
-        if "1" in c["state"]["dungeon"]["delves"]:
+        d = c["state"]["dungeon"]["delves"].get("1")
+        if d and not d["can_leave"]:
             self.assertFalse(s.call("leave_dungeon", {"pid": 1})["ok"])               # mid-segment: no way out
 
     def test_academy_town_council_commands(self):
