@@ -227,6 +227,7 @@ class ConflictEngine:
             s.morale = max(0.0, s.morale - config.BRAWL_MORALE)            # a brawl leaves both sour
             emotions.feel(s, "anger", config.BRAWL_ANGER)
             s.grounded = True
+            s.brawls += 1
             if s.busy:                   # a brawl cuts a hunt / lesson short
                 s.state, s.hunt, s.task = "idle", None, None
         events.append(f"💥 {by_id[c.a].name} and {by_id[c.b].name} brawl! Both are grounded until mediated.")

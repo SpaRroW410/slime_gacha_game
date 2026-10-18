@@ -238,7 +238,7 @@ class TestRestArea(unittest.TestCase):
 class TestBuildings(unittest.TestCase):
     def test_buildings_start_at_level_one(self):
         g = rich()
-        self.assertEqual(set(BUILDINGS.keys()), {"rest_area", "training_grounds", "library", "barracks", "armory", "chamber", "alchemy", "kitchen", "hospital", "blade_yard", "archery_range", "mana_pool", "spar_sword", "spar_archery", "spar_magic", "spar_party"})
+        self.assertEqual(set(BUILDINGS.keys()), {"rest_area", "training_grounds", "library", "barracks", "armory", "chamber", "alchemy", "kitchen", "hospital", "blade_yard", "archery_range", "mana_pool", "spar_sword", "spar_archery", "spar_magic", "spar_party", "party_yard"})
         self.assertTrue(all(g.buildings.level(k) == 1 for k in BUILDINGS.keys()))
 
     def test_upgrade_pays_and_caps(self):
@@ -521,3 +521,41 @@ class TestCouncil(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRelief(unittest.TestCase):
+    def test_merging_a_troublemaker_changes_nobodys_morale(self):
+        from tests.test_time import mk as mkgame
+        g = mkgame(seed=41, n=5)
+        a, b, c, d, e = g.slimes()
+        for s in (a, b, c, d, e):
+            s.morale = 70.0
+        d.grounded = True                                       # brawling
+        morale = {s.id: s.morale for s in (a, b, c, e)}
+        stress = g.sacrifice_stress
+        log = g.merge(a.id, d.id)
+        self.assertTrue(any("No change in morale" in l for l in log))
+        self.assertEqual(g.sacrifice_stress, stress)
+        self.assertEqual({s.id: s.morale for s in (a, b, c, e)}, morale)
+
+    def test_a_habitual_brawler_is_a_nuisance_but_weak_is_no_reason(self):
+        from tests.test_time import mk as mkgame
+        g = mkgame(seed=43, n=5)
+        a, b, c, d, e = g.slimes()
+        d.brawls = config.NUISANCE_BRAWLS
+        self.assertTrue(g.unwelcome(d))
+        d.brawls = 0
+        d.level = 1                                              # weak, but liked well enough
+        self.assertFalse(g.unwelcome(d))
+
+    def test_a_loved_slime_is_still_mourned(self):
+        from tests.test_time import mk as mkgame
+        g = mkgame(seed=42, n=5)
+        a, b, c, d, e = g.slimes()
+        for s in (a, b, c, d, e):
+            s.morale = 70.0
+        g.social.bonds[tuple(sorted((c.id, d.id)))] = 40         # best friends
+        if g.unwelcome(d):
+            self.skipTest("this seed makes the donor unwelcome")
+        g.merge(a.id, d.id)
+        self.assertGreater(g.sacrifice_stress, 0)

@@ -418,8 +418,8 @@ def _ward_round(game, doctor, events: List[str]) -> None:
     """Every hour a doctor on duty heals the injured at home (more with a bigger Hospital and a better doctor)."""
     rate = config.HOSPITAL_HEAL[game.buildings.level("hospital") - 1] * power(doctor, "doctor", game)
     for o in injured(game)[0]:
-        if o is doctor and o.state == "working":
-            continue
+        if (o is doctor and o.state == "working") or o.state == "resting":
+            continue                                      # (patients in the ward / Rest Area have their own care)
         o.hp = min(o.max_hp, o.hp + max(1, int(o.max_hp * rate)))
 
 

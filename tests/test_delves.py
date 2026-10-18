@@ -138,7 +138,8 @@ class TestDelve(unittest.TestCase):
         pid = party(g, strong=True)
         g.enter_dungeon(pid)
         g.delve_next(pid)
-        g.recall(members(g, pid)[0].id)
+        with self.assertRaises(InvalidAction):
+            g.recall(members(g, pid)[0].id)                  # nobody can be called back from the Descent
         self.assertEqual(members(g, pid)[0].in_dungeon, "main")
 
     def test_wipe_ends_the_delve_and_deaths_are_permanent(self):

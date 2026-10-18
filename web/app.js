@@ -73,7 +73,7 @@ function ghost(g) { // graveyard entry
 }
 
 /* ---------------------------------------------------------------- persistence + api */
-function saveLocal(save) { try { localStorage.setItem(LS_KEY, JSON.stringify({ save, at: Date.now() })); } catch (e) { /* storage may be blocked */ } }
+function saveLocal(save) { S.lastSave = save; try { localStorage.setItem(LS_KEY, JSON.stringify({ save, at: Date.now() })); } catch (e) { /* storage may be blocked */ } }
 function loadLocal() { try { const r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r).save : null; } catch (e) { return null; } }
 
 function toast(msg, err = false) {
@@ -91,6 +91,30 @@ function pushLog(lines) {
   S.feed = S.feed.slice(0, 120);
 }
 
+/* The save as it is right now: what the last response carried, else the browser copy, else ask the game for it. */
+async function currentSave() {
+  let save = S.lastSave || loadLocal();
+  if (!save) { try { const r = await backend.call('state', {}); save = r && r.save; } catch (e) { /* no game yet */ } }
+  return save || null;
+}
+/* Export: the share sheet where there is one (iPhone: "Save to Files"), else a download link added to the page (Safari needs
+   it attached) and kept alive long enough; the text can also be copied. */
+async function exportSave() {
+  const save = await currentSave();
+  if (!save) return toast('Nothing to export yet: play a little first.', true);
+  const text = JSON.stringify(save), name = `slime-gacha-save-day${S.state?.day ?? ''}.json`;
+  try {
+    const file = new File([text], name, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Slime Gacha save' }); lsSet(LS_EXPORT, Date.now()); return toast('Save shared.'); }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = name; a.style.display = 'none'; document.body.appendChild(a); a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 30000);
+    lsSet(LS_EXPORT, Date.now());
+    toast('Save exported. If nothing downloaded, use “Copy save text”.');
+  } catch (e) { toast('Export failed: use “Copy save text” instead.', true); }
+}
 async function act(cmd, args = {}, opt = {}) {
   if (S.busy) return null;
   S.busy = true;
@@ -178,6 +202,7 @@ function render() {
   <nav class="tabs">${TABS.map(([k, n]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-t="${k}">${n}${tabBadge(k)}</button>`).join('')}</nav>
   ${liveBar()}
   ${awayBar()}
+  ${notices()}
   <main>${tabContent()}</main>
   <section style="padding:0 16px 20px;max-width:1280px;margin:0 auto;width:100%"><details><summary class="mute">Event log</summary><div class="feed">${S.feed.map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Nothing yet.</small>'}</div></details></section>
   ${S.sel && slimeById(S.sel) ? `<div class="scrim" data-act="closesel"></div>${drawer(slimeById(S.sel))}` : ''}
@@ -370,7 +395,16 @@ function dOverview(s, { st, free, inDun }) {
     ${sect('Care', inDun ? 'This slime is inside a dungeon: feeding, petting, sleeping and potions are not possible until it is back.' : 'Feeding, petting and rest. Not possible while a slime is inside a dungeon.', `<div class="row">
       ${care('feed', '🍖 Feed', st.wallet.food > 0 ? '' : 'x')}${care('serve', '🍽 Serve a dish', st.jobs.kitchen.total > 0 ? '' : 'x')}${care('pet', '🤗 Pet')}
       ${s.state === 'sleeping' || s.state === 'resting' ? care('wake', s.state === 'sleeping' ? '⏰ Wake (mood −)' : '⏰ Wake') : care('sleep', '😴 Sleep', free ? '' : 'x')}
-      <button class="btn small" data-act="do" data-c="rest" ${!inDun && free && s.state !== 'resting' ? '' : 'disabled'}>🛏️ Rest Area</button>
+      ${(() => {
+        const restFull = st.rest.used >= st.rest.cap, hosp = st.jobs.hospital, hospFull = hosp.used >= hosp.beds;
+        const inRest = s.state === 'resting' && !s.ward, inWard = s.state === 'resting' && s.ward;
+        const canMove = !inDun && (free || s.state === 'resting');
+        const callable = ['hunting', 'studying', 'resting'].includes(s.state) && !inDun;
+        const callWhy = inDun ? 'Away in the Descent, a scouting trip or a monster wave: it cannot be called back' : !callable ? 'Nothing to call back from' : '';
+        return `<button class="btn small" data-act="do" data-c="rest" ${canMove && !inRest && !restFull ? '' : 'disabled'} title="${inRest ? 'Already in the Rest Area' : restFull ? 'The Rest Area is full' : ''}">🛏️ Rest Area (${st.rest.used}/${st.rest.cap})</button>
+        <button class="btn small" data-act="do" data-c="hospital" ${canMove && !inWard && !hospFull && s.hp < s.max_hp ? '' : 'disabled'} title="${inWard ? 'Already in the Hospital' : hospFull ? 'The Hospital is full' : s.hp >= s.max_hp ? 'Not hurt' : hosp.on_duty ? 'A doctor is on duty: patients heal 30% faster than in the Rest Area' : 'No doctor: patients heal about 5% faster than in the Rest Area'}">🏥 Hospital (${hosp.used}/${hosp.beds})</button>
+        <button class="btn small" data-act="do" data-c="recall" ${callable ? '' : 'disabled'} title="${esc(callWhy)}">📞 Call back</button>`;
+      })()}
       ${s.can_evolve ? `<button class="btn small primary" data-act="do" data-c="evolve" ${free ? '' : 'disabled'}>🌟 Evolve (${s.evolve_cost} ✨)</button>` : ''}</div>
       ${st.potions.stock.length ? `<div class="row"><select data-ui="pot_sel">${st.potions.stock.map((p) => `<option value="${p.kind}:${p.grade}">${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}</option>`).join('')}</select><button class="btn small" data-act="use_potion" ${inDun ? 'disabled' : ''}>Drink</button></div>` : ''}`)}
     ${sect('Orders', 'Stance decides what the slime does in a fight. Hunting sends it out for gel, food and essence.', `<div class="row"><label class="f">Stance <select data-act-change="stance">${st.stances.map((x) => `<option ${x === s.behavior ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>
@@ -584,7 +618,7 @@ function dungeonsAll() {
         ${chips('rescue_ids', rescueIds)}
         <button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left || !rescueIds.length ? 'disabled' : ''}>🛟 Send rescue (${rescueIds.length})</button></div>`).join('')}</div>` : '';
   const scouting = `<div class="panel stack"><h2>🔭 Scouting ${info('Scouts learn specific floors (any run of floors up to the limit, not only multiples of 5). They must reach 100% of every floor they were sent to within the hour budget; floors they finish stay known even if they run out of time. Leave the budget empty to use the safe budget from the estimate. One slime is enough; more only helps if they are good scouts.')}</h2>
-      <p class="mute">Send <b>one to ${st.party_size}</b> slimes (no party needed) to learn floors (1 to ${d.scout_max_floors} at a time). Scouts must reach <b>100% of every targeted floor</b> within the budget, or they are stranded until rescued. Each scout must have cleared the floor above the first one scouted.</p>
+      <p class="mute">Send <b>one to ${st.party_size}</b> slimes (no party needed) to learn floors (1 to ${d.scout_max_floors} at a time). Scouts must reach <b>100% of every targeted floor</b> within the budget, or they are stranded until rescued. The floor above the first one scouted must be <b>scouted already or cleared in the Descent</b> (by anyone in the colony), so even a level-1 slime can go on over known floors.</p>
       ${chips('scout_ids', scoutIds)}
       <div class="row"><label class="f">Floors <input type="number" min="1" max="${d.max_floor}" value="${sfirst}" data-ui="sfirst" style="width:64px"> to <input type="number" min="1" max="${d.max_floor}" value="${slast}" data-ui="slast" style="width:64px"></label>
         <button class="btn small" data-act="scout_plan" ${scoutIds.length ? '' : 'disabled'}>📏 Estimate</button></div>
@@ -694,10 +728,29 @@ function statusTags(s) {
   return t.join(' · ');
 }
 function wakePanel() {
-  const sleepers = S.state.slimes.filter((s) => s.state === 'sleeping' && !s.in_dungeon);
+  const st = S.state;
+  const sleepers = st.slimes.filter((s) => s.state === 'sleeping' && !s.in_dungeon);
   const ok = sleepers.filter((s) => s.needs.energy >= 10), tired = ok.filter((s) => s.needs.energy < 50);
-  return `<div class="panel flat row between"><span>😴 <b>${sleepers.length}</b> asleep in town${sleepers.length - ok.length ? ` · ${sleepers.length - ok.length} under 10% energy are left to sleep` : ''}${tired.length ? ` · ⚠ ${tired.length} would wake grumpy (under 50% energy)` : ''}</span>
-    <button class="btn" data-act="wake_all" ${ok.length ? '' : 'disabled'}>☀️ Wake everybody</button></div>`;
+  const hurt = st.slimes.filter((s) => ['idle', 'sleeping'].includes(s.state) && !s.in_dungeon && s.hp < s.max_hp && !s.ward);
+  const beds = st.jobs.hospital.beds - st.jobs.hospital.used;
+  const weary = st.slimes.filter((s) => s.state === 'idle' && !s.in_dungeon && s.needs.energy < 25);
+  return `<div class="panel flat stack"><div class="row between"><span>😴 <b>${sleepers.length}</b> asleep in town${sleepers.length - ok.length ? ` · ${sleepers.length - ok.length} under 10% energy are left to sleep` : ''}${tired.length ? ` · ⚠ ${tired.length} would wake grumpy (under 50% energy)` : ''}</span>
+    <button class="btn" data-act="wake_all" ${ok.length ? '' : 'disabled'}>☀️ Wake everybody</button></div>
+    <div class="row"><button class="btn" data-act="admit_hurt" ${hurt.length && beds > 0 ? '' : 'disabled'} title="Most hurt first, while the ward has beds">🏥 Send all hurt to the Hospital (${hurt.length} hurt · ${Math.max(0, beds)} beds)</button>
+      <button class="btn" data-act="sleep_tired" ${weary.length ? '' : 'disabled'} title="Idle slimes under 25% energy">💤 Send all low-energy to sleep (${weary.length})</button></div></div>`;
+}
+/* Notices under the tabs: what changed in the last update, and a reminder to back the colony up to a file (the browser copy is the only copy). */
+const LS_NEWS = 'sg_seen_news', LS_EXPORT = 'sg_last_export', LS_SNOOZE = 'sg_backup_snooze';
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, String(v)); } catch (e) { /* blocked */ } };
+const BACKUP_DAYS = 3;
+function backupAge() { const t = Number(lsGet(LS_EXPORT)); return t ? (Date.now() - t) / 86400000 : null; }
+function backupDue() { const a = backupAge(); return (a === null || a >= BACKUP_DAYS) && Date.now() - Number(lsGet(LS_SNOOZE) || 0) > 86400000; }
+function notices() {
+  const n = S.state?.whats_new, out = [];
+  if (n && lsGet(LS_NEWS) !== n.id) out.push(`<div class="panel flat row between"><span>🆕 <b>What's new:</b> ${esc(n.text)}</span><button class="btn small" data-act="dismiss_news">Got it</button></div>`);
+  if (backupDue()) { const a = backupAge(); out.push(`<div class="panel flat row between warnbox"><span>💾 ${a === null ? 'You have never exported your colony.' : `Your last backup was ${Math.floor(a)} days ago.`} The only copy lives in this browser: export a save file now and then.</span><span class="row"><button class="btn small primary" data-act="export">⬇ Export</button><button class="btn small" data-act="snooze_backup">Later</button></span></div>`); }
+  return out.length ? `<div style="padding:0 16px;max-width:1280px;margin:8px auto 0;width:100%">${out.join('')}</div>` : '';
 }
 function postPanel(key, extra = '') {
   const st = S.state, j = st.jobs.posts.find((p) => p.key === key);
@@ -780,7 +833,9 @@ function about() {
   const chipFor = (s) => chip(s, s === 'in progress' ? 'warn' : s === 'later' ? 'info' : '');
   return `<div class="panel stack"><div class="row between"><h2>ℹ️ ${esc(a.name)}</h2><span class="chip ok">version ${esc(a.version)}</span></div>
     <p>${esc(a.summary)}</p>
-    <small class="mute">Saves are format ${a.save_version}. The Guide tab has the numbers behind every mechanic.</small></div>
+    <small class="mute">Saves are format ${a.save_version}. The Guide tab has the numbers behind every mechanic.</small>
+    <div class="panel flat row between ${backupDue() || backupAge() === null ? 'warnbox' : ''}"><span>💾 <b>Back up your colony.</b> ${backupAge() === null ? 'You have never exported it.' : `Last backup: ${Math.floor(backupAge())} day(s) ago.`} The browser copy is the only copy: export a file every few days (the game reminds you after ${BACKUP_DAYS}).</span><span class="row"><button class="btn small primary" data-act="export">⬇ Export</button><button class="btn small" data-act="copy_save">📋 Copy</button></span></div>
+    <div class="panel flat"><b>🆕 What's new:</b> ${esc(S.state.whats_new?.text || '')}</div></div>
   ${a.sections.map((s) => `<details class="panel guide" open><summary><b>${s.icon} ${esc(s.title)}</b></summary><ul>${s.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></details>`).join('')}
   <div class="panel stack"><h2>🗺 Still to come</h2><small class="mute">The remaining roadmap, in the order the work is planned.</small>
     ${groups.map((g) => `<h4>${esc(g)}</h4>${a.roadmap.filter((r) => r.group === g).map((r) => `<div class="panel flat"><div class="row between"><b>${esc(r.title)}</b>${chipFor(r.status)}</div><small class="mute">${esc(r.text)}</small></div>`).join('')}`).join('')}</div>`;
@@ -867,9 +922,13 @@ function academyAll() {
       ${postPanel('trainer_' + d.key)}</div>`;
   };
   const trainingFacility = `<div class="panel stack"><h2>🥋 Training facilities — proficiency</h2>
-    <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable). Each discipline has its own facility with its own places: the <b>Blade Yard</b> (sword classes), the <b>Archery Range</b> (rangers) and the <b>Mana Pool</b> (casters). Upgrade each one separately in Town &gt; Buildings; every level adds two places. The Training Grounds (L${tg.level}) boost the gains and unlock stronger drills (Advanced at level 3, Master at level 5). A drill is worth less as a slime nears mastery.</p>
+    <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable). Each discipline has its own facility with its own places (plus a yard for whole parties): the <b>Blade Yard</b> (sword classes), the <b>Archery Range</b> (rangers) and the <b>Mana Pool</b> (casters). Upgrade each one separately in Town &gt; Buildings; every level adds two places. The Training Grounds (L${tg.level}) boost the gains and unlock stronger drills (Advanced at level 3, Master at level 5). A drill is worth less as a slime nears mastery.</p>
     <div class="row"><label class="f">Drill <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)} · ${t.ticks}h · ${esc(cost(t.cost))}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select></label></div>
-    ${st.disciplines.map(yardPanel).join('')}</div>`;
+    ${st.disciplines.map(yardPanel).join('')}
+    <div class="panel flat stack">${facHead(st.party_yard)}
+      <small class="mute">A yard for a whole party: pick a party and everyone trains for themselves in their own field. Proficiency rises for every member and the party grows closer (synergy). One flat drill cost for the whole party (the basic drill is 1 ⚪). Each level holds one more party.</small>
+      <div class="row">${partyOptions('ptpid')}<button class="btn primary" data-act="party_train" ${lvl(st.party_yard).capacity - lvl(st.party_yard).users.length >= st.party_size && S.ui.ptpid ? '' : 'disabled'}>🥋 ${esc(tr.name)} (${tr.ticks}h) · ${esc(cost(tr.cost))}</button></div>
+      ${facUsers(st.party_yard, 'In training')}</div></div>`;
   const duelPanel = (d) => {
     const k = st.facility_arenas[d.key], a = 'spa_' + d.key, b = 'spb_' + d.key;
     const A = slimeSel(a, avail, 'data-rerender="1"', 0, d.key), B = slimeSel(b, (s) => avail(s) && s.id != num(ui(a)), 'data-rerender="1"', 1, d.key);
@@ -1057,7 +1116,7 @@ function sacrificeView() {
       ${bar(Math.min(st.stress, 5), 5, 'morale', 'Sacrifice stress', st.stress)}
       <div class="row"><label class="f">Target (keeps living) ${t}</label><label class="f">Donor (consumed) ${d}</label></div>
       ${tid === did && free.length >= 2 ? '<small class="mute">Choose two different slimes.</small>' : ''}
-      ${pv ? `<div class="panel flat"><b>${esc(dsl?.name)} → ${esc(tsl?.name)}</b>: +${pv.xp} XP · compatibility ${pv.compat >= 0 ? '+' : ''}${pv.compat} (${esc(pv.label)}) · colony morale cost about ${pv.grief}</div>` : '<small class="mute">Press Preview to see the XP, compatibility and morale cost.</small>'}
+      ${pv ? `<div class="panel flat"><b>${esc(dsl?.name)} → ${esc(tsl?.name)}</b>: +${pv.xp} XP · compatibility ${pv.compat >= 0 ? '+' : ''}${pv.compat} (${esc(pv.label)}) · ${pv.relief ? 'the colony would be relieved: <b>no morale change</b>' : `colony morale cost about ${pv.grief}`}</div>` : '<small class="mute">Press Preview to see the XP, compatibility and morale cost.</small>'}
       <div class="row"><button class="btn" data-act="merge_preview" ${ok ? '' : 'disabled'}>🔍 Preview</button>
         <button class="btn danger" data-act="merge" data-t="${tid}" data-d="${did}" data-tn="${esc(tsl?.name)}" data-dn="${esc(dsl?.name)}" data-xp="${pv ? pv.xp : '?'}" data-g="${pv ? pv.grief : '?'}" ${ok ? '' : 'disabled'}>Merge</button></div></div>
     <div class="panel stack"><h2>🔥 Destroy a slime</h2>
@@ -1255,6 +1314,7 @@ function modalHtml() {
         <button class="btn small ${S.state.potions.autonomy ? 'primary' : ''}" data-act="autonomy" title="Slimes use up to 66% of your stocks by themselves">🤖 Autonomy ${S.state.potions.autonomy ? 'on' : 'off'}</button></div>
       <h4 style="margin:6px 0 0">Save</h4>
       <button class="btn" data-act="export">⬇ Export save (.json)</button>
+      <button class="btn" data-act="copy_save">📋 Copy save text</button>
       <label class="btn" style="display:block">⬆ Import save<input type="file" accept=".json,application/json" data-import hidden></label>
       <button class="btn danger" data-act="newgame2">🗑 Start a new colony</button>
       <small class="mute">Backend: ${esc(S.backendName)}. Your colony is saved automatically in this browser.</small></div></div>`;
@@ -1386,6 +1446,7 @@ const A = {
     const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
     act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn() }, { title: 'Wave simulation' }); },
   drill: (d) => act('drill', { id: num(ui('dsl_' + d.d)), discipline: d.d, tier: num(ui('dtier', 1), 1) }),
+  party_train: () => { const pid = num(S.ui.ptpid); if (!pid) return toast('You need a full party at home.', true); act('party_train', { pid, tier: num(ui('dtier', 1), 1) }, { slow: true }); },
   spar: (d) => { const a = num(ui('spa_' + d.d)), b = num(ui('spb_' + d.d)); act('spar', { a, b, discipline: d.d }, { title: 'Sparring match' }); },
   spar_parties: () => { const pid = num(S.ui.sppid), other = num(S.ui.sppid2); if (!pid || !other) return toast('You need two full parties at home.', true);
     act('spar_parties', { pid, other, discipline: ui('pstyle', 'sword') }, { title: 'Party spar', slow: true }); },
@@ -1409,9 +1470,13 @@ const A = {
   newgame: () => act('new_game', { seed: ui('seed') ? num(ui('seed')) : null, party_size: num(ui('psize', 5), 5) }).then(() => { S.tab = 'colony'; S.sel = null; S.pull = null; render(); }),
   newgame2: () => confirmThen('Abandon this colony and start over? The current save will be overwritten.', () => { S.modal = null; S.state = null; S.feed = []; render(); }),
   continue: async () => { const save = loadLocal(); const r = await backend.call('load', { save }); if (r.ok) { S.state = r.state; render(); } else toast(r.error, true); },
-  export: () => { const save = loadLocal(); if (!save) return toast('Nothing to export yet.', true);
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(save)], { type: 'application/json' }));
-    a.download = 'slime-gacha-save.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); },
+  export: async () => { await exportSave(); render(); },
+  dismiss_news: () => { lsSet(LS_NEWS, S.state.whats_new.id); render(); },
+  snooze_backup: () => { lsSet(LS_SNOOZE, Date.now()); render(); },
+  admit_hurt: () => act('admit_hurt'),
+  sleep_tired: () => act('sleep_tired'),
+  copy_save: async () => { const save = await currentSave(); if (!save) return toast('Nothing to copy yet.', true);
+    try { await navigator.clipboard.writeText(JSON.stringify(save)); lsSet(LS_EXPORT, Date.now()); toast('Save copied: paste it into a text file or a note.'); } catch (e) { toast('Copying is blocked here: use Export.', true); } },
 };
 
 document.addEventListener('click', (e) => {

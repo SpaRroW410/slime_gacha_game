@@ -102,6 +102,7 @@ class Game:
         self.wall_last: Optional[float] = None
         self.wall_frac = 0.0
         self.expeditions: List[dict] = []              # live mode: parties away until a game tick
+        self.ward: List[int] = []                      # slimes admitted to the Hospital ward (they are 'resting', in the ward)
         self.pantry: Dict[str, int] = {}               # cooked servings by recipe (jobs.py: chef and kitchen)
         self.recipe_pref = "auto"                      # the recipe the chef cooks ("auto" = the best one)
         self.forge_progress, self.forge_next = 0, "weapon"   # the blacksmith's slow forging (jobs._craft)
@@ -287,6 +288,8 @@ class Game:
     def facility_capacity(self, key: str) -> int:
         """Slimes a facility holds at once: yards and duelling rings take two per level, the Party Arena a team match per level."""
         lv = self.buildings.level(key)
+        if key == bld.PARTY_YARD:
+            return self.parties.size * lv                     # one party per level
         return 2 * self.parties.size * lv if key == bld.PARTY_ARENA else 2 * lv
 
     def facility_users(self, key: str) -> List[Slime]:
@@ -446,7 +449,9 @@ class Game:
             self.tick_count += 1
             self.needs.tick(self.slimes(), events)
             self._reap(events)
-            bld.rest_tick(self.slimes(), self.buildings, events)
+            doc = jobs.holder(self, "doctor")
+            bld.rest_tick(self.slimes(), self.buildings, events, set(self.ward), bool(doc and doc.state == "working"))
+            self.ward = [i for i in self.ward if i in self.roster and self.roster[i].state == "resting"]
             self.sacrifice_stress = max(0.0, self.sacrifice_stress - 1.0 / config.SACRIFICE_STRESS_DECAY_TICKS)
             self.social.morale_tick(self.slimes(), self.sacrifice_stress)
             self.hunts.tick(self.slimes(), events)
@@ -1024,6 +1029,27 @@ class Game:
             return "is in a rage and refuses"
         return ""
 
+    def admit_hurt(self) -> List[str]:
+        """Send every hurt slime at home to the Hospital ward, the most hurt first, while there are beds."""
+        hurt = sorted((s for s in self.slimes() if s.state in ("idle", "sleeping") and not s.in_dungeon and s.hp < s.max_hp
+                       and s.id not in self.ward), key=lambda s: s.hp / s.max_hp)
+        out = []
+        for s in hurt:
+            try:
+                out.append(self.admit(s.id))
+            except InvalidAction as e:
+                out.append(f"🏥 {e}")
+                break
+        return out or ["Nobody at home is hurt."]
+
+    def sleep_tired(self) -> List[str]:
+        """Put every idle slime at home that is low on energy to sleep."""
+        out = []
+        for s in self.slimes():
+            if s.state == "idle" and not s.in_dungeon and s.needs.get("energy") < config.TASK_MIN_ENERGY:
+                out.append(self.sleep(s.id))
+        return out or ["Nobody idle is tired."]
+
     def wake_all(self) -> List[str]:
         """Wake every sleeper at home, except those below REFUSE_ENERGY (they need the sleep). Tired ones are grumpy."""
         out = []
@@ -1116,6 +1142,13 @@ class Game:
         s = self.slime(sid)
         if s.job and s.state == "hunting":
             return jobs.recall(self, s)                       # a worker out foraging goes straight back to the post
+        if s.state == "resting":
+            s.state = "idle"
+            if s.id in self.ward:
+                self.ward.remove(s.id)
+            return f"{s.name} was called back home."
+        if s.state not in ("hunting", "studying"):
+            raise InvalidAction(f"{s.name} is {s.in_dungeon and 'in a dungeon' or s.state}: there is nobody to call back.")
         self.hunts.recall(s)
         self.academy.cancel(s)
         return f"{s.name} was called back."
@@ -1217,7 +1250,29 @@ class Game:
 
     # ---- rest area -------------------------------------------------------------------------
     def resting_count(self) -> int:
-        return sum(1 for s in self.slimes() if s.state == "resting")
+        """Slimes in the Rest Area (the Hospital ward has its own beds)."""
+        return sum(1 for s in self.slimes() if s.state == "resting" and s.id not in self.ward)
+
+    def ward_count(self) -> int:
+        return sum(1 for s in self.slimes() if s.state == "resting" and s.id in self.ward)
+
+    def admit(self, sid: int) -> str:
+        """Send a slime to the Hospital ward: it heals faster than in the Rest Area (30% faster with a doctor on duty,
+        5% without) and leaves once healed. The ward has a limited number of beds (Hospital level)."""
+        s = self.slime(sid)
+        if s.busy or s.in_dungeon:
+            raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
+        if s.state == "resting" and s.id in self.ward:
+            return f"{s.name} is already in the Hospital."
+        beds = config.HOSPITAL_BEDS[self.buildings.level("hospital") - 1]
+        if self.ward_count() >= beds:
+            raise InvalidAction(f"The Hospital is full ({beds} beds). Upgrade it for more.")
+        if s.hp >= s.max_hp:
+            raise InvalidAction(f"{s.name} is not hurt.")
+        s.state = "resting"
+        self.ward.append(s.id)
+        doc = jobs.holder(self, "doctor")
+        return f"🏥 {s.name} is admitted to the Hospital ({'a doctor is on duty: +30% healing' if doc and doc.state == 'working' else 'no doctor on duty: +5% healing'})."
 
     def _auto_rest(self, s) -> bool:
         if s.state == "idle" and not s.in_dungeon and self.resting_count() < self.buildings.rest_capacity():
@@ -1230,10 +1285,12 @@ class Game:
         s = self.slime(sid)
         if s.busy:
             raise InvalidAction(f"{s.name} is away ({s.state}).")
-        if s.state == "resting":
+        if s.state == "resting" and s.id not in self.ward:
             return f"{s.name} is already resting."
         if self.resting_count() >= self.buildings.rest_capacity():
             raise InvalidAction(f"The Rest Area is full ({self.buildings.rest_capacity()}). Upgrade it for more room.")
+        if s.id in self.ward:
+            self.ward.remove(s.id)                         # moved out of the ward into the Rest Area
         s.state = "resting"
         return f"{s.name} sinks into the Rest Area."
 
@@ -1321,7 +1378,10 @@ class Game:
                         continue
                     c = self.social.compat(t, d)
                     gain = merge_gain(t, d, c)
-                    grief = self.social.grief(d, self.slimes(), 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress)
+                    if self.unwelcome(d):
+                        grief = 0                                                     # a nuisance's merge upsets nobody
+                    else:
+                        grief = self.social.grief(d, self.slimes(), 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress)
                     sugg.append(dict(target=t, donor=d, xp=gain, compat=c, grief=grief,
                                      net=gain - 3 * grief))
             sugg.sort(key=lambda x: -x["net"])
@@ -1358,6 +1418,38 @@ class Game:
                 out.append(f"✋ {e}")
         return out
 
+    def party_train(self, pid: int, tier: int = 1) -> List[str]:
+        """A whole party trains in the Party Training Yard, everyone for themselves: every member sharpens its own discipline
+        (class proficiency and a little fighting style) as in a solo drill, and every pair grows closer, which raises the
+        party's synergy. One flat drill cost for the whole party (1 white gel for the basic drill); the time is the drill's."""
+        from . import attributes
+        self._require_full(pid)
+        party = self.party_members(pid)
+        name, ticks, cost, _, style = self.academy.drill_tier(tier)
+        for s in party:
+            sparring.check_ready_basic(s)
+        self._check_room(bld.PARTY_YARD, len(party))
+        self.wallet.spend_many(cost)
+        out = list(self._prepare_trainees(party))
+        before = self.social.synergy(party)
+        for i, a in enumerate(party):
+            for b in party[i + 1:]:
+                self.social.add_bond(a, b, config.PARTY_TRAIN_BOND)
+        for s in party:
+            d = s.arch.discipline
+            gain = self.academy.drill_gain(s, d, tier) * (config.WOUNDED_DRILL if s.hp < s.max_hp * config.WOUNDED_BELOW else 1.0)
+            attributes.practise(s, d, gain, 0.5)
+            sparring.gain_style_xp(s, d, config.DRILL_STYLE_XP * style * self.buildings.style_mult() * jobs.trainer_bonus(self, d),
+                                   self.buildings.style_cap())
+            s.needs.add("energy", -8)
+            s.needs.add("esteem", 4)
+        out.append(f"🛡️ {self.parties.get(pid).name} trains together ({name.lower()}, {ticks}h): class proficiency up, "
+                   f"synergy {before - 1:+.1%} -> {self.social.synergy(party) - 1:+.1%}.")
+        events = self._occupy(party, ticks, "train", bld.PARTY_YARD)
+        out.extend("   " + e for e in events if "died" in e)
+        self.journal.extend(events)
+        return out
+
     def study(self, sid: int, element: str) -> str:
         """Attune to / study a basic element at the Library (3-star+ slimes of ANY class)."""
         s = self.slime(sid)
@@ -1388,13 +1480,22 @@ class Game:
     def evolve(self, sid: int) -> List[str]:
         return evolve(self.slime(sid), self.wallet)
 
+    def unwelcome(self, d: Slime) -> bool:
+        """Is this slime a nuisance the colony would be glad to see go: one that keeps brawling (or is brawling now) or one
+        disliked by most of the colony? Sacrificing such a slime upsets nobody. Being weak is no reason."""
+        if d.grounded or d.brawls >= config.NUISANCE_BRAWLS:
+            return True
+        others = [o for o in self.slimes() if o is not d]
+        return bool(others) and sum(self.social.compat(d, o) for o in others) / len(others) < -10
+
     def merge(self, target_id: int, donor_id: int) -> List[str]:
         t, d = self._free_slime(target_id), self._free_slime(donor_id)
         if d.id == self.vice:
             raise InvalidAction(f"{d.name} is the Vice Keeper and cannot be merged away. Dismiss them first.")
         compat = self.social.compat(t, d)
         amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
-        grief = self.social.grief(d, self.slimes(), amp)
+        relief = self.unwelcome(d)                             # a troublemaker's merge changes nobody's morale
+        grief = 0 if relief else self.social.grief(d, self.slimes(), amp)
         log = merge(t, d, compat)
         self._xp("merge", config.KEEPER_XP["merge"])
         self._return_gear(d)
@@ -1408,6 +1509,9 @@ class Game:
         self.parties.remove(d.id)
         self._lose_ties(d)
         self.social.forget(d.id)
+        if relief:
+            log.append(f"   {d.name} was a constant nuisance: the colony is relieved. No change in morale.")
+            return log
         for o in self.slimes():                               # the colony mourns the sacrifice
             base = config.MERGE_MORALE_FRIENDS if o.id in friends else config.MERGE_MORALE_OTHERS
             if o.id == t.id:
@@ -1431,7 +1535,8 @@ class Game:
         compat = self.social.compat(t, d)
         amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
         return dict(xp=merge_gain(t, d, compat), compat=compat, label=self.social.compat_label(compat),
-                    grief=self.social.grief(d, self.slimes(), amp), stress=round(self.sacrifice_stress, 2),
+                    grief=0 if self.unwelcome(d) else self.social.grief(d, self.slimes(), amp), stress=round(self.sacrifice_stress, 2),
+                    relief=self.unwelcome(d),
                     away=[s.name for s in (t, d) if s.busy])
 
     # ---- the commander's gifts (purple gel) ---------------------------------------------------------
@@ -1937,6 +2042,7 @@ class Game:
     def _consume_slime(self, s: Slime, stress: float) -> None:
         """Remove a slime sacrificed by the player: gear comes home, the colony mourns, stress rises."""
         amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
+        relief = self.unwelcome(s)                            # destroying a troublemaker upsets nobody
         friends = {i for f in self.conflicts.friends if s.id in f for i in f if i != s.id}
         friends |= {i for k, v in self.social.bonds.items() if s.id in k and v >= 20 for i in k if i != s.id}
         self._return_gear(s)
@@ -1945,6 +2051,8 @@ class Game:
         self.parties.remove(s.id)
         self._lose_ties(s)
         self.social.forget(s.id)
+        if relief:
+            return
         for o in self.slimes():
             base = config.MERGE_MORALE_FRIENDS if o.id in friends else config.MERGE_MORALE_OTHERS
             self.social.shift_morale(o, base * amp)
@@ -1975,11 +2083,13 @@ class Game:
             raise InvalidAction(f"{s.name} is the Vice Keeper and cannot be destroyed. Dismiss them first.")
         y = ascension.chamber_yield(s, self.buildings.level("chamber"))
         name, label = s.name, f"{config.RARITY_TAG[s.rarity]} {s.star_str()} Lv{s.level} {s.arch.name}"
+        relief = self.unwelcome(s)
         self._consume_slime(s, config.CHAMBER_STRESS)
         self.wallet.add_many(y)
         return [f"🔥 {name} ({label}) is destroyed in the chamber: " +
                 ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in y.items()) + ".",
-                f"   The colony mourns. Sacrifice stress is now {self.sacrifice_stress:.1f}."]
+                ("   A constant nuisance: the colony is relieved. No change in morale." if relief
+                 else f"   The colony mourns. Sacrifice stress is now {self.sacrifice_stress:.1f}.")]
 
     def _farm_loot(self, foes: int, log: List[str]) -> None:
         """Every farming dungeon (Pit, Rift, Quarry) also hands out a little of the other resources, rarely."""
@@ -3104,9 +3214,11 @@ class Game:
         if not config.SCOUT_MIN_HOURS <= hours <= config.SCOUT_MAX_HOURS:
             raise InvalidAction(f"The budget is {config.SCOUT_MIN_HOURS}-{config.SCOUT_MAX_HOURS} hours.")
         laggard = min(party, key=lambda s: s.progress)
-        if laggard.progress < first - 1:
-            raise InvalidAction(f"{laggard.name} has only cleared floor {laggard.progress}; scouts must have walked "
-                                f"the floors above floor {first}.")
+        cleared = max([self.best_floor] + [s.progress for s in self.slimes()])       # cleared in the Descent by anyone
+        if first > 1 and cleared < first - 1 and self._knowledge(first - 1) < 100.0:
+            raise InvalidAction(f"Floor {first - 1} is neither scouted nor cleared in the Descent (the colony has cleared up "
+                                f"to floor {cleared}): scout the floors above floor {first} first, in order. Even a fresh "
+                                f"slime may scout onward over floors that are scouted or cleared.")
         self.wallet.spend("food", int(math.ceil(hours * config.SCOUT_FOOD_PER_HOUR)))
         skill = self.scout_skill(party) * (1 + 0.08 * self.keeper.rank("keen_eye"))
         floors = list(range(first, last + 1))
@@ -3370,7 +3482,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, ward=self.ward, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -3472,6 +3584,7 @@ class Game:
         g.expeditions = [dict(e, ids=[i for i in e["ids"] if i in g.roster]) for e in d.get("expeditions", [])]
         g.expeditions = [e for e in g.expeditions if e["ids"]]
         g.pantry = {k: int(v) for k, v in d.get("pantry", {}).items()}
+        g.ward = [i for i in d.get("ward", []) if i in g.roster]
         g.recipe_pref = d.get("recipe_pref", "auto")
         g.forge_progress, g.forge_next = d.get("forge_progress", 0), d.get("forge_next", "weapon")
         g.stranded = [e for e in d.get("stranded", []) if any(i in g.roster for i in e["ids"])]

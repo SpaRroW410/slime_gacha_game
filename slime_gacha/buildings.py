@@ -75,6 +75,8 @@ register_building(Building("kitchen", "Kitchen", "🍳", 5,
 register_building(Building("blade_yard", "Blade Yard", "⚔️", 5, "Drill yard for sword classes: a bigger yard trains more slimes at once.", _costs(70, 10)))
 register_building(Building("archery_range", "Archery Range", "🏹", 5, "Drill yard for rangers: a bigger range trains more slimes at once.", _costs(70, 10)))
 register_building(Building("mana_pool", "Mana Pool", "🔮", 5, "Drill pool for casters: a bigger pool trains more slimes at once.", _costs(70, 10)))
+register_building(Building("party_yard", "Party Training Yard", "🛡️", 5, "A training yard for a whole party: everyone drills in their own field side by side, and the party grows closer. Each level holds one more party. Costs more than the single yards.",
+                           _costs(160, 25, purple_from=4)))
 register_building(Building("spar_sword", "Sword Arena", "🗡️", 5, "Duelling ring for the sword style: a bigger ring holds more duels at once.", _costs(90, 12)))
 register_building(Building("spar_archery", "Archery Arena", "🎯", 5, "Duelling ring for the archery style: a bigger ring holds more duels at once.", _costs(90, 12)))
 register_building(Building("spar_magic", "Spell Arena", "🪄", 5, "Duelling ring for the magic style: a bigger ring holds more duels at once.", _costs(90, 12)))
@@ -85,7 +87,8 @@ register_building(Building("spar_party", "Party Arena", "🏟️", 5, "A grand a
 DRILL_YARDS = {"sword": "blade_yard", "archery": "archery_range", "magic": "mana_pool"}
 SPAR_ARENAS = {"sword": "spar_sword", "archery": "spar_archery", "magic": "spar_magic"}
 PARTY_ARENA = "spar_party"
-FACILITIES = list(DRILL_YARDS.values()) + list(SPAR_ARENAS.values()) + [PARTY_ARENA]
+PARTY_YARD = "party_yard"          # a fourth training yard: a whole party trains side by side, everyone for themselves
+FACILITIES = list(DRILL_YARDS.values()) + [PARTY_YARD] + list(SPAR_ARENAS.values()) + [PARTY_ARENA]
 
 JOB_HOSTS = {"kitchen": "Chef", "armory": "Blacksmith", "library": "Librarian", "training_grounds": "Trainers", "alchemy": "Brewer", "hospital": "Doctor"}
 
@@ -129,9 +132,10 @@ class BuildingManager:
             "alchemy": lambda: f"brews potions up to grade {lv}",
             **{k: (lambda lv=lv: f"trains {2 * lv} slimes at once") for k in DRILL_YARDS.values()},
             **{k: (lambda lv=lv: f"{lv} duel{'s' if lv > 1 else ''} at once ({2 * lv} slimes)") for k in SPAR_ARENAS.values()},
+            PARTY_YARD: lambda: f"trains {lv} part{'ies' if lv > 1 else 'y'} at once",
             PARTY_ARENA: lambda: f"{lv} team match{'es' if lv > 1 else ''} at once ({lv} x 2 parties)",
             "kitchen": lambda: f"pantry holds {config.PANTRY_PER_LEVEL * lv} servings",
-            "hospital": lambda: f"doctor heals the injured {int(config.HOSPITAL_HEAL[lv - 1] * 100)}% HP/hour",
+            "hospital": lambda: f"{config.HOSPITAL_BEDS[lv - 1]} ward beds (patients heal +{int(config.WARD_NO_DOCTOR_BONUS * 100)}%, +{int(config.WARD_DOCTOR_BONUS * 100)}% with a doctor); a doctor heals the injured at home {int(config.HOSPITAL_HEAL[lv - 1] * 100)}% HP/hour",
             "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",
             "barracks": lambda: (f"morale +{self.morale_target_bonus(lv)}, drift {self.morale_drift(lv):.2f}/h, "
                                  f"bonds x{self.bond_mult(lv):.2f}, synergy x{self.synergy_mult(lv):.2f}"),
@@ -202,10 +206,24 @@ class BuildingManager:
                 self.levels[k] = max(1, min(int(v), BUILDINGS.get(k).max_level))
 
 
-def rest_tick(slimes: List, buildings: BuildingManager, events: List[str]) -> None:
-    """Slimes in the Rest Area recover a share of max HP per hour; they leave once healed and rested."""
+def rest_tick(slimes: List, buildings: BuildingManager, events: List[str], ward=(), doctor_on: bool = False) -> None:
+    """Slimes in the Rest Area recover a share of max HP per hour; they leave once healed and rested. Patients in the
+    Hospital ward heal faster than in the Rest Area (a little with nobody on duty, much more with a doctor) and leave once healed."""
     for s in slimes:
         if s.state != "resting" or not s.alive:
+            continue
+        if s.id in ward:
+            bonus = config.WARD_DOCTOR_BONUS if doctor_on else config.WARD_NO_DOCTOR_BONUS
+            if s.needs.get("food") > 0:
+                s.hp = min(s.max_hp, s.hp + max(1, int(round(s.max_hp * buildings.rest_heal() * (1 + bonus)))))
+            s.needs.add("energy", config.REST_ENERGY[0])
+            s.morale = min(100.0, s.morale + 2)
+            if s.needs.get("food") <= 0:
+                s.state = "idle"
+                events.append(f"{s.name} leaves the Hospital - too hungry to heal!")
+            elif s.hp >= s.max_hp:
+                s.state = "idle"
+                events.append(f"🏥 {s.name} leaves the Hospital fully healed.")
             continue
         if s.needs.get("food") > 0:                       # a starving slime cannot heal
             s.hp = min(s.max_hp, s.hp + max(1, int(round(s.max_hp * buildings.rest_heal()))))

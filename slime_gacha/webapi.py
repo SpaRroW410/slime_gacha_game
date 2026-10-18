@@ -38,7 +38,7 @@ def slime_view(g: Game, s) -> dict:
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
-        refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
+        ward=s.id in g.ward, refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
         mood=s.mood_label(), power=(tp := power_mod.total_power(s))["total"], power_tag=power_mod.display(tp["total"]), power_parts=tp["parts"], power_mult=tp["multiplier"],
         morale=round(s.morale), morale_label=SocialEngine.morale_label(s.morale),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
@@ -221,7 +221,8 @@ def _jobs_view(g: Game) -> dict:
                      recipes=[dict(key=r.key, name=r.name, emoji=r.emoji, cost=r.cost, nutrition=r.nutrition, servings=r.servings,
                                    morale=r.morale, level=r.level, stock=g.pantry.get(r.key, 0)) for r in jobs_mod.RECIPES.values()]),
         hospital=dict(injured=len(hurt), wounded=len(wounded), names=[s.name for s in sorted(hurt, key=lambda s: s.hp / s.max_hp)[:8]],
-                      rate=round(config.HOSPITAL_HEAL[g.buildings.level("hospital") - 1] * 100), on_duty=bool(jobs_mod.holder(g, "doctor"))),
+                      rate=round(config.HOSPITAL_HEAL[g.buildings.level("hospital") - 1] * 100), on_duty=bool(jobs_mod.holder(g, "doctor")),
+                      beds=config.HOSPITAL_BEDS[g.buildings.level("hospital") - 1], used=g.ward_count()),
         forge=dict(progress=g.forge_progress, shifts=config.CRAFT_SHIFTS, next=g.forge_next, relic_cost=dict(config.CRAFT_RELIC_COST),
                    share=config.CRAFT_COST_SHARE),
     )
@@ -275,7 +276,7 @@ def snapshot(g: Game) -> dict:
                        max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
-        version=config.VERSION,
+        version=config.VERSION, whats_new=about_mod.WHATS_NEW,
         stranded=[dict(id=e["id"], ids=e["ids"], names=[g.roster[i].name for i in e["ids"] if i in g.roster], first=e["first"], last=e["last"],
                        stuck=e["stuck"], hours_left=g.stranded_left(e), rescue_hours=g.rescue_hours(e), food=g.rescue_food(e),
                        path=g.rescue_path(e), need=max([f for f in range(1, e["stuck"]) if g._knowledge(f) < 100.0], default=0)) for e in g.stranded],
@@ -332,7 +333,7 @@ def snapshot(g: Game) -> dict:
         facilities={k: dict(name=bld_mod.BUILDINGS.get(k).name, emoji=bld_mod.BUILDINGS.get(k).emoji, level=g.buildings.level(k),
                             capacity=g.facility_capacity(k), users=[dict(id=s.id, name=s.name) for s in g.facility_users(k)])
                     for k in bld_mod.FACILITIES},
-        facility_yards=bld_mod.DRILL_YARDS, facility_arenas=bld_mod.SPAR_ARENAS, party_arena=bld_mod.PARTY_ARENA,
+        facility_yards=bld_mod.DRILL_YARDS, party_yard=bld_mod.PARTY_YARD, facility_arenas=bld_mod.SPAR_ARENAS, party_arena=bld_mod.PARTY_ARENA,
         drill=dict(base=config.PROF_DRILL, grounds=g.buildings.level("training_grounds"),
                    tiers=[dict(tier=i + 1, name=t[0], needs=t[1], ticks=t[2], cost=t[3], mult=t[4], unlocked=g.buildings.level("training_grounds") >= t[1])
                           for i, t in enumerate(config.DRILL_TIERS)]),
@@ -423,6 +424,21 @@ def _sleep(g, a):
 @command("wake")
 def _wake(g, a):
     return _msg(g.wake(_i(a, "id")))
+
+
+@command("hospital")
+def _hospital(g, a):
+    return _msg(g.admit(_i(a, "id")))
+
+
+@command("admit_hurt")
+def _admit_hurt(g, a):
+    return g.admit_hurt(), {}
+
+
+@command("sleep_tired")
+def _sleep_tired(g, a):
+    return g.sleep_tired(), {}
 
 
 @command("wake_all")
@@ -900,6 +916,11 @@ def _resolve_challenge(g, a):
 @command("drill")
 def _drill(g, a):
     return [g.drill(_i(a, "id"), str(a.get("discipline", "")), _i(a, "tier", 1))], {}
+
+
+@command("party_train")
+def _party_train(g, a):
+    return g.party_train(_i(a, "pid"), _i(a, "tier", 1)), {}
 
 
 @command("drill_party")

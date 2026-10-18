@@ -356,3 +356,65 @@ class TestServing(unittest.TestCase):
         self.assertEqual(b.needs.get("food"), 20)
         self.assertIn("ran out", " ".join(out))
         self.assertEqual(g.pantry, {})
+
+
+class TestHospitalWard(unittest.TestCase):
+    def hurt(self, g, s):
+        s.hp = max(1, int(s.max_hp * 0.2))
+        s.needs.set("food", 90)
+
+    def test_ward_patients_heal_faster_with_a_doctor_and_leave_healed(self):
+        g = quiet(rich(96))
+        a, b, doc = slime(g), slime(g), slime(g, "medic", stars=2)
+        for s in (a, b):
+            s.level = 30                                          # enough HP for the percentages to show
+            self.hurt(g, s)
+        g.admit(a.id)
+        self.assertEqual((a.state, g.ward_count(), g.resting_count()), ("resting", 1, 0))
+        g.tick(1)
+        no_doc = a.hp - int(a.max_hp * 0.2)
+        g.rest(b.id)                                              # the Rest Area for comparison
+        g.assign_job(doc.id, "doctor")
+        a.hp = int(a.max_hp * 0.2)
+        b.hp = int(b.max_hp * 0.2)
+        g.tick(1)
+        with_doc = a.hp - int(a.max_hp * 0.2)
+        rest_gain = b.hp - int(b.max_hp * 0.2)
+        self.assertGreater(with_doc, rest_gain)
+        self.assertGreaterEqual(no_doc, rest_gain - 1)             # without a doctor the ward is about the Rest Area's pace
+        for _ in range(30):
+            g.tick(1)
+        self.assertEqual((a.hp, a.state), (a.max_hp, "idle"))
+        self.assertEqual(g.ward, [])
+
+    def test_the_ward_is_limited_and_calling_back_frees_a_bed(self):
+        g = quiet(rich(97))
+        ss = [slime(g) for _ in range(3)]
+        for s in ss:
+            self.hurt(g, s)
+        g.admit(ss[0].id)
+        g.admit(ss[1].id)                                         # level 1: two beds
+        with self.assertRaises(InvalidAction):
+            g.admit(ss[2].id)
+        g.recall(ss[0].id)
+        self.assertEqual(ss[0].state, "idle")
+        g.admit(ss[2].id)
+        with self.assertRaises(InvalidAction):
+            g.admit(ss[0].id) if False else g.admit(slime(g).id)  # not hurt: nothing to treat
+
+
+class TestQuickCare(unittest.TestCase):
+    def test_send_all_hurt_to_the_hospital_and_all_tired_to_sleep(self):
+        g = quiet(rich(98))
+        a, b, c, d = slime(g), slime(g), slime(g), slime(g)
+        for s in (a, b, c):
+            s.hp = max(1, s.max_hp // 3)
+            s.needs.set("food", 90)
+        a.hp = 1                                                  # the most hurt goes first; two beds only
+        d.needs.set("energy", 5)
+        out = g.admit_hurt()
+        self.assertEqual(g.ward_count(), 2)
+        self.assertEqual(a.state, "resting")
+        self.assertTrue(any("full" in l for l in out))
+        g.sleep_tired()
+        self.assertEqual(d.state, "sleeping")
