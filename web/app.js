@@ -59,6 +59,12 @@ function faceClass(s) {
   if (f && f.value >= 50) return 'f-' + f.key;
   return s.mood ? 'm-' + s.mood : 'm-okay';
 }
+/* What a slime is doing, in words: the Hospital ward and the Rest Area both use the 'resting' state inside the game. */
+function stateLabel(s) {
+  if (s.state === 'resting') return s.ward ? `🏥 hospital (${S.state.jobs.hospital.on_duty ? '+30%' : '+5%'} healing)` : '🛏️ resting';
+  if (s.state === 'sleeping') return '😴 sleeping';
+  return esc(s.state);
+}
 function avatar(s, cls = '') {
   const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
@@ -333,7 +339,7 @@ function colony() {
   const big = st.slimes.length > TOP;          // a big colony: ten cards, the rest as a compact list
   const opt = (obj, cur) => Object.entries(obj).map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('');
   return `<div class="row between" style="margin-bottom:10px">
-    <h2>${st.slimes.length} slimes · ${st.rest.used}/${st.rest.cap} resting</h2>
+    <h2>${st.slimes.length} slimes · ${st.rest.used}/${st.rest.cap} resting · ${st.jobs.hospital.used}/${st.jobs.hospital.beds} in hospital</h2>
     <div class="row">
       <label class="f">Sort <select data-sel="sort">${opt({ power: 'Power', level: 'Level', stars: 'Stars', rarity: 'Rarity', hp: 'Lowest HP', morale: 'Lowest morale', name: 'Name' }, S.sort)}</select></label>
       <label class="f">Show <select data-sel="filter">${opt({ all: 'All', free: 'Not in a party', idle: 'Available', wounded: 'Wounded', away: 'Away', needy: 'Needs something' }, S.filter)}</select></label>
@@ -345,7 +351,7 @@ function colony() {
 }
 function srow(s) {
   const a = awayOf(s.id);
-  const tag = s.in_dungeon ? `🕳 ${esc(s.in_dungeon)}` : s.state !== 'idle' ? esc(s.state) : '';
+  const tag = s.in_dungeon ? `🕳 ${esc(s.in_dungeon)}` : s.state !== 'idle' ? stateLabel(s) : '';
   return `<div class="srow ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">${figure(s, 'sm')}
     <span class="sname">${s.is_vice ? '🎖 ' : ''}${esc(s.name)}</span><span class="smeta">${esc(s.class_name)} · ${s.stars}★ ${esc(s.rarity)} · Lv${s.level}</span>
     <span class="shp">${bar(s.hp, s.max_hp, 'hp')}</span>
@@ -641,13 +647,15 @@ function dungeonsAll() {
       <p class="mute">A <b>committed</b> XP-farming session. The party fights all the runs (camping when hurt) unless everyone goes down. Nobody dies here, but a downed slime <b>loses morale (never XP) and drops its gear</b> — survivors may carry it back (more likely with high party synergy); else it stays in the Pit's lost-and-found${st.gear.pit_lost.length ? ` (${st.gear.pit_lost.length} item(s) lost there now)` : ''}.</p>
       <div class="row">${partyOptions('gpid')}
         <label class="f">Depth <input type="range" min="1" max="${d.grind_depths}" value="${depth}" data-ui="depth" data-rerender="1"> <b>${depth}</b></label>
-        <label class="f">Runs <input type="number" min="1" max="60" value="${runs}" data-ui="runs" style="width:70px"></label>
+        <label class="f">Runs <input type="number" min="1" max="${d.session.grind_runs}" value="${runs}" data-ui="runs" data-rerender="1" style="width:70px"></label>
         <button class="btn small ${ui('pit_lure', false) ? 'primary' : ''}" data-act="pit_lure" title="Richer prey: x${d.pit.lure_xp} XP and x${d.pit.lure_gear} gear drops">${ui('pit_lure', false) ? '✔ ' : ''}Lure (${d.pit.lure_cost} 🟣/run)</button>
         <button class="btn primary" data-act="grind">Commit</button>${cmdToggle()}</div>
+      ${sessionNote(runs, d.session.grind_ticks, d.session.grind_runs)}
       <small class="mute">Depth 3 = enemies at your party's average level; 1 is easier, 5 is harder and pays more XP. A <b>lure</b> (${d.pit.lure_cost} 🟣 per run) draws richer prey: <b>×${d.pit.lure_xp} XP</b> and <b>×${d.pit.lure_gear} chance of gear</b>; it stops when the purple gel runs out.</small></div>`;
   const wave = `<div class="panel stack"><h2>🧪 Wave simulation ${info('A training drill, not a real fight: a full party at home fights waves of monsters whose level lies between the minimum and maximum you set (1-50), and nobody can die. Each wave takes 2 hours. The XP is fixed by the monsters and their level (deeper monsters pay more, no luck or rarity involved, split between the members); there is no loot. It also trains battle (class) proficiency and builds teamwork. If the party loses a wave the simulation stops. You can take command of every turn, like any other fight.')}</h2>
       <p class="mute">A full party fights a <b>wave of monsters</b> as a simulation: <b>nobody dies</b>, no loot. Pick the <b>monster level range</b> and the <b>number of waves</b>; the XP is fixed by the monsters and their level.</p>
-      <div class="row">${partyOptions('kpid')}<label>Min lvl <input type="number" data-ui="wlo" min="1" max="50" value="${num(ui('wlo', 1), 1)}" style="width:4.5em"></label><label>Max lvl <input type="number" data-ui="whi" min="1" max="50" value="${num(ui('whi', 5), 5)}" style="width:4.5em"></label><label>Waves <input type="number" data-ui="waves" min="1" max="5" value="${num(ui('waves', 1), 1)}" style="width:3.5em"></label><button class="btn primary" data-act="skirmish">Run the simulation</button>${cmdToggle()}</div></div>`;
+      <div class="row">${partyOptions('kpid')}<label>Min lvl <input type="number" data-ui="wlo" min="1" max="50" value="${num(ui('wlo', 1), 1)}" style="width:4.5em"></label><label>Max lvl <input type="number" data-ui="whi" min="1" max="50" value="${num(ui('whi', 5), 5)}" style="width:4.5em"></label><label>Waves <input type="number" data-ui="waves" data-rerender="1" min="1" max="5" value="${num(ui('waves', 1), 1)}" style="width:3.5em"></label><button class="btn primary" data-act="skirmish">Run the simulation</button>${cmdToggle()}</div>
+      ${sessionNote(ui('waves', 1), st.dungeon.session.wave_ticks, st.dungeon.session.wave_max, 'wave')}</div>`;
   return { descent, stranded, scouting, pit, wave };
 }
 
@@ -656,6 +664,13 @@ function dungeonsAll() {
 function cut(html, from, to) {
   const a = from ? html.indexOf(from) : 0, b = to ? html.indexOf(to) : html.length;
   return html.slice(Math.max(0, a), b < 0 ? html.length : b);
+}
+/* How long a session will take, said before it starts (a farming session never lasts more than a day, camping included). */
+function sessionNote(runs, ticks, maxRuns, what = 'run') {
+  const ss = S.state.dungeon.session, n = Math.max(1, Math.min(num(runs, 1), maxRuns)), hours = n * ticks;
+  const live = S.state.clock.mode === 'live' && S.state.clock.dungeon_rate ? ` (about ${Math.max(1, Math.round(hours / S.state.clock.dungeon_rate * 60))} real minutes at the current speed)` : '';
+  const cut = num(runs, 1) > maxRuns ? ` <b>Limited to ${maxRuns} ${what}s: a session is one day at most.</b>` : '';
+  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h</b>${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h, leaving early if it runs out of time.${cut}</small>`;
 }
 /* Which party (or group of slimes) is away and how long it has left. */
 const partyNameOf = (ids) => { const p = (S.state.parties || []).find((q) => ids.every((i) => q.members.includes(i))) || (S.state.parties || []).find((q) => ids.some((i) => q.members.includes(i))); return p ? p.name : null; };
@@ -705,8 +720,9 @@ function quarryView() {
   return `<div class="grid cols2"><div class="panel stack"><h2>💎 The Starfall Quarry <small class="mute">(ascension stones)</small></h2>
     <p class="mute">Same rules as the Rift: any <b>1–${a.max_party}</b> slimes may go, monsters are <b>one level above</b> the party average, nobody dies (a knocked-out slime loses morale and its relics are battered). The prize is <b>ascension stones</b> (and a little XP) instead of relics. There is no lure here.</p>
     ${pick.html}
-    <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" style="width:70px"></label>
-      <button class="btn primary" data-act="quarry" ${pick.sel.size ? '' : 'disabled'}>💎 Quarry (${pick.sel.size}/${a.max_party})</button></div></div>
+    <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" data-rerender="1" style="width:70px"></label>
+      <button class="btn primary" data-act="quarry" ${pick.sel.size ? '' : 'disabled'}>💎 Quarry (${pick.sel.size}/${a.max_party})</button></div>
+    ${sessionNote(ui('adv_runs', 5), st.dungeon.session.adv_ticks, a.max_runs)}</div>
   <div class="panel stack"><h2>💎 Ascension stones</h2>
     <div class="row">${Object.entries(st.ascension.stones).map(([r, n]) => `<span class="chip ${r}">${RES['stone_' + r][0]} ${n}${n >= st.ascension.merge && r !== 'legendary' ? ` <button class="btn small" data-act="merge_stones" data-r="${r}">merge ${st.ascension.merge} → 1</button>` : ''}</span>`).join('')}</div>
     <small class="mute">Total worth ${st.ascension.total} common stones. Stars cost ${Object.entries(st.ascension.star_stones).map(([k, v]) => `${k - 1}→${k}★: ${v}`).join(' · ')}. 100 stones of a rarity merge into 1 of the next. The 💎 <b>Starfall Quarry</b> drops stones (${Object.entries(st.ascension.rates).map(([k, v]) => `${k} ${v}%`).join(', ')}); other dungeons hide the odd common stone and boss hoards hold more. Destroying slimes in the 🔥 Chamber also yields stones.</small>
@@ -753,7 +769,7 @@ function holdWhy(s, j) {
 function statusTags(s) {
   const t = [];
   if (s.state === 'sleeping') t.push(`😴 asleep ${Math.round(s.needs.energy)}%`);
-  else if (s.state === 'resting') t.push('🛏️ resting');
+  else if (s.state === 'resting') t.push(s.ward ? '🏥 hospital' : '🛏️ resting');
   else if (s.state === 'working') t.push(`👷 ${esc(s.job?.name || 'at work')}`);
   else if (s.state === 'hunting') t.push(s.job ? '🧺 foraging' : '🏞 hunting');
   else t.push('🏠 at home');
@@ -1054,9 +1070,10 @@ function riftAll() {
   <div class="panel stack"><h2>🧭 The Wayfarer's Rift <small class="mute">(relics)</small></h2>
     <p class="mute">An adventure dungeon for <b>relics</b>. Any <b>1–${a.max_party}</b> slimes may go; monsters are <b>one level above</b> the party average (a smaller party meets fewer). Nobody dies, but a knocked-out slime loses morale and its relics are battered. Every win may drop a relic — odds are far harsher than the gacha: ${rates}. A <b>lure</b> (${a.lure_cost} 🟣 per run) multiplies the rare odds.</p>
     <div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>
-    <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" style="width:70px"></label>
+    <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" data-rerender="1" style="width:70px"></label>
       <button class="btn small ${ui('adv_lure', false) ? 'primary' : ''}" data-act="adv_lure">${ui('adv_lure', false) ? '✔ ' : ''}Lure (🟣)</button>
       <button class="btn primary" data-act="adventure" ${sel.size ? '' : 'disabled'}>🧭 Rift (${sel.size}/${a.max_party})</button></div>
+    ${sessionNote(ui('adv_runs', 5), st.dungeon.session.adv_ticks, a.max_runs)}
     <h4>Materials</h4><div class="row">${Object.entries(a.materials || st.gear.materials).map(([k, v]) => chip(`${RES[k][0]} ${RES[k][1]}: ${v}`)).join('')}</div>
     <small class="mute">Salvaging relics gives materials of their tier; the higher the level and stars, the more — and a better tier. Levelling needs materials of the relic's own tier. Star ascension (level 10) also needs Armory level ≥ the current star count; raising rarity needs ★5 Lv10 and Armory level 5.</small></div>
   <div class="stack"><div class="panel stack"><h2>🎒 Relic vault <small class="mute">(${st.gear.vault.length})</small></h2>
