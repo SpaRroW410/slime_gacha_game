@@ -594,15 +594,11 @@ class TestSacrificeStress(unittest.TestCase):
         g.tick(config.SACRIFICE_STRESS_DECAY_TICKS * 4)
         self.assertEqual(g.sacrifice_stress, 0.0)
 
-    def test_a_manual_merge_costs_more_when_the_colony_is_stressed_but_the_councils_pick_costs_nothing(self):
+    def test_council_cost_estimate_rises_with_stress(self):
         g = self._colony()
-        m = g.council()["merges"][0]
-        self.assertEqual(m["grief"], 0)                                    # the council's own pick upsets nobody
-        d = next(s for s in g.slimes() if s.id != m["donor"].id and not g.unwelcome(s))
-        t = next(s for s in g.slimes() if s.id != d.id)
-        calm = g.social.grief(d, g.slimes(), 1.0)
+        calm = g.council()["merges"][0]["grief"]
         g.sacrifice_stress = 2.0
-        self.assertGreater(g.social.grief(d, g.slimes(), 1 + config.SACRIFICE_STRESS_AMP * 2.0), calm * 1.5)
+        self.assertGreater(g.council()["merges"][0]["grief"], calm * 1.5)
 
 
 if __name__ == "__main__":

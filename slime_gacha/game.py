@@ -288,6 +288,8 @@ class Game:
     def facility_capacity(self, key: str) -> int:
         """Slimes a facility holds at once: yards and duelling rings take two per level, the Party Arena a team match per level."""
         lv = self.buildings.level(key)
+        if key == bld.PARTY_YARD:
+            return self.parties.size * lv                     # one party per level
         return 2 * self.parties.size * lv if key == bld.PARTY_ARENA else 2 * lv
 
     def facility_users(self, key: str) -> List[Slime]:
@@ -1027,6 +1029,27 @@ class Game:
             return "is in a rage and refuses"
         return ""
 
+    def admit_hurt(self) -> List[str]:
+        """Send every hurt slime at home to the Hospital ward, the most hurt first, while there are beds."""
+        hurt = sorted((s for s in self.slimes() if s.state in ("idle", "sleeping") and not s.in_dungeon and s.hp < s.max_hp
+                       and s.id not in self.ward), key=lambda s: s.hp / s.max_hp)
+        out = []
+        for s in hurt:
+            try:
+                out.append(self.admit(s.id))
+            except InvalidAction as e:
+                out.append(f"🏥 {e}")
+                break
+        return out or ["Nobody at home is hurt."]
+
+    def sleep_tired(self) -> List[str]:
+        """Put every idle slime at home that is low on energy to sleep."""
+        out = []
+        for s in self.slimes():
+            if s.state == "idle" and not s.in_dungeon and s.needs.get("energy") < config.TASK_MIN_ENERGY:
+                out.append(self.sleep(s.id))
+        return out or ["Nobody idle is tired."]
+
     def wake_all(self) -> List[str]:
         """Wake every sleeper at home, except those below REFUSE_ENERGY (they need the sleep). Tired ones are grumpy."""
         out = []
@@ -1355,8 +1378,12 @@ class Game:
                         continue
                     c = self.social.compat(t, d)
                     gain = merge_gain(t, d, c)
-                    sugg.append(dict(target=t, donor=d, xp=gain, compat=c, grief=0,       # the council's own pick upsets nobody
-                                     net=gain))
+                    if self.unwelcome(d):
+                        grief = 0                                                     # a nuisance's merge upsets nobody
+                    else:
+                        grief = self.social.grief(d, self.slimes(), 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress)
+                    sugg.append(dict(target=t, donor=d, xp=gain, compat=c, grief=grief,
+                                     net=gain - 3 * grief))
             sugg.sort(key=lambda x: -x["net"])
         return dict(rows=rows, merges=sugg[:5])
 
@@ -1392,16 +1419,16 @@ class Game:
         return out
 
     def party_train(self, pid: int, tier: int = 1) -> List[str]:
-        """A whole party trains together in the Party Arena: every member sharpens its own discipline (class proficiency and
-        a little fighting style) as in a solo drill, and every pair grows closer, which raises the party's synergy. One flat
-        drill cost for the whole party; the time is the drill's."""
+        """A whole party trains in the Party Training Yard, everyone for themselves: every member sharpens its own discipline
+        (class proficiency and a little fighting style) as in a solo drill, and every pair grows closer, which raises the
+        party's synergy. One flat drill cost for the whole party (1 white gel for the basic drill); the time is the drill's."""
         from . import attributes
         self._require_full(pid)
         party = self.party_members(pid)
         name, ticks, cost, _, style = self.academy.drill_tier(tier)
         for s in party:
             sparring.check_ready_basic(s)
-        self._check_room(bld.PARTY_ARENA, len(party))
+        self._check_room(bld.PARTY_YARD, len(party))
         self.wallet.spend_many(cost)
         out = list(self._prepare_trainees(party))
         before = self.social.synergy(party)
@@ -1416,9 +1443,9 @@ class Game:
                                    self.buildings.style_cap())
             s.needs.add("energy", -8)
             s.needs.add("esteem", 4)
-        out.append(f"🏟️ {self.parties.get(pid).name} trains together ({name.lower()}, {ticks}h): class proficiency up, "
+        out.append(f"🛡️ {self.parties.get(pid).name} trains together ({name.lower()}, {ticks}h): class proficiency up, "
                    f"synergy {before - 1:+.1%} -> {self.social.synergy(party) - 1:+.1%}.")
-        events = self._occupy(party, ticks, "train", bld.PARTY_ARENA)
+        events = self._occupy(party, ticks, "train", bld.PARTY_YARD)
         out.extend("   " + e for e in events if "died" in e)
         self.journal.extend(events)
         return out
@@ -1454,15 +1481,12 @@ class Game:
         return evolve(self.slime(sid), self.wallet)
 
     def unwelcome(self, d: Slime) -> bool:
-        """Is this slime a nuisance the colony would be glad to see go: one the council proposes as a donor, one disliked by
-        most of the colony, or one that is brawling (grounded)? Sacrificing such a slime upsets nobody."""
-        if d.grounded:
+        """Is this slime a nuisance the colony would be glad to see go: one that keeps brawling (or is brawling now) or one
+        disliked by most of the colony? Sacrificing such a slime upsets nobody. Being weak is no reason."""
+        if d.grounded or d.brawls >= config.NUISANCE_BRAWLS:
             return True
-        slimes = self.slimes()
-        others = [o for o in slimes if o is not d]
-        if others and sum(self.social.compat(d, o) for o in others) / len(others) < -10:
-            return True
-        return any(m["donor"].id == d.id for m in self.council()["merges"])
+        others = [o for o in self.slimes() if o is not d]
+        return bool(others) and sum(self.social.compat(d, o) for o in others) / len(others) < -10
 
     def merge(self, target_id: int, donor_id: int) -> List[str]:
         t, d = self._free_slime(target_id), self._free_slime(donor_id)
@@ -3190,10 +3214,11 @@ class Game:
         if not config.SCOUT_MIN_HOURS <= hours <= config.SCOUT_MAX_HOURS:
             raise InvalidAction(f"The budget is {config.SCOUT_MIN_HOURS}-{config.SCOUT_MAX_HOURS} hours.")
         laggard = min(party, key=lambda s: s.progress)
-        if first > 1 and laggard.progress < first - 1 and self._knowledge(first - 1) < 100.0:
-            raise InvalidAction(f"Floor {first - 1} is neither scouted nor cleared by {laggard.name} (cleared up to floor "
-                                f"{laggard.progress}): scout the floors above floor {first} first, in order. Even a fresh slime "
-                                f"may scout onward over floors that are already known.")
+        cleared = max([self.best_floor] + [s.progress for s in self.slimes()])       # cleared in the Descent by anyone
+        if first > 1 and cleared < first - 1 and self._knowledge(first - 1) < 100.0:
+            raise InvalidAction(f"Floor {first - 1} is neither scouted nor cleared in the Descent (the colony has cleared up "
+                                f"to floor {cleared}): scout the floors above floor {first} first, in order. Even a fresh "
+                                f"slime may scout onward over floors that are scouted or cleared.")
         self.wallet.spend("food", int(math.ceil(hours * config.SCOUT_FOOD_PER_HOUR)))
         skill = self.scout_skill(party) * (1 + 0.08 * self.keeper.rank("keen_eye"))
         floors = list(range(first, last + 1))

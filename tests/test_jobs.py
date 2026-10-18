@@ -401,3 +401,20 @@ class TestHospitalWard(unittest.TestCase):
         g.admit(ss[2].id)
         with self.assertRaises(InvalidAction):
             g.admit(ss[0].id) if False else g.admit(slime(g).id)  # not hurt: nothing to treat
+
+
+class TestQuickCare(unittest.TestCase):
+    def test_send_all_hurt_to_the_hospital_and_all_tired_to_sleep(self):
+        g = quiet(rich(98))
+        a, b, c, d = slime(g), slime(g), slime(g), slime(g)
+        for s in (a, b, c):
+            s.hp = max(1, s.max_hp // 3)
+            s.needs.set("food", 90)
+        a.hp = 1                                                  # the most hurt goes first; two beds only
+        d.needs.set("energy", 5)
+        out = g.admit_hurt()
+        self.assertEqual(g.ward_count(), 2)
+        self.assertEqual(a.state, "resting")
+        self.assertTrue(any("full" in l for l in out))
+        g.sleep_tired()
+        self.assertEqual(d.state, "sleeping")

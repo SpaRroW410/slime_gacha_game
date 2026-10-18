@@ -165,3 +165,13 @@ class TestScoutOnward(unittest.TestCase):
             g.scout(None, 3, 3, 0, ids=[s.id])                  # floor 2 is neither scouted nor cleared
         g.intel[2] = 100.0
         g.scout(None, 3, 3, 0, ids=[s.id])                      # floor 2 is known: a level-1 slime may go on
+
+    def test_a_floor_cleared_in_the_descent_by_anyone_opens_the_next_scouting(self):
+        g = mk(seed=7, n=2)
+        pid = party(g, strong=True, name="P")
+        fresh = members(g, pid)[0]
+        fresh.progress = 0
+        other = g.slimes()[-1]
+        other.progress = 6                                      # someone else cleared down to floor 6
+        g.rng.random = lambda: 0.99
+        g.scout(None, 7, 7, 0, ids=[fresh.id])

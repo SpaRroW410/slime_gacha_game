@@ -238,7 +238,7 @@ class TestRestArea(unittest.TestCase):
 class TestBuildings(unittest.TestCase):
     def test_buildings_start_at_level_one(self):
         g = rich()
-        self.assertEqual(set(BUILDINGS.keys()), {"rest_area", "training_grounds", "library", "barracks", "armory", "chamber", "alchemy", "kitchen", "hospital", "blade_yard", "archery_range", "mana_pool", "spar_sword", "spar_archery", "spar_magic", "spar_party"})
+        self.assertEqual(set(BUILDINGS.keys()), {"rest_area", "training_grounds", "library", "barracks", "armory", "chamber", "alchemy", "kitchen", "hospital", "blade_yard", "archery_range", "mana_pool", "spar_sword", "spar_archery", "spar_magic", "spar_party", "party_yard"})
         self.assertTrue(all(g.buildings.level(k) == 1 for k in BUILDINGS.keys()))
 
     def test_upgrade_pays_and_caps(self):
@@ -537,6 +537,16 @@ class TestRelief(unittest.TestCase):
         self.assertTrue(any("No change in morale" in l for l in log))
         self.assertEqual(g.sacrifice_stress, stress)
         self.assertEqual({s.id: s.morale for s in (a, b, c, e)}, morale)
+
+    def test_a_habitual_brawler_is_a_nuisance_but_weak_is_no_reason(self):
+        from tests.test_time import mk as mkgame
+        g = mkgame(seed=43, n=5)
+        a, b, c, d, e = g.slimes()
+        d.brawls = config.NUISANCE_BRAWLS
+        self.assertTrue(g.unwelcome(d))
+        d.brawls = 0
+        d.level = 1                                              # weak, but liked well enough
+        self.assertFalse(g.unwelcome(d))
 
     def test_a_loved_slime_is_still_mourned(self):
         from tests.test_time import mk as mkgame

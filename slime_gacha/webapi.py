@@ -276,7 +276,7 @@ def snapshot(g: Game) -> dict:
                        max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
         auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
         buildings=g.building_report(),
-        version=config.VERSION,
+        version=config.VERSION, whats_new=about_mod.WHATS_NEW,
         stranded=[dict(id=e["id"], ids=e["ids"], names=[g.roster[i].name for i in e["ids"] if i in g.roster], first=e["first"], last=e["last"],
                        stuck=e["stuck"], hours_left=g.stranded_left(e), rescue_hours=g.rescue_hours(e), food=g.rescue_food(e),
                        path=g.rescue_path(e), need=max([f for f in range(1, e["stuck"]) if g._knowledge(f) < 100.0], default=0)) for e in g.stranded],
@@ -333,7 +333,7 @@ def snapshot(g: Game) -> dict:
         facilities={k: dict(name=bld_mod.BUILDINGS.get(k).name, emoji=bld_mod.BUILDINGS.get(k).emoji, level=g.buildings.level(k),
                             capacity=g.facility_capacity(k), users=[dict(id=s.id, name=s.name) for s in g.facility_users(k)])
                     for k in bld_mod.FACILITIES},
-        facility_yards=bld_mod.DRILL_YARDS, facility_arenas=bld_mod.SPAR_ARENAS, party_arena=bld_mod.PARTY_ARENA,
+        facility_yards=bld_mod.DRILL_YARDS, party_yard=bld_mod.PARTY_YARD, facility_arenas=bld_mod.SPAR_ARENAS, party_arena=bld_mod.PARTY_ARENA,
         drill=dict(base=config.PROF_DRILL, grounds=g.buildings.level("training_grounds"),
                    tiers=[dict(tier=i + 1, name=t[0], needs=t[1], ticks=t[2], cost=t[3], mult=t[4], unlocked=g.buildings.level("training_grounds") >= t[1])
                           for i, t in enumerate(config.DRILL_TIERS)]),
@@ -429,6 +429,16 @@ def _wake(g, a):
 @command("hospital")
 def _hospital(g, a):
     return _msg(g.admit(_i(a, "id")))
+
+
+@command("admit_hurt")
+def _admit_hurt(g, a):
+    return g.admit_hurt(), {}
+
+
+@command("sleep_tired")
+def _sleep_tired(g, a):
+    return g.sleep_tired(), {}
 
 
 @command("wake_all")

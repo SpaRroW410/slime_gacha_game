@@ -286,6 +286,7 @@ class TestFacilities(unittest.TestCase):
 class TestPartyTraining(unittest.TestCase):
     def test_a_party_trains_together_for_proficiency_and_synergy(self):
         g = rich(141)
+        white = g.wallet.get("white_gel")
         pid = party(g)
         members = g.party_members(pid)
         for s in members:
@@ -295,3 +296,5 @@ class TestPartyTraining(unittest.TestCase):
         self.assertTrue(any("trains together" in o for o in out))
         self.assertTrue(all(s.class_prof > 40.0 for s in members))
         self.assertGreater(g.social.synergy(members), before)
+        self.assertEqual(g.wallet.get("white_gel"), white - 1)          # one white gel for the whole party
+        self.assertEqual(len(g.facility_users("spar_party")), 0)         # it is a training yard, not the sparring arena

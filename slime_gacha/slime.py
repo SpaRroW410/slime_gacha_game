@@ -123,6 +123,7 @@ class Slime:
         self.wins = 0
         self.merged = 0
         self.grounded = False          # set by an unresolved brawl: refuses hunts
+        self.brawls = 0                # brawls this slime has been in (a habitual brawler is a nuisance)
 
     # ---- derived ---------------------------------------------------------
     @property
@@ -232,7 +233,7 @@ class Slime:
                     total_xp=self.total_xp, stage=self.stage, behavior=self.behavior,
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
-                    merged=self.merged, grounded=self.grounded, style_xp=self.style_xp, morale=self.morale,
+                    merged=self.merged, grounded=self.grounded, brawls=self.brawls, style_xp=self.style_xp, morale=self.morale,
                     gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, buffs=self.buffs, parents=self.parents, parent_names=self.parent_names,
                     generation=self.generation, emotions=self.emotions,
                     emotion_floor=self.emotion_floor, awareness=self.awareness, temperament=self.temperament,
@@ -246,7 +247,7 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "style_xp", "morale", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
+                  "merged", "grounded", "brawls", "style_xp", "morale", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
             if k in d:
                 setattr(s, k, d[k])
         s.items = {k: Item.from_dict(v) for k, v in (d.get("items") or {}).items()}
