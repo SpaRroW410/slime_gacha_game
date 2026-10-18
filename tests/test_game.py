@@ -632,3 +632,22 @@ class TestPersistence(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDisband(unittest.TestCase):
+    def test_a_party_can_be_disbanded_unless_it_is_away_as_a_party(self):
+        g = fresh(7, 8)
+        pid = g.create_party("D").id
+        g.party_autofill(pid)
+        s0 = g.party_members(pid)[0]
+        s0.state = "working"                                      # busy alone: no obstacle
+        self.assertEqual(g.party_activity(pid), "")
+        s0.state = "idle"
+        for s in g.party_members(pid):
+            s.in_dungeon = "scout"
+        with self.assertRaises(InvalidAction):
+            g.party_disband(pid)
+        for s in g.party_members(pid):
+            s.in_dungeon = ""
+        g.party_disband(pid)
+        self.assertNotIn(pid, g.parties.parties)

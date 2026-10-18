@@ -232,7 +232,7 @@ def snapshot(g: Game) -> dict:
     slimes = [slime_view(g, s) for s in g.slimes()]
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
                     synergy=round(g.party_synergy(p.id) - 1, 4) if len(p.members) > 1 else 0.0,
-                    in_delve=p.id in g.delves, away=any(g.slime(i).busy for i in p.members),
+                    in_delve=p.id in g.delves, away=any(g.slime(i).busy for i in p.members), activity=g.party_activity(p.id),
                     leader=(lambda l: l.id if l else None)(g.party_leader(p.id)), leader_set=p.leader is not None, temp=p.temp,
                     entry=(g.entry_options(p.id) if p.members else [1]),
                     min_progress=min((g.slime(i).progress for i in p.members), default=0))
