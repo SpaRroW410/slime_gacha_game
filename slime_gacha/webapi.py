@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -329,6 +329,10 @@ def snapshot(g: Game) -> dict:
         disciplines=[dict(key=d.key, name=d.name, emoji=d.emoji, style=d.style, perk=d.perk,
                           desc=d.description, feeds=[a.name for a in all_archetypes() if a.discipline == d.key])
                      for d in sparring.DISCIPLINES],
+        facilities={k: dict(name=bld_mod.BUILDINGS.get(k).name, emoji=bld_mod.BUILDINGS.get(k).emoji, level=g.buildings.level(k),
+                            capacity=g.facility_capacity(k), users=[dict(id=s.id, name=s.name) for s in g.facility_users(k)])
+                    for k in bld_mod.FACILITIES},
+        facility_yards=bld_mod.DRILL_YARDS, facility_arenas=bld_mod.SPAR_ARENAS, party_arena=bld_mod.PARTY_ARENA,
         drill=dict(base=config.PROF_DRILL, grounds=g.buildings.level("training_grounds"),
                    tiers=[dict(tier=i + 1, name=t[0], needs=t[1], ticks=t[2], cost=t[3], mult=t[4], unlocked=g.buildings.level("training_grounds") >= t[1])
                           for i, t in enumerate(config.DRILL_TIERS)]),

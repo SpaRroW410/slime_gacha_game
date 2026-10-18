@@ -96,6 +96,7 @@ class TestTrainingFacility(unittest.TestCase):
         with self.assertRaises(InvalidAction):
             g.drill(s.id, "magic")
         pid = party(g)
+        g.buildings.levels["blade_yard"] = 3                   # a yard of 6 places holds the whole party
         out = g.drill_party(pid, "sword")
         self.assertEqual(len(out), g.parties.size)
         self.assertTrue(all("heads to" in o for o in out))
@@ -238,3 +239,45 @@ class TestScholarsAndPausedMastery(unittest.TestCase):
         s.mastery_xp["fire"] = config.MASTERY_XP[1]                # level 2, cap at 3 stars is 4
         elements.add_mastery_xp(s, "fire", 50)
         self.assertGreater(s.mastery_xp["fire"], config.MASTERY_XP[1])
+
+
+class TestFacilities(unittest.TestCase):
+    def mk(self, n=4, cls="ranger"):
+        g = rich(131)
+        ss = []
+        for _ in range(n):
+            s = g.gacha.make_slime("common", cls, stars=1)
+            g.roster[s.id] = s
+            ss.append(s)
+        return g, ss
+
+    def test_each_yard_holds_two_slimes_per_level(self):
+        g, ss = self.mk(3)
+        g.drill(ss[0].id, "archery")
+        g.drill(ss[1].id, "archery")
+        self.assertEqual(g.facility_capacity("archery_range"), 2)
+        self.assertEqual({s.id for s in g.facility_users("archery_range")}, {ss[0].id, ss[1].id})
+        with self.assertRaises(InvalidAction):
+            g.drill(ss[2].id, "archery")                         # the range is full ...
+        g.drill(ss[2].id, "sword")                               # ... but the Blade Yard is a separate place
+        g.upgrade_building("archery_range")
+        self.assertEqual(g.facility_capacity("archery_range"), 4)
+
+    def test_arenas_are_separate_and_the_party_arena_costs_more(self):
+        from slime_gacha import buildings as bld
+        self.assertGreater(bld.BUILDINGS.get("spar_party").upgrade_costs[0]["white_gel"], 2 * bld.BUILDINGS.get("spar_sword").upgrade_costs[0]["white_gel"])
+        g, ss = self.mk(2)
+        self.assertEqual(g.facility_capacity("spar_party"), 2 * g.parties.size)
+        self.assertEqual(g.facility_capacity("spar_sword"), 2)
+        self.assertEqual(g.facility_users("spar_magic"), [])
+
+    def test_live_sparring_occupies_its_arena_until_the_time_is_paid(self):
+        g, ss = self.mk(4)
+        g.set_time_mode("live")
+        g.spar(ss[0].id, ss[1].id, "archery")
+        self.assertEqual(len(g.facility_users("spar_archery")), 2)
+        for s in ss[2:]:
+            s.needs.set("energy", 100)
+        with self.assertRaises(InvalidAction):
+            g.spar(ss[2].id, ss[3].id, "archery")                # one duel at level 1
+        self.assertEqual(g.facility_users("spar_sword"), [])

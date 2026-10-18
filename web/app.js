@@ -821,9 +821,8 @@ function trainTags(s) {
 }
 function academyAll() {
   const st = S.state;
-  const arena = ui('arena', 'sword');
-  const slimeSel = (key, filter = () => true, extra = '', idx = 0) => {
-    const list = st.slimes.filter(filter);
+  const slimeSel = (key, filter = () => true, extra = '', idx = 0, prefer = '') => {
+    const list = st.slimes.filter(filter).sort((a, b) => (b.discipline === prefer) - (a.discipline === prefer));   // the facility's own classes first
     let cur = ui(key, list[Math.min(idx, list.length - 1)]?.id);
     if (!list.some((s) => s.id == cur)) cur = list[Math.min(idx, list.length - 1)]?.id;   // a slime that left is no longer chosen
     S.ui[key] = cur;   // what the dropdown shows is what the action uses
@@ -832,12 +831,14 @@ function academyAll() {
   };
   const avail = (s) => !s.in_dungeon && s.state !== 'hunting' && s.state !== 'studying' && !s.grounded;
   const freeN = st.slimes.filter(avail).length;
-  const duelA = slimeSel('spa', avail, 'data-rerender="1"');
-  const duelB = slimeSel('spb', (s) => avail(s) && s.id != S.ui.spa, 'data-rerender="1"', 0);
+  const lvl = (k) => st.facilities[k];
+  /* A facility's header: level, how full it is; and below it who is in it with the time left. */
+  const facHead = (k) => { const f = lvl(k); return `<div class="row between"><b>${f.emoji} ${esc(f.name)}</b><span class="row">${chip(`L${f.level}`, 'info')}${chip(`${f.users.length}/${f.capacity} places`, f.users.length >= f.capacity ? 'bad' : 'ok')}</span></div>`; };
+  const facUsers = (k, what) => { const f = lvl(k); return `<small class="mute" style="display:block">${what}: ${f.users.length ? f.users.map((u) => `<b>${esc(u.name)}</b> ${etaFor(u.id)}`).join(' · ') : 'nobody'}. <i>Upgrade it in Town &gt; Buildings for more places.</i></small>`; };
+  const full = (k) => lvl(k).users.length >= lvl(k).capacity;
   const partyA = partyOptions('sppid');
   const partyB = partyOptions('sppid2', true, false, S.ui.sppid);
   const partyOk = !!S.ui.sppid && !!S.ui.sppid2 && S.ui.sppid != S.ui.sppid2;
-  const duelOk = freeN >= 2 && S.ui.spa && S.ui.spb && S.ui.spa != S.ui.spb;
   const lib = st.library;
   const scholars = st.slimes.filter((s) => s.can_master && avail(s));
   let lsid = num(ui('lib_s', scholars[0]?.id));
@@ -849,34 +850,50 @@ function academyAll() {
   const ra = ui('res_a', known[0]), rb = ui('res_b', known[1]);
   const nameOf = (k) => st.spell_defs[k]?.name || k;
   const tg = st.buildings.find((b) => b.key === 'training_grounds');
-  const dsl = slimeById(num(ui('dsl', st.slimes.find(avail)?.id)));
-  if (S.ui.yard_for !== dsl?.id) { delete S.ui.yard; S.ui.yard_for = dsl?.id; }   // a new slime starts in its own yard
-  const yard = ui('yard', dsl?.discipline || 'sword');
-  const yd = st.disciplines.find((d) => d.key === yard) || st.disciplines[0];
   const tiers = st.drill.tiers;
   const tier = Math.min(num(ui('dtier', 1), 1), tiers.filter((t) => t.unlocked).length) || 1;
   S.ui.dtier = tier;
   const tr = tiers[tier - 1];
-  const dgain = dsl?.prof?.drill?.[yd.key]?.[tier - 1] || 0;
-  const trainingFacility = `<div class="panel stack"><h2>🥋 Training facility — proficiency</h2>
-    <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable) in the yard of its own discipline: the <b>Blade Yard</b> for sword classes, the <b>Archery Range</b> for rangers, the <b>Mana Pool</b> for casters. The Training Grounds level boosts it and unlocks stronger drills (Advanced at level 3, Master at level 5); a drill is worth less as a slime nears mastery. <b>No stars needed</b>: a slime that has just risen in rarity (back to one star) cannot study new elements at the Library, but it can still drill here.</p>
-    <div class="grid cards3">${st.disciplines.map((d) => `<div class="panel flat scard ${yard === d.key ? 'sel' : ''}" data-act="yard" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><small class="mute" style="display:block">${esc(d.feeds.join(', '))}</small></div>`).join('')}</div>
-    <h4>🧑‍🏫 Trainers ${info('One trainer per discipline (2★ or more). An appointed trainer speeds up proficiency and fighting-style gains for drills and sparring in their discipline. The bonus grows with the trainer\'s level and the Training Grounds level.')}</h4>
-    ${st.disciplines.map((d) => { const k = 'trainer_' + d.key; return `<div class="row"><small class="mute">${esc(d.emoji)} ${esc(d.name)}: ${st.jobs.trainer[d.key] ? `+${st.jobs.trainer[d.key]}% proficiency and style gains` : 'no trainer appointed'}</small></div>${postPanel(k)}`; }).join('')}
+  const yardPanel = (d) => {
+    const k = st.facility_yards[d.key], sel = slimeSel('dsl_' + d.key, avail, 'data-rerender="1"', 0, d.key);
+    const s = slimeById(num(ui('dsl_' + d.key)));
+    const gain = s?.prof?.drill?.[d.key]?.[tier - 1] || 0;
+    return `<div class="panel flat stack">${facHead(k)}
+      <small class="mute">${esc(d.feeds.join(', '))} · Trainer: ${st.jobs.trainer[d.key] ? `+${st.jobs.trainer[d.key]}% gains` : 'none appointed'}</small>
+      <div class="row">${sel}<button class="btn primary" data-act="drill" data-d="${d.key}" ${s && !full(k) ? '' : 'disabled'}>${esc(tr.name)} (${tr.ticks}h)</button></div>
+      ${s ? `<small class="mute">${esc(s.name)}: ${s.prof ? `proficiency ${s.prof.value}` : ''} · ${gain > 0 ? `this drill is worth about +${gain}` : 'not their discipline: only a little general practice'}</small>` : ''}
+      ${full(k) ? '<small class="mute">The yard is full.</small>' : ''}
+      ${facUsers(k, 'In training')}
+      ${postPanel('trainer_' + d.key)}</div>`;
+  };
+  const trainingFacility = `<div class="panel stack"><h2>🥋 Training facilities — proficiency</h2>
+    <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable). Each discipline has its own facility with its own places: the <b>Blade Yard</b> (sword classes), the <b>Archery Range</b> (rangers) and the <b>Mana Pool</b> (casters). Upgrade each one separately in Town &gt; Buildings; every level adds two places. The Training Grounds (L${tg.level}) boost the gains and unlock stronger drills (Advanced at level 3, Master at level 5). A drill is worth less as a slime nears mastery.</p>
     <div class="row"><label class="f">Drill <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)} · ${t.ticks}h · ${esc(cost(t.cost))}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select></label></div>
-    <div class="row"><b>Slime:</b> ${slimeSel('dsl', avail, 'data-rerender="1"')}<button class="btn primary" data-act="drill" ${dsl ? '' : 'disabled'}>${esc(tr.name)} (${tr.ticks}h)</button></div>
-    ${dsl ? `<small class="mute">${esc(dsl.name)}: ${dsl.prof ? `proficiency ${dsl.prof.value}` : ''} · ${dgain > 0 ? `this drill is worth about +${dgain}` : `the ${esc(yd.name)} is not their discipline: only a little general practice`}</small>` : ''}
-    <div class="row"><b>Party:</b> ${partyOptions('dppid')}<button class="btn" data-act="drill_party" title="Each member drills in the yard of its own discipline">Everyone drills (own yards)</button></div></div>`;
+    ${st.disciplines.map(yardPanel).join('')}</div>`;
+  const duelPanel = (d) => {
+    const k = st.facility_arenas[d.key], a = 'spa_' + d.key, b = 'spb_' + d.key;
+    const A = slimeSel(a, avail, 'data-rerender="1"', 0, d.key), B = slimeSel(b, (s) => avail(s) && s.id != num(ui(a)), 'data-rerender="1"', 1, d.key);
+    const ok = ui(a) && ui(b) && ui(a) != ui(b) && lvl(k).capacity - lvl(k).users.length >= 2;
+    return `<div class="panel flat stack">${facHead(k)}
+      <small class="mute"><b>${esc(d.style)}</b> · ${esc(d.perk)}</small>
+      <div class="row">${A} vs ${B}<button class="btn primary" data-act="spar" data-d="${d.key}" ${ok ? '' : 'disabled'}>Spar · 2 ⚪</button></div>
+      ${facUsers(k, 'Sparring')}</div>`;
+  };
+  const partyK = st.party_arena, pstyle = ui('pstyle', 'sword');
+  const partyFree = lvl(partyK).capacity - lvl(partyK).users.length >= 2 * st.party_size;
+  const sparPanel = `<div class="panel stack"><h2>⚔ Sparring — fighting styles ${info('A duel costs 2 white gel. Two parties sparring as teams cost a flat 3 white gel (not per pair). Each takes 3 hours. A sleeping slime is woken first (mood cost: morale and a flash of anger); a slime at a job leaves it (that shift is lost); a slime below half health is too hurt to spar and drills for less. Check the tags in the pickers.')}</h2>
+    <p class="mute">Training is not for XP. Slimes duel each other (non-lethal; the loser is left at <b>1 HP</b>; heal them at the Rest Area) to develop a <b>fighting style</b> with permanent combat perks. Costs ${cost(st.mercy.spar_cost)} per duel and ${st.mercy.train_ticks}h. Each style has its own arena with its own places (every level holds one more duel at once); the Training Grounds (L${tg.level}) set the style ceiling: ${esc(tg.now)}.</p>
+    ${st.disciplines.map(duelPanel).join('')}
+    ${away ? `<small class="mute">${away} slime${away > 1 ? 's are' : ' is'} away (dungeon, hunt or study) and not listed.</small>` : ''}
+    <div class="panel flat stack">${facHead(partyK)}
+      <small class="mute">Two full parties fight each other as teams: a flat 3 ⚪ and 3 hours. Every level holds one more team match at once, and upgrading it costs much more.</small>
+      <div class="row"><b>Party vs party:</b> ${partyA} vs ${partyB}<label class="f">Style <select data-ui="pstyle">${st.disciplines.map((d) => `<option value="${d.key}" ${d.key === pstyle ? 'selected' : ''}>${esc(d.emoji)} ${esc(d.style)}</option>`).join('')}</select></label>
+        <button class="btn" data-act="spar_parties" ${partyOk && partyFree ? '' : 'disabled'}>Parties spar · 3 ⚪</button>${info('Two full parties at home fight each other, non-lethally, for a flat 3 white gel (not per pair) and 3 hours. Every member gains fighting-style XP and class proficiency, and the members of each party grow closer, which raises party synergy. The loser is left low on health (the Hospital heals them).')}</div>
+      <small class="mute">${partyOk ? (partyFree ? 'Two parties fight as teams to knit together and sharpen their class.' : 'The Party Arena has no room for two more parties: wait or upgrade it.') : 'You need two full parties at home to spar them against each other. Make them in the Parties tab.'}</small>
+      ${facUsers(partyK, 'In the arena')}</div></div>`;
   return `<div class="grid acad">
   ${trainingFacility}
-  <div class="panel stack"><h2>⚔ Sparring — fighting styles ${info('A duel costs 2 white gel. Two parties sparring as teams cost a flat 3 white gel (not per pair). Each takes 3 hours. A sleeping slime is woken first (mood cost: morale and a flash of anger); a slime at a job leaves it (that shift is lost); a slime below half health is too hurt to spar and drills for less. Check the tags in the pickers.')}</h2>
-    <p class="mute">Training is not for XP. Slimes duel each other (non-lethal; the loser is left at <b>1 HP</b> — heal them at the Rest Area) to develop a <b>fighting style</b> with permanent combat perks. Costs ${cost(st.mercy.spar_cost)} per duel and ${st.mercy.train_ticks}h. Training Grounds L${tg.level}: ${esc(tg.now)}.</p>
-    <div class="grid cards3">${st.disciplines.map((d) => `<div class="panel flat scard ${arena === d.key ? 'sel' : ''}" data-act="arena" data-k="${d.key}"><div style="font-size:1.6rem">${d.emoji}</div><b>${esc(d.name)}</b><div class="sub">${esc(d.style)}</div><small class="mute">${esc(d.perk)}</small></div>`).join('')}</div>
-    <div class="row"><b>Duel:</b> ${duelA} vs ${duelB}<button class="btn primary" data-act="spar" ${duelOk ? '' : 'disabled'}>Spar · 2 ⚪</button></div>
-    ${away ? `<small class="mute">${away} slime${away > 1 ? 's are' : ' is'} away (dungeon, hunt or study) and not listed.</small>` : ''}
-    <div class="row"><b>Party vs party:</b> ${partyA} vs ${partyB}<button class="btn" data-act="spar_parties" ${partyOk ? '' : 'disabled'}>Parties spar · 3 ⚪</button>${info('Two full parties at home fight each other, non-lethally, for a flat 3 white gel (not per pair) and 3 hours. Every member gains fighting-style XP and class proficiency, and the members of each party grow closer, which raises party synergy. The loser is left low on health (the Hospital heals them).')}</div>
-    <small class="mute">${partyOk ? 'Two parties fight as teams to knit together and sharpen their class.' : 'You need two full parties at home to spar them against each other. Make them in the Parties tab.'}</small></div>
-
+  ${sparPanel}
   <div class="panel stack"><h2>📚 Library</h2>
     <p class="mute">Elemental mastery unlocks at <b>3★ for any class</b> (mages get an extra element slot and study faster). Library spell slots: <b>${lib.slots}</b>${lib.tier3 ? '' : ' · Restricted Section (tier-3) needs Library L3'}.</p>
     ${postPanel('librarian')}
@@ -1261,7 +1278,6 @@ const A = {
   set_time: (d) => act('set_time', { mode: d.mode, scale: d.scale ? Number(d.scale) : undefined }).then(() => { S.modal = { type: 'menu' }; render(); }),
   wait: (d) => act('wait', { hours: num(d.h) }, { slow: num(d.h) >= 24 }),
   autocare: () => act('auto_care', { on: !S.state.auto_care }),
-  arena: (d) => { S.ui.arena = d.k; render(); },
   do: (d) => { const sl = slimeById(d.id ? num(d.id) : S.sel);
     if (d.c === 'wake' && sl && sl.state === 'sleeping' && sl.needs.energy <= 50) return confirmThen(`${sl.name} is still tired (energy ${sl.needs.energy}%).\n\nWaking a slime that has slept less than half its energy costs mood: morale drops and it gets angry. Wake it anyway?`, () => act('wake', { id: sl.id }));
     return act(d.c, { id: d.id ? num(d.id) : S.sel }); },
@@ -1369,13 +1385,10 @@ const A = {
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
     act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn() }, { title: 'Wave simulation' }); },
-  yard: (d) => { S.ui.yard = d.k; render(); },
-  drill: () => act('drill', { id: num(ui('dsl')), discipline: ui('yard', slimeById(num(ui('dsl')))?.discipline || ''), tier: num(ui('dtier', 1), 1) }),
-  drill_party: () => { const pid = num(ui('dppid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
-    act('drill_party', { pid, discipline: '', tier: num(ui('dtier', 1), 1) }); },
-  spar: () => { const a = num(ui('spa', S.state.slimes[0]?.id)), b = num(ui('spb', S.state.slimes[1]?.id)); act('spar', { a, b, discipline: ui('arena', 'sword') }, { title: 'Sparring match' }); },
+  drill: (d) => act('drill', { id: num(ui('dsl_' + d.d)), discipline: d.d, tier: num(ui('dtier', 1), 1) }),
+  spar: (d) => { const a = num(ui('spa_' + d.d)), b = num(ui('spb_' + d.d)); act('spar', { a, b, discipline: d.d }, { title: 'Sparring match' }); },
   spar_parties: () => { const pid = num(S.ui.sppid), other = num(S.ui.sppid2); if (!pid || !other) return toast('You need two full parties at home.', true);
-    act('spar_parties', { pid, other, discipline: ui('arena', 'sword') }, { title: 'Party spar', slow: true }); },
+    act('spar_parties', { pid, other, discipline: ui('pstyle', 'sword') }, { title: 'Party spar', slow: true }); },
   learn: (d) => { const id = num(ui('lib_s', S.state.slimes.find((s) => s.can_master)?.id)); act('learn', { id, spell: d.spell }); },
   forget: (d) => act('forget', { id: num(d.id), spell: d.spell }),
   res_preview: async (d) => { const r = await backend.call('research_preview', { id: num(d.id), a: ui('res_a'), b: ui('res_b') });
