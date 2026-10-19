@@ -108,16 +108,22 @@ class TestCommands(unittest.TestCase):
         a, b = st["parties"][0]["members"][:2]
         r = s.call("spar", {"a": a, "b": b, "discipline": "sword"})
         self.assertTrue(r["ok"])
-        self.assertTrue(r["result"]["battle"][0]["log"])
+        self.assertNotIn("battle", r["result"])                         # the duel report arrives when the duellists are back
         self.assertFalse(s.call("spar", {"a": a, "b": a, "discipline": "sword"})["ok"])
         away = s.call("state")["state"]["away"]
         self.assertTrue(any(x["kind"] == "expedition" and x["hours"] > 0 for x in away))     # the duellists are away with the hours left
         s.call("wait", {"hours": 3})
         r = s.call("skirmish", {"pid": 1, "tier": 1})
         self.assertTrue(r["ok"])
-        bat = r["result"]["battle"][0]
+        self.assertNotIn("battle", r["result"])                         # the party is away: the report comes with it
+        self.assertTrue(r["state"]["held"])
+        w = s.call("wait", {"hours": r["state"]["held"][0]["hours"]})
+        bat = w["state"]["reports"][0]["battles"][0]
         self.assertIn("log", bat)
         self.assertIn("victory", bat)
+        for rep in w["state"]["reports"]:
+            s.call("ack_report", {"id": rep["id"]})
+        self.assertEqual(s.call("state")["state"]["reports"], [])
 
     def test_dungeon_commands(self):
         s = session()
@@ -138,8 +144,11 @@ class TestCommands(unittest.TestCase):
             sl.emotions.clear()
         g = s.call("grind", {"pid": 1, "depth": 2, "runs": 2})
         self.assertTrue(g["ok"], g["error"])
-        self.assertTrue(g["result"]["battle"])
-        s.call("wait", {"hours": 72})
+        self.assertNotIn("battle", g["result"])                          # held until the party is back
+        self.assertTrue(g["state"]["held"])
+        w = s.call("wait", {"hours": 72})
+        self.assertTrue(w["state"]["reports"][0]["battles"])
+        s.call("ack_report", {"id": w["state"]["reports"][0]["id"]})
         for sl in s.game.slimes():
             sl.hp, sl.state, sl.grounded = sl.max_hp, "idle", False
             sl.needs.v.update({k: 90.0 for k in sl.needs.v})
@@ -153,10 +162,11 @@ class TestCommands(unittest.TestCase):
         self.assertFalse(s.call("rest", {"id": s.game.party_members(1)[0].id})["ok"])      # locked in
         n = s.call("delve_next", {"pid": 1})
         self.assertTrue(n["ok"])
-        self.assertTrue(n["result"]["battle"][0]["log"])
+        self.assertNotIn("battle", n["result"])                          # the floor report arrives when the party is ready again
         busy = n["state"]["dungeon"]["delves"]["1"]["ready_in"]
         self.assertGreater(busy, 0)                                                             # the floor took game hours: the party is away
-        s.call("wait", {"hours": busy})                                                         # ... until they pass
+        w = s.call("wait", {"hours": busy})                                                     # ... until they pass
+        self.assertTrue(w["state"]["reports"][0]["battles"][0]["log"])
         c = s.call("delve_camp", {"pid": 1, "hours": 2})
         self.assertTrue(c["ok"] or "not inside" in c["error"])
         d = c["state"]["dungeon"]["delves"].get("1")

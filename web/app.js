@@ -196,6 +196,10 @@ function render() {
   const app = document.getElementById('app');
   if (!S.state) { app.innerHTML = welcome(); return; }
   if (S.state !== S._seen) { S._seen = S.state; S.stateAt = Date.now(); }   // the moment the timers were measured
+  if (S.state.reports && S.state.reports.length && !S.modal && !S.state.battle) {          // a party is back: its report opens by itself
+    const r = S.state.reports[0];
+    S.modal = { type: 'battle', battles: r.battles, title: `📜 ${r.title} — report`, summary: r.summary, report_id: r.id };
+  }
   const keep = window.scrollY;
   const st = S.state;
   const fp = st.free_pull;
@@ -682,7 +686,7 @@ function sessionNote(runs, ticks, maxRuns, what = 'run') {
   const ss = S.state.dungeon.session, n = Math.max(1, Math.min(num(runs, 1), maxRuns)), hours = n * ticks;
   const live = S.state.clock.mode === 'live' && S.state.clock.dungeon_rate ? ` (about ${Math.max(1, Math.round(hours / S.state.clock.dungeon_rate * 60))} real minutes at the current speed)` : '';
   const cut = num(runs, 1) > maxRuns ? ` <b>Limited to ${maxRuns} ${what}s: a session is one day at most.</b>` : '';
-  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h</b>${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h, leaving early if it runs out of time.${cut}</small>`;
+  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h</b>${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h (earlier if the whole party is knocked out). The report and the haul arrive when it is back.${cut}</small>`;
 }
 /* Which party (or group of slimes) is away and how long it has left. */
 const partyNameOf = (ids) => { const p = (S.state.parties || []).find((q) => ids.every((i) => q.members.includes(i))) || (S.state.parties || []).find((q) => ids.some((i) => q.members.includes(i))); return p ? p.name : null; };
@@ -1425,7 +1429,7 @@ const A = {
   dtab: (d) => { S.dtab = d.t; render(); },
   sel: (d) => { S.sel = num(d.id); render(); },
   closesel: () => { S.sel = null; render(); },
-  closemodal: () => { S.modal = null; render(); },
+  closemodal: () => { const m = S.modal; S.modal = null; if (m && m.report_id) return act('ack_report', { id: m.report_id }); render(); },
   battle_nav: (d) => { const m = S.modal; m.i = Math.max(0, Math.min(m.battles.length - 1, (m.i ?? m.battles.length - 1) + num(d.d))); render(); },
   menu: () => { S.modal = { type: 'menu' }; render(); },
   set_time: (d) => act('set_time', { mode: d.mode, scale: d.scale ? Number(d.scale) : undefined }).then(() => { S.modal = { type: 'menu' }; render(); }),

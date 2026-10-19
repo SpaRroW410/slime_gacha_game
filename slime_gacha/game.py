@@ -102,6 +102,9 @@ class Game:
         self.wall_last: Optional[float] = None
         self.wall_frac = 0.0
         self.expeditions: List[dict] = []              # live mode: parties away until a game tick
+        self.held: List[dict] = []                     # finished sessions whose haul and report arrive when the party is back
+        self.next_held = 1
+        self.last_due = 0                              # tick the party of the last session is back (set when it leaves; read by the web layer)
         self.plans: Dict[str, dict] = {}               # day plans of the posts (jobs.py): eight shifts and "if" rules
         self.ward: List[int] = []                      # slimes admitted to the Hospital ward (they are 'resting', in the ward)
         self.pantry: Dict[str, int] = {}               # cooked servings by recipe (jobs.py: chef and kitchen)
@@ -333,12 +336,36 @@ class Game:
         arena, self._arena = self._arena, None
         alive = [s for s in party if s.id in self.roster]
         if self.timed and owed > 0 and alive:
+            self.last_due = max(self.last_due, self.tick_count + owed)
             self.expeditions.append(dict(ids=[s.id for s in alive], until=self.tick_count + owed, hours=owed,
                                          **({"arena": arena} if arena else {})))
         else:
             self._clear_flag(party)
 
+    # ---- sessions whose results arrive with the party -------------------------------------------------------------
+    def hold_session(self, wallet_before: Dict[str, int], due: int, title: str, battles: list, summary: list) -> None:
+        """A dungeon session ran when the party left, but its haul and report only arrive when the party is back at tick `due`:
+        take the resources it just earned out of the wallet and keep them (with the report) until then."""
+        after = self.wallet.to_dict()
+        gains = {k: v - wallet_before.get(k, 0) for k, v in after.items() if v > wallet_before.get(k, 0)}
+        for k, v in gains.items():
+            self.wallet.spend(k, v)
+        self.held.append(dict(id=self.next_held, due=int(due), title=title, gains=gains, battles=battles, summary=summary, paid=False))
+        self.next_held += 1
+
+    def _deliver_held(self, events: List[str]) -> None:
+        for h in self.held:
+            if not h["paid"] and h["due"] <= self.tick_count:
+                self.wallet.add_many(h["gains"])
+                h["paid"] = True
+                got = ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in h["gains"].items())
+                events.append(f"📜 {h['title']}: the party is back, the report is ready" + (f" (haul: {got})." if got else "."))
+
+    def ack_report(self, rid: int) -> None:
+        self.held = [h for h in self.held if not (h["id"] == rid and h["paid"])]
+
     def _return_expeditions(self, events: List[str]) -> None:
+        self._deliver_held(events)
         for e in list(self.expeditions):
             if self.tick_count >= e["until"]:
                 self.expeditions.remove(e)
@@ -3038,6 +3065,7 @@ class Game:
                 self.delves[q]["hours"] += spent
                 if self.timed:
                     self.delves[q]["ready_tick"] = self.tick_count + spent
+                    self.last_due = max(self.last_due, self.tick_count + spent)
                 if not self._members_in("main", q):        # everyone starved / died in the meantime
                     self.delves.pop(q, None)
         self._owed = 0.0
@@ -3554,7 +3582,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, ward=self.ward, plans=self.plans, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -3656,6 +3684,8 @@ class Game:
         g.expeditions = [dict(e, ids=[i for i in e["ids"] if i in g.roster]) for e in d.get("expeditions", [])]
         g.expeditions = [e for e in g.expeditions if e["ids"]]
         g.pantry = {k: int(v) for k, v in d.get("pantry", {}).items()}
+        g.held = list(d.get("held", []))
+        g.next_held = d.get("next_held", 1)
         g.ward = [i for i in d.get("ward", []) if i in g.roster]
         g.plans = {k: v for k, v in (d.get("plans") or {}).items() if k in jobs.JOBS}
         g.recipe_pref = d.get("recipe_pref", "auto")

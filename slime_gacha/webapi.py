@@ -315,6 +315,8 @@ def snapshot(g: Game) -> dict:
                                      hours=max(0, e["until"] - g.tick_count),
                                      real_min=(round(max(0, e["until"] - g.tick_count) / max(1e-9, g.clock_rate()) * 60) if g.live else None))
                                 for e in g.expeditions] if g.timed else []),
+        reports=[dict(id=h['id'], title=h['title'], battles=h['battles'], summary=h['summary']) for h in g.held if h['paid']],
+        held=[dict(title=h['title'], hours=max(0, h['due'] - g.tick_count)) for h in g.held if not h['paid']],
         stress=round(g.sacrifice_stress, 2),
         gift=dict(morale=config.GIFT_MORALE_COST, morale_gain=config.GIFT_MORALE_GAIN, peace=config.GIFT_PEACE_COST,
                   potion=config.GIFT_POTION_PURPLE, merge_gear=config.GEAR_MERGE_COUNT, scrap=config.GEAR_SCRAP_REFUND),
@@ -447,6 +449,12 @@ def _sleep_tired(g, a):
 @command("set_plan")
 def _set_plan(g, a):
     return _msg(g.set_plan(str(a.get("key", "")), a.get("slots") or [], a.get("rules") or []))
+
+
+@command("ack_report")
+def _ack_report(g, a):
+    g.ack_report(_i(a, "id"))
+    return [], {}
 
 
 @command("wake_all")
@@ -1010,6 +1018,10 @@ def _skirmish(g, a):
     return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a), a.get("lo") and _i(a, "lo"), a.get("hi") and _i(a, "hi"), _i(a, "waves", 1)))
 
 
+SESSION_TITLES = dict(grind="The Gloop Pit", adventure="The Wayfarer's Rift", quarry="The Starfall Quarry", skirmish="Wave simulation",
+                      wave="Wave simulation", delve_next="The Hollow Descent", spar="Sparring match", spar_parties="Party sparring")
+
+
 # ---- session -----------------------------------------------------------------------------------------------
 BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift"}
 
@@ -1045,7 +1057,16 @@ class Session:
                 woke = []
             else:
                 woke = self.game.sync()                # live mode: the wall clock moves the colony forward first
-            log, result = HANDLERS[cmd](self.game, args)
+            g = self.game
+            g.last_due = 0
+            before = g.wallet.to_dict()
+            log, result = HANDLERS[cmd](g, args)
+            battles = result.get("battle") if isinstance(result, dict) else None
+            if battles and g.timed and g.last_due > g.tick_count and cmd in SESSION_TITLES:      # the party is away: the report and haul come with it
+                hours = g.last_due - g.tick_count
+                g.hold_session(before, g.last_due, SESSION_TITLES[cmd], battles, log)
+                result = {k: v for k, v in result.items() if k != "battle"}
+                log = [f"{SESSION_TITLES[cmd]}: the party set out. The report and the haul arrive in {hours}h."]
             return self._ok(woke + log, result)
         except GameError as e:
             return self._fail(str(e))
