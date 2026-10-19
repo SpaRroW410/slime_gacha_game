@@ -28,6 +28,7 @@ header.top { position: sticky; top: 0; z-index: 20; background: var(--bg2); bord
 .logo { font-weight: 800; letter-spacing: .02em; display: flex; gap: 8px; align-items: center; }
 .logo .dot { width: 22px; height: 22px; border-radius: 50% 50% 46% 46%; background: radial-gradient(circle at 35% 30%, #b9ffd9, var(--accent2)); }
 .res { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip.wrap { white-space: normal; border-radius: 12px; }
 .chip { display: inline-flex; gap: 5px; align-items: center; padding: 3px 9px; border-radius: 999px; background: var(--card);
   border: 1px solid var(--line); font-size: .85rem; white-space: nowrap; }
 .chip.white b { color: var(--white); } .chip.purple b { color: var(--purple); }

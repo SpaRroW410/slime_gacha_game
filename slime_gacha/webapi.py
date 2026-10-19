@@ -440,7 +440,7 @@ def _admit_hurt(g, a):
 
 @command("sleep_tired")
 def _sleep_tired(g, a):
-    return g.sleep_tired(), {}
+    return g.sleep_tired(float(a.get("below", config.TASK_MIN_ENERGY))), {}
 
 
 @command("wake_all")

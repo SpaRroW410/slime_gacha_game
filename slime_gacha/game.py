@@ -983,7 +983,10 @@ class Game:
                     events.append("🎖 " + self.feed(s.id))
 
     def feed(self, sid: int) -> str:
+        """Feed a slime: a cooked dish from the Kitchen's pantry first (as automatic eating does), else raw food."""
         s = self._tend(sid)
+        if self.pantry and s.needs.get("food") < 100:
+            return self.serve(sid)
         self.wallet.spend("food", 1)
         s.needs.add("food", config.FOOD_NUTRITION)
         s.needs.add("belonging", 3)
@@ -1050,11 +1053,11 @@ class Game:
                 break
         return out or ["Nobody at home is hurt."]
 
-    def sleep_tired(self) -> List[str]:
-        """Put every idle slime at home that is low on energy to sleep."""
+    def sleep_tired(self, below: float = config.TASK_MIN_ENERGY) -> List[str]:
+        """Put every idle slime at home with energy under `below` percent to sleep."""
         out = []
         for s in self.slimes():
-            if s.state == "idle" and not s.in_dungeon and s.needs.get("energy") < config.TASK_MIN_ENERGY:
+            if s.state == "idle" and not s.in_dungeon and s.needs.get("energy") < below:
                 out.append(self.sleep(s.id))
         return out or ["Nobody idle is tired."]
 
@@ -1631,6 +1634,9 @@ class Game:
         return f"{self.slime(sid).name} joins {p.name} ({len(p.members)}/{self.parties.size})."
 
     def party_remove(self, sid: int) -> str:
+        p = self.parties.party_of(sid)
+        if p and self.party_activity(p.id):
+            raise InvalidAction(f"{p.name} is away {self.party_activity(p.id)}: nobody can leave it until it is back.")
         self.parties.remove(sid)
         return f"{self.slime(sid).name} leaves their party."
 

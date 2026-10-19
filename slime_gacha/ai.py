@@ -101,6 +101,9 @@ class NeedsEngine:
                 events.append(f"{s.name} takes a meal break.")
         if s.state == "idle":
             if n.get("energy") < config.AUTO_SLEEP_BELOW:
+                if self.rest_hook and self.rest_hook(s):             # a free bed in the Rest Area restores energy much faster
+                    events.append(f"🛏️ {s.name} is tired and heads to the Rest Area.")
+                    return
                 s.state = "sleeping"
                 events.append(f"{s.name} curls up and falls asleep. zzz")
                 return

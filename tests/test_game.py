@@ -131,9 +131,21 @@ class TestGacha(unittest.TestCase):
 
 
 class TestNeeds(unittest.TestCase):
+    def test_a_tired_slime_takes_a_free_rest_area_bed_else_sleeps(self):
+        g = fresh(1, 2)
+        a, b = g.slimes()
+        a.needs.set("energy", 10)
+        g.tick(1)
+        self.assertEqual(a.state, "resting")                    # a free bed: the Rest Area restores energy faster
+        g.buildings.rest_capacity = lambda lv=None: 0           # no bed free
+        b.needs.set("energy", 10)
+        g.tick(1)
+        self.assertEqual(b.state, "sleeping")
+
     def test_auto_sleep_and_wake(self):
         g = fresh(1, 1)
         s = g.slimes()[0]
+        g.buildings.rest_capacity = lambda lv=None: 0
         s.needs.set("energy", 10)
         g.tick(1)
         self.assertEqual(s.state, "sleeping")

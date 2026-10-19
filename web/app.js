@@ -262,10 +262,19 @@ function etaHtml(a) {
   if (a.hours != null) return `<span class="eta">${Math.ceil(a.hours)}h left</span>`;
   return `<span class="eta">${a.kind === 'job' ? 'at work' : 'inside'}</span>`;
 }
+/* The Away bar is a row of small icons (one per kind of absence, with how many slimes); tap it for the full list with timers. */
 function awayBar() {
   const items = awayItems();
   if (!items.length) return '';
-  return `<div class="awaybar"><b>⏳ Away</b>${items.map((a) => `<span class="chip" title="${esc(a.names.join(', '))}">${esc(a.label)} · ${esc(a.names.slice(0, 3).join(', '))}${a.names.length > 3 ? ` +${a.names.length - 3}` : ''} · ${etaHtml(a)}</span>`).join('')}</div>`;
+  const icon = (a) => (a.label.match(/^\S+/) || ['⏳'])[0];
+  const groups = new Map();
+  items.forEach((a) => { const k = icon(a); const g = groups.get(k) || { n: 0, tips: [] }; g.n += a.names.length; g.tips.push(`${a.label.replace(/^\S+\s*/, '')}: ${a.names.join(', ')}${a.hours != null ? ` (${Math.ceil(a.hours)}h left)` : ''}`); groups.set(k, g); });
+  const soon = items.filter((a) => a.hours != null && a.hours > 0).sort((x, y) => x.hours - y.hours)[0];
+  const open = S.awayOpen;
+  return `<div class="awaybar"><button class="chip chipbtn" data-act="away_toggle" title="Show or hide the details">⏳ Away ${items.reduce((n, a) => n + a.names.length, 0)} ${open ? '▴' : '▾'}</button>
+    ${[...groups.entries()].map(([k, g]) => `<button class="chip chipbtn" data-act="away_toggle" title="${esc(g.tips.join('\n'))}">${k} ${g.n}</button>`).join('')}
+    ${soon ? `<small class="mute">next back in ~${Math.ceil(soon.hours)}h</small>` : ''}</div>
+    ${open ? `<div class="awaybar awaydetail">${items.map((a) => `<span class="chip" title="${esc(a.names.join(', '))}">${esc(a.label)} · ${esc(a.names.slice(0, 3).join(', '))}${a.names.length > 3 ? ` +${a.names.length - 3}` : ''} · ${etaHtml(a)}</span>`).join('')}</div>` : ''}`;
 }
 let syncSoon = 0;
 function tickEtas() {
@@ -334,7 +343,7 @@ function colony() {
   const filters = { all: () => true, free: (s) => !s.party, idle: (s) => s.state === 'idle' && !s.in_dungeon, wounded: (s) => s.hp < s.max_hp * 0.6,
     away: (s) => s.busy || s.state === 'hunting', needy: (s) => !!s.dominant };
   const q = String(ui('roster_q', '')).trim().toLowerCase();
-  const list = st.slimes.filter(filters[S.filter]).filter((s) => !q || `${s.name} ${s.class_name} ${s.rarity} ${s.title}`.toLowerCase().includes(q)).sort(sorters[S.sort]);
+  const list = st.slimes.filter(filters[S.filter]).filter((s) => !S.cls || s.class_name === S.cls).filter((s) => !q || `${s.name} ${s.class_name} ${s.rarity} ${s.title}`.toLowerCase().includes(q)).sort(sorters[S.sort]);
   const TOP = 10;
   const big = st.slimes.length > TOP;          // a big colony: ten cards, the rest as a compact list
   const opt = (obj, cur) => Object.entries(obj).map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('');
@@ -342,6 +351,7 @@ function colony() {
     <h2>${st.slimes.length} slimes · ${st.rest.used}/${st.rest.cap} resting · ${st.jobs.hospital.used}/${st.jobs.hospital.beds} in hospital</h2>
     <div class="row">
       <label class="f">Sort <select data-sel="sort">${opt({ power: 'Power', level: 'Level', stars: 'Stars', rarity: 'Rarity', hp: 'Lowest HP', morale: 'Lowest morale', name: 'Name' }, S.sort)}</select></label>
+      <label class="f">Class <select data-sel="cls"><option value="">All classes</option>${[...new Set(st.slimes.map((s) => s.class_name))].sort().map((c) => `<option value="${esc(c)}" ${S.cls === c ? 'selected' : ''}>${esc(c)} (${st.slimes.filter((s) => s.class_name === c).length})</option>`).join('')}</select></label>
       <label class="f">Show <select data-sel="filter">${opt({ all: 'All', free: 'Not in a party', idle: 'Available', wounded: 'Wounded', away: 'Away', needy: 'Needs something' }, S.filter)}</select></label>
     </div></div>
   ${big ? `<div class="row" style="margin-bottom:8px"><input type="search" data-ui="roster_q" data-rerender="1" value="${esc(ui('roster_q', ''))}" placeholder="Find a slime (name, class, rarity)" style="max-width:300px"><small class="mute">Showing the top ${Math.min(TOP, list.length)} by ${esc(S.sort)}; the rest are in the list below.</small></div>` : ''}
@@ -409,7 +419,7 @@ function dOverview(s, { st, free, inDun }) {
     ${s.buffs.length ? `<div class="row"><small class="mute">potion slots ${s.buffs.length}/${s.potion_slots}</small>${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}
     ${sect(`Needs ${s.dominant ? badge(WISH[s.dominant], 'warn') : badge('content', 'ok')}`, 'Needs fall over time. Unmet needs lower mood and morale, stir bad feelings and, at zero, hurt the slime. See the Guide tab for details.', Object.entries(s.needs).map(([k, v]) => bar(v, 100, 'need', NEED_NAME[k], v)).join(''))}
     ${sect('Care', inDun ? 'This slime is inside a dungeon: feeding, petting, sleeping and potions are not possible until it is back.' : 'Feeding, petting and rest. Not possible while a slime is inside a dungeon.', `<div class="row">
-      ${care('feed', '🍖 Feed', st.wallet.food > 0 ? '' : 'x')}${care('serve', '🍽 Serve a dish', st.jobs.kitchen.total > 0 ? '' : 'x')}${care('pet', '🤗 Pet')}
+      ${care('feed', st.jobs.kitchen.total > 0 ? '🍽 Feed (kitchen)' : '🍖 Feed', st.wallet.food > 0 || st.jobs.kitchen.total > 0 ? '' : 'x')}${care('serve', '🍽 Serve a dish', st.jobs.kitchen.total > 0 ? '' : 'x')}${care('pet', '🤗 Pet')}
       ${s.state === 'sleeping' || s.state === 'resting' ? care('wake', s.state === 'sleeping' ? '⏰ Wake (mood −)' : '⏰ Wake') : care('sleep', '😴 Sleep', free ? '' : 'x')}
       ${(() => {
         const restFull = st.rest.used >= st.rest.cap, hosp = st.jobs.hospital, hospFull = hosp.used >= hosp.beds;
@@ -538,7 +548,7 @@ function parties() {
       ${p.members.length ? `<div class="row" style="gap:6px">👑 <b>${esc(slimeById(p.leader)?.name || '—')}</b> <small class="mute">${p.leader_set ? 'leader (your choice)' : 'leader (highest level)'}</small>
         ${!(p.in_delve || p.away) && p.members.length > 1 ? `<select data-ui="lead_${p.id}">${p.members.map((id) => `<option value="${id}" ${id === p.leader ? 'selected' : ''}>${esc(slimeById(id)?.name)}</option>`).join('')}</select><button class="btn small" data-act="set_leader" data-pid="${p.id}">Set leader</button>` : ''}
         ${p.temp ? badge('hunt party', 'info') : ''}</div>` : ''}
-      <div class="row" style="margin:6px 0">${p.members.map((id) => mini(id, !(p.in_delve || p.away))).join('') || '<small class="mute">Empty</small>'}</div>
+      <div class="row" style="margin:6px 0">${p.members.map((id) => mini(id, !p.activity && !slimeById(id)?.in_dungeon)).join('') || '<small class="mute">Empty</small>'}</div>
       ${p.members.length > 1 ? `<p class="mute">Synergy <b>${(p.synergy * 100).toFixed(1)}%</b> power (from average compatibility) · ⚡ party power <b>${Math.round(p.members.reduce((a, id) => a + (slimeById(id)?.power || 0), 0) * (1 + p.synergy))}</b> ${info('The members\' total power added up, times the party synergy.')}</p>` : ''}
       <div class="row">
         ${!p.full && !(p.in_delve || p.away) ? `<button class="btn small" data-act="party_fill" data-pid="${p.id}">⚡ Fill with best free</button>` : ''}
@@ -613,7 +623,7 @@ function dungeonsAll() {
         <button class="btn ${v.can_leave ? 'primary' : ''}" data-act="leave_dungeon" data-pid="${pid}" ${v.can_leave ? '' : 'disabled'} title="${v.can_leave ? 'Climb out' : 'Only possible at a checkpoint'}">🚪 Leave</button></div>
       ${v.can_leave ? '' : `<div class="row"><small class="mute">No free way out until the boss of floor ${v.boss_floor} falls.</small>
         <button class="btn small danger" data-act="retreat" data-pid="${pid}" data-cost="${v.retreat.cost}" data-amb="${Math.round(v.retreat.ambush * 100)}" ${v.ready_in > 0 || S.state.wallet.purple_gel < v.retreat.cost ? 'disabled' : ''} title="Costs purple gel, morale, and the flight may be ambushed">🏃 Retreat · ${v.retreat.cost} 🟣</button></div>`}
-      ${v.modifier ? `<div class="chip bad">${esc(S.state.modifiers[v.modifier].emoji)} ${esc(S.state.modifiers[v.modifier].name)}: ${esc(S.state.modifiers[v.modifier].desc)}</div>` : ''}
+      ${v.modifier ? `<div class="chip bad wrap">${esc(S.state.modifiers[v.modifier].emoji)} ${esc(S.state.modifiers[v.modifier].name)}: ${esc(S.state.modifiers[v.modifier].desc)}</div>` : ''}
       ${v.stop ? stopPanel(+pid, v) : ''}
       <small class="mute" style="display:block">⛺ Camp time left on this floor: <b>${v.camp_left}h</b> of ${v.camp_limit}h (the floor number, stretched by how well it is scouted).${v.relief > 0 ? ` Ambushes are ${Math.round(v.relief * 50)}% less likely: another party is closing in from below.` : ''}</small>
       ${v.callers.length ? reinforcePanel(+pid, v) : ''}
@@ -785,11 +795,14 @@ function wakePanel() {
   const ok = sleepers.filter((s) => s.needs.energy >= 10), tired = ok.filter((s) => s.needs.energy < 50);
   const hurt = st.slimes.filter((s) => ['idle', 'sleeping'].includes(s.state) && !s.in_dungeon && s.hp < s.max_hp && !s.ward);
   const beds = st.jobs.hospital.beds - st.jobs.hospital.used;
-  const weary = st.slimes.filter((s) => s.state === 'idle' && !s.in_dungeon && s.needs.energy < 25);
+  const below = num(ui('tired_below', 25), 25);
+  const wearyN = (x) => st.slimes.filter((s) => s.state === 'idle' && !s.in_dungeon && s.needs.energy < x).length;
+  const weary = { length: wearyN(below) };
   return `<div class="panel flat stack"><div class="row between"><span>😴 <b>${sleepers.length}</b> asleep in town${sleepers.length - ok.length ? ` · ${sleepers.length - ok.length} under 10% energy are left to sleep` : ''}${tired.length ? ` · ⚠ ${tired.length} would wake grumpy (under 50% energy)` : ''}</span>
     <button class="btn" data-act="wake_all" ${ok.length ? '' : 'disabled'}>☀️ Wake everybody</button></div>
-    <div class="row"><button class="btn" data-act="admit_hurt" ${hurt.length && beds > 0 ? '' : 'disabled'} title="Most hurt first, while the ward has beds">🏥 Send all hurt to the Hospital (${hurt.length} hurt · ${Math.max(0, beds)} beds)</button>
-      <button class="btn" data-act="sleep_tired" ${weary.length ? '' : 'disabled'} title="Idle slimes under 25% energy">💤 Send all low-energy to sleep (${weary.length})</button></div></div>`;
+    <div class="row"><button class="btn" data-act="admit_hurt" ${hurt.length && beds > 0 ? '' : 'disabled'} title="Most hurt first, while the ward has beds">🏥 Send all hurt to the Hospital (${hurt.length} hurt · ${Math.max(0, beds)} free beds)</button>
+      <span class="row"><select data-ui="tired_below" data-rerender="1"><option value="25" ${below === 25 ? 'selected' : ''}>energy under 25% (${wearyN(25)})</option><option value="50" ${below === 50 ? 'selected' : ''}>energy under 50% (${wearyN(50)})</option></select>
+        <button class="btn" data-act="sleep_tired" ${weary.length ? '' : 'disabled'} title="Idle slimes with energy under ${below}%">💤 Send them to sleep (${weary.length})</button></span></div></div>`;
 }
 /* Notices under the tabs: what changed in the last update, and a reminder to back the colony up to a file (the browser copy is the only copy). */
 const LS_NEWS = 'sg_seen_news', LS_EXPORT = 'sg_last_export', LS_SNOOZE = 'sg_backup_snooze';
@@ -1251,7 +1264,11 @@ function council() {
   const st = S.state, c = S.council;
   const sel = (key, idx = 0) => `<select data-ui="${key}">${st.slimes.map((s) => `<option value="${s.id}" ${s.id == ui(key, st.slimes[Math.min(idx, st.slimes.length - 1)]?.id) ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)})</option>`).join('')}</select>`;
   const comp = S.compat;
-  return `<div class="grid cols2">
+  const quarrels = `<div class="panel stack"><h3>Quarrels</h3>${st.conflicts.length ? st.conflicts.map((q) => `<div class="row between panel flat"><span>${esc(slimeById(q.a)?.name)} vs ${esc(slimeById(q.b)?.name)}<br><small class="mute">${esc(q.reason)} · severity ${q.severity}</small></span>
+        ${q.away.length ? `<small class="mute">${esc(q.away.join(' & '))} away — out of your hands</small>` : `<span class="row"><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="talk">Talk</button><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="snack" ${st.wallet.food >= 2 ? '' : 'disabled'}>Snack (2🍖)</button></span>`}</div>`).join('') : '<p class="mute">The colony is peaceful.</p>'}</div>
+    </div>`;
+  return `<div class="stack" style="margin-bottom:12px">${quarrels.replace('<h3>Quarrels</h3>', `<h3>⚔️ Quarrels to mediate ${st.conflicts.length ? chip(String(st.conflicts.length), 'bad') : ''}</h3>`)}</div>
+  <div class="grid cols2">
     <div class="panel stack"><h2>⚖️ Who to keep, who to sacrifice?</h2>
       <p class="mute">Merging consumes the donor to feed the target. It lowers everyone's morale, and <b>sacrifices compound</b>: stress now <b>${st.stress}</b> (each recent merge makes the next cost +${Math.round(st.max_stress_amp * 100)}% more and lowers the whole colony's morale target; it fades by 1 per day).</p>
       ${bar(Math.min(st.stress, 5), 5, 'morale', 'Sacrifice stress', st.stress)}
@@ -1263,8 +1280,6 @@ function council() {
           <button class="btn small danger" data-act="merge" data-t="${m.target}" data-d="${m.donor}" data-tn="${esc(m.target_name)}" data-dn="${esc(m.donor_name)}" data-xp="${m.xp}" data-g="${m.grief}">Merge</button></div>`).join('') : '<p class="mute">Not enough slimes.</p>'}</div>
       <div class="panel stack"><h3>Compatibility</h3><div class="row">${sel('ca')} & ${sel('cb', 1)}<button class="btn" data-act="compat">Check</button></div>
         ${comp ? `<p><b>${comp.total >= 0 ? '+' : ''}${comp.total}</b> (${comp.label}) — ${Object.entries(comp.parts).filter(([, v]) => v).map(([k, v]) => `${k} ${v >= 0 ? '+' : ''}${v}`).join(', ')}</p>` : ''}</div>
-      <div class="panel stack"><h3>Quarrels</h3>${st.conflicts.length ? st.conflicts.map((q) => `<div class="row between panel flat"><span>${esc(slimeById(q.a)?.name)} vs ${esc(slimeById(q.b)?.name)}<br><small class="mute">${esc(q.reason)} · severity ${q.severity}</small></span>
-        ${q.away.length ? `<small class="mute">${esc(q.away.join(' & '))} away — out of your hands</small>` : `<span class="row"><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="talk">Talk</button><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="snack" ${st.wallet.food >= 2 ? '' : 'disabled'}>Snack (2🍖)</button></span>`}</div>`).join('') : '<p class="mute">The colony is peaceful.</p>'}</div>
     </div></div>`;
 }
 
@@ -1462,6 +1477,7 @@ const A = {
   set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
   assign_job: (d) => { const id = num(S.ui['post_' + d.job]); if (id) act('assign_job', { id, job: d.job }); },
   forage: () => act('set_forage', { on: !S.state.jobs.forage }),
+  away_toggle: () => { S.awayOpen = !S.awayOpen; render(); },
   serve_hungry: () => act('serve_hungry'),
   wake_all: () => confirmThen('Wake everybody asleep in town?\n\nSlimes under 10% energy are left to sleep. Those under 50% energy wake grumpy (a mood cost).', () => act('wake_all')),
   stop_job: (d) => d.confirm ? confirmThen(`Dismiss this slime from the ${d.jn} post?\n\nThe shift in progress is not finished: no work is done for it (nothing is cooked, forged or brewed, no herbs are found).`, () => act('stop_job', { id: num(d.id) })) : act('stop_job', { id: num(d.id) }),
@@ -1532,7 +1548,7 @@ const A = {
   dismiss_news: () => { lsSet(LS_NEWS, S.state.whats_new.id); render(); },
   snooze_backup: () => { lsSet(LS_SNOOZE, Date.now()); render(); },
   admit_hurt: () => act('admit_hurt'),
-  sleep_tired: () => act('sleep_tired'),
+  sleep_tired: () => act('sleep_tired', { below: num(ui('tired_below', 25), 25) }),
   copy_save: async () => { const save = await currentSave(); if (!save) return toast('Nothing to copy yet.', true);
     try { await navigator.clipboard.writeText(JSON.stringify(save)); lsSet(LS_EXPORT, Date.now()); toast('Save copied: paste it into a text file or a note.'); } catch (e) { toast('Copying is blocked here: use Export.', true); } },
 };
