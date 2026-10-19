@@ -430,3 +430,36 @@ class TestDismissMidShift(unittest.TestCase):
         self.assertEqual((chef.state, chef.job, g.pantry), ("idle", "", {}))        # nothing was cooked
         g.tick(jobs.SHIFT_HOURS)
         self.assertEqual(g.pantry, {})
+
+
+class TestDayPlans(unittest.TestCase):
+    def test_a_rule_decides_the_shift_and_plans_survive_a_save(self):
+        g = quiet(rich(100))
+        doc = slime(g, "medic", stars=2)
+        g.assign_job(doc.id, "doctor")
+        g.set_plan("doctor", ["work"] * 8, [dict({"if": "no_patients", "do": "forage"})])
+        self.assertEqual(jobs.plan_action(g, doc), "forage")           # nobody is hurt
+        h = slime(g, "barbarian")
+        h.hp = 1
+        self.assertEqual(jobs.plan_action(g, doc), "work")             # a patient: the doctor stays
+        g2 = Game.from_dict(g.to_dict())
+        self.assertEqual(g2.plans["doctor"]["rules"][0]["if"], "no_patients")
+
+    def test_slots_and_the_pantry_rule(self):
+        g = quiet(rich(101))
+        chef = slime(g, "medic", stars=2)
+        g.assign_job(chef.id, "chef")
+        slot = (g.tick_count // jobs.SHIFT_HOURS) % jobs.PLAN_SLOTS
+        slots = ["work"] * 8
+        slots[slot] = "sleep"
+        g.set_plan("chef", slots, [dict({"if": "pantry_days_ge", "n": 10, "do": "forage"})])
+        self.assertEqual(jobs.plan_action(g, chef), "sleep")
+        g.pantry = {next(iter(jobs.RECIPES)): 500}                      # lots of food: the rule wins
+        self.assertEqual(jobs.plan_action(g, chef), "forage")
+        g.pantry = {}
+        g.tick(1)
+        self.assertEqual(chef.state, "sleeping")                        # sleeps through the shift ...
+        g.tick(jobs.SHIFT_HOURS)
+        self.assertIn(chef.state, ("working", "hunting"))               # ... then goes back to the post
+        with self.assertRaises(InvalidAction):
+            g.set_plan("chef", ["dance"] * 8, [])

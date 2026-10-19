@@ -165,6 +165,69 @@ def recall(game, slime) -> str:
     return f"📞 {slime.name} is called back through the portal and returns to the {JOBS[slime.job].name.lower()}'s post."
 
 
+# ---- day plans ------------------------------------------------------------------------------------------------------------
+# A post can follow a plan for the whole day: eight 3-hour shifts, each work / forage / sleep, plus up to three "if" rules that are
+# checked at the start of every shift and win over the slot ("if nobody is hurt: forage", "if the pantry holds 10+ days: sleep").
+PLAN_SLOTS = 24 // SHIFT_HOURS
+PLAN_ACTIONS = ("work", "forage", "sleep")
+PLAN_CONDITIONS = {"always": "always", "no_patients": "nobody is hurt at home", "hurt_ge": "N or more slimes are hurt",
+                   "pantry_days_ge": "the pantry holds N days of food or more", "pantry_days_lt": "the pantry holds under N days of food",
+                   "energy_lt": "my energy is under N%"}
+PLAN_MAX_RULES = 3
+
+
+def pantry_days(game) -> float:
+    """Days of food the pantry holds, at about one serving per slime per day."""
+    return pantry_total(game) / max(1, len(game.slimes()))
+
+
+def _rule_holds(game, s, cond: str, n: float) -> bool:
+    if cond == "always":
+        return True
+    if cond == "no_patients":
+        return not injured(game)[0]
+    if cond == "hurt_ge":
+        return len(injured(game)[0]) >= n
+    if cond == "pantry_days_ge":
+        return pantry_days(game) >= n
+    if cond == "pantry_days_lt":
+        return pantry_days(game) < n
+    if cond == "energy_lt":
+        return s.needs.get("energy") < n
+    return False
+
+
+def plan_action(game, s) -> str:
+    """What this worker does in the shift that starts now: the first matching rule, else the plan's slot, else work."""
+    plan = game.plans.get(s.job)
+    if not plan:
+        return "work"
+    for r in plan.get("rules", []):
+        if _rule_holds(game, s, r["if"], r.get("n", 0)):
+            return r["do"]
+    slot = (game.tick_count // SHIFT_HOURS) % PLAN_SLOTS
+    return (plan.get("slots") or ["work"] * PLAN_SLOTS)[slot]
+
+
+def set_plan(game, key: str, slots, rules) -> str:
+    get(key)
+    slots = [str(x) for x in (slots or [])][:PLAN_SLOTS]
+    slots += ["work"] * (PLAN_SLOTS - len(slots))
+    if any(x not in PLAN_ACTIONS for x in slots):
+        raise InvalidAction("A shift is work, forage or sleep.")
+    clean = []
+    for r in list(rules or [])[:PLAN_MAX_RULES]:
+        cond, do = str(r.get("if", "")), str(r.get("do", ""))
+        if cond not in PLAN_CONDITIONS or do not in PLAN_ACTIONS:
+            raise InvalidAction("Unknown rule.")
+        clean.append(dict({"if": cond, "do": do}, n=float(r.get("n", 0) or 0)))
+    if all(x == "work" for x in slots) and not clean:
+        game.plans.pop(key, None)
+        return f"The {get(key).name.lower()} works every shift again."
+    game.plans[key] = dict(slots=slots, rules=clean)
+    return f"📅 Day plan saved for the {get(key).name.lower()}."
+
+
 # ---- time -------------------------------------------------------------------------------------------------------------
 def tick(game, events: List[str]) -> None:
     for s in list(game.slimes()):
@@ -175,8 +238,23 @@ def tick(game, events: List[str]) -> None:
         if s.state == "idle":                                       # back from foraging: take the post up again
             s.state, s.job_clock = "working", 0
             continue
+        if s.state == "sleeping":                                   # a planned sleep shift: back at the post when it is over (or rested)
+            s.job_clock += 1
+            if s.job_clock >= SHIFT_HOURS:
+                s.state, s.job_clock = "working", 0
+            continue
         if s.state != "working":
             continue
+        if s.job_clock == 0 and s.job in game.plans:                # a new shift begins: the day plan decides what it is
+            act = plan_action(game, s)
+            if act == "sleep":
+                s.state, s.job_clock = "sleeping", 1
+                events.append(f"😴 {s.name} sleeps through this shift (day plan).")
+                continue
+            if act == "forage":
+                _forage(game, s, events, planned=True)
+                if s.state == "hunting":
+                    continue
         if s.needs.get("energy") < config.AUTO_SLEEP_BELOW:          # too weary to carry on: leaves the post to sleep
             events.append(f"😴 {s.name} is too tired to keep working as a {JOBS[s.job].name.lower()}.")
             s.state, s.job, s.job_clock = "idle", "", 0
@@ -215,13 +293,14 @@ def _bonus(game, s, events: List[str]) -> None:
     events.append(f"💰 {s.name}'s shift bonus: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in got.items()) + ".")
 
 
-def _forage(game, s, events: List[str]) -> None:
-    """Nothing to do this shift: go foraging for three hours (call back at any time)."""
+def _forage(game, s, events: List[str], planned: bool = False) -> None:
+    """Nothing to do this shift (or the day plan says so): go foraging for three hours (call back at any time)."""
     try:
         game.hunts.start_from_post(s)
     except InvalidAction:
         return
-    events.append(f"🧺 {s.name} has nothing to do at the {JOBS[s.job].name.lower()}'s post and goes foraging for {SHIFT_HOURS}h.")
+    events.append(f"🧺 {s.name} " + ("forages this shift (day plan)." if planned else
+                  f"has nothing to do at the {JOBS[s.job].name.lower()}'s post and goes foraging for {SHIFT_HOURS}h."))
 
 
 def at_home(game, exclude=None) -> list:

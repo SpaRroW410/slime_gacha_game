@@ -214,7 +214,8 @@ def _jobs_view(g: Game) -> dict:
     hungry = jobs_mod.hungry(g)
     chef = jobs_mod.holder(g, "chef")
     return dict(
-        forage=g.forage, shift=jobs_mod.SHIFT_HOURS, posts=posts,
+        forage=g.forage, shift=jobs_mod.SHIFT_HOURS, posts=posts, plans=g.plans, plan_conditions=jobs_mod.PLAN_CONDITIONS, plan_slots=jobs_mod.PLAN_SLOTS,
+        pantry_days=round(jobs_mod.pantry_days(g), 1),
         trainer={d: round((jobs_mod.trainer_bonus(g, d) - 1) * 100) for d in jobs_mod.TRAINERS},
         kitchen=dict(pref=g.recipe_pref, pantry=dict(g.pantry), total=jobs_mod.pantry_total(g), cap=jobs_mod.pantry_cap(g),
                      hungry=len(hungry), hungry_names=[s.name for s in hungry[:8]], hungry_list=[dict(id=s.id, name=s.name, food=round(s.needs.get("food"))) for s in hungry], chef_level=(jobs_mod.level(chef, "chef") if chef else 0),
@@ -441,6 +442,11 @@ def _admit_hurt(g, a):
 @command("sleep_tired")
 def _sleep_tired(g, a):
     return g.sleep_tired(float(a.get("below", config.TASK_MIN_ENERGY))), {}
+
+
+@command("set_plan")
+def _set_plan(g, a):
+    return _msg(g.set_plan(str(a.get("key", "")), a.get("slots") or [], a.get("rules") or []))
 
 
 @command("wake_all")

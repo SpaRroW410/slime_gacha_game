@@ -181,6 +181,7 @@ function toggleTip(el) { if (tipPin === el.dataset.tip && tipEl && tipEl.style.d
 document.addEventListener('mouseover', (e) => { const i = e.target.closest && e.target.closest('button.info'); if (i && !tipPin) showTip(i); });
 document.addEventListener('mouseout', (e) => { const i = e.target.closest && e.target.closest('button.info'); if (i && !tipPin) hideTip(); });
 document.addEventListener('focusin', (e) => { const i = e.target.closest && e.target.closest('button.info'); if (i) showTip(i); });
+document.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.plan) { S.planOpen = S.planOpen || {}; S.planOpen[d.dataset.plan] = d.open; } }, true);   // keep a plan editor open across re-renders
 document.addEventListener('click', (e) => { if (!(e.target.closest && e.target.closest('button.info'))) hideTip(); }, true);
 async function loadCouncil(rerender = true) {
   if (!S.state?.slimes.length) { S.council = null; return; }
@@ -817,6 +818,24 @@ function notices() {
   if (backupDue()) { const a = backupAge(); out.push(`<div class="panel flat row between warnbox"><span>💾 ${a === null ? 'You have never exported your colony.' : `Your last backup was ${Math.floor(a)} days ago.`} The only copy lives in this browser: export a save file now and then.</span><span class="row"><button class="btn small primary" data-act="export">⬇ Export</button><button class="btn small" data-act="snooze_backup">Later</button></span></div>`); }
   return out.length ? `<div style="padding:0 16px;max-width:1280px;margin:8px auto 0;width:100%">${out.join('')}</div>` : '';
 }
+/* A post's day plan: eight 3-hour shifts (work / forage / sleep) and up to three "if" rules that win over the slot. */
+function planEditor(key) {
+  const st = S.state, jb = st.jobs, plan = jb.plans[key];
+  const slots = plan ? plan.slots : Array(jb.plan_slots).fill('work'), rules = plan ? plan.rules : [];
+  const acts = { work: '🔨 work', forage: '🧺 forage', sleep: '😴 sleep' };
+  const optA = (cur) => Object.entries(acts).map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('');
+  const hh = (i) => `${String(i * jb.shift).padStart(2, '0')}–${String((i + 1) * jb.shift % 24).padStart(2, '0')}`;
+  const needsN = (c) => c !== '' && c !== 'always' && c !== 'no_patients';
+  const ruleRow = (i) => { const r = rules[i] || {}, c = ui(`plan_${key}_rc${i}`, r.if || ''); return `<div class="row"><small class="mute">If</small>
+      <select data-ui="plan_${key}_rc${i}" data-rerender="1"><option value="">— no rule —</option>${Object.entries(jb.plan_conditions).map(([k, n]) => `<option value="${k}" ${k === c ? 'selected' : ''}>${esc(n.replace('N', needsN(k) ? '…' : 'N'))}</option>`).join('')}</select>
+      ${needsN(c) ? `<input type="number" min="0" max="999" data-ui="plan_${key}_rn${i}" value="${num(ui(`plan_${key}_rn${i}`, r.n ?? 10), 10)}" style="width:70px">` : ''}
+      <small class="mute">then</small><select data-ui="plan_${key}_ra${i}">${optA(ui(`plan_${key}_ra${i}`, r.do || 'forage'))}</select></div>`; };
+  return `<details class="rosmore" data-plan="${key}" ${(S.planOpen || {})[key] ? 'open' : ''}><summary><b>📅 Day plan</b> <small class="mute">${plan ? 'custom' : 'works every shift'} · pantry holds ${jb.pantry_days} days of food</small></summary>
+    <small class="mute" style="display:block">What the post does in each 3-hour shift of the day, and rules checked at the start of every shift (the first that fits wins): e.g. “if nobody is hurt: forage”, or “if the pantry holds 10 days or more: sleep”.</small>
+    <div class="grid cols2" style="gap:6px;margin:6px 0">${slots.map((a, i) => `<label class="f">${hh(i)} <select data-ui="plan_${key}_s${i}">${optA(ui(`plan_${key}_s${i}`, a))}</select></label>`).join('')}</div>
+    ${[0, 1, 2].map(ruleRow).join('')}
+    <div class="row" style="margin-top:6px"><button class="btn small primary" data-act="save_plan" data-key="${key}">Save the plan</button><button class="btn small" data-act="reset_plan" data-key="${key}">Work every shift</button></div></details>`;
+}
 function postPanel(key, extra = '') {
   const st = S.state, j = st.jobs.posts.find((p) => p.key === key);
   const pick = 'post_' + key;
@@ -833,6 +852,7 @@ function postPanel(key, extra = '') {
     ${full ? '<small class="mute">All places are taken: dismiss someone or upgrade the building.</small>'
       : town.length ? `<div class="row"><select data-ui="${pick}">${town.map((s) => { const w = holdWhy(s, j); return `<option value="${s.id}" ${s.id == cur ? 'selected' : ''} ${w ? 'disabled' : ''}>${esc(s.name)} (${esc(s.class_name)} ${s.stars}★) · ${statusTags(s)}${w ? ' · 🚫 ' + esc(w) : ''}</option>`; }).join('')}</select>
         <button class="btn primary" data-act="assign_job" data-job="${key}" ${cands.length ? '' : 'disabled'}>Appoint</button></div>${cands.length ? '' : '<small class="mute">Nobody in town can take this post right now (see the tags).</small>'}` : `<small class="mute">Nobody free qualifies${j.min_stars > 1 ? ` (${j.min_stars}★+)` : ''}${j.classes.length ? ' (' + j.classes.map(esc).join('/') + ' only)' : ''}.</small>`}
+    ${planEditor(key)}
     ${extra}</div>`;
 }
 function kitchenView() {
@@ -1477,6 +1497,11 @@ const A = {
   set_color: (d) => act('set_color', { id: num(d.id), color: '' }),
   assign_job: (d) => { const id = num(S.ui['post_' + d.job]); if (id) act('assign_job', { id, job: d.job }); },
   forage: () => act('set_forage', { on: !S.state.jobs.forage }),
+  save_plan: (d) => { const key = d.key, jb = S.state.jobs, cur = jb.plans[key];
+    const slots = Array.from({ length: jb.plan_slots }, (_, i) => ui(`plan_${key}_s${i}`, cur ? cur.slots[i] : 'work'));
+    const rules = [0, 1, 2].map((i) => ({ if: ui(`plan_${key}_rc${i}`, (cur?.rules[i] || {}).if || ''), n: num(ui(`plan_${key}_rn${i}`, (cur?.rules[i] || {}).n ?? 10), 10), do: ui(`plan_${key}_ra${i}`, (cur?.rules[i] || {}).do || 'forage') })).filter((r) => r.if);
+    act('set_plan', { key, slots, rules }); },
+  reset_plan: (d) => { const key = d.key; for (let i = 0; i < 8; i++) delete S.ui[`plan_${key}_s${i}`]; for (let i = 0; i < 3; i++) { delete S.ui[`plan_${key}_rc${i}`]; } act('set_plan', { key, slots: Array(8).fill('work'), rules: [] }); },
   away_toggle: () => { S.awayOpen = !S.awayOpen; render(); },
   serve_hungry: () => act('serve_hungry'),
   wake_all: () => confirmThen('Wake everybody asleep in town?\n\nSlimes under 10% energy are left to sleep. Those under 50% energy wake grumpy (a mood cost).', () => act('wake_all')),

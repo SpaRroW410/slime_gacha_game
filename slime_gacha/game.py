@@ -102,6 +102,7 @@ class Game:
         self.wall_last: Optional[float] = None
         self.wall_frac = 0.0
         self.expeditions: List[dict] = []              # live mode: parties away until a game tick
+        self.plans: Dict[str, dict] = {}               # day plans of the posts (jobs.py): eight shifts and "if" rules
         self.ward: List[int] = []                      # slimes admitted to the Hospital ward (they are 'resting', in the ward)
         self.pantry: Dict[str, int] = {}               # cooked servings by recipe (jobs.py: chef and kitchen)
         self.recipe_pref = "auto"                      # the recipe the chef cooks ("auto" = the best one)
@@ -1401,6 +1402,10 @@ class Game:
     def assign_job(self, sid: int, key: str) -> str:
         """Put a slime to work in town (Chef, Blacksmith, Trainer). Switching jobs is free; places are limited by the Workshops."""
         return jobs.assign(self, self.slime(sid), key)
+
+    def set_plan(self, key: str, slots, rules) -> str:
+        """The day plan of a post: what its worker does in each of the day's eight 3-hour shifts, and the "if" rules."""
+        return jobs.set_plan(self, key, slots, rules)
 
     def stop_job(self, sid: int) -> str:
         return jobs.stop(self, self.slime(sid))
@@ -3549,7 +3554,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, ward=self.ward, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, ward=self.ward, plans=self.plans, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -3652,6 +3657,7 @@ class Game:
         g.expeditions = [e for e in g.expeditions if e["ids"]]
         g.pantry = {k: int(v) for k, v in d.get("pantry", {}).items()}
         g.ward = [i for i in d.get("ward", []) if i in g.roster]
+        g.plans = {k: v for k, v in (d.get("plans") or {}).items() if k in jobs.JOBS}
         g.recipe_pref = d.get("recipe_pref", "auto")
         g.forge_progress, g.forge_next = d.get("forge_progress", 0), d.get("forge_next", "weapon")
         g.stranded = [e for e in d.get("stranded", []) if any(i in g.roster for i in e["ids"])]
