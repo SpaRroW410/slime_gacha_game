@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -43,7 +43,7 @@ def slime_view(g: Game, s) -> dict:
         row=(s.row or battle_default_row(s)), row_set=s.row, ward=s.id in g.ward, refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
         mood=s.mood_label(), power=(tp := power_mod.total_power(s))["total"], power_tag=power_mod.display(tp["total"]), power_parts=tp["parts"], power_mult=tp["multiplier"],
         morale=round(s.morale), morale_label=SocialEngine.morale_label(s.morale),
-        sanity=round(s.sanity), sanity_max=config.SANITY_MAX[s.rarity], sanity_label=sanity_mod.label(s), mood_cap=round(sanity_mod.mood_cap(s), 2),
+        memories=memory_mod.recent(s), sanity=round(s.sanity), sanity_max=config.SANITY_MAX[s.rarity], sanity_label=sanity_mod.label(s), mood_cap=round(sanity_mod.mood_cap(s), 2),
         talked=bool(s.cared.get("day") == g.day and s.cared.get("talk")),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
         abilities=[dict(key=k, name=get_ability(k).name, element=get_ability(k).element,

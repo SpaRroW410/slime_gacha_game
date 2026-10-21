@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements, places, story, sanity
+from . import achievements, places, story, sanity, memory
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -84,6 +84,7 @@ class Game:
         self.social = SocialEngine(self.conflicts, self.buildings)
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
         self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
+        self.conflicts.memory_fn = memory.for_pair
         self.conflicts.hook = self._social_hook
         self.conflicts.together_fn = self._together
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
@@ -645,6 +646,8 @@ class Game:
                 sanity.heal(s, config.SANITY_REST["calm"])
 
     def _relations_day(self, events: List[str]) -> None:
+        for s in self.slimes():
+            memory.fade(s)
         before = len(self.relations.rel)
         self.relations.daily(self, self.mood_rng, events, self.day)
         if len(self.relations.rel) > before:
@@ -783,6 +786,7 @@ class Game:
             self._lose_ties(s)
             self.social.forget(s.id)
             for o in self.slimes():                      # grief: friends hurt more
+                memory.remember(o, "lost", s, self.day, 4.0 if o.id in friends else 1.5, f"({s.death_cause or 'unknown causes'})")
                 sanity.hit(o, config.SANITY_HIT["friend_died" if o.id in friends else "slime_died"])
                 o.needs.add("belonging", -25 if o.id in friends else -8)
                 emotions.feel(o, "sadness", 35 if o.id in friends else 8)
@@ -812,6 +816,7 @@ class Game:
                 m = mx[t.id]
                 t.hp = min(m, t.hp + max(1, int(m * 0.1)))
                 t.needs.add("belonging", 3)
+                memory.remember(t, "healed", h, self.day, 1.5)
                 events.append(f"💚 {h.name} tends to {t.name}.")
 
     # ---- care ------------------------------------------------------------------
@@ -1477,6 +1482,18 @@ class Game:
     def _social_hook(self, kind: str, a, b, success: bool = None) -> None:
         if kind in ("quarrel", "brawl"):
             self.relations.note_quarrel(a, b)
+            c = self.conflicts.open_between(a.id, b.id)
+            why = c.reason if c else ""
+            if " grudge: " in why:
+                why = "an old grievance"
+            if kind == "quarrel" and why == "the last snack":      # the hungrier one holds it against the other
+                hungry, other = (a, b) if a.needs.get("food") <= b.needs.get("food") else (b, a)
+                memory.remember(hungry, "snack", other, self.day, 3.0)
+            elif kind == "quarrel":
+                memory.remember(b, "quarrel", a, self.day, 2.0, why)       # whoever started it is remembered by the other
+            else:
+                memory.remember(a, "brawl", b, self.day, 4.0)
+                memory.remember(b, "brawl", a, self.day, 4.0)
         if kind == "quarrel":
             self.social.add_bond(a, b, -3)
             for s in (a, b):
@@ -1493,6 +1510,8 @@ class Game:
                 emotions.feel(s, "guilt", 8)
         elif kind == "resolved":
             if success:
+                memory.remember(a, "made_up", b, self.day, 3.0)
+                memory.remember(b, "made_up", a, self.day, 3.0)
                 self.social.add_bond(a, b, 10)
                 for s in (a, b):
                     self.social.shift_morale(s, 10)
@@ -2041,6 +2060,14 @@ class Game:
             for sid, xp_ in bonus.items():
                 if sid in self.roster and self.roster[sid].hp > 0:
                     report.log.extend(add_xp(self.roster[sid], int(xp_ * mx)))
+            for i, a in enumerate(alive):
+                for b in alive[i + 1:]:
+                    memory.remember(a, "comrade", b, self.day, 0.8 * scale + 0.2)
+                    memory.remember(b, "comrade", a, self.day, 0.8 * scale + 0.2)
+            for f in lost:                                   # whoever stood by a fallen friend and won is remembered
+                if f.id in self.roster:
+                    for s in alive[:2]:
+                        memory.remember(f, "carried", s, self.day, 2.0 * scale + 0.5)
             for s in alive:
                 sanity.heal(s, config.SANITY_WIN * scale)
                 emotions.feel(s, "joy", 14 * scale + 4)

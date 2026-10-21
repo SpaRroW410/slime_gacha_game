@@ -145,6 +145,7 @@ class ConflictEngine:
         self.rng = rng
         self.conflicts: List[Conflict] = []
         self.friends: set = set()       # frozenset({id, id}) pairs that resolved a quarrel
+        self.memory_fn = None           # Game sets: callable(a, b) -> (chance factor, stated reason or None) from shared history
         self.compat_fn = None           # Game sets: callable(a, b) -> compatibility; shapes quarrel odds
         self.together_fn = None         # Game sets: callable(a, b) -> are they in the same place (both home, or the same group away)?
         self.hook = None                # Game sets: callable(kind, a, b[, success]) for bonds / morale
@@ -183,9 +184,15 @@ class ConflictEngine:
             p *= 0.3
         if self.compat_fn:                          # incompatible slimes quarrel more, soulmates much less
             p *= max(0.4, min(2.0, 1 - self.compat_fn(a, b) / 120.0))
+        if self.memory_fn:                          # a history of grudges makes a fight likelier, shared thanks make it rarer
+            p *= self.memory_fn(a, b)[0]
         return max(0.0, p * self.calm)
 
     def reason(self, a, b) -> str:
+        if self.memory_fn:
+            why = self.memory_fn(a, b)[1]
+            if why:
+                return why
         if a.needs.get("food") < config.NEED_THRESHOLD or b.needs.get("food") < config.NEED_THRESHOLD:
             return "the last snack"
         if b.archetype in get_archetype(a.archetype).rivals:

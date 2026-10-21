@@ -493,3 +493,11 @@ SANITY_WIN = 1.0                 # a won fight steadies a little
 SANITY_TALK = 6                  # the first talk of the day
 SANITY_SOOTHE = 8                # the Keeper's Soothe, for everyone
 SANITY_REFUSE = {"dungeon": 0.2, "job": 0.1}   # below this share of its reserve a slime refuses
+
+# memory (memory.py): what slimes remember about each other
+MEMORY_CAP = 14                  # memories a slime keeps
+MEMORY_MAX_WEIGHT = 10.0
+MEMORY_FADE = 0.93               # weight kept per game day (a strong memory lasts a few weeks)
+MEMORY_MIN_WEIGHT = 0.4
+MEMORY_MERGE_DAYS = 3            # the same thing happening again within this many days strengthens one memory
+MEMORY_GRUDGE_MIN = 2.0          # a grudge this strong can be the stated reason of a quarrel

@@ -111,6 +111,7 @@ class Slime:
         self.in_dungeon: str = ""                 # "main" / "grind" / "scout" while committed to a dungeon
         self.style_xp: Dict[str, float] = {}      # fighting-style xp per discipline (see sparring.py)
         self.sanity: float = float(config.SANITY_MAX.get(rarity, 80))   # mental reserve (sanity.py)
+        self.memories: List[dict] = []                  # what it remembers about others (memory.py)
         self.cared = {"day": -1, "talk": 0, "pet": 0}  # how often the Keeper talked to / petted it today (diminishing returns)
         self.morale: float = config.MORALE_START  # fight readiness 0-100 (see social.py)
         self.attuned: List[str] = []              # basic elements this slime has attuned to
@@ -240,7 +241,7 @@ class Slime:
                     total_xp=self.total_xp, stage=self.stage, behavior=self.behavior,
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
-                    merged=self.merged, grounded=self.grounded, brawls=self.brawls, row=self.row, style_xp=self.style_xp, morale=self.morale, sanity=round(self.sanity, 2), cared=self.cared,
+                    merged=self.merged, grounded=self.grounded, brawls=self.brawls, row=self.row, style_xp=self.style_xp, morale=self.morale, sanity=round(self.sanity, 2), cared=self.cared, memories=self.memories,
                     gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, buffs=self.buffs, parents=self.parents, parent_names=self.parent_names,
                     generation=self.generation, emotions=self.emotions,
                     emotion_floor=self.emotion_floor, awareness=self.awareness, temperament=self.temperament,
@@ -254,7 +255,7 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "brawls", "row", "style_xp", "morale", "sanity", "cared", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
+                  "merged", "grounded", "brawls", "row", "style_xp", "morale", "sanity", "cared", "memories", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
             if k in d:
                 setattr(s, k, d[k])
         s.items = {k: Item.from_dict(v) for k, v in (d.get("items") or {}).items()}

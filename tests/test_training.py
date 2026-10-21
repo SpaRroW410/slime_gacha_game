@@ -477,3 +477,50 @@ class SanityTest(unittest.TestCase):
         s.sanity, s.state = 10, "sleeping"
         g._sanity_tick()
         self.assertGreater(s.sanity, 10)
+
+
+class MemoryTest(unittest.TestCase):
+    def _g(self):
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.wallet.add("white_gel", 1000)
+        g.pull(3, "white_gel")
+        return g
+
+    def test_grudges_shape_quarrels_and_reasons(self):
+        from slime_gacha import memory
+        g = self._g()
+        a, b, c = g.slimes()
+        self.assertEqual(memory.for_pair(a, b), (1.0, None))                 # strangers
+        memory.remember(a, "snack", b, g.day, 4.0)
+        f, why = memory.for_pair(a, b)
+        self.assertGreater(f, 1.0)
+        self.assertIn(b.name, why)
+        self.assertIn("snack", why)
+        self.assertEqual(g.conflicts.reason(a, b), why)                       # the quarrel is about the real grievance
+        memory.remember(b, "healed", a, g.day, 6.0)
+        memory.remember(a, "made_up", b, g.day, 6.0)
+        self.assertLess(memory.chance_factor(a, b), memory.chance_factor(b, c))   # shared thanks outweigh the old grudge
+
+    def test_memories_fade_merge_and_survive_saving(self):
+        from slime_gacha import memory, config
+        from slime_gacha.game import Game
+        g = self._g()
+        a, b = g.slimes()[:2]
+        memory.remember(a, "brawl", b, 0, 4.0)
+        memory.remember(a, "brawl", b, 1, 4.0)
+        self.assertEqual(len(a.memories), 1)                                  # the same thing again strengthens it
+        self.assertEqual(len(Game.from_dict(g.to_dict()).roster[a.id].memories), 1)
+        for _ in range(60):
+            memory.fade(a)
+        self.assertEqual(a.memories, [])                                      # and time heals
+        for i in range(30):
+            memory.remember(a, "slight", b, i * 10, 1.0 + i * 0.1, str(i))
+        self.assertLessEqual(len(a.memories), config.MEMORY_CAP)
+
+    def test_a_death_is_remembered_by_the_colony(self):
+        g = self._g()
+        a, b, c = g.slimes()
+        c.hp, c.death_cause = 0, "fell in battle"
+        g._reap([])
+        self.assertTrue(any(m["kind"] == "lost" and m["name"] == c.name for m in a.memories))
