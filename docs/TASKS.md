@@ -43,6 +43,30 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 - [ ] **21. Balance pass with a simulation harness** — extend `tools/playtest.py` to Pit depths, rarities, skills and capstones.  *Done when:* a report covers each system and numbers are tuned in `config.py`.
 - [ ] **22. Localisation** — string catalogs and a language switch.  *Done when:* UI, logs and Guide can be switched to a second language.
 
+## QA report (phase 1) — from the QA and mobile planning report (https://claude.ai/artifact/4YYjeph6PAC4xW9A1qdHry, tested at commit 3cd06d8)
+Findings not yet re-verified against the current code; check each before fixing (some may already be fixed by later work).
+- [ ] **34. C1 (critical): a bad save locks players out of the static build** — validate saves in `Game.from_dict`, catch every load error, offer start-fresh / restore-backup instead of a traceback.  *Done when:* a null/list/string save or negative tick shows a "save damaged" screen with a way forward.
+- [ ] **35. M1: reloading during a manual battle undoes permadeath** — `Game.flow` is memory-only.  *Done when:* reload mid-battle cannot revive dead slimes or refight the floor.
+- [ ] **36. M2: shown odds do not match the code** — purple is x3.57 not x5 and boosts uncommon; star odds and the 3-star minimum are not shown; Favor covers all ten pulls; README, `gacha.py` docstring and `docs/SDD.md` list old rates.  *Done when:* exact odds per pull button are shown and every doc agrees with the code.
+- [ ] **37. M3: free pulls repeat without limit** — the daily pull follows game days, which are free to skip; live mode can be gamed with the device clock.  *Done when:* one free pull per real day in both modes (see task 16).
+- [ ] **38. M4: two tabs overwrite each other (static build)** — last save wins.  *Done when:* a second tab is detected and warned or shares one game.
+- [ ] **39. M5: Import replaces the colony without asking** — any JSON loads as an empty colony.  *Done when:* import confirms, validates the file and backs up the current colony first.
+- [ ] **40. M6: failed saves are silent; no offline support** — storage errors are swallowed; no manifest or service worker.  *Done when:* a visible warning appears when saving fails and the page works offline (see task 20).
+- [ ] **41. M7: waiting gets very slow in big colonies** — `_healer_aura` rescans and recomputes `max_hp` per healer (+1 day: 0.4 s at 100 slimes, 11 s at 500).  *Done when:* +1 day under 1 s at 250 slimes in native Python.
+- [ ] **42. M8: every action sends and stores the full state and save** — 0.95 MB at 200 slimes; pull count unbounded.  *Done when:* replies carry deltas or are bounded, saves are written on a timer/pause, and pull count is capped.
+- [ ] **43. M9: time controls and active tab scroll out of view on phones** — header snaps back after each action.  *Done when:* the +1h/+4h/+1 day buttons and the active tab stay reachable at 375 px.
+- [ ] **44. M10: toast messages block taps** — they accept taps and cover the pull buttons.  *Done when:* toasts let taps through and sit clear of the main buttons.
+- [ ] **45. M11: slimes cannot be opened from the keyboard; dialogs lack roles** — slime cards are plain divs.  *Done when:* cards are focusable and open with Enter, dialogs have `role="dialog"` and trap focus.
+- [ ] **46. Minor bugs m1-m9** — Android back, light-theme contrast, star screen-reader text, small tap targets, constant animation, unguarded `syncLive`, no new-game backup, odd saved numbers, unchecked spell names.  *Done when:* each is fixed or consciously declined.
+
+## Mobile (phase 2) — Capacitor route recommended in the same report
+- [ ] **47. Mobile M1: mobile UX** — 44 pt / 48 dp targets, bottom tab bar, fixed time controls, scroll positions kept, safe areas, Android back, purple ten-pull confirm.  *Done when:* the game is comfortable on a 375 px phone.
+- [ ] **48. Mobile M2: performance** — engine hot spots, smaller replies, in-place page updates, lazy rosters, startup measured on low-end phones.  *Done when:* Pyodide startup and big-colony turns are acceptable on a 2 GB Android phone and an iPhone SE.
+- [ ] **49. Mobile M3: Capacitor shell** — native storage with atomic writes and rotating checksummed backups, lifecycle (save on pause, stop timers), store builds.  *Done when:* builds run on iOS and Android with safe saves.
+- [ ] **50. Mobile M4: store prep and compliance** — odds screen, age-rating answers, privacy labels, listings, regional rules.  *Done when:* TestFlight and Play internal testing builds are submitted.
+- [ ] **51. Mobile M5 (optional): monetization decision** — will real money buy gacha currency? If yes: server-side economy and receipts; if no: stay on-device.  *Done when:* the decision is made and recorded.
+- [ ] **52. Mobile M6: beta and launch** — device testing, long sessions, crash reporting, release.  *Done when:* released.
+
 ## After floor 50 (art and sound)
 - [ ] **17. Animated battle arena** — replace `ARENA.render`.  *Done when:* units animate and statuses show without touching rules.
 - [ ] **19. Art pass: sprites, animated slimes, sound** — replace the CSS blobs, add sound effects.  *Done when:* every slime class and rarity has art and the main actions have sound.
