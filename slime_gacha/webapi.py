@@ -325,7 +325,7 @@ def snapshot(g: Game) -> dict:
                                 for e in g.expeditions] if g.timed else []),
         reports=[dict(id=h['id'], title=h['title'], battles=h['battles'], summary=h['summary']) for h in g.held if h['paid']],
         held=[dict(title=h['title'], hours=max(0, h['due'] - g.tick_count)) for h in g.held if not h['paid']],
-        stress=round(g.sacrifice_stress, 2),
+        stress=round(g.sacrifice_stress, 2), feathers=dict(have=g.feathers, cost=config.FEATHER_COST, hp=config.FEATHER_HP),
         gift=dict(morale=config.GIFT_MORALE_COST, morale_gain=config.GIFT_MORALE_GAIN, peace=config.GIFT_PEACE_COST,
                   potion=config.GIFT_POTION_PURPLE, merge_gear=config.GEAR_MERGE_COUNT, scrap=config.GEAR_SCRAP_REFUND),
         gear=dict(sets=[dict(key=k, name=v["name"], emoji=v["emoji"], pieces=list(v["pieces"]), bonus=v["bonus"]) for k, v in equipment.GEAR_SETS.items()],
@@ -724,6 +724,11 @@ def _quarry(g, a):
 @command("keeper_learn")
 def _keeper_learn(g, a):
     return _msg(g.keeper_learn(a.get("key", "")))
+
+
+@command("craft_feather")
+def _craft_feather(g, a):
+    return _msg(g.craft_feather(_i(a, "n", 1)))
 
 
 @command("keeper_respec")

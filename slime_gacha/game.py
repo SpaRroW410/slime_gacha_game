@@ -107,6 +107,7 @@ class Game:
         self.next_held = 1
         self.last_due = 0                              # tick the party of the last session is back (set when it leaves; read by the web layer)
         self.construction: Dict[str, int] = {}        # building -> tick its upgrade finishes (timed play only)
+        self.feathers = 0                              # Phoenix Feathers: a fallen party member rises instead of dying
         self.plans: Dict[str, dict] = {}               # day plans of the posts (jobs.py): eight shifts and "if" rules
         self.ward: List[int] = []                      # slimes admitted to the Hospital ward (they are 'resting', in the ward)
         self.pantry: Dict[str, int] = {}               # cooked servings by recipe (jobs.py: chef and kitchen)
@@ -1963,6 +1964,14 @@ class Game:
         """Morale and bonds react to the outcome (deaths are handled when the dead are reaped)."""
         if wear:
             report.log.extend(self._wear_items(party))
+        for s in party:
+            if self.feathers > 0 and s.hp <= 0 and s.name in report.deaths:
+                self.feathers -= 1
+                s.hp, s.death_cause = max(1, int(s.max_hp * config.FEATHER_HP)), ""
+                report.deaths.remove(s.name)
+                if s in report.fallen:
+                    report.fallen.remove(s)
+                report.log.append(f"🪶 A Phoenix Feather burns up: {s.name} rises again with {s.hp} HP!")
         alive = [s for s in party if s.hp > 0]
         lost = [s for s in party if s.hp <= 0 or s in report.fallen]
         if report.victory:
@@ -2016,6 +2025,12 @@ class Game:
         """Gear the Armory sells (tier limited by Armory level)."""
         tier = self.buildings.gear_tier()
         return [g for g in equipment.GEAR if g.tier <= tier]
+
+    def craft_feather(self, n: int = 1) -> str:
+        n = max(1, min(int(n), 20))
+        self.wallet.spend_many({k: v * n for k, v in config.FEATHER_COST.items()})
+        self.feathers += n
+        return f"🪶 Crafted {n} Phoenix Feather{'s' if n > 1 else ''} ({self.feathers} in stock)."
 
     def buy_gear(self, key: str) -> str:
         if key not in equipment.GEAR:
@@ -3635,7 +3650,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -3778,6 +3793,7 @@ class Game:
         g.next_held = d.get("next_held", 1)
         g.ward = [i for i in d.get("ward", []) if i in g.roster]
         g.construction = {k: int(v) for k, v in (d.get("construction") or {}).items() if k in BUILDINGS}
+        g.feathers = max(0, int(d.get("feathers", 0)))
         g.plans = {k: v for k, v in (d.get("plans") or {}).items() if k in jobs.JOBS}
         g.recipe_pref = d.get("recipe_pref", "auto")
         g.forge_progress, g.forge_next = d.get("forge_progress", 0), d.get("forge_next", "weapon")

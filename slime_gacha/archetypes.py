@@ -56,7 +56,7 @@ def _s(hp, atk, defense, mag, spd):
 # ---- the six starting classes ----------------------------------------------
 register_archetype(Archetype(
     "barbarian", "Barbarian", "🪓", _s(40, 9, 5, 1, 4), _s(6, 2, 1, 0.3, 0.5),
-    {1: "splat", 3: "smash", 6: "war_cry", 10: "rampage"}, "attack",
+    {1: "splat", 3: "smash", 6: "war_cry", 8: "flame_brand", 10: "rampage"}, "attack",
     discipline="sword",
     likes=("meat", "shouting"), hunt_bonus={"white_gel": 1.3}, rivals=("mage",)))
 

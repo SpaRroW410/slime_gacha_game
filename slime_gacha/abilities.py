@@ -61,6 +61,7 @@ for _a in [
     Ability("raise_bones", "Raise Bones", "summon", 0.6, "mag", "self", 5, 0, "Summon a Bone Pal."),
     Ability("curse", "Wilting Curse", "poison", 0.5, "mag", "enemy", 2, 4, "Strong poison."),
     Ability("defend", "Defend", "guard", 0.0, "defense", "self", 0, 1, "Basic guard (everyone has it)."),
+    Ability("flame_brand", "Flame Brand", "utility", 0.0, "atk", "self", 4, 0, "Set the axe ablaze: physical hits strike as fire for 3 turns.", fx=(("imbue", "fire", 3),)),
     Ability("lilt", "Lilt", "damage", 1.1, "mag", "enemy", 0, 0, "A bouncy sour note."),
     Ability("rally_song", "Rally Song", "heal", 0.6, "mag", "all_allies", 3, 0, "A tune that perks up the whole party."),
     Ability("lullaby", "Lullaby", "damage", 1.4, "mag", "enemy", 4, 0, "A drowsy melody that stuns one foe.", fx=(("stun", 0.5),)),

@@ -329,3 +329,21 @@ class KeeperExtrasTest(unittest.TestCase):
         g.keeper_respec()
         self.assertEqual(g.keeper.points, pts + 1)
         self.assertEqual(g.keeper.respecs, 1)
+
+
+class ImbueAndFeatherTest(unittest.TestCase):
+    def test_imbue_status_and_feather(self):
+        from slime_gacha import fx
+        from slime_gacha.battle import Combatant
+        from slime_gacha.game import Game
+        c = Combatant("A", "x", "party", dict(hp=10, atk=5, defense=1, mag=1, spd=1), 10, ["splat"], "attack", 1.0, None)
+        c.imbue = ("fire", 1)
+        self.assertIn("🔥", fx.statuses(c))
+        fx.tick(c, [])
+        self.assertEqual(c.imbue[1], 0)
+        g = Game(8)
+        g.wallet.add("purple_gel", 4)
+        g.wallet.add("essence", 100)
+        g.craft_feather(2)
+        self.assertEqual(g.feathers, 2)
+        self.assertEqual(Game.from_dict(g.to_dict()).feathers, 2)

@@ -24,7 +24,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 - [x] **10. Construction time and the Hatchery** — upgrades take game time; a Hatchery building (the Pantry now lives in the Kitchen).  *Done when:* upgrades show in the away bar and the Hatchery has effects.
 - [x] **11. Gear set bonuses** — bonuses for matching sets.  *Done when:* shown in Armory and slime card, balanced.
 - [x] **12. Keeper achievements, titles and respec** — achievements list, titles, skill respec.  *Done when:* People > Keeper shows them and respec costs something.
-- [ ] **13. Imbue statuses and revival items** — e.g. Barbarian fire-axe imbue as a timed status; consumable resurrection.  *Done when:* both use fx and are tested.
+- [x] **13. Imbue statuses and revival items** — e.g. Barbarian fire-axe imbue as a timed status; consumable resurrection.  *Done when:* both use fx and are tested.
 
 ## Content
 - [ ] **15. Campaign chapters from STORY.md** — story beats at floors and boss clears.  *Done when:* chapters trigger from data and are readable in game.

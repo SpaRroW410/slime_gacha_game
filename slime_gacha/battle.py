@@ -146,6 +146,7 @@ class Combatant:
     spec_uses: int = 0              # hybrid skills used this fight (second-discipline practice)
     cap_scale: Dict[str, float] = field(default_factory=dict)   # ability key -> strength factor (hybrid capstones)
     hybrid: frozenset = frozenset() # keys that count as hybrid practice
+    imbue: tuple = ("", 0)          # (element, turns) weapon imbue: physical hits strike as that element (fx "imbue")
     row: str = "front"              # formation: "front" | "back" (see BattleSystem.reachable)
 
     @property
@@ -730,6 +731,8 @@ def _h_damage(bs, actor, ab, targets, everyone, log):
             log.append(f"  {t.emoji}{t.name} dodges {actor.name}'s {ab.name}!")
             continue
         hit_ab = replace(ab, element=bs.rng.choice(elements.BASICS)) if fx.find(ab, "prism") else ab
+        if actor.imbue[1] > 0 and not hit_ab.element and hit_ab.stat == "atk":
+            hit_ab = replace(hit_ab, element=actor.imbue[0])
         dmg, crit, eff = _damage_value(bs, actor, hit_ab, t)
         t.hurt(dmg)
         bs.last_hits[id(t)] = bs.last_hits.get(id(t), 0) + dmg
