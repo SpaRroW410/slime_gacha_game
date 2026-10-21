@@ -28,6 +28,7 @@ class GachaSystem:
         self.since_legendary = 0
         self.total_pulls = 0
         self.next_id = 1
+        self.last_free_ts = 0.0           # wall-clock time of the last free pull (a clock set back cannot earn another)
         self.last_free_day = -1          # game day of the last free pull
         self.luck = 1.0                  # Keeper skill: multiplies the non-common weights
         self.favor = False               # Keeper active: the next pull has double rare odds
@@ -117,7 +118,7 @@ class GachaSystem:
     def to_dict(self):
         return dict(since_epic=self.since_epic, since_legendary=self.since_legendary,
                     total_pulls=self.total_pulls, next_id=self.next_id,
-                    last_free_day=self.last_free_day)
+                    last_free_day=self.last_free_day, last_free_ts=self.last_free_ts)
 
     def load(self, d):
         self.since_epic = d.get("since_epic", 0)
@@ -125,3 +126,4 @@ class GachaSystem:
         self.total_pulls = d.get("total_pulls", 0)
         self.next_id = d.get("next_id", 1)
         self.last_free_day = d.get("last_free_day", -1)
+        self.last_free_ts = float(d.get("last_free_ts", 0.0))

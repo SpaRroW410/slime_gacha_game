@@ -235,16 +235,28 @@ class Game:
     def day(self) -> int:
         return self.tick_count // config.DAY_TICKS
 
+    def real_day(self) -> int:
+        """The free pull follows the real calendar (UTC), in turn and live mode alike: waiting game days never refills it."""
+        return int(self.clock_fn() // 86400)
+
     def free_pull_available(self) -> bool:
-        return self.gacha.free_available(self.day)
+        return self.clock_fn() >= self.gacha.last_free_ts and self.gacha.free_available(self.real_day())
 
     def hours_to_free_pull(self) -> int:
-        return 0 if self.free_pull_available() else (self.day + 1) * config.DAY_TICKS - self.tick_count
+        if self.free_pull_available():
+            return 0
+        now = self.clock_fn()
+        return max(1, int(math.ceil(((self.gacha.last_free_day + 1) * 86400 - now) / 3600))) if now >= self.gacha.last_free_ts \
+            else max(1, int(math.ceil((self.gacha.last_free_ts - now) / 3600)))
 
     def pull(self, n: int = 1, pay: str = "white_gel") -> List[Slime]:
         """pay = 'free' (1 per game day) | 'white_gel' | 'purple_gel' (10 each; purple boosts rare odds)."""
         before = self.wallet.get("purple_gel" if pay == "purple_gel" else "white_gel")
-        new = self.gacha.pull(n, pay, self.day)
+        if pay == "free" and not self.free_pull_available():
+            raise InvalidAction("You already used today's free pull (it resets at midnight UTC).")
+        new = self.gacha.pull(n, pay, self.real_day())
+        if pay == "free":
+            self.gacha.last_free_ts = self.clock_fn()
         back = self.buildings.hatch_refund()
         if back and pay != "free":
             spent = before - self.wallet.get(pay)

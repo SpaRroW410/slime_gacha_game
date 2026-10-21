@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=16, group="Platform", title="Daily free pull on the real clock", status="planned",
-         text="The daily pull resets by wall clock in both time modes, with offline catch-up."),
     dict(id=20, group="Platform", title="Installable offline app (PWA)", status="planned",
          text="A manifest and service worker so it installs on iPhone and Windows and works with no network."),
     dict(id=23, group="Platform", title="Mod loader (plugins)", status="planned",
@@ -86,8 +84,6 @@ ROADMAP: List[Dict[str, object]] = [
          text="A battle you command by hand is not saved, so reloading brings dead slimes back."),
     dict(id=36, group="QA", title="M2: shown odds do not match the code", status="planned",
          text="Purple-gel odds, star odds and the 3-star minimum will be shown exactly, and the docs corrected."),
-    dict(id=37, group="QA", title="M3: free pulls repeat without limit", status="planned",
-         text="The daily free pull will follow the real clock in both time modes."),
     dict(id=38, group="QA", title="M4: two tabs overwrite each other's saves", status="planned",
          text="A second open tab will be detected."),
     dict(id=39, group="QA", title="M5: Import replaces the colony without asking", status="planned",
@@ -122,8 +118,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-31",
-                 text="Story chapters unlock as you play; read them in People > Records. Dungeons are now data: a new \"More places\" tab has the first extra one, the Mossy Burrows. Barbarians learn Flame Brand (a fire imbue), and Phoenix Feathers brewed in the Alchemy tab save a slime that would die in battle. The Keeper tab has achievements with wearable titles, and you can respec your skills for a gel price. Gear sets: wear two or three matching armory pieces for a bonus (shown in the Armory and on the slime card). Building upgrades now take game hours (see them in the Away bar), and a new Hatchery gives back some pull gel. Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
+WHATS_NEW = dict(id="2026-11-01",
+                 text="The free daily pull now follows the real calendar (resets at midnight UTC) in every time mode. Story chapters unlock as you play; read them in People > Records. Dungeons are now data: a new \"More places\" tab has the first extra one, the Mossy Burrows. Barbarians learn Flame Brand (a fire imbue), and Phoenix Feathers brewed in the Alchemy tab save a slime that would die in battle. The Keeper tab has achievements with wearable titles, and you can respec your skills for a gel price. Gear sets: wear two or three matching armory pieces for a bonus (shown in the Armory and on the slime card). Building upgrades now take game hours (see them in the Away bar), and a new Hatchery gives back some pull gel. Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
 
 
 def build() -> Dict[str, object]:

@@ -103,19 +103,25 @@ class TestGacha(unittest.TestCase):
         with self.assertRaises(NotEnoughResources):
             g.pull(1, "white_gel")
 
-    def test_one_free_pull_per_day(self):
+    def test_one_free_pull_per_real_day(self):
         g = Game(1)
+        now = [86400.0 * 20000 + 3600]
+        g.clock_fn = lambda: now[0]
         self.assertTrue(g.free_pull_available())
         g.pull(1, "free")
         self.assertFalse(g.free_pull_available())
         with self.assertRaises(InvalidAction):
             g.pull(1, "free")
-        self.assertEqual(g.hours_to_free_pull(), config.DAY_TICKS)
-        g.tick(config.DAY_TICKS)
+        self.assertEqual(g.hours_to_free_pull(), 23)
+        g.tick(config.DAY_TICKS * 3)                 # game days do not refill it
+        self.assertFalse(g.free_pull_available())
+        now[0] -= 86400 * 2                          # nor does setting the clock back
+        self.assertFalse(g.free_pull_available())
+        now[0] += 86400 * 2 + 23 * 3600              # the next real day does
         self.assertTrue(g.free_pull_available())
         g.pull(1, "free")
         with self.assertRaises(InvalidAction):
-            g.pull(2, "free")                    # free pull is single only
+            g.pull(2, "free")                        # free pull is single only
 
     def test_pity_is_optional(self):
         g = fresh(3)
