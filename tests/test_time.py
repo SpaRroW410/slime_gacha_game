@@ -329,3 +329,25 @@ class TestHeldSessions(unittest.TestCase):
         self.assertTrue(g.held[0]["paid"])
         g.ack_report(g.held[0]["id"])
         self.assertEqual(g.held, [])
+
+
+class ConstructionTest(unittest.TestCase):
+    def test_timed_upgrade_takes_hours_and_hatchery_refunds(self):
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.wallet.add("white_gel", 5000)
+        g.wallet.add("essence", 500)
+        g.deferred_turn = True
+        before = g.buildings.level("rest_area")
+        g.upgrade_building("rest_area")
+        self.assertEqual(g.buildings.level("rest_area"), before)
+        with self.assertRaises(Exception):
+            g.upgrade_building("rest_area")
+        g.tick(6)
+        self.assertEqual(g.buildings.level("rest_area"), before + 1)
+        g.deferred_turn = False
+        g.upgrade_building("hatchery")
+        g.upgrade_building("hatchery")
+        w = g.wallet.get("white_gel")
+        g.pull(10, "white_gel")
+        self.assertGreater(g.wallet.get("white_gel"), w - 90 * 1)

@@ -57,6 +57,8 @@ register_building(Building("library", "Library", "📚", 5,
 register_building(Building("barracks", "Barracks", "🏕️", 5,
                            "Bunks, songs and a very shared fridge: morale, bonds and party synergy.", _costs(90, 10)))
 
+register_building(Building("hatchery", "Hatchery", "🥚", 5,
+                           "Where new slimes hatch: each level above 1 hands back a share of the gel you spend on pulls.", _costs(95, 12)))
 register_building(Building("armory", "Armory", "🛠️", 5,
                            "Forges gear. Higher levels stock better equipment tiers.", _costs(70, 10)))
 
@@ -111,13 +113,28 @@ class BuildingManager:
             return None
         return {k: max(1, int(v * (1 - self.discount))) for k, v in b.upgrade_costs[lv - 1].items()}
 
-    def upgrade(self, key: str) -> str:
+    def pay(self, key: str) -> None:
         b = BUILDINGS.get(key)
         cost = self.next_cost(key)
         if cost is None:
             raise InvalidAction(f"{b.name} is already at its maximum level ({b.max_level}).")
         self.wallet.spend_many(cost)
+
+    def build_hours(self, key: str) -> int:
+        return config.CONSTRUCTION_HOURS[self.level(key) - 1]
+
+    def hatch_refund(self) -> float:
+        return config.HATCHERY_REFUND * (self.level("hatchery") - 1)
+
+    def upgrade(self, key: str) -> str:
+        b = BUILDINGS.get(key)
+        self.pay(key)
         self.levels[key] = self.level(key) + 1
+        return f"{b.emoji} {b.name} upgraded to level {self.levels[key]}!"
+
+    def upgrade_free(self, key: str) -> str:
+        b = BUILDINGS.get(key)
+        self.levels[key] = min(b.max_level, self.level(key) + 1)
         return f"{b.emoji} {b.name} upgraded to level {self.levels[key]}!"
 
     def describe(self, key: str, level: int = None) -> str:
@@ -130,6 +147,7 @@ class BuildingManager:
                                 f"{', Restricted Section open' if self.tier3_open(lv) else ''}"),
             "chamber": lambda: f"destroyed slimes yield x{ascension.chamber_factor(lv):.1f}",
             "alchemy": lambda: f"brews potions up to grade {lv}",
+            "hatchery": lambda: f"{int(config.HATCHERY_REFUND * (lv - 1) * 100)}% of the gel of every pull comes back",
             **{k: (lambda lv=lv: f"trains {2 * lv} slimes at once") for k in DRILL_YARDS.values()},
             **{k: (lambda lv=lv: f"{lv} duel{'s' if lv > 1 else ''} at once ({2 * lv} slimes)") for k in SPAR_ARENAS.values()},
             PARTY_YARD: lambda: f"trains {lv} part{'ies' if lv > 1 else 'y'} at once",

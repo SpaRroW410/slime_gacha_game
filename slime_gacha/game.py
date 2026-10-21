@@ -105,6 +105,7 @@ class Game:
         self.held: List[dict] = []                     # finished sessions whose haul and report arrive when the party is back
         self.next_held = 1
         self.last_due = 0                              # tick the party of the last session is back (set when it leaves; read by the web layer)
+        self.construction: Dict[str, int] = {}        # building -> tick its upgrade finishes (timed play only)
         self.plans: Dict[str, dict] = {}               # day plans of the posts (jobs.py): eight shifts and "if" rules
         self.ward: List[int] = []                      # slimes admitted to the Hospital ward (they are 'resting', in the ward)
         self.pantry: Dict[str, int] = {}               # cooked servings by recipe (jobs.py: chef and kitchen)
@@ -222,7 +223,13 @@ class Game:
 
     def pull(self, n: int = 1, pay: str = "white_gel") -> List[Slime]:
         """pay = 'free' (1 per game day) | 'white_gel' | 'purple_gel' (10 each; purple boosts rare odds)."""
+        before = self.wallet.get("purple_gel" if pay == "purple_gel" else "white_gel")
         new = self.gacha.pull(n, pay, self.day)
+        back = self.buildings.hatch_refund()
+        if back and pay != "free":
+            spent = before - self.wallet.get(pay)
+            if spent > 0 and int(spent * back):
+                self.wallet.add(pay, int(spent * back))
         self.gacha.favor = False
         for s in new:
             self.roster[s.id] = s
@@ -495,6 +502,7 @@ class Game:
             self.academy.tick(self.slimes(), events)
             self._reap(events)
             jobs.tick(self, events)
+            self._build_tick(events)
             self._healer_aura(self.slimes(), events)
             self.conflicts.tick(self.slimes(), events)
             self._reap(events)
@@ -1360,16 +1368,30 @@ class Game:
     def upgrade_building(self, key: str) -> str:
         if key not in BUILDINGS:
             raise InvalidAction(f"Unknown building '{key}'. Options: {', '.join(BUILDINGS.keys())}.")
-        return self.buildings.upgrade(key)
+        if not self.timed:
+            return self.buildings.upgrade(key)
+        b = BUILDINGS.get(key)
+        if key in self.construction:
+            raise InvalidAction(f"The {b.name} is already being upgraded.")
+        self.buildings.pay(key)
+        hours = self.buildings.build_hours(key)
+        self.construction[key] = self.tick_count + hours
+        return f"🚧 The {b.name} is being upgraded: ready in {hours} hours."
+
+    def _build_tick(self, events: List[str]) -> None:
+        for key in [k for k, t in self.construction.items() if t <= self.tick_count]:
+            del self.construction[key]
+            events.append(self.buildings.upgrade_free(key))
 
     def building_report(self) -> List[dict]:
         out = []
         for b in BUILDINGS:
             lv = self.buildings.level(b.key)
             nxt = self.buildings.next_cost(b.key)
-            out.append(dict(key=b.key, name=b.name, emoji=b.emoji, level=lv, max=b.max_level,
-                            now=self.buildings.describe(b.key), cost=nxt,
-                            nxt=self.buildings.describe(b.key, lv + 1) if nxt else None))
+            building = b.key in self.construction
+            out.append(dict(key=b.key, name=b.name, emoji=b.emoji, level=lv, max=b.max_level, building=building,
+                            now=self.buildings.describe(b.key), cost=None if building else nxt,
+                            nxt=self.buildings.describe(b.key, lv + 1) if nxt and not building else None))
         return out
 
     # ---- social: morale, compatibility, council -----------------------------------------------
@@ -3593,7 +3615,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -3618,7 +3640,7 @@ class Game:
     # the top-level shape every save has: key -> accepted types (a missing key is fine: old saves lack newer ones)
     _SAVE_SHAPE = dict(tick=int, seed=(int, type(None)), wallet=dict, gacha=dict, parties=dict, slimes=list, buildings=(dict, type(None)),
                        delves=dict, intel=dict, keeper=(dict, type(None)), pantry=dict, journal=list, graveyard=list, conflicts=list,
-                       bonds=list, bounties=list, expeditions=list, stranded=list, inventory=dict, plans=dict)
+                       bonds=list, bounties=list, expeditions=list, stranded=list, inventory=dict, plans=dict, construction=dict)
 
     @classmethod
     def check_save(cls, d) -> None:
@@ -3735,6 +3757,7 @@ class Game:
         g.held = list(d.get("held", []))
         g.next_held = d.get("next_held", 1)
         g.ward = [i for i in d.get("ward", []) if i in g.roster]
+        g.construction = {k: int(v) for k, v in (d.get("construction") or {}).items() if k in BUILDINGS}
         g.plans = {k: v for k, v in (d.get("plans") or {}).items() if k in jobs.JOBS}
         g.recipe_pref = d.get("recipe_pref", "auto")
         g.forge_progress, g.forge_next = d.get("forge_progress", 0), d.get("forge_next", "weapon")

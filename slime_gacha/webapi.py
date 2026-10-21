@@ -186,6 +186,9 @@ def away_view(g: Game) -> list:
         ids = [s.id for s in jobs_mod.workers(g) if s.job == key]
         if ids:
             out.append(item("job", f"{j.emoji} Working: {j.name}", ids, None))
+    for key, t in g.construction.items():
+        b = BUILDINGS.get(key)
+        out.append(item("build", f"🚧 Upgrading: {b.name}", [], g.remaining_hours(t)))
     for e in g.expeditions:
         ids = [i for i in e["ids"] if i in g.roster]
         if ids:

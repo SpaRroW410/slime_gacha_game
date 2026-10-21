@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=10, group="Gameplay", title="Construction time and the Hatchery", status="planned",
-         text="Building upgrades that take game time (shown in the away bar), and a Hatchery building."),
     dict(id=11, group="Gameplay", title="Gear set bonuses", status="planned", text="Bonuses for wearing matching sets."),
     dict(id=12, group="Gameplay", title="Keeper achievements, titles and respec", status="planned",
          text="An achievements list, titles, and a (costly) way to respec Keeper skills."),
@@ -133,8 +131,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-25",
-                 text="Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
+WHATS_NEW = dict(id="2026-10-26",
+                 text="Building upgrades now take game hours (see them in the Away bar), and a new Hatchery gives back some pull gel. Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
 
 
 def build() -> Dict[str, object]:

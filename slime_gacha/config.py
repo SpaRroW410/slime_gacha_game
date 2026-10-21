@@ -469,3 +469,7 @@ LIVE_LOBBY_RATE = 1.0            # game hours per REAL hour at home (study, hunt
 LIVE_DUNGEON_RATE = 3.0          # game hours per real hour while any party is in a dungeon
 LIVE_SCALES = (1, 6, 60)         # speed presets multiplying both rates
 LIVE_CATCHUP_MAX_HOURS = 48      # offline progress is capped (game hours)
+
+# upgrades take game time when time passes for real (live / deferred turns); instant in the CLI and tests
+CONSTRUCTION_HOURS = [6, 12, 24, 36]            # building level 1->2 ... 4->5
+HATCHERY_REFUND = 0.05                           # per Hatchery level above 1: share of the gel of a pull given back
