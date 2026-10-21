@@ -41,11 +41,24 @@ class Registry(Generic[T]):
         self._items.pop(key, None)
 
 
+PLUGIN_ERRORS: Dict[str, str] = {}        # plugin name -> why it was skipped
+
+
 def load_plugins() -> List[str]:
-    """Import every module in slime_gacha/plugins so it can self-register content."""
+    """Import every module in slime_gacha/plugins so it can self-register content (docs/MODDING.md).
+    A module with a `register()` function gets it called (unless `ENABLED = False`); one without registers at import time.
+    A module with `ENABLED = False` is skipped; one that raises is skipped too (and noted in PLUGIN_ERRORS) so a broken
+    mod never stops the game from starting."""
     from . import plugins
     loaded = []
     for mod in pkgutil.iter_modules(plugins.__path__):
-        importlib.import_module(f"{plugins.__name__}.{mod.name}")
-        loaded.append(mod.name)
+        name = f"{plugins.__name__}.{mod.name}"
+        try:
+            m = importlib.import_module(name)
+            if getattr(m, "ENABLED", True):
+                if callable(getattr(m, "register", None)):
+                    m.register()
+                loaded.append(mod.name)
+        except Exception as e:                      # noqa: BLE001 - any failure in a mod is that mod's problem
+            PLUGIN_ERRORS[mod.name] = f"{type(e).__name__}: {e}"
     return loaded

@@ -405,3 +405,27 @@ class CliHandFightTest(unittest.TestCase):
             res = cli.fight_by_hand(g, res)
         self.assertTrue(res.log)
         self.assertIsNone(g.flow)
+
+
+class ModLoaderTest(unittest.TestCase):
+    def test_example_pack_adds_class_skill_and_enemy(self):
+        from slime_gacha import registry
+        from slime_gacha.abilities import ABILITIES
+        from slime_gacha.archetypes import ARCHETYPES
+        from slime_gacha.battle import ENEMIES
+        from slime_gacha.plugins import example_pack
+        self.assertNotIn("jester", ARCHETYPES)               # shipped switched off
+        self.assertEqual(registry.PLUGIN_ERRORS, {})
+        try:
+            example_pack.register()
+            self.assertIn("jester", ARCHETYPES)
+            self.assertIn("pratfall", ABILITIES)
+            self.assertIn("mirthless_mime", ENEMIES)
+            from slime_gacha.game import Game
+            g = Game(3)
+            s = g.gacha.make_slime("rare", "jester")
+            self.assertEqual(s.known_abilities()[0], "pratfall")
+        finally:
+            ARCHETYPES.unregister("jester")
+            ABILITIES.unregister("pratfall")
+            ENEMIES.unregister("mirthless_mime")
