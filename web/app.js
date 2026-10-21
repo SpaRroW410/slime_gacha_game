@@ -143,14 +143,14 @@ function toast(msg, err = false) {
   const box = document.getElementById('toasts');
   const el = document.createElement('div');
   el.className = 'toast' + (err ? ' err' : '');
-  el.textContent = msg;
+  el.textContent = I18N.tr(msg);
   box.appendChild(el);
   while (box.children.length > 4) box.firstChild.remove();
   setTimeout(() => el.remove(), err ? 5200 : 3600);
 }
 function pushLog(lines) {
   const stamp = S.state ? `D${S.state.day + 1} ${String(S.state.tick % 24).padStart(2, '0')}h` : '';
-  for (const l of lines) S.feed.unshift(`${stamp} · ${l}`);
+  for (const l of lines) S.feed.unshift(`${stamp} · ${I18N.tr(l)}`);
   S.feed = S.feed.slice(0, 120);
 }
 
@@ -289,6 +289,7 @@ function render() {
   ${S.state.battle ? ARENA.render(S.state.battle) : ''}
   ${S.modal ? modalHtml() : ''}`;
   declutter();
+  I18N.apply(app);
   window.scrollTo(0, keep);
 }
 function tabBadge(k) {
@@ -1514,6 +1515,8 @@ function modalHtml() {
       <h4 style="margin:0">Time ${info('Turn-based: time passes when you press the wait buttons or act. Live: time passes by itself with the wall clock — study, hunts and brewing take real time; at home 1 game hour = 1 real hour, and while a party is in a dungeon the clock runs 3x faster. The speed presets multiply both. Offline progress is capped at 48 game hours.')}</h4>
       <div class="seg"><button class="${S.state.clock.mode === 'turn' ? 'on' : ''}" data-act="set_time" data-mode="turn">Turn-based</button><button class="${S.state.clock.mode === 'live' ? 'on' : ''}" data-act="set_time" data-mode="live" data-scale="${S.state.clock.scale}">Live (wall clock)</button></div>
       ${S.state.clock.mode === 'live' || true ? `<div class="row"><small class="mute">Speed</small><div class="seg small">${S.state.clock.scales.map((x) => `<button class="${S.state.clock.scale === x ? 'on' : ''}" data-act="set_time" data-mode="${S.state.clock.mode}" data-scale="${x}">×${x}</button>`).join('')}</div></div>` : ''}
+      <h4 style="margin:6px 0 0">Language</h4>
+      <div class="seg">${Object.entries(I18N.langs).map(([c, n]) => `<button class="${I18N.lang === c ? 'on' : ''}" data-act="lang" data-c="${c}">${n}</button>`).join('')}</div>
       <h4 style="margin:6px 0 0">Helpers</h4>
       <div class="row"><button class="btn small ${S.state.auto_care ? 'primary' : ''}" data-act="autocare" title="Auto-care feeds, sleeps and rests slimes by itself">🤖 Auto-care ${S.state.auto_care ? 'on' : 'off'}</button>
         <button class="btn small ${S.state.potions.autonomy ? 'primary' : ''}" data-act="autonomy" title="Slimes use up to 66% of your stocks by themselves">🤖 Autonomy ${S.state.potions.autonomy ? 'on' : 'off'}</button></div>
@@ -1583,6 +1586,7 @@ const A = {
     confirmThen(`Sacrifice ${best.name} (Lv${best.level} ${best.class_name}) into this relic?\n\nIt becomes an EGO relic (stronger with the soul's level). ${best.name} is gone forever and the colony will mourn.`, () => act('fuse_ego', { uid: num(d.uid), id: best.id })); },
   study: (d) => act('study', { id: S.sel, element: d.el }),
   study_lib: (d) => act('study', { id: num(d.id), element: d.el }),
+  lang: (d) => { I18N.set(d.c); document.documentElement.lang = I18N.lang; render(); },
   sound: () => { SFX.toggle(); render(); },
   pull: (d) => { S.pull = null; return act('pull', { n: num(d.n), pay: d.pay }); },
   party_create: () => act('party_create', { name: ui('pname', '') }).then(() => { S.ui.pname = ''; render(); }),

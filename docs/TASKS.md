@@ -42,7 +42,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 
 ## Quality
 - [x] **21. Balance pass with a simulation harness** — extend `tools/playtest.py` to Pit depths, rarities, skills and capstones.  *Done when:* a report covers each system and numbers are tuned in `config.py`.
-- [ ] **22. Localisation** — string catalogs and a language switch.  *Done when:* UI, logs and Guide can be switched to a second language.
+- [x] **22. Localisation** — string catalogs and a language switch.  *Done when:* UI, logs and Guide can be switched to a second language.
 
 ## QA report (phase 1) — from the QA and mobile planning report (https://claude.ai/artifact/4YYjeph6PAC4xW9A1qdHry, tested at commit 3cd06d8)
 Findings not yet re-verified against the current code; check each before fixing (some may already be fixed by later work).
