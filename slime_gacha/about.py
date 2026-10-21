@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=12, group="Gameplay", title="Keeper achievements, titles and respec", status="planned",
-         text="An achievements list, titles, and a (costly) way to respec Keeper skills."),
     dict(id=13, group="Gameplay", title="Imbue statuses and revival items", status="planned",
          text="Timed elemental imbues (the barbarian's fire axe) and consumable resurrection."),
     dict(id=15, group="Content", title="Campaign chapters", status="planned",
@@ -130,8 +128,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-27",
-                 text="Gear sets: wear two or three matching armory pieces for a bonus (shown in the Armory and on the slime card). Building upgrades now take game hours (see them in the Away bar), and a new Hatchery gives back some pull gel. Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
+WHATS_NEW = dict(id="2026-10-28",
+                 text="The Keeper tab has achievements with wearable titles, and you can respec your skills for a gel price. Gear sets: wear two or three matching armory pieces for a bonus (shown in the Armory and on the slime card). Building upgrades now take game hours (see them in the Away bar), and a new Hatchery gives back some pull gel. Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
 
 
 def build() -> Dict[str, object]:

@@ -1207,6 +1207,9 @@ function keeper() {
   return viceKeeperPanel() + `<div class="panel stack"><div class="row between"><h2>🧙 ${esc(k.title)} <small class="mute">level ${k.level}/${k.max_level}</small></h2>${chip(`${k.points} skill point${k.points === 1 ? '' : 's'}`, k.points ? 'ok' : '')}</div>
     ${bar(k.xp, k.xp_next, 'know', `XP ${k.xp}/${k.xp_next}`)}
     <p class="mute">You earn Keeper XP by tending slimes, pulling, winning fights, clearing floors, scouting, mediating, forging, brewing and by seeing families grow. Each level gives a skill point (a bonus one every 5 levels).</p></div>
+  <div class="panel stack" style="margin-top:12px"><div class="row between"><h3>🏆 Achievements <small class="mute">${k.achievements.filter((x) => x.done).length}/${k.achievements.length}</small></h3>
+    <button class="btn small" data-act="keeper_respec" title="Forget every learned skill and get the points back" ${affordable(k.respec.cost) ? '' : 'disabled'}>🔄 Respec · ${cost(k.respec.cost)}</button></div>
+    <div class="grid cols2">${k.achievements.map((x) => `<div class="row between ${x.done ? '' : 'mute'}"><span>${x.done ? x.emoji : '🔒'} <b>${esc(x.name)}</b><br><small>${esc(x.desc)}${x.title ? ` · title “${esc(x.title)}”` : ''}</small></span>${x.done && x.title ? `<button class="btn small ${k.title_pick === x.key ? 'primary' : ''}" data-act="keeper_title" data-key="${k.title_pick === x.key ? '' : x.key}">${k.title_pick === x.key ? 'Worn' : 'Wear'}</button>` : ''}</div>`).join('')}</div></div>
   <div class="grid cols2" style="margin-top:12px">${Object.entries(k.branches).map(([b, br]) => `<div class="panel stack"><h3>${br.emoji} ${esc(br.name)}</h3>
     ${k.skills.filter((s) => s.branch === b).map((s) => `<div class="panel flat"><div class="row between"><b>${s.emoji} ${esc(s.name)}${info(s.per_rank + ' (per rank). Needs Keeper level ' + s.level + '+, +2 for each further rank.')}</b><span>${pips(s.rank, s.max_rank)}</span></div>
       <div class="row" style="margin-top:4px"><button class="btn small ${!s.why_not ? 'primary' : ''}" data-act="keeper_learn" data-key="${s.key}" ${s.why_not ? 'disabled' : ''} title="${esc(s.why_not || '')}">${s.rank >= s.max_rank ? 'Mastered' : 'Learn'}</button>${s.why_not && s.rank < s.max_rank ? `<small class="mute">${esc(s.why_not)}</small>` : ''}</div></div>`).join('')}
@@ -1483,6 +1486,8 @@ const A = {
   talk: () => act('talk', { id: S.sel }),
   keeper_learn: (d) => act('keeper_learn', { key: d.key }),
   keeper_use: (d) => act('keeper_use', { key: d.key }),
+  keeper_respec: () => confirm('Forget all learned skills? It costs gel and the price rises each time.') && act('keeper_respec', {}),
+  keeper_title: (d) => act('keeper_title', { key: d.key || '' }),
   bud: (d) => confirmThen('Have a child? It costs ' + cost(S.state.family.bud_cost) + '.', () => act('bud', { a: num(d.a), b: num(d.b) })),
   autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
   merge_gel: (d) => act('merge_gel', { n: d.n === 'max' ? Math.floor(S.state.wallet.white_gel / S.state.rates.gel_merge) : num(d.n) }),

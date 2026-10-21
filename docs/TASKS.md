@@ -23,7 +23,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 - [x] **9. New classes: Bard, Paladin, Alchemist, Druid** — four archetypes with 4 rarity skills, an evolution skill, 2 capstones and star attributes each.  *Done when:* all four pull, level, fight and appear in the Guide.
 - [x] **10. Construction time and the Hatchery** — upgrades take game time; a Hatchery building (the Pantry now lives in the Kitchen).  *Done when:* upgrades show in the away bar and the Hatchery has effects.
 - [x] **11. Gear set bonuses** — bonuses for matching sets.  *Done when:* shown in Armory and slime card, balanced.
-- [ ] **12. Keeper achievements, titles and respec** — achievements list, titles, skill respec.  *Done when:* People > Keeper shows them and respec costs something.
+- [x] **12. Keeper achievements, titles and respec** — achievements list, titles, skill respec.  *Done when:* People > Keeper shows them and respec costs something.
 - [ ] **13. Imbue statuses and revival items** — e.g. Barbarian fire-axe imbue as a timed status; consumable resurrection.  *Done when:* both use fx and are tested.
 
 ## Content

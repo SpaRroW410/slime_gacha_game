@@ -310,3 +310,22 @@ class GearSetTest(unittest.TestCase):
         self.assertGreater(two["atk"], 3)
         self.assertGreater(three["atk"], two["atk"])
         self.assertEqual(eq.set_status({"weapon": "wooden_club"})[0]["bonus"], {})
+
+
+class KeeperExtrasTest(unittest.TestCase):
+    def test_achievement_title_and_respec(self):
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.keeper.level, g.keeper.xp = 15, 0
+        g.tick(6)
+        self.assertIn("keeper_15", g.keeper.achieved)
+        g.keeper.achieved.append("floor_10")
+        g.keeper_title("floor_10")
+        self.assertIn("Delver", g.keeper.title_pick and __import__("slime_gacha.keeper", fromlist=["x"]).title(15, g.keeper.title_pick))
+        g.keeper_learn("gentle_hands")
+        g.wallet.add("white_gel", 1000)
+        g.wallet.add("purple_gel", 5)
+        pts = g.keeper.points
+        g.keeper_respec()
+        self.assertEqual(g.keeper.points, pts + 1)
+        self.assertEqual(g.keeper.respecs, 1)

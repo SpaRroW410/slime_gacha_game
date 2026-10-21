@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -262,7 +262,11 @@ def snapshot(g: Game) -> dict:
                      herbs={c: g.wallet.get(potions_mod.herb_key(c)) for c in config.HERBS},
                      autonomy=g.autonomy, autonomy_share=config.AUTONOMY_SHARE),
         keeper=dict(level=g.keeper.level, xp=g.keeper.xp, xp_next=keeper_mod.xp_to_next(g.keeper.level),
-                    title=keeper_mod.title(g.keeper.level), points=g.keeper.points, max_level=config.KEEPER_MAX_LEVEL,
+                    title=keeper_mod.title(g.keeper.level, g.keeper.title_pick), points=g.keeper.points, max_level=config.KEEPER_MAX_LEVEL,
+                    respec=dict(cost=g.keeper.respec_cost(), count=g.keeper.respecs),
+                    achievements=[dict(key=a.key, name=a.name, emoji=a.emoji, desc=a.desc, title=a.title,
+                                       done=a.key in g.keeper.achieved) for a in achievements_mod.ACHIEVEMENTS.values()],
+                    title_pick=g.keeper.title_pick,
                     branches={k: dict(name=v[0], emoji=v[1]) for k, v in keeper_mod.BRANCHES.items()},
                     skills=[dict(key=sk.key, branch=sk.branch, name=sk.name, emoji=sk.emoji, level=sk.level,
                                  per_rank=sk.per_rank, max_rank=sk.max_rank, rank=g.keeper.rank(sk.key),
@@ -720,6 +724,16 @@ def _quarry(g, a):
 @command("keeper_learn")
 def _keeper_learn(g, a):
     return _msg(g.keeper_learn(a.get("key", "")))
+
+
+@command("keeper_respec")
+def _keeper_respec(g, a):
+    return _msg(g.keeper_respec())
+
+
+@command("keeper_title")
+def _keeper_title(g, a):
+    return _msg(g.keeper_title(str(a.get("key", ""))))
 
 
 @command("keeper_use")

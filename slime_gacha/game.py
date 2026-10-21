@@ -16,6 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
+from . import achievements
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -167,6 +168,23 @@ class Game:
         msg = self.keeper.learn(key)
         self._apply_keeper()
         return msg
+
+    def keeper_respec(self) -> str:
+        k = self.keeper
+        spent = sum(k.ranks.values())
+        if not spent:
+            raise InvalidAction("You have no learned skills to forget.")
+        self.wallet.spend_many(k.respec_cost())
+        k.respec()
+        self._apply_keeper()
+        return f"🔄 Your skills are forgotten: {spent} point(s) are yours to spend again."
+
+    def keeper_title(self, key: str) -> str:
+        from . import achievements as ach
+        if key and (key not in ach.ACHIEVEMENTS or key not in self.keeper.achieved or not ach.ACHIEVEMENTS[key].title):
+            raise InvalidAction("You haven't earned that title.")
+        self.keeper.title_pick = key
+        return "You wear the title " + (f"“{ach.ACHIEVEMENTS[key].title}”." if key else "of your level.")
 
     def keeper_use(self, key: str) -> str:
         """Use one of the Keeper's daily abilities."""
@@ -518,6 +536,8 @@ class Game:
             self._forage_tick()
             self._leaders_tick(events)
             self._vice_tick(events)
+            if self.tick_count % 6 == 0:
+                events.extend(achievements.check(self))
         self.journal.extend(events)
         self.journal = self.journal[-200:]
         return events
