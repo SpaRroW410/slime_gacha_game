@@ -98,3 +98,13 @@ class TestRows(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NewClassesTest(unittest.TestCase):
+    def test_new_classes_exist_and_fight(self):
+        from slime_gacha.archetypes import get_archetype
+        from slime_gacha import attributes
+        for k in ("bard", "paladin", "alchemist", "druid"):
+            a = get_archetype(k)
+            self.assertTrue(a.abilities)
+            self.assertIn(k, attributes.STAR_ATTRS)

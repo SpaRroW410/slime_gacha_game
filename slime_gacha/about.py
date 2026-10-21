@@ -18,7 +18,7 @@ SECTIONS: List[Dict[str, object]] = [
         "Form parties, train in the Academy, build the town, and push deeper into the dungeons for loot and permanent progress.",
     ]),
     dict(title="Slimes", icon="🫧", items=[
-        "Six classes - barbarian, mage, medic, rogue, ranger, necromancer - each with its own skills, discipline and stats. "
+        "Ten classes - barbarian, mage, medic, rogue, ranger, necromancer, bard, paladin, alchemist, druid - each with its own skills, discipline and stats. "
         "Rarity (common to legendary) shows as the slime's shape and ring; its body colour is yours to choose.",
         "Needs: energy, food, safety, belonging, esteem. Neglect is lethal; contentment gives more power.",
         "Skills: class skills by level, 24 rarity skills, 6 evolution skills, 12 pure and 12 hybrid capstones, star attributes, "
@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=9, group="Gameplay", title="New classes: Bard, Paladin, Alchemist, Druid", status="planned",
-         text="Four more classes with their own skills, evolutions, capstones and star attributes."),
     dict(id=10, group="Gameplay", title="Construction time and the Hatchery", status="planned",
          text="Building upgrades that take game time (shown in the away bar), and a Hatchery building."),
     dict(id=11, group="Gameplay", title="Gear set bonuses", status="planned", text="Bonuses for wearing matching sets."),
@@ -135,8 +133,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-24",
-                 text="A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
+WHATS_NEW = dict(id="2026-10-25",
+                 text="Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
 
 
 def build() -> Dict[str, object]:

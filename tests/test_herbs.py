@@ -6,7 +6,7 @@ from slime_gacha.errors import InvalidAction
 from slime_gacha.game import Game
 
 
-def mk(seed=3, n=6):
+def mk(seed=8, n=6):
     g = Game(seed)
     g.wallet.add_many({"white_gel": 100000, "essence": 1000, "scrap": 1000, "alloy": 300, "crystal": 300})
     for c in config.HERBS:

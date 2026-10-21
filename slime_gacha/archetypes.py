@@ -89,3 +89,28 @@ register_archetype(Archetype(
     {1: "siphon", 3: "curse", 6: "raise_bones"}, "attack",
     discipline="magic",
     likes=("tea", "quiet"), hunt_bonus={"essence": 1.3}, rivals=("medic",)))
+
+# ---- second wave -------------------------------------------------------------
+register_archetype(Archetype(
+    "bard", "Bard", "🎵", _s(28, 3, 3, 8, 7), _s(3.5, 0.5, 0.7, 1.7, 0.8),
+    {1: "lilt", 3: "rally_song", 7: "lullaby"}, "heal",
+    discipline="magic",
+    likes=("songs", "applause"), hunt_bonus={"essence": 1.2, "food": 1.1}, rivals=()))
+
+register_archetype(Archetype(
+    "paladin", "Paladin", "🛡️", _s(44, 7, 7, 3, 3), _s(6.5, 1.6, 1.4, 0.5, 0.4),
+    {1: "holy_bonk", 3: "aegis", 6: "smite"}, "defend",
+    discipline="sword",
+    likes=("oaths", "polish"), hunt_bonus={"white_gel": 1.2}, rivals=("necromancer",)))
+
+register_archetype(Archetype(
+    "alchemist", "Alchemist", "⚗️", _s(27, 3, 3, 9, 5), _s(3.3, 0.4, 0.6, 1.9, 0.6),
+    {1: "acid_flask", 3: "tonic", 6: "explosive_brew"}, "attack",
+    discipline="magic",
+    likes=("fumes", "tinkering"), hunt_bonus={"essence": 1.3}, rivals=()))
+
+register_archetype(Archetype(
+    "druid", "Druid", "🌿", _s(32, 3, 4, 8, 5), _s(4.5, 0.5, 0.9, 1.8, 0.5),
+    {1: "thorn_lash", 3: "bloom", 6: "tangle"}, "heal",
+    discipline="magic",
+    likes=("moss", "rain"), hunt_bonus={"food": 1.4}, rivals=()))

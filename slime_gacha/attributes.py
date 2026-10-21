@@ -11,8 +11,10 @@ from . import config
 from .abilities import Ability, register_ability
 
 # ---- stamina ---------------------------------------------------------------------------------------------------------------
-STAMINA_BASE = dict(barbarian=100, rogue=90, ranger=90, medic=80, mage=70, necromancer=70)
-STAMINA_GROWTH = dict(barbarian=2.5, rogue=2.2, ranger=2.2, medic=2.0, mage=1.8, necromancer=1.8)
+from . import newclasses as _new          # Bard, Paladin, Alchemist, Druid
+
+STAMINA_BASE = dict(barbarian=100, rogue=90, ranger=90, medic=80, mage=70, necromancer=70, **_new.STAMINA_BASE)
+STAMINA_GROWTH = dict(barbarian=2.5, rogue=2.2, ranger=2.2, medic=2.0, mage=1.8, necromancer=1.8, **_new.STAMINA_GROWTH)
 
 
 def max_stamina(slime) -> float:
@@ -72,6 +74,7 @@ STAR_ATTRS = {                       # class -> attributes gained at 2, 3, 4, 5 
     "rogue": [("crit_rate", .06), ("evasion", .06), ("crit_dmg", .25), ("lifesteal", .06)],
     "ranger": [("crit_rate", .05), ("crit_dmg", .20), ("evasion", .05), ("lifesteal", .05)],
     "necromancer": [("lifesteal", .06), ("spell_power", .10), ("resist", .08), ("regen", .03)],
+    **_new.STAR_ATTRS,
 }
 
 
@@ -129,6 +132,7 @@ _S = dict(
                  _A("grave_feast", "Grave Feast", "drain", 2.0, "mag", "enemy", 4, 0, "Feast on a foe's life."),
                  _A("legion_of_bones", "Legion of Bones", "summon", 1.0, "mag", "self", 5, 0, "Three bone servants answer the call.", ("count", 3))],
 )
+_S.update(_new.RARITY_SKILLS)
 # one signature skill per class at its first evolution; the second evolution raises it to rank II
 EVOLUTION_SKILLS = dict(
     barbarian=(_A("berserkers_oath", "Berserker's Oath", "utility", 0.0, "atk", "self", 99, 0, "Swear an oath: +60% attack whenever badly hurt (below 30% HP), for the rest of the fight.", ("oath", 0.6)),
@@ -144,6 +148,7 @@ EVOLUTION_SKILLS = dict(
     necromancer=(_A("soul_tithe", "Soul Tithe", "utility", 0.0, "mag", "self", 4, 0, "Sacrifice a minion: the party heals its full HP.", ("tithe", 1.0)),
                  _A("soul_tithe_ii", "Soul Tithe II", "utility", 0.0, "mag", "self", 4, 0, "Sacrifice a minion: the party heals 150% of its HP.", ("tithe", 1.5))),
 )
+EVOLUTION_SKILLS.update(_new.EVOLUTION_SKILLS)
 for _cls, _pair in EVOLUTION_SKILLS.items():
     for _a in _pair:
         register_ability(_a)
@@ -170,6 +175,7 @@ PURE_CAPSTONES = dict(
     necromancer=(_A("raise_fallen", "Raise Fallen", "utility", 0.0, "mag", "self", 5, 0, "A fallen foe or ally rises as your thrall.", ("raise",)),
                  _A("soul_harvest", "Soul Harvest", "drain", 1.2, "mag", "all_enemies", 5, 0, "Drain every foe; the party heals half of everything taken.", ("harvest", 0.5))),
 )
+PURE_CAPSTONES.update(_new.PURE_CAPSTONES)
 for _cls, _pair in PURE_CAPSTONES.items():
     for _a in _pair:
         register_ability(_a)

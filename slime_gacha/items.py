@@ -66,7 +66,8 @@ for _b in [
 RARITIES = config.RARITIES
 FAMILIES = ("sword", "hammer", "dagger", "bow", "staff", "tome")
 CLASS_FAMILIES = dict(barbarian=("sword", "hammer"), rogue=("dagger", "sword"), ranger=("bow", "dagger"),
-                      mage=("staff", "tome"), medic=("staff", "tome"), necromancer=("tome", "dagger"))
+                      mage=("staff", "tome"), medic=("staff", "tome"), necromancer=("tome", "dagger"),
+                      bard=("staff", "dagger"), paladin=("sword", "hammer"), alchemist=("tome", "staff"), druid=("staff", "bow"))
 _NAME_A = ["Wolf", "Storm", "Ember", "Grave", "Dawn", "Night", "Frost", "Thorn", "Gale", "Ash", "Moon", "Iron", "Sun",
            "Hollow", "Star", "Blood"]
 _NAME_B = ["bane", "fang", "song", "render", "whisper", "breaker", "bite", "call", "reaver", "ward", "talon", "shard"]

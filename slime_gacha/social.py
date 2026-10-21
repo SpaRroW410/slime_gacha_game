@@ -25,7 +25,9 @@ TRAIT_PAIRS: Dict[frozenset, int] = {
 }
 COMPLEMENT = {frozenset(["medic", "barbarian"]): 14, frozenset(["medic", "ranger"]): 10,
               frozenset(["mage", "rogue"]): 10, frozenset(["necromancer", "barbarian"]): 8,
-              frozenset(["ranger", "mage"]): 10}
+              frozenset(["ranger", "mage"]): 10,
+              frozenset(["bard", "paladin"]): 10, frozenset(["alchemist", "druid"]): 10,
+              frozenset(["paladin", "medic"]): 8, frozenset(["bard", "barbarian"]): 8}
 RARITY_INDEX = {r: i for i, r in enumerate(config.RARITIES)}
 
 

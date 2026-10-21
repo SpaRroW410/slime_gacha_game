@@ -587,25 +587,25 @@ class TestDeath(unittest.TestCase):
 
 class TestExtensibility(unittest.TestCase):
     def test_add_bard_class_without_touching_engine(self):
-        register_ability(Ability("inspire", "Inspire", "heal", 0.5, "mag", "all_allies", 2))
+        register_ability(Ability("jig", "Jig", "heal", 0.5, "mag", "all_allies", 2))
         register_archetype(Archetype(
-            "bard", "Bard", "🎵", dict(hp=20, atk=3, defense=3, mag=8, spd=6),
-            dict(hp=3, atk=.5, defense=.5, mag=1.5, spd=.5), {1: "inspire"}, "heal"))
+            "jester", "Jester", "🎵", dict(hp=20, atk=3, defense=3, mag=8, spd=6),
+            dict(hp=3, atk=.5, defense=.5, mag=1.5, spd=.5), {1: "jig"}, "heal"))
         try:
             g = fresh(1)
-            s = g.gacha.make_slime("rare", "bard")
+            s = g.gacha.make_slime("rare", "jester")
             g.roster[s.id] = s
-            self.assertEqual(s.known_abilities(), ["inspire"])
-            p = g.create_party("bards")
+            self.assertEqual(s.known_abilities(), ["jig"])
+            p = g.create_party("jesters")
             for _ in range(5):
-                x = g.gacha.make_slime("rare", "bard")
+                x = g.gacha.make_slime("rare", "jester")
                 g.roster[x.id] = x
                 g.parties.add(p.id, x.id)
             g.battle(p.id, 1)                        # works in battle too
             seen = {x.archetype for x in fresh(1, 200).slimes()}
-            self.assertIn("bard", seen)              # appears in the gacha pool
+            self.assertIn("jester", seen)              # appears in the gacha pool
         finally:
-            ARCHETYPES.unregister("bard")
+            ARCHETYPES.unregister("jester")
 
     def test_bad_archetype_rejected(self):
         with self.assertRaises(ValueError):

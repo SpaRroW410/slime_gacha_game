@@ -2,7 +2,7 @@
 'use strict';
 
 const LS_KEY = 'slimegacha.save.v1';
-const CLASS_COLORS = { barbarian: '#e5604d', mage: '#8a7cff', medic: '#4cc38a', rogue: '#aab2c0', ranger: '#e0b341', necromancer: '#a56bd1' };
+const CLASS_COLORS = { barbarian: '#e5604d', mage: '#8a7cff', medic: '#4cc38a', rogue: '#aab2c0', ranger: '#e0b341', necromancer: '#a56bd1', bard: '#f08fc0', paladin: '#f2d36b', alchemist: '#5ec8d8', druid: '#7bb661' };
 const RES = { white_gel: ['⚪', 'White gel'], purple_gel: ['🟣', 'Purple gel'], food: ['🍖', 'Food'], essence: ['✨', 'Essence'], herb_green: ['🟢🌿', 'Green herb (health)'], herb_red: ['🔴🌿', 'Red herb (strength)'], herb_blue: ['🔵🌿', 'Blue herb (armor)'], herb_yellow: ['🟡🌿', 'Yellow herb (stamina)'], scrap: ['🔩', 'Scrap'], alloy: ['🪙', 'Alloy'], crystal: ['💠', 'Crystal'], stardust: ['🌟', 'Stardust'], voidglass: ['🕳️', 'Voidglass'],
   stone_common: ['⚪💎', 'Common stone'], stone_uncommon: ['🟢💎', 'Uncommon stone'], stone_rare: ['🔵💎', 'Rare stone'], stone_epic: ['🟣💎', 'Epic stone'], stone_legendary: ['🟡💎', 'Legendary stone'] };
 const CORE_RES = ['white_gel', 'purple_gel', 'food', 'essence'];

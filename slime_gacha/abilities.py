@@ -61,6 +61,18 @@ for _a in [
     Ability("raise_bones", "Raise Bones", "summon", 0.6, "mag", "self", 5, 0, "Summon a Bone Pal."),
     Ability("curse", "Wilting Curse", "poison", 0.5, "mag", "enemy", 2, 4, "Strong poison."),
     Ability("defend", "Defend", "guard", 0.0, "defense", "self", 0, 1, "Basic guard (everyone has it)."),
+    Ability("lilt", "Lilt", "damage", 1.1, "mag", "enemy", 0, 0, "A bouncy sour note."),
+    Ability("rally_song", "Rally Song", "heal", 0.6, "mag", "all_allies", 3, 0, "A tune that perks up the whole party."),
+    Ability("lullaby", "Lullaby", "damage", 1.4, "mag", "enemy", 4, 0, "A drowsy melody that stuns one foe.", fx=(("stun", 0.5),)),
+    Ability("holy_bonk", "Holy Bonk", "damage", 1.1, "atk", "enemy", 0, 0, "A blessed shield bash."),
+    Ability("aegis", "Aegis", "guard", 0.0, "defense", "ally", 3, 2, "Shield an ally with radiant goo."),
+    Ability("smite", "Smite", "damage", 2.0, "atk", "enemy", 4, 0, "Righteous overhead strike."),
+    Ability("acid_flask", "Acid Flask", "poison", 0.5, "mag", "enemy", 0, 3, "Hurl a fizzing flask."),
+    Ability("tonic", "Tonic", "heal", 1.2, "mag", "ally", 2, 0, "Brew a quick restorative."),
+    Ability("explosive_brew", "Explosive Brew", "damage", 1.0, "mag", "all_enemies", 4, 0, "A volatile splash on every foe."),
+    Ability("thorn_lash", "Thorn Lash", "damage", 1.1, "mag", "enemy", 0, 0, "A whip of living vine."),
+    Ability("bloom", "Bloom", "heal", 0.7, "mag", "all_allies", 3, 0, "Flowers sprout and soothe the party."),
+    Ability("tangle", "Tangle", "poison", 0.4, "mag", "enemy", 2, 3, "Roots sap a foe over time."),
     Ability("blorp_blast", "Blorp Blast", "damage", 2.0, "atk", "all_enemies", 4, 0, "Evolved: screen-wide goo."),
 ]:
     register_ability(_a)

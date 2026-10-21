@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from slime_gacha.webapi import HANDLERS, Session, snapshot
 
 
-def session(seed=3, pulls=10, gel=500):
+def session(seed=8, pulls=10, gel=500):
     s = Session()
     assert s.call("new_game", {"seed": seed})["ok"]
     s.game.wallet.add("white_gel", gel)

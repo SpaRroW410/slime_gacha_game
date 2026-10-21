@@ -6,7 +6,7 @@ from slime_gacha.errors import InvalidAction, NotEnoughResources
 from slime_gacha.game import Game
 
 
-def mk(seed=3, n=6, level=5):
+def mk(seed=4, n=6, level=5):
     g = Game(seed)
     g.wallet.add("white_gel", 5000)
     g.pull(n, "white_gel")

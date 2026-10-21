@@ -2231,7 +2231,9 @@ class Game:
 
     _LIKES = dict(barbarian=("might", "ironhide", "bulwark"), mage=("arcane", "renewal"), medic=("renewal", "arcane", "bulwark"),
                   rogue=("fury", "gale", "might"), ranger=("fury", "gale", "might"),
-                  necromancer=("bloodthirst", "arcane", "renewal"))
+                  necromancer=("bloodthirst", "arcane", "renewal"),
+                  bard=("arcane", "renewal", "gale"), paladin=("bulwark", "might", "renewal"),
+                  alchemist=("arcane", "renewal", "fury"), druid=("renewal", "gale", "arcane"))
 
     def _relic_free(self) -> bool:
         self.vault_peak = max(self.vault_peak, len(self.vault))
