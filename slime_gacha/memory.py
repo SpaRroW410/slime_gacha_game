@@ -24,6 +24,7 @@ KINDS: Dict[str, tuple] = {
     "comrade":   (+1, "{n} fought beside them and won{note}"),
     "carried":   (+1, "{n} stayed close when they fell{note}"),
     "lost":      (0,  "{n} was lost{note}"),
+    "ignored":   (-1, "You did not listen when they asked for help{note}"),
 }
 
 

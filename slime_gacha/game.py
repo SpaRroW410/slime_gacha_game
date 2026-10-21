@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements, places, story, sanity, memory
+from . import achievements, places, story, sanity, memory, mind
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -622,10 +622,16 @@ class Game:
         note = "" if n == 1 else " (you already talked today: it helps less)"
         return f'{s.name}{feel}: "{line}"{note}'
 
+    def _fight_sanity(self, s: Slime, kind: str) -> None:
+        """Quarrels and brawls wear sanity down, but an unresolved feud brawls again and again: it costs at most once a day."""
+        if s.cared.get("fday") != self.day:
+            s.cared["fday"] = self.day
+            sanity.hit(s, config.SANITY_HIT[kind])
+
     def _cared(self, s: Slime, kind: str) -> int:
         """Count talks / pets today for this slime (1 = the first): the Keeper's attention wears off when repeated."""
         if s.cared.get("day") != self.day:
-            s.cared = {"day": self.day, "talk": 0, "pet": 0}
+            s.cared = {"day": self.day, "talk": 0, "pet": 0, "fday": s.cared.get("fday", -1)}
         s.cared[kind] = s.cared.get(kind, 0) + 1
         return s.cared[kind]
 
@@ -648,6 +654,7 @@ class Game:
     def _relations_day(self, events: List[str]) -> None:
         for s in self.slimes():
             memory.fade(s)
+        mind.daily(self, events)
         before = len(self.relations.rel)
         self.relations.daily(self, self.mood_rng, events, self.day)
         if len(self.relations.rel) > before:
@@ -817,6 +824,7 @@ class Game:
                 t.hp = min(m, t.hp + max(1, int(m * 0.1)))
                 t.needs.add("belonging", 3)
                 memory.remember(t, "healed", h, self.day, 1.5)
+                mind.note(h, "heal")
                 events.append(f"💚 {h.name} tends to {t.name}.")
 
     # ---- care ------------------------------------------------------------------
@@ -1151,8 +1159,10 @@ class Game:
             return "is exhausted and refuses"
         if s.hp < s.max_hp * config.REFUSE_HP[kind]:
             return "is too hurt and refuses"
-        if s.mood() < config.REFUSE_MOOD:
+        if s.mood() < config.REFUSE_MOOD - config.TRUST_REFUSE_SHIFT * (s.trust - 50) / 50:
             return "is in too bleak a mood and refuses"
+        if kind == "dungeon" and s.goal and s.goal["kind"] == "avoid_dungeons" and s.trust < 80:
+            return f"refuses: {s.goal['text']}"
         if s.emotions.get("anger", 0) >= config.REFUSE_ANGER:
             return "is in a rage and refuses"
         if sanity.frac(s) < config.SANITY_REFUSE[kind]:
@@ -1497,13 +1507,13 @@ class Game:
         if kind == "quarrel":
             self.social.add_bond(a, b, -3)
             for s in (a, b):
-                sanity.hit(s, config.SANITY_HIT["quarrel"])
+                self._fight_sanity(s, "quarrel")
                 self.social.shift_morale(s, -3)
                 emotions.feel(s, "anger", 18)
         elif kind == "brawl":
             self.social.add_bond(a, b, -10)
             for s in (a, b):
-                sanity.hit(s, config.SANITY_HIT["brawl"])
+                self._fight_sanity(s, "brawl")
                 self.social.shift_morale(s, -15)
                 emotions.feel(s, "anger", 40)
                 emotions.feel(s, "sadness", 10)
@@ -1790,6 +1800,9 @@ class Game:
     def create_party(self, name: str = "") -> Party:
         return self.parties.create(name)
 
+    def answer_request(self, sid: int, accept: bool) -> str:
+        return mind.answer(self, sid, accept)
+
     def party_add(self, pid: int, sid: int) -> str:
         self.slime(sid)
         self.parties.add(pid, sid)
@@ -2069,6 +2082,7 @@ class Game:
                     for s in alive[:2]:
                         memory.remember(f, "carried", s, self.day, 2.0 * scale + 0.5)
             for s in alive:
+                mind.note(s, "win")
                 sanity.heal(s, config.SANITY_WIN * scale)
                 emotions.feel(s, "joy", 14 * scale + 4)
                 emotions.feel(s, "pride", (10 + (15 if boss else 0)) * scale + 2)
@@ -2944,6 +2958,7 @@ class Game:
                 for s in downed:
                     self.social.shift_morale(s, config.GRIND_DEATH_MORALE)
                     sanity.hit(s, config.SANITY_HIT["knocked_out"])
+                    mind.note(s, "ko")
                     events.append(f"💫 {s.name} was knocked out: morale {config.GRIND_DEATH_MORALE:+.0f}.")
                 self._ko_wear(downed, events)
                 if rep.victory and pl.drop == "stones":

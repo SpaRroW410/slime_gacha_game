@@ -550,6 +550,7 @@ function dOverview(s, { st, free, inDun }) {
     <small class="mute">⚡ Total power <b>${s.power}</b> = (${Object.entries(s.power_parts).map(([k, v]) => `${k} ${v}`).join(' + ')}) × mood &amp; morale ${s.power_mult} ${info('Total power sums what the slime is (stats: class, level, rarity, stars, stage, gear, relics, potions) and what it can do (skills scaled by the stat they use, capstones and spell forms counting extra, star attributes, elemental mastery, fighting styles, class proficiency), then multiplies by its current mood and morale.')}</small>
     ${bar(s.hp, s.max_hp, 'hp', 'HP')}${bar(s.xp, s.xp_next, 'xp', 'XP', s.level >= s.level_cap ? 'level cap' : `${s.xp}/${s.xp_next}`)}
     ${bar(s.morale, 100, 'morale', `Morale — ${s.morale_label}`, `power ×${s.morale_factor}`)}
+    ${sect(`On its mind ${s.request ? badge('request', 'warn') : ''}`, 'Slimes pick goals from what they remember, act on them when idle, and sometimes ask you for something. Granting requests builds trust; slimes who trust you put up with more, and refusals are remembered.', `<div class="stack"><small>🎯 ${s.goal ? esc(s.goal) : 'no particular goal'}</small><small class="mute">🤝 Trust in you: ${s.trust}/100</small>${s.request ? requestRow(s) : ''}</div>`)}
     ${sect('Memories', 'What this slime remembers about the others. Grudges make quarrels likelier (and are their stated reason); thanks make them rarer. Memories fade over a few weeks.', s.memories.length ? `<div class="stack">${s.memories.map((m) => `<small class="${m.sign < 0 ? 'bad' : m.sign > 0 ? '' : 'mute'}">${m.sign < 0 ? '😠' : m.sign > 0 ? '💚' : '🕯'} ${esc(m.text)} <span class="mute">· day ${m.day + 1}</span></small>`).join('')}</div>` : '<small class="mute">Nothing on its mind yet.</small>')}
     ${bar(s.sanity, s.sanity_max, 'sanity', `Sanity ${s.sanity}/${s.sanity_max} — ${s.sanity_label}`, s.mood_cap < 1 ? `mood capped at ${Math.round(s.mood_cap * 100)}%` : 'no cap')} ${info('Sanity is how much a slime can take. Deaths of friends, knock-outs, lost battles, brawls and long miserable stretches wear it down; sleep, the Rest Area, the Hospital, a calm happy home, a won fight, the Keeper\'s Soothe and one talk a day build it back. Low sanity caps the mood, so food and pets alone cannot fix a worn-down slime; below 20% it refuses dungeons, below 10% work. Rarer slimes have a bigger reserve and lose less per blow.')}
     ${bar(s.stamina, s.max_stamina, 'know', `⚡ Stamina`, `${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}
@@ -966,8 +967,13 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, String(v)); } catch (e) 
 const BACKUP_DAYS = 3;
 function backupAge() { const t = Number(lsGet(LS_EXPORT)); return t ? (Date.now() - t) / 86400000 : null; }
 function backupDue() { const a = backupAge(); return (a === null || a >= BACKUP_DAYS) && Date.now() - Number(lsGet(LS_SNOOZE) || 0) > 86400000; }
+function requestRow(s) {
+  return `<div class="row between panel flat"><span>💬 <b>${esc(s.name)}</b> ${esc(s.request.text)}.</span><span class="row"><button class="btn small primary" data-act="answer_request" data-id="${s.id}" data-yes="1">Grant</button><button class="btn small" data-act="answer_request" data-id="${s.id}" data-yes="0">Decline</button></span></div>`;
+}
 function notices() {
   const n = S.state?.whats_new, out = [];
+  const asks = (S.state?.slimes || []).filter((x) => x.request).slice(0, 3);
+  if (asks.length) out.push(`<div class="panel flat stack"><b>💬 Requests</b>${asks.map(requestRow).join('')}</div>`);
   if (S.saveFailed) out.push(`<div class="panel flat row between warnbox" role="alert"><span>⚠️ <b>This browser is not keeping your colony</b> (storage is full or blocked, for example in a private window). Progress will be lost when you close the page. Export a save file now.</span><span class="row"><button class="btn small primary" data-act="export">⬇ Export</button></span></div>`);
   if (S.otherTab) out.push(`<div class="panel flat row between warnbox" role="alert"><span>⚠️ <b>Slime Gacha is open in another tab.</b> This tab is paused so the two cannot overwrite each other's progress.</span><span class="row"><button class="btn small primary" data-act="take_over">Load the latest save here</button></span></div>`);
   if (n && lsGet(LS_NEWS) !== n.id) out.push(`<div class="panel flat row between"><span>🆕 <b>What's new:</b> ${esc(n.text)}</span><button class="btn small" data-act="dismiss_news">Got it</button></div>`);
@@ -1632,6 +1638,7 @@ const A = {
   talk: () => act('talk', { id: S.sel }),
   keeper_learn: (d) => act('keeper_learn', { key: d.key }),
   keeper_use: (d) => act('keeper_use', { key: d.key }),
+  answer_request: (d) => act('answer_request', { id: num(d.id), accept: d.yes === '1' }),
   craft_feather: () => act('craft_feather', { n: 1 }),
   keeper_respec: () => confirm('Forget all learned skills? It costs gel and the price rises each time.') && act('keeper_respec', {}),
   keeper_title: (d) => act('keeper_title', { key: d.key || '' }),

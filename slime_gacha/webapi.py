@@ -43,7 +43,7 @@ def slime_view(g: Game, s) -> dict:
         row=(s.row or battle_default_row(s)), row_set=s.row, ward=s.id in g.ward, refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
         mood=s.mood_label(), power=(tp := power_mod.total_power(s))["total"], power_tag=power_mod.display(tp["total"]), power_parts=tp["parts"], power_mult=tp["multiplier"],
         morale=round(s.morale), morale_label=SocialEngine.morale_label(s.morale),
-        memories=memory_mod.recent(s), sanity=round(s.sanity), sanity_max=config.SANITY_MAX[s.rarity], sanity_label=sanity_mod.label(s), mood_cap=round(sanity_mod.mood_cap(s), 2),
+        goal=(s.goal or {}).get("text", ""), request=s.request, trust=round(s.trust), memories=memory_mod.recent(s), sanity=round(s.sanity), sanity_max=config.SANITY_MAX[s.rarity], sanity_label=sanity_mod.label(s), mood_cap=round(sanity_mod.mood_cap(s), 2),
         talked=bool(s.cared.get("day") == g.day and s.cared.get("talk")),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
         abilities=[dict(key=k, name=get_ability(k).name, element=get_ability(k).element,
@@ -762,6 +762,11 @@ def _keeper_use(g, a):
 @command("bud")
 def _bud(g, a):
     return g.bud(_i(a, "a"), _i(a, "b")), {}
+
+
+@command("answer_request")
+def _answer_request(g, a):
+    return _msg(g.answer_request(_i(a, "id"), bool(a.get("accept"))))
 
 
 @command("talk")

@@ -524,3 +524,60 @@ class MemoryTest(unittest.TestCase):
         c.hp, c.death_cause = 0, "fell in battle"
         g._reap([])
         self.assertTrue(any(m["kind"] == "lost" and m["name"] == c.name for m in a.memories))
+
+
+class MindTest(unittest.TestCase):
+    def _g(self, n=4):
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.wallet.add("white_gel", 2000)
+        g.pull(n, "white_gel")
+        for s in g.slimes():
+            s.hp = s.max_hp
+            s.needs.v.update({k: 90.0 for k in s.needs.v})
+            s.emotions.clear()
+        return g
+
+    def test_a_fallen_friend_makes_a_slime_avoid_the_dungeons(self):
+        from slime_gacha import memory, mind
+        g = self._g()
+        a, b = g.slimes()[:2]
+        memory.remember(a, "lost", b, g.day, 6.0, "(fell in battle)")
+        a.goal = mind.choose_goal(g, a)
+        self.assertEqual(a.goal["kind"], "avoid_dungeons")
+        self.assertIn("refuses", g.refusal(a, "dungeon"))
+        self.assertEqual(g.refusal(a, "job"), "")                 # work is still fine
+        a.trust = 90
+        self.assertEqual(g.refusal(a, "dungeon"), "")             # a slime that trusts the Keeper goes anyway
+
+    def test_requests_and_trust(self):
+        from slime_gacha import sanity
+        g = self._g()
+        s = g.slimes()[0]
+        s.sanity = sanity.cap(s) * 0.2
+        r = __import__("slime_gacha.mind", fromlist=["x"]).make_request(g, s)
+        self.assertEqual(r["kind"], "rest")
+        s.request = r
+        before = s.trust
+        g.answer_request(s.id, True)
+        self.assertGreater(s.trust, before)
+        s.request = r
+        t = s.trust
+        g.answer_request(s.id, False)
+        self.assertLess(s.trust, t)
+        self.assertTrue(any(m["kind"] == "ignored" for m in s.memories))
+        with self.assertRaises(Exception):
+            g.answer_request(s.id, True)                            # nothing pending any more
+
+    def test_drift_changes_a_trait_and_a_day_runs(self):
+        from slime_gacha import mind
+        g = self._g()
+        s = g.slimes()[0]
+        s.traits = ["brave", "lazy"]
+        s.drift["ko"] = 6
+        ev = []
+        mind.drift(g, s, ev)
+        self.assertIn("timid", s.traits)
+        self.assertTrue(ev)
+        g.tick(24 * 3)                                             # goals, decisions and requests run with the days
+        self.assertTrue(all(x.goal for x in g.slimes()))

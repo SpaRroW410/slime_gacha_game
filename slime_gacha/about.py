@@ -81,8 +81,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-09",
-                 text="Slimes now remember: who ate their snack, who healed them, who fell. Grudges make quarrels likelier and become the stated reason; thanks make them rarer (see Memories on the slime card). Also new: sanity — a mental reserve (bigger for rarer slimes) that caps the mood; talking and petting now help less when repeated the same day. Also: four new classes (Bard, Paladin, Alchemist, Druid), a Hatchery and timed upgrades, gear sets, achievements and titles, story chapters, animated battles with sound, "
+WHATS_NEW = dict(id="2026-11-10",
+                 text="Slimes now have goals and make their own decisions (training on their own, visiting friends, refusing dungeons after a friend fell), ask you for things and build trust, and slowly change personality. Slimes also remember: who ate their snack, who healed them, who fell. Grudges make quarrels likelier and become the stated reason; thanks make them rarer (see Memories on the slime card). Also new: sanity — a mental reserve (bigger for rarer slimes) that caps the mood; talking and petting now help less when repeated the same day. Also: four new classes (Bard, Paladin, Alchemist, Druid), a Hatchery and timed upgrades, gear sets, achievements and titles, story chapters, animated battles with sound, "
                       "an installable offline app, exact gacha odds, and a safer save (second-tab and import protection).")
 
 
