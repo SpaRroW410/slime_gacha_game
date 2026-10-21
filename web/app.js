@@ -268,7 +268,49 @@ async function loadCouncil(rerender = true) {
 const confirmThen = (msg, fn) => { if (window.confirm(msg)) fn(); };
 
 /* ---------------------------------------------------------------- top-level render */
+/* Every render rebuilds the page, so anything the user was in the middle of is carried across: the scroll position of every scrolled
+   box (the top bar, the tab bar, lists, dialogs) and the text box being typed in, with its cursor. Boxes are matched by their path in
+   the page, so the same box in the new page gets the same position. */
+function pathOf(el, root) {
+  const p = [];
+  for (let n = el; n && n !== root; n = n.parentElement) p.push([...n.parentElement.children].indexOf(n));
+  return p.join('.') + ':' + el.tagName + '.' + el.className;
+}
+function captureView(root) {
+  const scrolls = [], focused = document.activeElement;
+  root.querySelectorAll('*').forEach((el) => { if ((el.scrollLeft || el.scrollTop) && el !== document.documentElement) scrolls.push([pathOf(el, root), el.scrollLeft, el.scrollTop]); });
+  let focus = null;
+  if (focused && focused.dataset && focused.dataset.ui && root.contains(focused)) {
+    let s = null, e = null;
+    try { s = focused.selectionStart; e = focused.selectionEnd; } catch (err) { /* number and select boxes have no selection */ }
+    focus = { ui: focused.dataset.ui, tag: focused.tagName, s, e };
+  }
+  return { scrolls, focus };
+}
+function restoreView(root, v) {
+  if (v.scrolls.length) {
+    const want = new Map(v.scrolls.map((x) => [x[0], x]));
+    root.querySelectorAll('*').forEach((el) => {
+      if (!el.scrollWidth && !el.scrollHeight) return;
+      const w = want.get(pathOf(el, root));
+      if (w) { el.scrollLeft = w[1]; el.scrollTop = w[2]; }
+    });
+  }
+  if (v.focus) {
+    const el = [...root.querySelectorAll(`[data-ui="${v.focus.ui}"]`)].find((x) => x.tagName === v.focus.tag);
+    if (el) {
+      el.focus({ preventScroll: true });
+      if (v.focus.s != null) { try { el.setSelectionRange(v.focus.s, v.focus.e); } catch (err) { /* not a text box */ } }
+    }
+  }
+}
 function render() {
+  const app = document.getElementById('app');
+  const view = captureView(app);
+  renderNow();
+  restoreView(app, view);
+}
+function renderNow() {
   const app = document.getElementById('app');
   if (!S.state) { app.innerHTML = welcome(); return; }
   if (S.state !== S._seen) { S._seen = S.state; S.stateAt = Date.now(); }   // the moment the timers were measured
@@ -1828,13 +1870,7 @@ document.addEventListener('input', (e) => {
   if (!t.dataset.ui) return;
   S.ui[t.dataset.ui] = t.value;
   if (!t.dataset.rerender) return;
-  const typing = t.matches('input[type=search], input[type=text]');
-  const pos = typing ? t.selectionStart : null;
-  render();
-  if (typing) {                       // the page was rebuilt: put the cursor back so the phone keyboard stays open
-    const again = document.querySelector(`input[data-ui="${t.dataset.ui}"]`);
-    if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (err) { /* not a text field */ } }
-  }
+  render();                           // (render() keeps the focus, the cursor and every scroll position, so typing is not interrupted)
 });
 document.addEventListener('toggle', (e) => { const k = e.target.dataset && e.target.dataset.keep; if (k) S.ui[k] = e.target.open; }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.modal) A.closemodal(); else if (S.sel) A.closesel(); } });
