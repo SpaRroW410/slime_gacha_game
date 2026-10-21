@@ -1,8 +1,11 @@
 """GachaSystem: rarity + star rolls, daily free pull, white/purple gel payment. Offline, RNG injected.
 
-Rarity weights come from config.RARITY_RATES (90 / 9 / 0.9 / 0.09 %). Paying with PURPLE gel multiplies the
-non-common weights by config.PURPLE_RARITY_BOOST. Stars (1-5) follow an exponential falloff whose steepness
-grows with rarity (config.STAR_DECAY), so a 5-star legendary is astronomically rare.
+Rarity weights come from config.RARITY_RATES (90 / 8 / 1.9 / 0.09 / 0.01, normalised). Paying with PURPLE gel
+multiplies every non-common weight by config.PURPLE_RARITY_BOOST (x5 on the weights, which is about x3.6 on the
+chance of rare-or-better after normalising); the Keeper's Lucky Charm and Fortune's Favor (x2 for the whole next
+pull, a ten-pull included) multiply them again. `odds()` returns the exact chances the roll uses, and the UI shows
+them. Stars (1-5) follow an exponential falloff whose steepness grows with rarity (config.STAR_DECAY); pulled
+mages, medics and necromancers are never below config.SCHOLAR_MIN_STARS.
 """
 import math
 import random
@@ -28,6 +31,7 @@ class GachaSystem:
         self.since_legendary = 0
         self.total_pulls = 0
         self.next_id = 1
+        self.last_free_ts = 0.0           # wall-clock time of the last free pull (a clock set back cannot earn another)
         self.last_free_day = -1          # game day of the last free pull
         self.luck = 1.0                  # Keeper skill: multiplies the non-common weights
         self.favor = False               # Keeper active: the next pull has double rare odds
@@ -45,6 +49,14 @@ class GachaSystem:
         total = sum(w)
         return [x / total for x in w]
 
+    def odds(self, purple: bool = False, favor: bool = None) -> dict:
+        """The exact chance of each rarity on one pull right now (including the Keeper's luck and, if asked, Favor)."""
+        favor = self.favor if favor is None else favor
+        boost = self.luck * (2.0 if favor else 1.0)
+        w = {r: v * (boost if r != "common" else 1.0) for r, v in self.rarity_weights(purple).items()}
+        total = sum(w.values())
+        return {r: w[r] / total for r in config.RARITIES}
+
     # ---- rolls ---------------------------------------------------------------
     def roll_rarity(self, purple: bool = False) -> str:
         # optional pity (disabled by default, see config)
@@ -53,10 +65,8 @@ class GachaSystem:
         if config.PITY_EPIC and self.since_epic + 1 >= config.PITY_EPIC:
             return self.rng.choices(["epic", "legendary"],
                                     [config.RARITY_RATES["epic"], config.RARITY_RATES["legendary"]])[0]
-        w = self.rarity_weights(purple)
-        boost = self.luck * (2.0 if self.favor else 1.0)
-        w = {r: v * (boost if r != "common" else 1.0) for r, v in w.items()}
-        return self.rng.choices(config.RARITIES, [w[r] for r in config.RARITIES])[0]
+        o = self.odds(purple)
+        return self.rng.choices(config.RARITIES, [o[r] for r in config.RARITIES])[0]
 
     def roll_stars(self, rarity: str) -> int:
         return self.rng.choices(range(1, config.MAX_STARS + 1), self.star_probabilities(rarity))[0]
@@ -117,7 +127,7 @@ class GachaSystem:
     def to_dict(self):
         return dict(since_epic=self.since_epic, since_legendary=self.since_legendary,
                     total_pulls=self.total_pulls, next_id=self.next_id,
-                    last_free_day=self.last_free_day)
+                    last_free_day=self.last_free_day, last_free_ts=self.last_free_ts)
 
     def load(self, d):
         self.since_epic = d.get("since_epic", 0)
@@ -125,3 +135,4 @@ class GachaSystem:
         self.total_pulls = d.get("total_pulls", 0)
         self.next_id = d.get("next_id", 1)
         self.last_free_day = d.get("last_free_day", -1)
+        self.last_free_ts = float(d.get("last_free_ts", 0.0))

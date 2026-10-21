@@ -70,7 +70,12 @@ def xp_to_next(level: int) -> int:
     return 40 + 30 * level + 6 * level * level
 
 
-def title(level: int) -> str:
+def title(level: int, pick: str = "") -> str:
+    if pick:
+        from .achievements import ACHIEVEMENTS
+        a = ACHIEVEMENTS.get(pick)
+        if a and a.title:
+            return f"{title(level)} {a.title}"
     return [t for lv, t in TITLES if level >= lv][-1]
 
 
@@ -83,6 +88,9 @@ class Keeper:
         self.earned: Dict[str, int] = {}             # xp earned today per source (daily caps)
         self.earned_day = -1
         self.total_xp = 0
+        self.achieved: List[str] = []                # achievement keys earned (achievements.py)
+        self.title_pick = ""                         # achievement key whose title is worn ("" = the level title)
+        self.respecs = 0
 
     # ---- levelling -----------------------------------------------------------------------------------------------
     def rank(self, key: str) -> int:
@@ -134,6 +142,14 @@ class Keeper:
         sk = SKILLS[key]
         return f"{sk.emoji} {sk.name} rank {self.ranks[key]}: {sk.per_rank}."
 
+    def respec_cost(self) -> Dict[str, int]:
+        spent = sum(self.ranks.values())
+        return {"white_gel": 40 * spent * (1 + self.respecs), "purple_gel": 1 + self.respecs}
+
+    def respec(self) -> None:
+        self.ranks = {}
+        self.respecs += 1
+
     def unlocked(self, active_key: str) -> bool:
         return self.rank(ACTIVES[active_key].needs) >= 1
 
@@ -143,7 +159,8 @@ class Keeper:
     # ---- persistence -------------------------------------------------------------------------------------------------
     def to_dict(self) -> dict:
         return dict(xp=self.xp, level=self.level, ranks=self.ranks, cooldowns=self.cooldowns, total_xp=self.total_xp,
-                    earned=self.earned, earned_day=self.earned_day)
+                    earned=self.earned, earned_day=self.earned_day,
+                    achieved=self.achieved, title_pick=self.title_pick, respecs=self.respecs)
 
     def load(self, d: dict) -> None:
         d = d or {}
@@ -152,3 +169,5 @@ class Keeper:
         self.cooldowns = {k: v for k, v in d.get("cooldowns", {}).items() if k in ACTIVES}
         self.total_xp = d.get("total_xp", 0)
         self.earned, self.earned_day = d.get("earned", {}), d.get("earned_day", -1)
+        self.achieved, self.respecs = list(d.get("achieved", [])), int(d.get("respecs", 0))
+        self.title_pick = d.get("title_pick", "")

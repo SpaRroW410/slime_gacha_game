@@ -298,3 +298,145 @@ class TestPartyTraining(unittest.TestCase):
         self.assertGreater(g.social.synergy(members), before)
         self.assertEqual(g.wallet.get("white_gel"), white - 1)          # one white gel for the whole party
         self.assertEqual(len(g.facility_users("spar_party")), 0)         # it is a training yard, not the sparring arena
+
+
+class GearSetTest(unittest.TestCase):
+    def test_set_bonus(self):
+        from slime_gacha import equipment as eq
+        none = eq.gear_bonus({"weapon": "wooden_club"})
+        two = eq.gear_bonus({"weapon": "wooden_club", "armor": "leather_wrap"})
+        three = eq.gear_bonus({"weapon": "wooden_club", "armor": "leather_wrap", "charm": "lucky_pebble"})
+        self.assertEqual(none["atk"], 3)
+        self.assertGreater(two["atk"], 3)
+        self.assertGreater(three["atk"], two["atk"])
+        self.assertEqual(eq.set_status({"weapon": "wooden_club"})[0]["bonus"], {})
+
+
+class KeeperExtrasTest(unittest.TestCase):
+    def test_achievement_title_and_respec(self):
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.keeper.level, g.keeper.xp = 15, 0
+        g.tick(6)
+        self.assertIn("keeper_15", g.keeper.achieved)
+        g.keeper.achieved.append("floor_10")
+        g.keeper_title("floor_10")
+        self.assertIn("Delver", g.keeper.title_pick and __import__("slime_gacha.keeper", fromlist=["x"]).title(15, g.keeper.title_pick))
+        g.keeper_learn("gentle_hands")
+        g.wallet.add("white_gel", 1000)
+        g.wallet.add("purple_gel", 5)
+        pts = g.keeper.points
+        g.keeper_respec()
+        self.assertEqual(g.keeper.points, pts + 1)
+        self.assertEqual(g.keeper.respecs, 1)
+
+
+class ImbueAndFeatherTest(unittest.TestCase):
+    def test_imbue_status_and_feather(self):
+        from slime_gacha import fx
+        from slime_gacha.battle import Combatant
+        from slime_gacha.game import Game
+        c = Combatant("A", "x", "party", dict(hp=10, atk=5, defense=1, mag=1, spd=1), 10, ["splat"], "attack", 1.0, None)
+        c.imbue = ("fire", 1)
+        self.assertIn("🔥", fx.statuses(c))
+        fx.tick(c, [])
+        self.assertEqual(c.imbue[1], 0)
+        g = Game(8)
+        g.wallet.add("purple_gel", 4)
+        g.wallet.add("essence", 100)
+        g.craft_feather(2)
+        self.assertEqual(g.feathers, 2)
+        self.assertEqual(Game.from_dict(g.to_dict()).feathers, 2)
+
+
+class PlacesTest(unittest.TestCase):
+    def test_data_defined_place_runs(self):
+        import json, os, tempfile
+        from slime_gacha import places
+        from slime_gacha.game import Game
+        d = [dict(key="test_cave", name="Test Cave", emoji="🕳", loot={"food": [1.0, 2, 2]}, salt=5)]
+        path = os.path.join(tempfile.mkdtemp(), "p.json")
+        json.dump(d, open(path, "w"))
+        self.assertEqual(places.load_json(path), 1)
+        g = Game(8)
+        g.wallet.add("white_gel", 3000)
+        g.pull(3, "white_gel")
+        for s in g.slimes():
+            s.level = 20
+        before = g.wallet.get("food")
+        r = g.explore("test_cave", [s.id for s in g.slimes()], 2)
+        self.assertTrue(r.runs)
+        self.assertGreaterEqual(g.wallet.get("food"), before)
+        with self.assertRaises(Exception):
+            g.explore("main", [1], 1)
+
+
+class StoryTest(unittest.TestCase):
+    def test_chapters_unlock_from_play(self):
+        from slime_gacha.game import Game
+        g = Game(8)
+        self.assertEqual(g.chapters, [])
+        g.wallet.add("white_gel", 100)
+        g.pull(1, "white_gel")
+        self.assertIn("wake", g.chapters)
+        g.best_floor = 5
+        g.tick(6)
+        self.assertIn("crust", g.chapters)
+        self.assertEqual(Game.from_dict(g.to_dict()).chapters, g.chapters)
+
+
+class CliHandFightTest(unittest.TestCase):
+    def test_fight_by_hand_runs_a_wave_simulation(self):
+        from unittest import mock
+        from slime_gacha import cli
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.wallet.add("white_gel", 3000)
+        g.pull(5, "white_gel")
+        p = g.create_party("A")
+        g.party_autofill(p.id)
+        for s in g.slimes():
+            s.level = 15
+            s.hp, s.state, s.grounded = s.max_hp, "idle", False
+            s.needs.v.update({k: 90.0 for k in s.needs.v})
+            s.emotions.clear()
+        res = g.battle(p.id, 1, manual=True)
+        with mock.patch.object(cli, "_ask", side_effect=lambda *_: "a"), mock.patch("builtins.print"):
+            res = cli.fight_by_hand(g, res)
+        self.assertTrue(res.log)
+        self.assertIsNone(g.flow)
+
+
+class ModLoaderTest(unittest.TestCase):
+    def test_example_pack_adds_class_skill_and_enemy(self):
+        from slime_gacha import registry
+        from slime_gacha.abilities import ABILITIES
+        from slime_gacha.archetypes import ARCHETYPES
+        from slime_gacha.battle import ENEMIES
+        from slime_gacha.plugins import example_pack
+        self.assertNotIn("jester", ARCHETYPES)               # shipped switched off
+        self.assertEqual(registry.PLUGIN_ERRORS, {})
+        try:
+            example_pack.register()
+            self.assertIn("jester", ARCHETYPES)
+            self.assertIn("pratfall", ABILITIES)
+            self.assertIn("mirthless_mime", ENEMIES)
+            from slime_gacha.game import Game
+            g = Game(3)
+            s = g.gacha.make_slime("rare", "jester")
+            self.assertEqual(s.known_abilities()[0], "pratfall")
+        finally:
+            ARCHETYPES.unregister("jester")
+            ABILITIES.unregister("pratfall")
+            ENEMIES.unregister("mirthless_mime")
+
+
+class SpellNameTest(unittest.TestCase):
+    def test_spell_names_are_checked(self):
+        from slime_gacha import spells
+        from slime_gacha.abilities import get_ability
+        from slime_gacha.errors import InvalidAction
+        a, b = get_ability("fireblob"), get_ability("spark")
+        for bad in ("<b>x</b>", "x" * 80):
+            with self.assertRaises(InvalidAction):
+                spells.design_fusion(a, b, bad)

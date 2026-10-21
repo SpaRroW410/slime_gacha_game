@@ -51,7 +51,7 @@ No dependencies, no network. Saves go to `savegame.json` next to `main.py`
 
 | Area | What you get |
 |------|--------------|
-| Gacha | Rarity 90 / 9 / 0.9 / 0.09 %, plus a **1–5 ★ rating** (exponential falloff, steeper at higher rarity). **1 free pull per game day**; otherwise 10 ⚪ white gel **or** 10 🟣 purple gel per pull — purple gel multiplies rare+ odds ×5 |
+| Gacha | Rarity 90 / 8 / 1.9 / 0.09 / 0.01 % (common to legendary), plus a **1–5 ★ rating** (exponential falloff, steeper at higher rarity; pulled mages, medics and necromancers are never below 3★). **1 free pull per real day**; otherwise 10 ⚪ white gel **or** 10 🟣 purple gel per pull — purple gel multiplies the rare+ weights ×5 (about ×3.6 on the chance of anything above common). The exact odds are shown on the Gacha tab |
 | Economy | ⚪ **White gel** (common) and 🟣 **Purple gel** (rare: small drop chance in hunts/dungeons, bosses are the best source), Food, Essence |
 | Main dungeon | **The Hollow Descent** — rough, permanent death. Walk the floors **in order** and **leave only after a boss floor** (every 5), so there is time to train and study between segments. **Progress is per slime**: to enter floor *f* every member must have cleared floor *f−1*, so nobody can be carried and a rookie drags a veteran party back to floor 1. Other parties may walk the same floors again. Boss bounty is paid once per boss floor |
 | Floors 1-50 | 29 terrains (valleys, dunes, islands, caverns, tundra, volcano...) boost/dampen elements or hurt each round; 71 monsters in mixed warbands (goblins + direwolves, orcs + ogres...); 10 bosses, the Parched King on floor 50. No two floors repeat. The **Gloop Pit changes theme every day** |

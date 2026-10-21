@@ -11,11 +11,13 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
+from .battle import default_row as battle_default_row
 from .buildings import BUILDINGS
+from .gacha import GachaSystem
 from .errors import GameError, InvalidAction
 from .game import Game
 from .growth import can_evolve, evolve_cost
@@ -38,7 +40,7 @@ def slime_view(g: Game, s) -> dict:
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
-        ward=s.id in g.ward, refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
+        row=(s.row or battle_default_row(s)), row_set=s.row, ward=s.id in g.ward, refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
         mood=s.mood_label(), power=(tp := power_mod.total_power(s))["total"], power_tag=power_mod.display(tp["total"]), power_parts=tp["parts"], power_mult=tp["multiplier"],
         morale=round(s.morale), morale_label=SocialEngine.morale_label(s.morale),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
@@ -88,7 +90,7 @@ def slime_view(g: Game, s) -> dict:
         ascend=dict(next_rarity=ascension.next_rarity(s.rarity), rarity_cost=ascension.rarity_cost(s),
                     rarity_ready=(s.level >= config.RARITY_ASCEND_LEVEL and s.stars >= config.MAX_STARS), rarity_level=config.RARITY_ASCEND_LEVEL,
                     star_cost=ascension.star_cost(s), star_level=ascension.star_level(s), chamber=ascension.chamber_yield(s, g.buildings.level("chamber"))),
-        gear=dict(s.gear), items={k: _item_view(v, s) for k, v in s.items.items()}, task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
+        gear=dict(s.gear), gear_sets=equipment.set_status(s.gear), items={k: _item_view(v, s) for k, v in s.items.items()}, task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
         party=(party.id if party else None), can_evolve=can_evolve(s),
         evolve_cost=(evolve_cost(s) if can_evolve(s) else None), discipline=a.discipline,
         progress=s.progress, exp=dict(s.exp), outlook=_outlook_view(s),
@@ -146,8 +148,6 @@ def ability_view(a) -> dict:
                 element=a.element, tier=a.tier, creator=a.creator, description=a.description, forms=spells.mutation_view(a))
 
 
-_AWAY_PLACE = dict(rescue="🛟 Rescue mission", stranded="🆘 Stranded", grind="🫧 Gloop Pit", adventure="🧭 Wayfarer's Rift", quarry="💎 Starfall Quarry", scout="🔭 Scouting",
-                   lab="⚗️ Alchemy Lab", wave="🧪 Wave simulation", train="🥊 Training Grounds", main="🕳 Hollow Descent")
 
 
 def away_view(g: Game) -> list:
@@ -185,10 +185,13 @@ def away_view(g: Game) -> list:
         ids = [s.id for s in jobs_mod.workers(g) if s.job == key]
         if ids:
             out.append(item("job", f"{j.emoji} Working: {j.name}", ids, None))
+    for key, t in g.construction.items():
+        b = BUILDINGS.get(key)
+        out.append(item("build", f"🚧 Upgrading: {b.name}", [], g.remaining_hours(t)))
     for e in g.expeditions:
         ids = [i for i in e["ids"] if i in g.roster]
         if ids:
-            where = _AWAY_PLACE.get(g.roster[ids[0]].in_dungeon, "🕳 Dungeon")
+            where = (places_mod.PLACES.get(g.roster[ids[0]].in_dungeon).title if g.roster[ids[0]].in_dungeon in places_mod.PLACES else "🕳 Dungeon")
             out.append(item("expedition", where, ids, g.remaining_hours(e["until"]) if g.timed else None))
     for pid, d in g.delves.items():
         ids = [m.id for m in g._members_in("main", pid)]
@@ -258,7 +261,11 @@ def snapshot(g: Game) -> dict:
                      herbs={c: g.wallet.get(potions_mod.herb_key(c)) for c in config.HERBS},
                      autonomy=g.autonomy, autonomy_share=config.AUTONOMY_SHARE),
         keeper=dict(level=g.keeper.level, xp=g.keeper.xp, xp_next=keeper_mod.xp_to_next(g.keeper.level),
-                    title=keeper_mod.title(g.keeper.level), points=g.keeper.points, max_level=config.KEEPER_MAX_LEVEL,
+                    title=keeper_mod.title(g.keeper.level, g.keeper.title_pick), points=g.keeper.points, max_level=config.KEEPER_MAX_LEVEL,
+                    respec=dict(cost=g.keeper.respec_cost(), count=g.keeper.respecs),
+                    achievements=[dict(key=a.key, name=a.name, emoji=a.emoji, desc=a.desc, title=a.title,
+                                       done=a.key in g.keeper.achieved) for a in achievements_mod.ACHIEVEMENTS.values()],
+                    title_pick=g.keeper.title_pick,
                     branches={k: dict(name=v[0], emoji=v[1]) for k, v in keeper_mod.BRANCHES.items()},
                     skills=[dict(key=sk.key, branch=sk.branch, name=sk.name, emoji=sk.emoji, level=sk.level,
                                  per_rank=sk.per_rank, max_rank=sk.max_rank, rank=g.keeper.rank(sk.key),
@@ -315,10 +322,15 @@ def snapshot(g: Game) -> dict:
                                      hours=max(0, e["until"] - g.tick_count),
                                      real_min=(round(max(0, e["until"] - g.tick_count) / max(1e-9, g.clock_rate()) * 60) if g.live else None))
                                 for e in g.expeditions] if g.timed else []),
-        stress=round(g.sacrifice_stress, 2),
+        reports=[dict(id=h['id'], title=h['title'], battles=h['battles'], summary=h['summary']) for h in g.held if h['paid']],
+        held=[dict(title=h['title'], hours=max(0, h['due'] - g.tick_count)) for h in g.held if not h['paid']],
+        places=[dict(key=p.key, name=p.name, emoji=p.emoji, blurb=p.blurb, drop=p.drop, loot=p.loot) for p in places_mod.PLACES if p.kind == "expedition" and p.drop == "loot"],
+        story=[dict(key=c.key, title=c.title, hint=c.hint, done=c.key in g.chapters, text=c.text if c.key in g.chapters else "") for c in story_mod.CHAPTERS],
+        stress=round(g.sacrifice_stress, 2), feathers=dict(have=g.feathers, cost=config.FEATHER_COST, hp=config.FEATHER_HP),
         gift=dict(morale=config.GIFT_MORALE_COST, morale_gain=config.GIFT_MORALE_GAIN, peace=config.GIFT_PEACE_COST,
                   potion=config.GIFT_POTION_PURPLE, merge_gear=config.GEAR_MERGE_COUNT, scrap=config.GEAR_SCRAP_REFUND),
-        gear=dict(shop=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier,
+        gear=dict(sets=[dict(key=k, name=v["name"], emoji=v["emoji"], pieces=list(v["pieces"]), bonus=v["bonus"]) for k, v in equipment.GEAR_SETS.items()],
+                  shop=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier,
                              stats=x.stats, cost=x.cost) for x in g.gear_shop()],
                   all=[dict(key=x.key, name=x.name, emoji=x.emoji, slot=x.slot, tier=x.tier, stats=x.stats,
                             cost=x.cost) for x in equipment.GEAR],
@@ -353,6 +365,10 @@ def snapshot(g: Game) -> dict:
         classes=[dict(key=a.key, name=a.name, emoji=a.emoji) for a in all_archetypes()],
         stances=list(BEHAVIORS),
         rates=dict(rarity=config.RARITY_RATES, purple_boost=config.PURPLE_RARITY_BOOST,
+                   odds=dict(white=g.gacha.odds(False, False), purple=g.gacha.odds(True, False), white_favor=g.gacha.odds(False, True),
+                             purple_favor=g.gacha.odds(True, True), luck=g.gacha.luck, favor=g.gacha.favor),
+                   stars={r: GachaSystem.star_probabilities(r) for r in config.RARITIES}, scholar=sorted(config.SCHOLAR_CLASSES),
+                   scholar_min=config.SCHOLAR_MIN_STARS,
                    pull_cost=config.PULL_COST, gel_merge=config.GEL_MERGE, bulk_n=config.PULL_BULK_N, bulk_discount=config.PULL_BULK_DISCOUNT),
         mercy=dict(spar_cost=config.SPAR_COST, train_ticks=config.SPAR_TICKS),
         spec=dict(cost=config.SPEC_COST, style=config.SPEC_MIN_STYLE, level=config.SPEC_MIN_LEVEL, table=_spec_table()),
@@ -447,6 +463,17 @@ def _sleep_tired(g, a):
 @command("set_plan")
 def _set_plan(g, a):
     return _msg(g.set_plan(str(a.get("key", "")), a.get("slots") or [], a.get("rules") or []))
+
+
+@command("ack_report")
+def _ack_report(g, a):
+    g.ack_report(_i(a, "id"))
+    return [], {}
+
+
+@command("set_row")
+def _set_row(g, a):
+    return _msg(g.set_row(_i(a, "id"), str(a.get("row", "auto"))))
 
 
 @command("wake_all")
@@ -699,9 +726,30 @@ def _quarry(g, a):
     return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
 
 
+@command("explore")
+def _explore(g, a):
+    r = g.explore(str(a.get("place", "")), [int(x) for x in a.get("ids", [])], _i(a, "runs", 1))
+    return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
 @command("keeper_learn")
 def _keeper_learn(g, a):
     return _msg(g.keeper_learn(a.get("key", "")))
+
+
+@command("craft_feather")
+def _craft_feather(g, a):
+    return _msg(g.craft_feather(_i(a, "n", 1)))
+
+
+@command("keeper_respec")
+def _keeper_respec(g, a):
+    return _msg(g.keeper_respec())
+
+
+@command("keeper_title")
+def _keeper_title(g, a):
+    return _msg(g.keeper_title(str(a.get("key", ""))))
 
 
 @command("keeper_use")
@@ -1010,6 +1058,10 @@ def _skirmish(g, a):
     return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a), a.get("lo") and _i(a, "lo"), a.get("hi") and _i(a, "hi"), _i(a, "waves", 1)))
 
 
+SESSION_TITLES = dict(grind="The Gloop Pit", adventure="The Wayfarer's Rift", quarry="The Starfall Quarry", explore="An expedition", skirmish="Wave simulation",
+                      wave="Wave simulation", delve_next="The Hollow Descent", spar="Sparring match", spar_parties="Party sparring")
+
+
 # ---- session -----------------------------------------------------------------------------------------------
 BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift"}
 
@@ -1031,9 +1083,23 @@ class Session:
             if cmd == "new_game":
                 self.new_game(args.get("seed"), args.get("party_size", 5))
                 return self._ok(["A new colony begins. The Last Gacha Well hums..."], {})
+            if cmd == "peek_save":                      # look inside a save without touching the colony in play
+                g2 = Game.from_dict(args["save"])
+                return dict(ok=True, error=None, log=[], state=None, save=None,
+                            result=dict(slimes=len(g2.roster), day=g2.day + 1, keeper=g2.keeper.level, best_floor=g2.best_floor,
+                                        gel=g2.wallet.get("white_gel"), purple=g2.wallet.get("purple_gel")))
             if cmd == "load":
                 self.game = Game.from_dict(args["save"])
                 self.game.deferred_turn = True
+                pend, self.game.pending_battle = self.game.pending_battle, None
+                if pend and pend.get("cmd") in HANDLERS:        # the save was taken mid-battle: leaving does not undo it
+                    for sl in self.game.slimes():            # (the session's own away-flags are set again by the re-run)
+                        if sl.in_dungeon in ("wave", "grind"):
+                            sl.in_dungeon = ""
+                    r = self.call(pend["cmd"], dict(pend.get("args") or {}, manual=False))
+                    if r["ok"]:
+                        r["log"] = ["Save loaded. You left in the middle of a battle you were commanding: the slimes fought it out on their own."] + r["log"]
+                    return r
                 return self._ok(["Save loaded."], {})
             if self.game is None:
                 return dict(ok=False, error="No game in progress.", log=[], result={}, state=None, save=None)
@@ -1045,7 +1111,20 @@ class Session:
                 woke = []
             else:
                 woke = self.game.sync()                # live mode: the wall clock moves the colony forward first
-            log, result = HANDLERS[cmd](self.game, args)
+            g = self.game
+            g.last_due = 0
+            before = g.wallet.to_dict()
+            log, result = HANDLERS[cmd](g, args)
+            if cmd not in BATTLE_CMDS:                 # a battle left waiting for orders is remembered in the save (see "load")
+                g.pending_battle = dict(cmd=cmd, args=dict(args)) if g.flow is not None else None
+            elif g.flow is None:
+                g.pending_battle = None
+            battles = result.get("battle") if isinstance(result, dict) else None
+            if battles and g.timed and g.last_due > g.tick_count and cmd in SESSION_TITLES:      # the party is away: the report and haul come with it
+                hours = g.last_due - g.tick_count
+                g.hold_session(before, g.last_due, SESSION_TITLES[cmd], battles, log)
+                result = {k: v for k, v in result.items() if k != "battle"}
+                log = [f"{SESSION_TITLES[cmd]}: the party set out. The report and the haul arrive in {hours}h."]
             return self._ok(woke + log, result)
         except GameError as e:
             return self._fail(str(e))
@@ -1053,6 +1132,8 @@ class Session:
             return self._fail(f"Unknown {str(e).strip(chr(39))}.")
         except (ValueError, TypeError) as e:
             return self._fail(f"Bad request: {e}")
+        except Exception as e:                        # never let a stray error kill the session: report it and keep the game as it was
+            return self._fail(f"Something went wrong ({type(e).__name__}: {e}). Your colony is unchanged.")
 
     def call_json(self, cmd: str, args_json: str = "{}") -> str:
         """String in / string out - what the Pyodide transport uses."""

@@ -56,8 +56,47 @@ _g("moss_charm", "Moss Charm", "🍀", "charm", 2, dict(hp=10, mag=2, atk=2))
 _g("heart_shard", "Heart Shard", "💜", "charm", 3, dict(atk=3, mag=3, defense=3, spd=3, hp=10))
 
 
-def gear_bonus(equipped: Dict[str, str]) -> Dict[str, float]:
+# Matching sets: wear two or three pieces of one set for a bonus (flat stats, on top of the pieces).
+GEAR_SETS = {
+    "scrapper": dict(name="Scrapper", emoji="🧷", pieces=("wooden_club", "leather_wrap", "lucky_pebble"),
+                     bonus={2: dict(atk=1, defense=1), 3: dict(atk=3, defense=2, hp=8)}),
+    "tinkerer": dict(name="Tinkerer", emoji="🔧", pieces=("apprentice_wand", "hunting_bow", "leather_wrap", "lucky_pebble"),
+                     bonus={2: dict(mag=1, spd=1), 3: dict(mag=3, spd=2, hp=6)}),
+    "gooey": dict(name="Gooey Guard", emoji="💧", pieces=("goo_blade", "gel_mail", "moss_charm"),
+                  bonus={2: dict(atk=2, hp=8), 3: dict(atk=4, defense=3, hp=20)}),
+    "arcane": dict(name="Arcane Weave", emoji="🔮", pieces=("crystal_staff", "gel_mail", "moss_charm"),
+                   bonus={2: dict(mag=3, hp=6), 3: dict(mag=6, defense=2, hp=16)}),
+    "royal": dict(name="Royal Regalia", emoji="👑", pieces=("kings_edge", "storm_staff", "obsidian_plate", "heart_shard"),
+                  bonus={2: dict(atk=3, mag=3, hp=15), 3: dict(atk=6, mag=6, defense=5, hp=40)}),
+}
+
+
+def set_status(equipped: Dict[str, str]) -> list:
+    """For each set the slime wears at least one piece of: how many, the bonus now, and what the next piece gives."""
+    worn = set(equipped.values())
+    out = []
+    for key, s in GEAR_SETS.items():
+        n = sum(1 for p in set(s["pieces"]) if p in worn)
+        if n:
+            n = min(n, 3)
+            bonus = s["bonus"].get(n) if n >= 2 else None
+            out.append(dict(key=key, name=s["name"], emoji=s["emoji"], count=n, bonus=bonus or {},
+                            next=s["bonus"].get(n + 1) if n < 3 else None))
+    return out
+
+
+def set_bonus(equipped: Dict[str, str]) -> Dict[str, float]:
     out: Dict[str, float] = {}
+    for st in set_status(equipped):
+        for stat, v in st["bonus"].items():
+            out[stat] = out.get(stat, 0) + v
+    return out
+
+
+def gear_bonus(equipped: Dict[str, str]) -> Dict[str, float]:
+    if not equipped:
+        return {}
+    out: Dict[str, float] = dict(set_bonus(equipped))
     for key in equipped.values():
         if key in GEAR:
             for stat, v in GEAR.get(key).stats.items():

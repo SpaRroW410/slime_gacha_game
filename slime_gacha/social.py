@@ -9,6 +9,7 @@ Council's keep-vs-sacrifice advice.
 * council     ranks the roster (KEEP / FLEX / SACRIFICE?) and suggests merges (donor is consumed!) so you can
               decide who to sacrifice and who to keep.
 """
+from functools import lru_cache
 from itertools import combinations
 from typing import Dict, Iterable, List, Optional
 
@@ -25,7 +26,22 @@ TRAIT_PAIRS: Dict[frozenset, int] = {
 }
 COMPLEMENT = {frozenset(["medic", "barbarian"]): 14, frozenset(["medic", "ranger"]): 10,
               frozenset(["mage", "rogue"]): 10, frozenset(["necromancer", "barbarian"]): 8,
-              frozenset(["ranger", "mage"]): 10}
+              frozenset(["ranger", "mage"]): 10,
+              frozenset(["bard", "paladin"]): 10, frozenset(["alchemist", "druid"]): 10,
+              frozenset(["paladin", "medic"]): 8, frozenset(["bard", "barbarian"]): 8}
+@lru_cache(maxsize=None)
+def _static_compat(ca: str, cb: str, ta: tuple, tb: tuple):
+    """The part of compatibility that never changes for a pair of classes and trait sets: (traits, class)."""
+    t = sum(TRAIT_PAIRS.get(frozenset((x, y)), 0) for x in ta for y in tb)
+    cls = 0
+    if cb in get_archetype(ca).rivals or ca in get_archetype(cb).rivals:
+        cls += config.COMPAT_RIVAL
+    if ca == cb:
+        cls += config.COMPAT_SAME_CLASS
+    cls += COMPLEMENT.get(frozenset((ca, cb)), 0)
+    return max(-30, min(30, t)), cls
+
+
 RARITY_INDEX = {r: i for i, r in enumerate(config.RARITIES)}
 
 
@@ -64,15 +80,7 @@ class SocialEngine:
     # ---- compatibility ---------------------------------------------------------------
     def compat_parts(self, a, b) -> Dict[str, int]:
         parts: Dict[str, int] = {}
-        t = sum(TRAIT_PAIRS.get(frozenset((x, y)), 0) for x in a.traits for y in b.traits)
-        parts["traits"] = max(-30, min(30, t))
-        cls = 0
-        if b.archetype in get_archetype(a.archetype).rivals or a.archetype in get_archetype(b.archetype).rivals:
-            cls += config.COMPAT_RIVAL
-        if a.archetype == b.archetype:
-            cls += config.COMPAT_SAME_CLASS
-        cls += COMPLEMENT.get(frozenset((a.archetype, b.archetype)), 0)
-        parts["class"] = cls
+        parts["traits"], parts["class"] = _static_compat(a.archetype, b.archetype, tuple(a.traits), tuple(b.traits))
         el = 0
         shared = set(a.attuned) & set(b.attuned)
         el += min(2, len(shared)) * config.COMPAT_SHARED_ELEMENT
@@ -81,7 +89,7 @@ class SocialEngine:
         parts["elements"] = el
         parts["friends"] = config.COMPAT_FRIEND if pair(a, b) in self.conflicts.friends else 0
         parts["bond"] = int(self.bond(a, b))
-        parts["quarrel"] = config.COMPAT_OPEN_CONFLICT if self.conflicts.open_between(a.id, b.id) else 0
+        parts["quarrel"] = config.COMPAT_OPEN_CONFLICT if self.conflicts.has_between(a.id, b.id) else 0
         return parts
 
     def compat(self, a, b) -> int:

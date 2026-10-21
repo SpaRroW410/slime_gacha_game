@@ -180,6 +180,8 @@ SPAR_BOND = 3
 WAVE_PROF, WAVE_BOND, WAVE_TICKS = 2.0, 1.0, 2
 WAVE_MAX_LEVEL, WAVE_MAX_WAVES, WAVE_XP_MULT = 50, 5, 1.0   # wave simulation: top monster level, most waves, XP vs the monsters' worth   # wave simulation: class proficiency per member (x(1+0.5 per tier above 1)), bond per pair, hours
 NUISANCE_BRAWLS = 2                # a slime that has brawled this often is a nuisance: merging or destroying it upsets nobody
+ROW_BACK_MELEE = 0.75          # a melee fighter standing in the back row hits for this much
+ROW_BACK_GUARD = 0.80          # a unit in the back row takes this much of any damage that reaches it
 PARTY_TRAIN_BOND = 3.0         # every pair inside a party that trains together in the Party Arena grows this much closer
 SPAR_PARTY_BOND = 4             # every pair inside a party that spars as a team grows this much closer
 STYLE_AFFINITY_MULT = 1.5       # practising the discipline that matches your class
@@ -467,3 +469,15 @@ LIVE_LOBBY_RATE = 1.0            # game hours per REAL hour at home (study, hunt
 LIVE_DUNGEON_RATE = 3.0          # game hours per real hour while any party is in a dungeon
 LIVE_SCALES = (1, 6, 60)         # speed presets multiplying both rates
 LIVE_CATCHUP_MAX_HOURS = 48      # offline progress is capped (game hours)
+
+# upgrades take game time when time passes for real (live / deferred turns); instant in the CLI and tests
+CONSTRUCTION_HOURS = [6, 12, 24, 36]            # building level 1->2 ... 4->5
+HATCHERY_REFUND = 0.05                           # per Hatchery level above 1: share of the gel of a pull given back
+
+# Phoenix Feather: a consumable that lifts a slime that would die in battle back to its feet
+FEATHER_COST = {"purple_gel": 2, "essence": 20}
+FEATHER_HP = 0.3
+
+# bounds that keep replies and saves small on a phone
+PULL_MAX_N = 100                 # pulls in one action
+COLONY_MAX = 400                 # slimes the colony can hold

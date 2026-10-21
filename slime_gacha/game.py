@@ -16,10 +16,11 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
+from . import achievements, places, story
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
-from .errors import GameError, InvalidAction
+from .errors import GameError, InvalidAction, SaveError
 from .gacha import GachaSystem
 from .growth import add_xp, evolve, evolve_cost, lose_xp, merge, merge_gain
 from .hunt import HuntSystem, ZONES
@@ -102,6 +103,13 @@ class Game:
         self.wall_last: Optional[float] = None
         self.wall_frac = 0.0
         self.expeditions: List[dict] = []              # live mode: parties away until a game tick
+        self.held: List[dict] = []                     # finished sessions whose haul and report arrive when the party is back
+        self.next_held = 1
+        self.last_due = 0                              # tick the party of the last session is back (set when it leaves; read by the web layer)
+        self.construction: Dict[str, int] = {}        # building -> tick its upgrade finishes (timed play only)
+        self.pending_battle = None                    # {"cmd", "args"} of a hand-fought battle in progress: a reload fights it out on auto
+        self.chapters: List[str] = []                 # story chapters unlocked (story.py)
+        self.feathers = 0                              # Phoenix Feathers: a fallen party member rises instead of dying
         self.plans: Dict[str, dict] = {}               # day plans of the posts (jobs.py): eight shifts and "if" rules
         self.ward: List[int] = []                      # slimes admitted to the Hospital ward (they are 'resting', in the ward)
         self.pantry: Dict[str, int] = {}               # cooked servings by recipe (jobs.py: chef and kitchen)
@@ -164,6 +172,23 @@ class Game:
         self._apply_keeper()
         return msg
 
+    def keeper_respec(self) -> str:
+        k = self.keeper
+        spent = sum(k.ranks.values())
+        if not spent:
+            raise InvalidAction("You have no learned skills to forget.")
+        self.wallet.spend_many(k.respec_cost())
+        k.respec()
+        self._apply_keeper()
+        return f"🔄 Your skills are forgotten: {spent} point(s) are yours to spend again."
+
+    def keeper_title(self, key: str) -> str:
+        from . import achievements as ach
+        if key and (key not in ach.ACHIEVEMENTS or key not in self.keeper.achieved or not ach.ACHIEVEMENTS[key].title):
+            raise InvalidAction("You haven't earned that title.")
+        self.keeper.title_pick = key
+        return "You wear the title " + (f"“{ach.ACHIEVEMENTS[key].title}”." if key else "of your level.")
+
     def keeper_use(self, key: str) -> str:
         """Use one of the Keeper's daily abilities."""
         k = self.keeper
@@ -211,19 +236,42 @@ class Game:
     def day(self) -> int:
         return self.tick_count // config.DAY_TICKS
 
+    def real_day(self) -> int:
+        """The free pull follows the real calendar (UTC), in turn and live mode alike: waiting game days never refills it."""
+        return int(self.clock_fn() // 86400)
+
     def free_pull_available(self) -> bool:
-        return self.gacha.free_available(self.day)
+        return self.clock_fn() >= self.gacha.last_free_ts and self.gacha.free_available(self.real_day())
 
     def hours_to_free_pull(self) -> int:
-        return 0 if self.free_pull_available() else (self.day + 1) * config.DAY_TICKS - self.tick_count
+        if self.free_pull_available():
+            return 0
+        now = self.clock_fn()
+        return max(1, int(math.ceil(((self.gacha.last_free_day + 1) * 86400 - now) / 3600))) if now >= self.gacha.last_free_ts \
+            else max(1, int(math.ceil((self.gacha.last_free_ts - now) / 3600)))
 
     def pull(self, n: int = 1, pay: str = "white_gel") -> List[Slime]:
         """pay = 'free' (1 per game day) | 'white_gel' | 'purple_gel' (10 each; purple boosts rare odds)."""
-        new = self.gacha.pull(n, pay, self.day)
+        before = self.wallet.get("purple_gel" if pay == "purple_gel" else "white_gel")
+        if n > config.PULL_MAX_N:
+            raise InvalidAction(f"Pull at most {config.PULL_MAX_N} slimes at a time.")
+        if len(self.roster) + n > config.COLONY_MAX:
+            raise InvalidAction(f"The colony cannot hold more than {config.COLONY_MAX} slimes: room for {max(0, config.COLONY_MAX - len(self.roster))} more.")
+        if pay == "free" and not self.free_pull_available():
+            raise InvalidAction("You already used today's free pull (it resets at midnight UTC).")
+        new = self.gacha.pull(n, pay, self.real_day())
+        if pay == "free":
+            self.gacha.last_free_ts = self.clock_fn()
+        back = self.buildings.hatch_refund()
+        if back and pay != "free":
+            spent = before - self.wallet.get(pay)
+            if spent > 0 and int(spent * back):
+                self.wallet.add(pay, int(spent * back))
         self.gacha.favor = False
         for s in new:
             self.roster[s.id] = s
         self._xp("pull", config.KEEPER_XP["pull"] * len(new))
+        self.journal.extend(story.check(self))
         return new
 
     # ---- time: turn-based or live (wall clock, dilated) ----------------------------------------------------
@@ -333,12 +381,36 @@ class Game:
         arena, self._arena = self._arena, None
         alive = [s for s in party if s.id in self.roster]
         if self.timed and owed > 0 and alive:
+            self.last_due = max(self.last_due, self.tick_count + owed)
             self.expeditions.append(dict(ids=[s.id for s in alive], until=self.tick_count + owed, hours=owed,
                                          **({"arena": arena} if arena else {})))
         else:
             self._clear_flag(party)
 
+    # ---- sessions whose results arrive with the party -------------------------------------------------------------
+    def hold_session(self, wallet_before: Dict[str, int], due: int, title: str, battles: list, summary: list) -> None:
+        """A dungeon session ran when the party left, but its haul and report only arrive when the party is back at tick `due`:
+        take the resources it just earned out of the wallet and keep them (with the report) until then."""
+        after = self.wallet.to_dict()
+        gains = {k: v - wallet_before.get(k, 0) for k, v in after.items() if v > wallet_before.get(k, 0)}
+        for k, v in gains.items():
+            self.wallet.spend(k, v)
+        self.held.append(dict(id=self.next_held, due=int(due), title=title, gains=gains, battles=battles, summary=summary, paid=False))
+        self.next_held += 1
+
+    def _deliver_held(self, events: List[str]) -> None:
+        for h in self.held:
+            if not h["paid"] and h["due"] <= self.tick_count:
+                self.wallet.add_many(h["gains"])
+                h["paid"] = True
+                got = ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in h["gains"].items())
+                events.append(f"📜 {h['title']}: the party is back, the report is ready" + (f" (haul: {got})." if got else "."))
+
+    def ack_report(self, rid: int) -> None:
+        self.held = [h for h in self.held if not (h["id"] == rid and h["paid"])]
+
     def _return_expeditions(self, events: List[str]) -> None:
+        self._deliver_held(events)
         for e in list(self.expeditions):
             if self.tick_count >= e["until"]:
                 self.expeditions.remove(e)
@@ -468,6 +540,7 @@ class Game:
             self.academy.tick(self.slimes(), events)
             self._reap(events)
             jobs.tick(self, events)
+            self._build_tick(events)
             self._healer_aura(self.slimes(), events)
             self.conflicts.tick(self.slimes(), events)
             self._reap(events)
@@ -483,6 +556,9 @@ class Game:
             self._forage_tick()
             self._leaders_tick(events)
             self._vice_tick(events)
+            if self.tick_count % 6 == 0:
+                events.extend(achievements.check(self))
+                events.extend(story.check(self))
         self.journal.extend(events)
         self.journal = self.journal[-200:]
         return events
@@ -691,15 +767,17 @@ class Game:
     def _healer_aura(self, slimes, events) -> None:
         """Idle slimes on the 'heal' stance who know a heal patch up the most wounded idle friend."""
         from .abilities import get_ability
-        for h in slimes:
-            if h.state != "idle" or h.behavior != "heal":
-                continue
-            if not any(get_ability(k).kind == "heal" for k in h.known_abilities()):
-                continue
-            hurt = [o for o in slimes if o is not h and o.state != "hunting" and o.hp < o.max_hp]
-            if hurt:
-                t = min(hurt, key=lambda o: o.hp / o.max_hp)
-                t.hp = min(t.max_hp, t.hp + max(1, int(t.max_hp * 0.1)))
+        healers = [h for h in slimes if h.state == "idle" and h.behavior == "heal"
+                   and any(get_ability(k).kind == "heal" for k in h.known_abilities())]
+        if not healers:
+            return
+        mx = {o.id: o.max_hp for o in slimes if o.state != "hunting"}          # max HP is computed once per slime, not per healer
+        hurt = [o for o in slimes if o.id in mx and o.hp < mx[o.id]]
+        for h in healers:
+            t = min((o for o in hurt if o is not h and o.hp < mx[o.id]), key=lambda o: o.hp / mx[o.id], default=None)
+            if t:
+                m = mx[t.id]
+                t.hp = min(m, t.hp + max(1, int(m * 0.1)))
                 t.needs.add("belonging", 3)
                 events.append(f"💚 {h.name} tends to {t.name}.")
 
@@ -708,7 +786,7 @@ class Game:
         """Care (feeding, petting, sleeping, talking, potions) is impossible while a slime is inside a dungeon -
         unless the Vice Keeper is in there with them."""
         s = self.slime(sid)
-        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry", "stranded") and not self.vice_reaches(s):
+        if s.in_dungeon in places.away_kinds() and not self.vice_reaches(s):
             raise InvalidAction(f"{s.name} is inside a dungeon - you cannot tend to them until they are back.")
         return s
 
@@ -1107,6 +1185,15 @@ class Game:
                 out.append(f"{s.name} leaves the {jobs.JOBS[s.job].name.lower() if s.job in jobs.JOBS else 'job'} for training. " + jobs.stop(self, s))
         return out
 
+    def set_row(self, sid: int, row: str) -> str:
+        """Choose where a slime stands in a fight: "front", "back" or "auto" (casters and archers at the back)."""
+        from .battle import default_row
+        if row not in ("front", "back", "auto"):
+            raise InvalidAction("A row is front, back or auto.")
+        s = self.slime(sid)
+        s.row = "" if row == "auto" else row
+        return f"{s.name} will stand in the {s.row or default_row(s) + ' (automatic)'} row."
+
     def set_behavior(self, sid: int, stance: str) -> str:
         if stance not in BEHAVIORS:
             raise InvalidAction(f"Stance must be one of {', '.join(BEHAVIORS)}.")
@@ -1324,16 +1411,30 @@ class Game:
     def upgrade_building(self, key: str) -> str:
         if key not in BUILDINGS:
             raise InvalidAction(f"Unknown building '{key}'. Options: {', '.join(BUILDINGS.keys())}.")
-        return self.buildings.upgrade(key)
+        if not self.timed:
+            return self.buildings.upgrade(key)
+        b = BUILDINGS.get(key)
+        if key in self.construction:
+            raise InvalidAction(f"The {b.name} is already being upgraded.")
+        self.buildings.pay(key)
+        hours = self.buildings.build_hours(key)
+        self.construction[key] = self.tick_count + hours
+        return f"🚧 The {b.name} is being upgraded: ready in {hours} hours."
+
+    def _build_tick(self, events: List[str]) -> None:
+        for key in [k for k, t in self.construction.items() if t <= self.tick_count]:
+            del self.construction[key]
+            events.append(self.buildings.upgrade_free(key))
 
     def building_report(self) -> List[dict]:
         out = []
         for b in BUILDINGS:
             lv = self.buildings.level(b.key)
             nxt = self.buildings.next_cost(b.key)
-            out.append(dict(key=b.key, name=b.name, emoji=b.emoji, level=lv, max=b.max_level,
-                            now=self.buildings.describe(b.key), cost=nxt,
-                            nxt=self.buildings.describe(b.key, lv + 1) if nxt else None))
+            building = b.key in self.construction
+            out.append(dict(key=b.key, name=b.name, emoji=b.emoji, level=lv, max=b.max_level, building=building,
+                            now=self.buildings.describe(b.key), cost=None if building else nxt,
+                            nxt=self.buildings.describe(b.key, lv + 1) if nxt and not building else None))
         return out
 
     # ---- social: morale, compatibility, council -----------------------------------------------
@@ -1885,6 +1986,14 @@ class Game:
         """Morale and bonds react to the outcome (deaths are handled when the dead are reaped)."""
         if wear:
             report.log.extend(self._wear_items(party))
+        for s in party:
+            if self.feathers > 0 and s.hp <= 0 and s.name in report.deaths:
+                self.feathers -= 1
+                s.hp, s.death_cause = max(1, int(s.max_hp * config.FEATHER_HP)), ""
+                report.deaths.remove(s.name)
+                if s in report.fallen:
+                    report.fallen.remove(s)
+                report.log.append(f"🪶 A Phoenix Feather burns up: {s.name} rises again with {s.hp} HP!")
         alive = [s for s in party if s.hp > 0]
         lost = [s for s in party if s.hp <= 0 or s in report.fallen]
         if report.victory:
@@ -1938,6 +2047,12 @@ class Game:
         """Gear the Armory sells (tier limited by Armory level)."""
         tier = self.buildings.gear_tier()
         return [g for g in equipment.GEAR if g.tier <= tier]
+
+    def craft_feather(self, n: int = 1) -> str:
+        n = max(1, min(int(n), 20))
+        self.wallet.spend_many({k: v * n for k, v in config.FEATHER_COST.items()})
+        self.feathers += n
+        return f"🪶 Crafted {n} Phoenix Feather{'s' if n > 1 else ''} ({self.feathers} in stock)."
 
     def buy_gear(self, key: str) -> str:
         if key not in equipment.GEAR:
@@ -2165,7 +2280,7 @@ class Game:
     def _herb_drop(self, where: str, foes: int, log: List[str], terrain=None) -> None:
         """Coloured herbs for the Alchemy Lab. The terrain decides the main colour (so the daily Pit's herb changes
         with its theme); plentiful in the Pit, a few elsewhere."""
-        p = config.HERB_DROP.get(where, 0)
+        p = places.PLACES.get(where).herb if where in places.PLACES else config.HERB_DROP.get(where, 0)
         got: Dict[str, int] = {}
         local = config.TERRAIN_HERB.get(terrain.kind) if terrain else None
         for _ in range(foes):
@@ -2195,7 +2310,9 @@ class Game:
 
     _LIKES = dict(barbarian=("might", "ironhide", "bulwark"), mage=("arcane", "renewal"), medic=("renewal", "arcane", "bulwark"),
                   rogue=("fury", "gale", "might"), ranger=("fury", "gale", "might"),
-                  necromancer=("bloodthirst", "arcane", "renewal"))
+                  necromancer=("bloodthirst", "arcane", "renewal"),
+                  bard=("arcane", "renewal", "gale"), paladin=("bulwark", "might", "renewal"),
+                  alchemist=("arcane", "renewal", "fury"), druid=("renewal", "gale", "arcane"))
 
     def _relic_free(self) -> bool:
         self.vault_peak = max(self.vault_peak, len(self.vault))
@@ -2689,6 +2806,13 @@ class Game:
         is ASCENSION STONES (and a little XP), not relics."""
         return self._expedition("quarry", sids, runs, False)
 
+    def explore(self, key: str, sids: List[int], runs: int = 5) -> GrindResult:
+        """Send a party to any data-defined expedition place (places.py)."""
+        p = places.PLACES.get(key) if key in places.PLACES else None
+        if not p or p.kind != "expedition":
+            raise InvalidAction(f"'{key}' is not a place you can explore.")
+        return self._expedition(key, sids, runs, False)
+
     def _expedition(self, kind: str, sids: List[int], runs: int, lure: bool) -> GrindResult:
         """A party of 1-5 slimes (any slimes, no formal party needed) fights waves one level ABOVE their average,
         hunting relics. Nobody dies (like the Pit): a knocked-out slime loses morale and its relics are damaged.
@@ -2738,14 +2862,14 @@ class Game:
                         lure = False
                         res.summary.append("   (out of purple gel - the lure is spent)")
                 avg = sum(s.level for s in members) / len(members)
-                theme = dungeon.pit_theme(self.dungeon_seed ^ (0xA11 if kind == "adventure" else 0x57A), self.day * 8 + (n % 8))
+                pl = places.PLACES.get(kind)
+                theme = dungeon.pit_theme(self.dungeon_seed ^ pl.salt, self.day * 8 + (n % 8))
                 enemies = dungeon.grind_wave(avg, 3 + config.ADV_MONSTER_LEVEL,
                                            max(1, round(len(members) * config.ADV_FOE_RATIO)), self.rng, theme)
                 rep = self._run_battle(members, enemies, permadeath=False, split_xp=False,
-                                       xp_mult=(config.ADV_XP_MULT if kind == "adventure" else config.QUARRY_XP_MULT),
+                                       xp_mult=pl.xp_mult,
                                        terrain=theme.terrain)
-                place = "🧭 The Wayfarer's Rift" if kind == "adventure" else "💎 The Starfall Quarry"
-                rep.log.insert(0, f"{place} (monsters ~lvl {dungeon.grind_level(avg, 4)}) - "
+                rep.log.insert(0, f"{pl.title} (monsters ~lvl {dungeon.grind_level(avg, 4)}) - "
                                   f"{theme.terrain.emoji} {theme.terrain.name}")
                 self._after_battle(members, rep, scale=0.4)
                 events: List[str] = []
@@ -2754,7 +2878,7 @@ class Game:
                     self.social.shift_morale(s, config.GRIND_DEATH_MORALE)
                     events.append(f"💫 {s.name} was knocked out: morale {config.GRIND_DEATH_MORALE:+.0f}.")
                 self._ko_wear(downed, events)
-                if rep.victory and kind == "quarry":
+                if rep.victory and pl.drop == "stones":
                     for _ in enemies:
                         if self.rng.random() < config.QUARRY_DROP_PER_FOE * (1 + 0.2 * self.keeper.rank("stonecutter")):
                             got = ascension.roll_stone(self.rng)
@@ -2764,7 +2888,14 @@ class Game:
                 if rep.victory:
                     self._herb_drop(kind, len(enemies), events, theme.terrain)
                     self._farm_loot(len(enemies), events)
-                if rep.victory and kind != "quarry":
+                if rep.victory and pl.loot:
+                    for _ in enemies:
+                        for res, (chance, lo, hi) in pl.loot.items():
+                            if self.rng.random() < chance:
+                                n_ = self.rng.randint(lo, hi)
+                                self.wallet.add(res, n_)
+                                events.append(f"🎒 Found {n_} {res.replace('_', ' ')}.")
+                if rep.victory and pl.drop == "relics":
                     self._stone_side_drop("adventure", len(enemies), events)
                     for _ in enumerate(enemies):
                         if self.rng.random() < config.ADV_DROP_PER_FOE:
@@ -3038,6 +3169,7 @@ class Game:
                 self.delves[q]["hours"] += spent
                 if self.timed:
                     self.delves[q]["ready_tick"] = self.tick_count + spent
+                    self.last_due = max(self.last_due, self.tick_count + spent)
                 if not self._members_in("main", q):        # everyone starved / died in the meantime
                     self.delves.pop(q, None)
         self._owed = 0.0
@@ -3554,7 +3686,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, ward=self.ward, plans=self.plans, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -3576,8 +3708,45 @@ class Game:
         with open(path, encoding="utf-8") as f:
             return cls.from_dict(json.load(f))
 
+    # the top-level shape every save has: key -> accepted types (a missing key is fine: old saves lack newer ones)
+    _SAVE_SHAPE = dict(tick=int, seed=(int, type(None)), wallet=dict, gacha=dict, parties=dict, slimes=list, buildings=(dict, type(None)),
+                       delves=dict, intel=dict, keeper=(dict, type(None)), pantry=dict, journal=list, graveyard=list, conflicts=list,
+                       bonds=list, bounties=list, expeditions=list, stranded=list, inventory=dict, plans=dict, construction=dict, chapters=list, pending_battle=(dict, type(None)))
+
+    @classmethod
+    def check_save(cls, d) -> None:
+        """Refuse anything that is not a usable save: wrong shapes, a newer format, impossible numbers."""
+        if not isinstance(d, dict):
+            raise SaveError("This is not a Slime Gacha save.")
+        ver = d.get("version", 0)
+        if isinstance(ver, bool) or not isinstance(ver, int) or ver < 0:
+            raise SaveError("This is not a Slime Gacha save (no valid version).")
+        if ver > config.SAVE_VERSION:
+            raise SaveError(f"This save was made by a newer version of the game (format {ver}, this one reads up to {config.SAVE_VERSION}).")
+        for key, typ in cls._SAVE_SHAPE.items():
+            if key in d and (not isinstance(d[key], typ) or (typ is int and isinstance(d[key], bool))):
+                raise SaveError(f"This save is damaged: '{key}' has the wrong shape.")
+        if d.get("tick", 0) < 0:
+            raise SaveError("This save is damaged: time runs backwards.")
+        for k, v in (d.get("wallet") or {}).items():
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v < 0 or v > 10 ** 15:
+                raise SaveError(f"This save is damaged: '{k}' in the wallet is not a sensible amount.")
+        if not any(k in d for k in ("slimes", "wallet", "gacha")):
+            raise SaveError("This is not a Slime Gacha save.")
+
     @classmethod
     def from_dict(cls, d: dict) -> "Game":
+        """Load a save. Anything wrong with it raises SaveError (never a bare AttributeError or IndexError)."""
+        cls.check_save(d)
+        try:
+            return cls._from_dict(d)
+        except GameError:
+            raise
+        except Exception as e:                                # a save that passed the shape check but still breaks the loader
+            raise SaveError(f"This save is damaged and could not be read ({type(e).__name__}).") from e
+
+    @classmethod
+    def _from_dict(cls, d: dict) -> "Game":
         from .ai import Conflict
         from .archetypes import ARCHETYPES
         g = cls(d.get("seed"), d.get("parties", {}).get("size", config.PARTY_SIZE))
@@ -3656,7 +3825,13 @@ class Game:
         g.expeditions = [dict(e, ids=[i for i in e["ids"] if i in g.roster]) for e in d.get("expeditions", [])]
         g.expeditions = [e for e in g.expeditions if e["ids"]]
         g.pantry = {k: int(v) for k, v in d.get("pantry", {}).items()}
+        g.held = list(d.get("held", []))
+        g.next_held = d.get("next_held", 1)
         g.ward = [i for i in d.get("ward", []) if i in g.roster]
+        g.construction = {k: int(v) for k, v in (d.get("construction") or {}).items() if k in BUILDINGS}
+        g.pending_battle = d.get("pending_battle") if isinstance(d.get("pending_battle"), dict) else None
+        g.chapters = [k for k in d.get("chapters", []) if k in {c.key for c in story.CHAPTERS}]
+        g.feathers = max(0, int(d.get("feathers", 0)))
         g.plans = {k: v for k, v in (d.get("plans") or {}).items() if k in jobs.JOBS}
         g.recipe_pref = d.get("recipe_pref", "auto")
         g.forge_progress, g.forge_next = d.get("forge_progress", 0), d.get("forge_next", "weapon")
@@ -3673,6 +3848,6 @@ class Game:
                         sl.state = "idle"
         away = {i for e in g.expeditions for i in e["ids"]}      # a battle that was open when the game was saved is gone:
         for sl in g.slimes():                                     # free its party (the Descent keeps its own delve flags)
-            if sl.in_dungeon in ("grind", "scout", "adventure", "quarry", "rescue") and sl.id not in away:
+            if sl.in_dungeon in places.session_kinds() and sl.id not in away:
                 sl.in_dungeon = ""
         return g

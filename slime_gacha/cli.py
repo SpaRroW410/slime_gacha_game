@@ -304,6 +304,53 @@ def show_intel(g: Game, first: int = 1, last: int = None) -> None:
                 print(f"      - {ln}")
 
 
+def show_battle(v: dict) -> None:
+    print(f"\n  -- round {v['round']}" + (f" - {v['terrain']['emoji']} {v['terrain']['name']}" if v["terrain"] else "") + " --")
+    for side, title in (("party", "YOURS"), ("foes", "FOES")):
+        print(f"  {title}:")
+        for u in v["units"]:
+            if u["side"] == side:
+                flags = " ".join(u["status"]) + ("" if u["alive"] else " DOWN")
+                print(f"    [{u['i']}] {u['emoji']}{u['name']:<14} {u['hp']:>4}/{u['max_hp']:<4} {u['row'][0]} {flags}")
+
+
+def fight_by_hand(g: Game, result):
+    """Drive a manual battle from the terminal. There is deliberately NO flee: a drill ends when one side is down (nobody
+    dies in it), and `h` hands the rest of the fight to the slimes' own judgement. Returns the finished result."""
+    shown = 0
+    while result is None:
+        run = g.battle_run()
+        if run is None:
+            break
+        v = run.view()
+        print("\n".join("  " + x for x in v["log"][shown:] if x) if shown else "")
+        shown = len(v["log"])
+        show_battle(v)
+        w = v["units"][v["waiting"]]
+        abil = v["abilities"]
+        print(f"\n  {w['emoji']}{w['name']}'s turn:")
+        for n, a in enumerate(abil, 1):
+            print(f"    {n}. {a['name']:<16} {a['kind']:<7} power {a['power']}" + (f" cd {a['cooldown']}" if a["cooldown"] else "") + ("" if a["ready"] else "  (not ready)"))
+        pick = _ask("  action number, [a]uto this turn, [h]and over to auto: ").lower()
+        try:
+            if pick.startswith("a"):
+                result = g.battle_auto_turn()
+            elif pick.startswith("h"):
+                result = g.battle_set_manual(False)
+            else:
+                ab = abil[int(pick) - 1]
+                target = None
+                if ab["target"] in ("enemy", "ally"):
+                    side = "foes" if ab["target"] == "enemy" else "party"
+                    ids = [u["i"] for u in v["units"] if u["side"] == side and u["alive"] and (ab["reach"] is None or side != "foes" or u["i"] in ab["reach"])]
+                    print("    targets: " + ", ".join(f"[{i}] {v['units'][i]['name']}" for i in ids))
+                    target = _int("    target #: ")
+                result = g.battle_act(ab["key"], target)
+        except (ValueError, IndexError, GameError) as e:
+            print(f"  ({e})")
+    return result
+
+
 def dungeon_menu(g: Game) -> None:
     th = dungeon.pit_theme(g.dungeon_seed, g.day)
     print("  [1] The Gloop Pit      - committed grinding session: no leaving until all runs are done or the whole party is down.\n"
@@ -321,7 +368,9 @@ def dungeon_menu(g: Game) -> None:
     if mode == "1":
         depth = _int(f"depth 1-{config.GRIND_DEPTHS} (3 = your level): ")
         runs = _int("number of runs (a COMMITMENT): ")
-        res = g.grind(pid, depth, runs)
+        by_hand = _ask("fight by [h]and or leave it to the slimes (Enter)? ").lower().startswith("h")
+        res = g.grind(pid, depth, runs, manual=by_hand)
+        res = fight_by_hand(g, res) if by_hand else res
         print("\n".join("  " + x for x in res.summary))
         print(f"  Session over: {res.stop_reason}")
     elif mode == "2":
@@ -364,7 +413,11 @@ def dungeon_menu(g: Game) -> None:
         if res.complete:
             show_intel(g, first, last)
     elif mode == "5":
-        print("\n".join(g.battle(pid, _int("tier 1-3 (4 = boss): ")).log))
+        tier = _int("tier 1-3 (4 = boss): ")
+        by_hand = _ask("fight by [h]and or leave it to the slimes (Enter)? ").lower().startswith("h")
+        rep = g.battle(pid, tier, manual=by_hand)
+        rep = fight_by_hand(g, rep) if by_hand else rep
+        print("\n".join(rep.log))
 
 
 def inventory_menu(g: Game) -> None:

@@ -2,7 +2,7 @@
 'use strict';
 
 const LS_KEY = 'slimegacha.save.v1';
-const CLASS_COLORS = { barbarian: '#e5604d', mage: '#8a7cff', medic: '#4cc38a', rogue: '#aab2c0', ranger: '#e0b341', necromancer: '#a56bd1' };
+const CLASS_COLORS = { barbarian: '#e5604d', mage: '#8a7cff', medic: '#4cc38a', rogue: '#aab2c0', ranger: '#e0b341', necromancer: '#a56bd1', bard: '#f08fc0', paladin: '#f2d36b', alchemist: '#5ec8d8', druid: '#7bb661' };
 const RES = { white_gel: ['⚪', 'White gel'], purple_gel: ['🟣', 'Purple gel'], food: ['🍖', 'Food'], essence: ['✨', 'Essence'], herb_green: ['🟢🌿', 'Green herb (health)'], herb_red: ['🔴🌿', 'Red herb (strength)'], herb_blue: ['🔵🌿', 'Blue herb (armor)'], herb_yellow: ['🟡🌿', 'Yellow herb (stamina)'], scrap: ['🔩', 'Scrap'], alloy: ['🪙', 'Alloy'], crystal: ['💠', 'Crystal'], stardust: ['🌟', 'Stardust'], voidglass: ['🕳️', 'Voidglass'],
   stone_common: ['⚪💎', 'Common stone'], stone_uncommon: ['🟢💎', 'Uncommon stone'], stone_rare: ['🔵💎', 'Rare stone'], stone_epic: ['🟣💎', 'Epic stone'], stone_legendary: ['🟡💎', 'Legendary stone'] };
 const CORE_RES = ['white_gel', 'purple_gel', 'food', 'essence'];
@@ -11,12 +11,12 @@ const WISH = { energy: 'needs sleep', food: 'is hungry', safety: 'feels unsafe (
 const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'],
   ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide'], ['about', 'ℹ️ About']];
 const SUBS = {
-  dungeons: [['descent', 'Hollow Descent'], ['scouting', 'Scouting'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['hunts', 'Hunts & foraging'], ['wave', 'Wave simulation']],
+  dungeons: [['descent', 'Hollow Descent'], ['scouting', 'Scouting'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['places', 'More places'], ['hunts', 'Hunts & foraging'], ['wave', 'Wave simulation']],
   town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
   academy: [['training', '🥋 Training & sparring'], ['library', '📚 Library & spells']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
-const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'stranded', 'rescue'];
+const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'mossy_burrows', 'stranded', 'rescue'];
 
 let backend = null;
 const S = { state: null, tab: 'colony', sel: null, sort: 'power', filter: 'all', feed: [], modal: null, pull: null,
@@ -42,7 +42,7 @@ const pct = (v, m) => Math.max(0, Math.min(100, m ? (100 * v) / m : 0));
 const hashColor = (k) => { let h = 0; for (const c of String(k)) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 60% 62%)`; };
 const cost = (c) => Object.entries(c || {}).map(([k, v]) => `${v} ${RES[k]?.[0] || k}`).join(' ');
 const affordable = (c) => Object.entries(c || {}).every(([k, v]) => (S.state.wallet[k] || 0) >= v);
-const stars = (n) => `<span class="stars">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></span>`;
+const stars = (n) => `<span class="stars" role="img" aria-label="${n} of 5 stars"><span aria-hidden="true">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></span></span>`;
 const bar = (v, m, cls = '', label = '', right = '') => {
   const p = pct(v, m);
   const level = (cls === 'hp' || cls === 'need') ? (p < 25 ? 'lvl-low' : p < 55 ? 'lvl-mid' : 'lvl-ok') : '';
@@ -65,10 +65,23 @@ function stateLabel(s) {
   if (s.state === 'sleeping') return '😴 sleeping';
   return esc(s.state);
 }
+/* Class headgear: one small inline SVG per class, drawn on top of the slime's head (see .hat in style.css). */
+const HATS = {
+  barbarian: '<path d="M3 12h18v-2C21 6 17 4 12 4S3 6 3 10z" fill="#9aa3ad"/><path d="M3 10C1 8 1 5 2 3c2 1 3 3 3 5zM21 10c2-2 2-5 1-7-2 1-3 3-3 5z" fill="#f1e6cf"/>',
+  mage: '<path d="M12 0l7 12H5z" fill="#6f5bd6"/><rect x="2" y="11" width="20" height="3" rx="1.5" fill="#4d3fa3"/><circle cx="12" cy="6" r="1.3" fill="#ffe27a"/>',
+  medic: '<rect x="4" y="5" width="16" height="8" rx="3" fill="#fff"/><path d="M11 6h2v6h-2zM9 8h6v2H9z" fill="#e5484d"/>',
+  rogue: '<path d="M3 13C3 6 8 3 12 3s9 3 9 10c-3-3-6-3-9-3s-6 0-9 3z" fill="#3b4250"/>',
+  ranger: '<path d="M3 12c0-5 4-8 9-8s9 3 9 8z" fill="#4f8a4a"/><path d="M17 8c3-5 5-6 6-6-1 3-2 5-6 8z" fill="#e8d36b"/>',
+  necromancer: '<path d="M4 12l2-8 3 4 3-6 3 6 3-4 2 8z" fill="#7b4ba3"/><circle cx="12" cy="9" r="1.6" fill="#ecebe6"/>',
+  bard: '<path d="M3 12c1-5 5-7 10-6 3 1 6 3 8 6z" fill="#e0679d"/><path d="M13 6c2-4 6-5 8-4-1 3-4 5-8 6z" fill="#f4d35e"/>',
+  paladin: '<ellipse cx="12" cy="3" rx="8" ry="2.2" fill="none" stroke="#ffd95a" stroke-width="1.6"/><path d="M4 12c0-4 3-6 8-6s8 2 8 6z" fill="#c7ccd6"/>',
+  alchemist: '<rect x="3" y="7" width="18" height="5" rx="2.5" fill="#5b4a3a"/><circle cx="8" cy="9.5" r="3" fill="#7fd6e3" stroke="#d9a441" stroke-width="1.2"/><circle cx="16" cy="9.5" r="3" fill="#7fd6e3" stroke="#d9a441" stroke-width="1.2"/>',
+  druid: '<path d="M4 12c0-4 4-7 8-7s8 3 8 7z" fill="#6aa84f"/><path d="M8 6l2-4 2 3 2-3 2 4z" fill="#3f7d3a"/>',
+};
 function avatar(s, cls = '') {
   const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
-  return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)}" style="--c:${c}"><div class="body"><i></i><i></i></div><div class="mouth"></div><span class="em">${s.emoji}</span></div>`;
+  return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)}" style="--c:${c}"><div class="body"><i></i><i></i></div><div class="mouth"></div>${HATS[s.archetype] ? `<svg class="hat" viewBox="0 0 24 14" aria-hidden="true">${HATS[s.archetype]}</svg>` : ''}<span class="em">${s.emoji}</span></div>`;
 }
 /* The three-digit power tag (001-999) shown beside a slime's figure; the full number and parts are on its card. */
 const ptag = (s) => `<span class="ptag t${Math.min(4, Math.floor(s.power_tag / 250) + 1)}" title="Total power ${s.power}">⚡${String(s.power_tag).padStart(3, '0')}</span>`;
@@ -78,22 +91,95 @@ function ghost(g) { // graveyard entry
   return `<div class="blob sm dead" style="--c:${c}"><div class="body"><i></i><i></i></div></div>`;
 }
 
+/* ---------------------------------------------------------------- sound: tiny synthesized effects (no audio files), off with the speaker chip */
+const SFX = {
+  on: (() => { try { return localStorage.getItem('slimegacha.sound') !== 'off'; } catch (e) { return true; } })(),
+  ctx: null,
+  tone(freq, dur = 0.12, type = 'sine', at = 0, vol = 0.08, slide = 0) {
+    if (!this.on) return;
+    try {
+      const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+      this.ctx = this.ctx || new C();
+      const t0 = this.ctx.currentTime + at, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = type; o.frequency.setValueAtTime(freq, t0); if (slide) o.frequency.exponentialRampToValueAtTime(freq * slide, t0 + dur);
+      g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(this.ctx.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+    } catch (e) { /* audio may be blocked */ }
+  },
+  play(name) {
+    const n = { pull: () => [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.14, 'triangle', i * 0.07)),
+      win: () => [392, 523, 659, 784].forEach((f, i) => this.tone(f, 0.18, 'square', i * 0.09, 0.05)),
+      lose: () => [330, 262, 196].forEach((f, i) => this.tone(f, 0.22, 'sawtooth', i * 0.12, 0.05)),
+      hit: () => this.tone(180, 0.12, 'square', 0, 0.07, 0.4),
+      ok: () => this.tone(660, 0.07, 'sine', 0, 0.05), err: () => this.tone(150, 0.15, 'sawtooth', 0, 0.05) }[name];
+    if (n) n();
+  },
+  toggle() { this.on = !this.on; try { localStorage.setItem('slimegacha.sound', this.on ? 'on' : 'off'); } catch (e) { /* ignore */ } if (this.on) this.play('ok'); },
+  after(cmd, res) {
+    if (!this.on || !res) return;
+    if (!res.ok) return this.play('err');
+    const bs = (res.result && res.result.battle) || [];
+    if (cmd === 'pull') this.play('pull');
+    else if (bs.length) this.play(bs[bs.length - 1].victory ? 'win' : 'lose');
+    else if (cmd.startsWith('battle_')) this.play('hit');
+    else if (cmd !== 'state') this.play('ok');
+  },
+};
+
 /* ---------------------------------------------------------------- persistence + api */
-function saveLocal(save) { S.lastSave = save; try { localStorage.setItem(LS_KEY, JSON.stringify({ save, at: Date.now() })); } catch (e) { /* storage may be blocked */ } }
-function loadLocal() { try { const r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r).save : null; } catch (e) { return null; } }
+const LS_BAK = 'slimegacha.save.bak', LS_PREV = 'slimegacha.save.prev', LS_DAMAGED = 'slimegacha.save.damaged';
+/* The save is written after every action; every five minutes the save it replaces is kept as a backup, so a damaged save can be rolled back. */
+/* The save is large (about 1 MB at 200 slimes), so it is written to storage at most every 3 seconds, and at once when the page is hidden or closed;
+   S.lastSave always holds the newest one in memory. */
+function saveLocal(save) {
+  S.lastSave = save;
+  S.dirty = true;
+  if (S.saveTimer) return;
+  S.saveTimer = setTimeout(flushSave, 3000);
+}
+function flushSave() {
+  clearTimeout(S.saveTimer); S.saveTimer = null;
+  if (!S.dirty || !S.lastSave) return;
+  S.dirty = false;
+  const save = S.lastSave;
+  try {
+    if (Date.now() - (S.bakAt || 0) > 300000) { const prev = localStorage.getItem(LS_KEY); if (prev) { localStorage.setItem(LS_BAK, prev); S.bakAt = Date.now(); } }
+    const at = Date.now();
+    const text = JSON.stringify({ save, at, tab: S.tabId });
+    localStorage.setItem(LS_KEY, text);
+    if (localStorage.getItem(LS_KEY) !== text) throw new Error('write did not stick');
+    S.myAt = at;
+    S.saveFailed = false;
+  } catch (e) {                                   // storage blocked, full or private: say so, the colony is only in memory
+    if (!S.saveFailed) toast('Could not save in this browser. Export your colony now.', true);
+    S.saveFailed = true;
+  }
+}
+/* Two tabs on one colony would overwrite each other's progress: every write is stamped with this tab's id, and a tab that sees a newer
+   write from another tab stops acting (a banner offers to take over with the latest save). */
+S.tabId = Math.random().toString(36).slice(2);
+function otherTabWrote() {
+  try { const r = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); return !!(r && r.tab && r.tab !== S.tabId && r.at > (S.myAt || 0)); } catch (e) { return false; }
+}
+try { S.myAt = (JSON.parse(localStorage.getItem(LS_KEY) || 'null') || {}).at || 0; } catch (e) { S.myAt = 0; }       // whatever is stored when this tab opens counts as seen
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+window.addEventListener('pagehide', flushSave);
+window.addEventListener('storage', (e) => { if (e.key === LS_KEY && otherTabWrote()) { S.otherTab = true; if (S.state) render(); } });
+const rawLocal = (key = LS_KEY) => { try { return localStorage.getItem(key); } catch (e) { return null; } };
+function loadLocal(key = LS_KEY) { try { const r = rawLocal(key); return r ? JSON.parse(r).save : null; } catch (e) { return null; } }
 
 function toast(msg, err = false) {
   const box = document.getElementById('toasts');
   const el = document.createElement('div');
   el.className = 'toast' + (err ? ' err' : '');
-  el.textContent = msg;
+  el.textContent = I18N.tr(msg);
   box.appendChild(el);
   while (box.children.length > 4) box.firstChild.remove();
   setTimeout(() => el.remove(), err ? 5200 : 3600);
 }
 function pushLog(lines) {
   const stamp = S.state ? `D${S.state.day + 1} ${String(S.state.tick % 24).padStart(2, '0')}h` : '';
-  for (const l of lines) S.feed.unshift(`${stamp} · ${l}`);
+  for (const l of lines) S.feed.unshift(`${stamp} · ${I18N.tr(l)}`);
   S.feed = S.feed.slice(0, 120);
 }
 
@@ -133,6 +219,7 @@ async function exportSave() {
 }
 async function act(cmd, args = {}, opt = {}) {
   if (S.busy) return null;
+  if (S.state && cmd !== 'state' && (S.otherTab || otherTabWrote())) { S.otherTab = true; render(); return null; }
   S.busy = true;
   if (opt.slow) { const v = document.createElement('div'); v.className = 'busy-veil'; v.id = 'veil'; v.innerHTML = '<div class="spin"></div>'; document.body.appendChild(v); }
   let res;
@@ -141,6 +228,7 @@ async function act(cmd, args = {}, opt = {}) {
   document.getElementById('veil')?.remove();
   if (!res) { render(); return null; }
   if (res.state) S.state = res.state;
+  SFX.after(cmd, res);
   if (res.ok) {
     if (res.save) saveLocal(res.save);
     pushLog(res.log || []);
@@ -196,7 +284,12 @@ function render() {
   const app = document.getElementById('app');
   if (!S.state) { app.innerHTML = welcome(); return; }
   if (S.state !== S._seen) { S._seen = S.state; S.stateAt = Date.now(); }   // the moment the timers were measured
-  const keep = window.scrollY;
+  if (S.state.reports && S.state.reports.length && !S.modal && !S.state.battle) {          // a party is back: its report opens by itself
+    const r = S.state.reports[0];
+    S.modal = { type: 'battle', battles: r.battles, title: `📜 ${r.title} — report`, summary: r.summary, report_id: r.id };
+  }
+  const keep = S.nextScroll != null ? S.nextScroll : window.scrollY;
+  S.nextScroll = null;
   const st = S.state;
   const fp = st.free_pull;
   const clk = st.clock;
@@ -211,8 +304,8 @@ function render() {
       ${chip(`Day <b>${st.day + 1}</b> · ${String(st.tick % 24).padStart(2, '0')}:00`)}
       ${clk.mode === 'live' ? chip(`⏱ live ×${clk.rate_now}`, 'info') : ''}
       ${fp.available ? chip('🎁 free pull', 'ok') : ''}
+      <button class="chip chipbtn" data-act="sound" aria-label="Sound effects" title="Sound effects on/off">${SFX.on ? '🔊' : '🔇'}</button>
       ${st.stress >= 0.1 ? chip(`😖 ${st.stress}`, 'bad') : ''}
-      ${clk.mode === 'turn' ? `<div class="seg small"><button data-act="wait" data-h="1">+1h</button><button data-act="wait" data-h="4">+4h</button><button data-act="wait" data-h="24">+1 day</button></div>` : ''}
     </div>
   </header>
   ${S.stockOpen ? `<div class="popover" id="stockpop"><div class="row" style="gap:6px">${stock.map(([k, v]) => chip(`${RES[k]?.[0] || ''} ${RES[k]?.[1] || k}: <b>${v}</b>`)).join('')}</div></div>` : ''}
@@ -221,11 +314,15 @@ function render() {
   ${awayBar()}
   ${notices()}
   <main>${tabContent()}</main>
+  ${clk.mode === 'turn' ? `<div class="timebar" role="group" aria-label="Pass time"><button data-act="wait" data-h="1">+1h</button><button data-act="wait" data-h="4">+4h</button><button data-act="wait" data-h="24">+1 day</button></div>` : ''}
   <section style="padding:0 16px 20px;max-width:1280px;margin:0 auto;width:100%"><details><summary class="mute">Event log</summary><div class="feed">${S.feed.map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Nothing yet.</small>'}</div></details></section>
   ${S.sel && slimeById(S.sel) ? `<div class="scrim" data-act="closesel"></div>${drawer(slimeById(S.sel))}` : ''}
   ${S.state.battle ? ARENA.render(S.state.battle) : ''}
   ${S.modal ? modalHtml() : ''}`;
   declutter();
+  a11y(app);
+  backTrap();
+  I18N.apply(app);
   window.scrollTo(0, keep);
 }
 function tabBadge(k) {
@@ -293,6 +390,41 @@ setInterval(tickEtas, 1000);
 /* Calm the page: long explanatory paragraphs under headings become (i) tooltips; dungeons say only whether death is possible. */
 const DEATH = [[/Hollow Descent/, true, 'Death is permanent'], [/Scouting/, true, 'The whole party is lost if scouting fails'],
   [/Skirmish/, true, 'Death is permanent'], [/Gloop Pit/, false, ''], [/Wayfarer/, false, '']];
+/* Keyboard and screen-reader access: clickable divs (slime cards, rows) become focusable buttons that Enter / Space open, and the
+   dialogs (drawer, modal, battle arena) get roles and keep Tab inside while they are open. */
+/* Android / browser Back closes the open card or dialog instead of leaving the game. */
+let backPushed = false;
+function backTrap() {
+  const open = !!(S.modal || S.sel);
+  if (open && !backPushed) { try { history.pushState({ sg: 1 }, ''); backPushed = true; } catch (e) { /* ignore */ } }
+  else if (!open && backPushed) { backPushed = false; try { if (history.state && history.state.sg) history.back(); } catch (e) { /* ignore */ } }
+}
+window.addEventListener('popstate', () => { if (backPushed) { backPushed = false; if (S.modal) A.closemodal(); else if (S.sel) A.closesel(); } });
+let dialogKey = '';
+function a11y(root) {
+  root.querySelectorAll('[data-act]:not(button):not(a):not(input):not(select):not(label):not(summary)').forEach((el) => {
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+    if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+  });
+  const dlg = root.querySelector('.modal, .drawer, .arena-wrap .arena');
+  root.querySelectorAll('.modal, .drawer, .arena').forEach((d) => { d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); if (!d.getAttribute('aria-label')) d.setAttribute('aria-label', (d.querySelector('h2,h3') || {}).textContent || 'Dialog'); });
+  const key = dlg ? (dlg.className + (dlg.querySelector('h2,h3') || {}).textContent) : '';
+  if (dlg && key !== dialogKey) { const f = dlg.querySelector('button, [tabindex="0"], input, select'); if (f) f.focus({ preventScroll: true }); }
+  dialogKey = key;
+}
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if ((e.key === 'Enter' || e.key === ' ') && t.matches && t.matches('[role="button"][data-act]:not(button)')) { e.preventDefault(); t.click(); return; }
+  if (e.key !== 'Tab') return;
+  const dlg = document.querySelector('.modal, .drawer, .arena');
+  if (!dlg) return;
+  const f = [...dlg.querySelectorAll('button:not([disabled]), [tabindex="0"], input:not([disabled]), select, a[href]')].filter((x) => x.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (!dlg.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 function declutter() {
   document.querySelectorAll('main .panel > h2, main .panel > h3').forEach((h) => {
     if (h.querySelector('.info')) return;
@@ -318,6 +450,19 @@ function declutter() {
 
 function welcome() {
   const saved = loadLocal();
+  if (S.damaged) {
+    const bak = loadLocal(LS_BAK);
+    return `<div class="welcome panel stack">
+      <h1>Your save could not be loaded</h1>
+      <p class="mute">${esc(S.damaged.error || 'The saved colony is damaged.')}</p>
+      <p>Nothing has been deleted: the damaged save is still in this browser. You can go back to the last backup, copy the damaged save to keep or repair it, or start a new colony (the damaged save is kept as a copy).</p>
+      <div class="stack">
+        ${bak ? '<button class="btn primary" data-act="restore_backup">↩ Restore the last backup</button>' : '<small class="mute">There is no backup yet (one is made every few minutes of play).</small>'}
+        <button class="btn" data-act="copy_damaged">📋 Copy the damaged save text</button>
+        <label class="btn" style="display:block">⬆ Import a save file<input type="file" accept=".json,application/json" data-import hidden></label>
+        <button class="btn danger" data-act="start_over">🗑 Start a new colony</button>
+      </div></div>`;
+  }
   return `<div class="welcome panel">
     <div class="blob big"><div class="body"><i></i><i></i></div><span class="em">🟢</span></div>
     <h1>Slime Gacha</h1>
@@ -435,7 +580,8 @@ function dOverview(s, { st, free, inDun }) {
       })()}
       ${s.can_evolve ? `<button class="btn small primary" data-act="do" data-c="evolve" ${free ? '' : 'disabled'}>🌟 Evolve (${s.evolve_cost} ✨)</button>` : ''}</div>
       ${st.potions.stock.length ? `<div class="row"><select data-ui="pot_sel">${st.potions.stock.map((p) => `<option value="${p.kind}:${p.grade}">${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}</option>`).join('')}</select><button class="btn small" data-act="use_potion" ${inDun ? 'disabled' : ''}>Drink</button></div>` : ''}`)}
-    ${sect('Orders', 'Stance decides what the slime does in a fight. Hunting sends it out for gel, food and essence.', `<div class="row"><label class="f">Stance <select data-act-change="stance">${st.stances.map((x) => `<option ${x === s.behavior ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>
+    ${sect('Orders', 'Stance decides what the slime does in a fight. Hunting sends it out for gel, food and essence.', `<div class="row"><label class="f">Row <select data-act-change="row" title="Where it stands in a fight: melee blows only reach the front row while someone stands there; the back row is sheltered but cannot swing melee well"><option value="auto" ${s.row_set ? '' : 'selected'}>auto (${s.row})</option><option value="front" ${s.row_set === 'front' ? 'selected' : ''}>front</option><option value="back" ${s.row_set === 'back' ? 'selected' : ''}>back</option></select></label>
+      <label class="f">Stance <select data-act-change="stance">${st.stances.map((x) => `<option ${x === s.behavior ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>
       <div class="row"><select data-ui="zone">${st.zones.map((z) => `<option value="${z.key}" ${z.key === zone ? 'selected' : ''}>${esc(z.name)} (${z.duration}h)</option>`).join('')}</select>
         <button class="btn small" data-act="hunt" ${free && s.state === 'idle' ? '' : 'disabled'}>🏞 Hunt</button>${s.state === 'hunting' ? '<button class="btn small" data-act="do" data-c="recall">Recall</button>' : ''}</div>`)}
     <p>${s.traits.map((t) => badge(t)).join(' ')}</p>`;
@@ -497,7 +643,9 @@ function dGear(s, { st, free }) {
       ${cur ? `<button class="btn small" data-act="unequip" data-slot="${sl}" ${free ? '' : 'disabled'}>Remove</button>` : ''}</span></div>`;
   }).join('');
   const relics = Object.values(s.items).map((it) => `<div class="row between"><span>${it.emoji} <b>${esc(it.name)}</b> ${chip(it.rarity, RARITY_CLS[it.rarity])} ${stars(it.stars)} Lv${it.level} <small class="mute">💞${it.compat}%</small></span><button class="btn small" data-act="item_unequip" data-id="${s.id}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Remove</button></div>`).join('');
-  return `${sect('Gear', 'Plain armory gear. Relics (below) come from the Rift and are managed in Town → Armory & relics.', `<div class="stack">${slots}</div>`)}
+  const bt = (b) => Object.entries(b || {}).map(([k, v]) => `+${v} ${k}`).join(' ');
+  const sets = (s.gear_sets || []).map((x) => `<small class="${x.bonus && Object.keys(x.bonus).length ? '' : 'mute'}">${x.emoji} <b>${esc(x.name)}</b> ${x.count}/3 · ${Object.keys(x.bonus).length ? bt(x.bonus) : 'wear 2 pieces for a bonus'}${x.next ? ` <span class="mute">(next: ${bt(x.next)})</span>` : ''}</small>`).join('');
+  return `${sect('Gear', 'Plain armory gear. Relics (below) come from the Rift and are managed in Town → Armory & relics. Matching set pieces give a bonus.', `<div class="stack">${slots}${sets}</div>`)}
     ${sect('Relics', 'Unique equipment with rarity, stars, mods and a compatibility with this slime.', relics || '<small class="mute">No relics worn.</small>')}
     ${sect('Weapons', 'A slime remembers up to three weapon families; practice sharpens them.', `<small class="mute">Favourite: ${s.weapons.favourite} · remembers ${s.weapons.memory.length}/${s.weapons.slots}</small>
       ${Object.entries(s.weapons.proficiency).map(([f, p]) => `<div>${f}${s.weapons.memory.includes(f) ? '' : ' <small class="mute">(forgotten)</small>'} <b>Lv${p.level}</b> <small class="mute">${p.uses} uses</small></div>`).join('')}
@@ -507,14 +655,19 @@ function dGear(s, { st, free }) {
 /* ---------------------------------------------------------------- gacha */
 function gacha() {
   const st = S.state, r = st.rates, c = r.pull_cost;
-  const rates = Object.entries(r.rarity).map(([k, v]) => `${chip(`${k} ${v}%`, k)}`).join(' ');
+  const pc = (x) => (x * 100 >= 10 ? (x * 100).toFixed(1) : x * 100 >= 1 ? (x * 100).toFixed(2) : (x * 100).toFixed(3)) + '%';
+  const od = r.odds, col = od.favor ? ['white_favor', 'purple_favor'] : ['white', 'purple'];
+  const oddsTable = `<details><summary>Exact odds ${od.favor ? '(Fortune\'s Favor is active)' : ''}</summary><table class="odds"><thead><tr><th>Rarity</th><th>⚪ white / free</th><th>🟣 purple</th><th>★1 ★2 ★3 ★4 ★5 (given that rarity)</th></tr></thead><tbody>${Object.keys(od.white).map((k) => `<tr><td>${chip(k, k)}</td><td>${pc(od[col[0]][k])}</td><td>${pc(od[col[1]][k])}</td><td>${r.stars[k].map((x) => pc(x)).join(' · ')}</td></tr>`).join('')}</tbody></table>
+    <small class="mute">These are the chances used for every pull, for one pull or ten. Purple gel multiplies the rare-or-better weights ×${r.purple_boost}, which is about ×${(((1 - od.purple.common) / (1 - od.white.common))).toFixed(1)} on the chance of anything above common. ${od.luck > 1 ? `Your Lucky Charm (×${od.luck.toFixed(1)}) is included. ` : ''}Fortune's Favor doubles the rare-or-better weights for your whole next pull, a ten-pull included. ${r.scholar.join(', ')} are never pulled below ${r.scholar_min}★. No pity timers; no hidden rates.</small></details>`;
+  const rates = Object.entries(od[col[0]]).map(([k, v]) => `${chip(`${k} ${pc(v)}`, k)}`).join(' ');
   const w = st.wallet;
   const price = (n) => n >= r.bulk_n ? Math.round(c * n * (1 - r.bulk_discount)) : c * n;
   const b = (n, pay, label, cls) => `<button class="btn ${cls}" data-act="pull" data-n="${n}" data-pay="${pay}" ${w[pay] >= price(n) ? '' : 'disabled'}>${label}<br><small>${price(n)} ${RES[pay][0]}${n >= r.bulk_n ? ` (−${Math.round(r.bulk_discount * 100)}%)` : ''}</small></button>`;
   return `<div class="panel well">
     <div class="blob big"><div class="body"><i></i><i></i></div><span class="em">🎰</span></div>
     <h2>The Last Gacha Well</h2>
-    <p class="mute">Each pull wakes a slime. Odds: ${rates}. Stars 1–5 fall off exponentially (steeper for higher rarities).<br>⚪ White gel and 🟣 purple gel cost ${c} per pull (pull ${r.bulk_n} or more at once for ${Math.round(r.bulk_discount * 100)}% off) — purple gel multiplies rare+ odds ×${r.purple_boost}.</p>
+    <p class="mute">Each pull wakes a slime. Odds (white / free pull): ${rates}.<br>⚪ White gel and 🟣 purple gel cost ${c} per pull (pull ${r.bulk_n} or more at once for ${Math.round(r.bulk_discount * 100)}% off) — purple gel multiplies rare+ odds ×${r.purple_boost}.</p>
+    ${oddsTable}
     <div class="row" style="justify-content:center;gap:12px">
       <button class="btn primary" data-act="pull" data-n="1" data-pay="free" ${st.free_pull.available ? '' : 'disabled'}>🎁 Free daily pull<br><small>${st.free_pull.available ? 'ready!' : `in ${st.free_pull.hours}h`}</small></button>
       ${b(1, 'white_gel', '⚪ Pull ×1', '')}${b(10, 'white_gel', '⚪ Pull ×10', '')}
@@ -534,6 +687,7 @@ function mini(id, removeBtn = false) {
   const s = slimeById(id);
   if (!s) return '';
   return `<div class="mini" data-act="sel" data-id="${s.id}">${avatar(s, 'sm')}<span>${esc(s.name)}</span>${bar(s.hp, s.max_hp, 'hp')}
+    <button class="btn small" data-act="toggle_row" data-id="${s.id}" title="${s.row === 'back' ? 'Back row (tap to move to the front)' : 'Front row (tap to move to the back)'}">${s.row === 'back' ? '⬅ back' : '▶ front'}</button>
     ${removeBtn ? `<button class="btn small" data-act="party_remove" data-id="${s.id}" title="Remove from party">✕</button>` : ''}</div>`;
 }
 function parties() {
@@ -682,7 +836,7 @@ function sessionNote(runs, ticks, maxRuns, what = 'run') {
   const ss = S.state.dungeon.session, n = Math.max(1, Math.min(num(runs, 1), maxRuns)), hours = n * ticks;
   const live = S.state.clock.mode === 'live' && S.state.clock.dungeon_rate ? ` (about ${Math.max(1, Math.round(hours / S.state.clock.dungeon_rate * 60))} real minutes at the current speed)` : '';
   const cut = num(runs, 1) > maxRuns ? ` <b>Limited to ${maxRuns} ${what}s: a session is one day at most.</b>` : '';
-  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h</b>${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h, leaving early if it runs out of time.${cut}</small>`;
+  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h</b>${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h (earlier if the whole party is knocked out). The report and the haul arrive when it is back.${cut}</small>`;
 }
 /* Which party (or group of slimes) is away and how long it has left. */
 const partyNameOf = (ids) => { const p = (S.state.parties || []).find((q) => ids.every((i) => q.members.includes(i))) || (S.state.parties || []).find((q) => ids.some((i) => q.members.includes(i))); return p ? p.name : null; };
@@ -713,6 +867,7 @@ function dungeons() {
   else if (v === 'scouting') body = `<div class="grid cols2">${p.stranded}${p.scouting}</div>`;
   else if (v === 'pit') body = `<div class="grid cols2">${p.pit}</div>`;
   else if (v === 'quarry') body = quarryView();
+  else if (v === 'places') body = placesView();
   else if (v === 'hunts') body = huntsView();
   else if (v === 'wave') body = `<div class="grid cols2">${p.wave}</div>`;
   else body = riftView();
@@ -725,6 +880,14 @@ function slimePickRow(a) {
   const st = S.state;
   const sel = new Set((ui('adv_ids', []) || []).map(num));
   return { sel, html: `<div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>` };
+}
+function placesView() {
+  const st = S.state, a = st.gear.adventure;
+  const pick = slimePickRow(a);
+  return `<div class="grid cols2">${st.places.map((p) => `<div class="panel stack"><h2>${p.emoji} ${esc(p.name)}</h2><p class="mute">${esc(p.blurb)} Any <b>1–${a.max_party}</b> slimes may go; monsters are one level above the party; nobody dies. Finds: ${Object.keys(p.loot).map((k) => esc(k.replace('_', ' '))).join(', ')}.</p>
+    ${pick.html}
+    <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" data-rerender="1" style="width:70px"></label>
+      <button class="btn primary" data-act="explore" data-place="${p.key}" ${pick.sel.size ? '' : 'disabled'}>${p.emoji} Explore (${pick.sel.size}/${a.max_party})</button></div></div>`).join('')}</div>`;
 }
 function quarryView() {
   const st = S.state, a = st.gear.adventure;
@@ -814,6 +977,8 @@ function backupAge() { const t = Number(lsGet(LS_EXPORT)); return t ? (Date.now(
 function backupDue() { const a = backupAge(); return (a === null || a >= BACKUP_DAYS) && Date.now() - Number(lsGet(LS_SNOOZE) || 0) > 86400000; }
 function notices() {
   const n = S.state?.whats_new, out = [];
+  if (S.saveFailed) out.push(`<div class="panel flat row between warnbox" role="alert"><span>⚠️ <b>This browser is not keeping your colony</b> (storage is full or blocked, for example in a private window). Progress will be lost when you close the page. Export a save file now.</span><span class="row"><button class="btn small primary" data-act="export">⬇ Export</button></span></div>`);
+  if (S.otherTab) out.push(`<div class="panel flat row between warnbox" role="alert"><span>⚠️ <b>Slime Gacha is open in another tab.</b> This tab is paused so the two cannot overwrite each other's progress.</span><span class="row"><button class="btn small primary" data-act="take_over">Load the latest save here</button></span></div>`);
   if (n && lsGet(LS_NEWS) !== n.id) out.push(`<div class="panel flat row between"><span>🆕 <b>What's new:</b> ${esc(n.text)}</span><button class="btn small" data-act="dismiss_news">Got it</button></div>`);
   if (backupDue()) { const a = backupAge(); out.push(`<div class="panel flat row between warnbox"><span>💾 ${a === null ? 'You have never exported your colony.' : `Your last backup was ${Math.floor(a)} days ago.`} The only copy lives in this browser: export a save file now and then.</span><span class="row"><button class="btn small primary" data-act="export">⬇ Export</button><button class="btn small" data-act="snooze_backup">Later</button></span></div>`); }
   return out.length ? `<div style="padding:0 16px;max-width:1280px;margin:8px auto 0;width:100%">${out.join('')}</div>` : '';
@@ -1177,6 +1342,9 @@ function keeper() {
   return viceKeeperPanel() + `<div class="panel stack"><div class="row between"><h2>🧙 ${esc(k.title)} <small class="mute">level ${k.level}/${k.max_level}</small></h2>${chip(`${k.points} skill point${k.points === 1 ? '' : 's'}`, k.points ? 'ok' : '')}</div>
     ${bar(k.xp, k.xp_next, 'know', `XP ${k.xp}/${k.xp_next}`)}
     <p class="mute">You earn Keeper XP by tending slimes, pulling, winning fights, clearing floors, scouting, mediating, forging, brewing and by seeing families grow. Each level gives a skill point (a bonus one every 5 levels).</p></div>
+  <div class="panel stack" style="margin-top:12px"><div class="row between"><h3>🏆 Achievements <small class="mute">${k.achievements.filter((x) => x.done).length}/${k.achievements.length}</small></h3>
+    <button class="btn small" data-act="keeper_respec" title="Forget every learned skill and get the points back" ${affordable(k.respec.cost) ? '' : 'disabled'}>🔄 Respec · ${cost(k.respec.cost)}</button></div>
+    <div class="grid cols2">${k.achievements.map((x) => `<div class="row between ${x.done ? '' : 'mute'}"><span>${x.done ? x.emoji : '🔒'} <b>${esc(x.name)}</b><br><small>${esc(x.desc)}${x.title ? ` · title “${esc(x.title)}”` : ''}</small></span>${x.done && x.title ? `<button class="btn small ${k.title_pick === x.key ? 'primary' : ''}" data-act="keeper_title" data-key="${k.title_pick === x.key ? '' : x.key}">${k.title_pick === x.key ? 'Worn' : 'Wear'}</button>` : ''}</div>`).join('')}</div></div>
   <div class="grid cols2" style="margin-top:12px">${Object.entries(k.branches).map(([b, br]) => `<div class="panel stack"><h3>${br.emoji} ${esc(br.name)}</h3>
     ${k.skills.filter((s) => s.branch === b).map((s) => `<div class="panel flat"><div class="row between"><b>${s.emoji} ${esc(s.name)}${info(s.per_rank + ' (per rank). Needs Keeper level ' + s.level + '+, +2 for each further rank.')}</b><span>${pips(s.rank, s.max_rank)}</span></div>
       <div class="row" style="margin-top:4px"><button class="btn small ${!s.why_not ? 'primary' : ''}" data-act="keeper_learn" data-key="${s.key}" ${s.why_not ? 'disabled' : ''} title="${esc(s.why_not || '')}">${s.rank >= s.max_rank ? 'Mastered' : 'Learn'}</button>${s.why_not && s.rank < s.max_rank ? `<small class="mute">${esc(s.why_not)}</small>` : ''}</div></div>`).join('')}
@@ -1257,10 +1425,12 @@ function townAll() {
   const stat = (o) => Object.entries(o).map(([k, v]) => `+${v} ${k}`).join(' ');
   return `<div class="grid cols3">${st.buildings.map((b) => `<div class="panel stack"><h3>${b.emoji} ${esc(b.name)} <small class="mute">L${b.level}/${b.max}</small></h3>
       ${bar(b.level, b.max)}<p>${esc(b.now)}</p>
-      ${b.cost ? `<p class="mute">Next: ${esc(b.nxt)}</p><button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="${b.key}" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade · ${cost(b.cost)}</button>` : '<p class="chip ok">Max level</p>'}</div>`).join('')}</div>
+      ${b.building ? '<p class="chip warn">🚧 Under construction</p>' : b.cost ? `<p class="mute">Next: ${esc(b.nxt)}</p><button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="${b.key}" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade · ${cost(b.cost)}</button>` : '<p class="chip ok">Max level</p>'}</div>`).join('')}</div>
   <div class="panel stack" style="margin-top:12px"><h2>⚗️ Alchemy Lab <small class="mute">(level ${st.potions.lab}: brews up to grade ${st.potions.lab})</small></h2>
     <p class="mute">A slime brews potions from coloured herbs: 🟢 <b>green</b> = health, 🔴 <b>red</b> = strength, 🔵 <b>blue</b> = armor, 🟡 <b>yellow</b> = stamina. Each makes its basic potion; <b>two different herbs combine</b> into a further attribute (lifesteal, guard, regeneration, magic, crit, speed & evasion). The daily Pit's terrain decides which herb is plentiful; other dungeons drop a few. A magical brewer (medics and necromancers have a knack) and a roomy lab improve the odds; failures lose the gel and half the herbs.</p>
     <div class="row">${Object.entries(st.potions.herbs).map(([c, n]) => chip(`${RES['herb_' + c][0]} ${n}`)).join('')}</div>
+    <div class="row"><span>🪶 Phoenix Feathers: <b>${st.feathers.have}</b> <small class="mute">a slime that would die in battle rises with ${Math.round(st.feathers.hp * 100)}% HP instead; one is used each time</small></span>
+      <button class="btn small ${affordable(st.feathers.cost) ? 'primary' : ''}" data-act="craft_feather" ${affordable(st.feathers.cost) ? '' : 'disabled'}>Craft · ${cost(st.feathers.cost)}</button></div>
     <div class="row"><label class="f">Brewer <select data-ui="brewer">${st.slimes.filter((x) => !x.busy).map((x) => `<option value="${x.id}">${esc(x.name)} (${esc(x.class_name)})</option>`).join('')}</select></label>
       <label class="f">Potion <select data-ui="brew_kind" data-rerender="1">${st.potions.kinds.map((k) => `<option value="${k.key}" ${k.key === ui('brew_kind', 'stamina') ? 'selected' : ''}>${k.emoji} ${esc(k.name)} — ${esc(k.effect)}</option>`).join('')}</select></label>
       <label class="f">Grade <select data-ui="brew_grade" data-rerender="1">${st.potions.grades.map((g) => `<option value="${g.grade}" ${g.grade == ui('brew_grade', 1) ? 'selected' : ''} ${g.grade > st.potions.lab ? 'disabled' : ''}>${g.grade}</option>`).join('')}</select></label>
@@ -1272,6 +1442,7 @@ function townAll() {
       <small class="mute">When on, slimes help themselves to up to ${Math.round(st.potions.autonomy_share * 100)}% of your stocks without asking: they drink potions (tired ones stamina, hurt ones vigor, class-suited ones before a trip), mend worn gear, dress themselves from the relic vault and armory, and brew potions the colony is short of — the rest is yours.</small></div></div>
   <div class="grid cols2" style="margin-top:12px">
     <div class="panel stack"><h2>🛠️ Armory</h2><p class="mute">Gear is usable by any class. The Armory level limits which tier it sells. Gear also drops in dungeons — but a fallen slime's gear can be lost.</p>
+      <details><summary>🧩 Gear sets</summary><div class="stack">${st.gear.sets.map((x) => `<small>${x.emoji} <b>${esc(x.name)}</b>: ${x.pieces.map((k) => esc((st.gear.all.find((g) => g.key === k) || {}).name || k)).join(', ')}<br><span class="mute">2 pieces: ${stat(x.bonus[2])} · 3 pieces: ${stat(x.bonus[3])}</span></small>`).join('')}</div></details>
       <table><tbody>${st.gear.shop.map((g) => `<tr><td>${g.emoji} <b>${esc(g.name)}</b><br><small class="mute">T${g.tier} ${g.slot} · ${stat(g.stats)}</small></td><td>${cost(g.cost)}</td>
         <td><button class="btn small" data-act="buy_gear" data-key="${g.key}" ${affordable(g.cost) ? '' : 'disabled'}>Buy</button></td></tr>`).join('')}</tbody></table></div>
     <div class="panel stack"><h2>🎒 Inventory</h2>
@@ -1306,7 +1477,8 @@ function council() {
 /* ---------------------------------------------------------------- records */
 function records() {
   const st = S.state;
-  return `<div class="grid cols2"><div class="panel"><h2>🪦 Memorial Pond</h2>${st.graveyard.length ? st.graveyard.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0">${ghost(g)}<div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">hour ${g.tick}: ${esc(g.cause)}</small></div></div>`).join('') : '<p class="mute">Nobody has fallen yet.</p>'}</div>
+  const tale = `<div class="panel stack" style="margin-bottom:12px"><h2>📖 The Great Gloop <small class="mute">${st.story.filter((c) => c.done).length}/${st.story.length}</small></h2>${st.story.map((c) => c.done ? `<details><summary><b>${esc(c.title)}</b></summary><p>${esc(c.text)}</p></details>` : `<div class="mute">🔒 <b>${esc(c.title.replace(/^\d+\. /, '???  '))}</b> — ${esc(c.hint)}</div>`).join('')}</div>`;
+  return tale + `<div class="grid cols2"><div class="panel"><h2>🪦 Memorial Pond</h2>${st.graveyard.length ? st.graveyard.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0">${ghost(g)}<div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">hour ${g.tick}: ${esc(g.cause)}</small></div></div>`).join('') : '<p class="mute">Nobody has fallen yet.</p>'}</div>
     <div class="panel"><h2>📜 Journal</h2><div class="feed" style="max-height:60vh">${st.journal.slice().reverse().map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Quiet so far.</small>'}</div></div></div>`;
 }
 
@@ -1337,19 +1509,35 @@ function giftPanel(pid) {
    Every unit has data-unit="<index>" and classes (.alive/.dead/.acting/.targetable) a stylesheet or canvas can hook. */
 const EL_EMOJI = { fire: '🔥', water: '💧', earth: '🪨', air: '🌪', light: '✨', dark: '🌑', lightning: '⚡', ice: '❄', steam: '♨', mud: '🟤', lava: '🌋', storm: '⛈' };
 const ARENA = {
-  unit(u, b, targetable) {
+  prev: {}, prevKey: '',
+  /* Animation lives here too: a unit that lost HP since the last render flashes and floats a damage number, a healed one
+     glows green, the acting one lunges, the fallen squash flat. All CSS (see .arena in style.css); nothing touches the rules. */
+  track(b) {
+    const key = b.units.map((u) => u.name).join('|');
+    if (key !== this.prevKey) { this.prev = {}; this.prevKey = key; }
+    const next = {}, delta = {};
+    b.units.forEach((u) => { const old = this.prev[u.i]; if (old != null && old.alive && u.hp !== old.hp) delta[u.i] = u.hp - old.hp; if (old != null && old.alive && !u.alive) delta[u.i] = delta[u.i] || -old.hp; next[u.i] = { hp: u.hp, alive: u.alive }; });
+    this.prev = next;
+    return delta;
+  },
+  unit(u, b, targetable, delta) {
     const acting = b.waiting === u.i, pct = u.max_hp ? Math.max(0, Math.min(100, 100 * u.hp / u.max_hp)) : 0;
-    const cls = ['unit', u.alive ? 'alive' : 'dead', acting ? 'acting' : '', targetable ? 'targetable' : '', u.side].join(' ');
+    const d = delta[u.i];
+    const cls = ['unit', u.alive ? 'alive' : 'dead', acting ? 'acting' : '', targetable ? 'targetable' : '', u.side, d < 0 ? 'hit' : d > 0 ? 'healed' : ''].join(' ');
     return `<div class="${cls}" data-unit="${u.i}" ${targetable ? `data-act="battle_target" data-i="${u.i}"` : ''}>
-      <div class="uname">${esc(u.emoji)} ${esc(u.name)}${u.element ? ` <small>${EL_EMOJI[u.element] || esc(u.element)}</small>` : ''}</div>
+      ${d ? `<span class="float ${d < 0 ? 'dmg' : 'heal'}">${d > 0 ? '+' : ''}${d}</span>` : ''}
+      <div class="uname"><span class="blob">${esc(u.emoji)}</span> ${esc(u.name)} <small class="mute" title="${u.row === 'back' ? 'Back row: sheltered, but melee blows cannot be struck from here' : 'Front row'}">${u.row === 'back' ? '⬅ back' : '▶ front'}</small>${u.element ? ` <small>${EL_EMOJI[u.element] || esc(u.element)}</small>` : ''}</div>
       <div class="bar ${pct < 30 ? 'lvl-low' : pct < 60 ? 'lvl-mid' : 'lvl-ok'}"><i style="width:${pct}%"></i></div>
       <small class="mute">${u.hp}/${u.max_hp}${u.stamina != null ? ` · ⚡${u.stamina}/${u.stamina_max}` : ''}</small>
       <div class="ustat">${(u.status || []).map((x) => `<span>${esc(x)}</span>`).join('')}${u.guard ? '<span>🛡</span>' : ''}${u.poison ? `<span>☠${u.poison}</span>` : ''}${!u.alive ? '<span>💀</span>' : ''}${u.minion ? '<span>👻</span>' : ''}</div></div>`;
   },
   render(b) {
+    const delta = this.track(b);
     const pick = S.ui.pick ? b.abilities.find((a) => a.key === S.ui.pick) : null;
     const tside = pick ? (pick.target === 'enemy' ? 'foes' : 'party') : null;
-    const col = (side) => b.units.filter((u) => u.side === side).map((u) => this.unit(u, b, !!pick && u.alive && u.side === tside && (side === 'foes' || !u.minion))).join('');
+    const can = (u, side) => !!pick && u.alive && u.side === tside && (side === 'foes' || !u.minion) && (!pick.reach || side !== 'foes' || pick.reach.includes(u.i));
+    const half = (side, row) => `<div class="rowcol ${row}">${b.units.filter((u) => u.side === side && (u.row || 'front') === row).map((u) => this.unit(u, b, can(u, side), delta)).join('')}</div>`;
+    const col = (side) => `<div class="rows ${side}">${side === 'party' ? half(side, 'back') + half(side, 'front') : half(side, 'front') + half(side, 'back')}</div>`;
     const order = b.order.map((i) => { const u = b.units[i]; return `<span class="ord ${u.side} ${i === b.current ? 'now' : ''}" title="${esc(u.name)}">${esc(u.emoji)}</span>`; }).join('');
     const w = b.waiting != null ? b.units[b.waiting] : null;
     const abil = w ? b.abilities.map((a) => {
@@ -1402,6 +1590,8 @@ function modalHtml() {
       <h4 style="margin:0">Time ${info('Turn-based: time passes when you press the wait buttons or act. Live: time passes by itself with the wall clock — study, hunts and brewing take real time; at home 1 game hour = 1 real hour, and while a party is in a dungeon the clock runs 3x faster. The speed presets multiply both. Offline progress is capped at 48 game hours.')}</h4>
       <div class="seg"><button class="${S.state.clock.mode === 'turn' ? 'on' : ''}" data-act="set_time" data-mode="turn">Turn-based</button><button class="${S.state.clock.mode === 'live' ? 'on' : ''}" data-act="set_time" data-mode="live" data-scale="${S.state.clock.scale}">Live (wall clock)</button></div>
       ${S.state.clock.mode === 'live' || true ? `<div class="row"><small class="mute">Speed</small><div class="seg small">${S.state.clock.scales.map((x) => `<button class="${S.state.clock.scale === x ? 'on' : ''}" data-act="set_time" data-mode="${S.state.clock.mode}" data-scale="${x}">×${x}</button>`).join('')}</div></div>` : ''}
+      ${Object.keys(I18N.langs).length > 1 ? `<h4 style="margin:6px 0 0">Language</h4>
+      <div class="seg">${Object.entries(I18N.langs).map(([c, n]) => `<button class="${I18N.lang === c ? 'on' : ''}" data-act="lang" data-c="${c}">${n}</button>`).join('')}</div>` : ''}
       <h4 style="margin:6px 0 0">Helpers</h4>
       <div class="row"><button class="btn small ${S.state.auto_care ? 'primary' : ''}" data-act="autocare" title="Auto-care feeds, sleeps and rests slimes by itself">🤖 Auto-care ${S.state.auto_care ? 'on' : 'off'}</button>
         <button class="btn small ${S.state.potions.autonomy ? 'primary' : ''}" data-act="autonomy" title="Slimes use up to 66% of your stocks by themselves">🤖 Autonomy ${S.state.potions.autonomy ? 'on' : 'off'}</button></div>
@@ -1417,7 +1607,7 @@ function modalHtml() {
 
 /* ---------------------------------------------------------------- actions */
 const A = {
-  tab: (d) => { S.tab = d.t; S.pull = d.t === 'gacha' ? S.pull : null; S.stockOpen = false;
+  tab: (d) => { S.scrollOf = S.scrollOf || {}; S.scrollOf[S.tab] = window.scrollY; S.nextScroll = S.scrollOf[d.t] || 0; S.tab = d.t; S.pull = d.t === 'gacha' ? S.pull : null; S.stockOpen = false;
     if (d.t === 'guide') loadGuide(); if (d.t === 'about') loadAbout(); if (onCouncil()) loadCouncil(); else render(); },
   sub: (d) => { S.sub[d.t] = d.s; if (onCouncil()) loadCouncil(); else render(); },
   stock: () => { S.stockOpen = !S.stockOpen; render(); },
@@ -1425,7 +1615,7 @@ const A = {
   dtab: (d) => { S.dtab = d.t; render(); },
   sel: (d) => { S.sel = num(d.id); render(); },
   closesel: () => { S.sel = null; render(); },
-  closemodal: () => { S.modal = null; render(); },
+  closemodal: () => { const m = S.modal; S.modal = null; if (m && m.report_id) return act('ack_report', { id: m.report_id }); render(); },
   battle_nav: (d) => { const m = S.modal; m.i = Math.max(0, Math.min(m.battles.length - 1, (m.i ?? m.battles.length - 1) + num(d.d))); render(); },
   menu: () => { S.modal = { type: 'menu' }; render(); },
   set_time: (d) => act('set_time', { mode: d.mode, scale: d.scale ? Number(d.scale) : undefined }).then(() => { S.modal = { type: 'menu' }; render(); }),
@@ -1443,6 +1633,7 @@ const A = {
   slime_star: () => act('slime_star', { id: S.sel }),
   merge_stones: (d) => act('merge_stones', { rarity: d.r }),
   destroy_slime: (d) => confirmThen(`Destroy ${d.n} in the Destruction Chamber?\n\nYou receive ${d.y}. ${d.n} is gone forever and the colony will mourn (sacrifice stress).`, () => act('destroy_slime', { id: num(d.id) }).then(() => { S.sel = null; render(); })),
+  explore: (d) => { const ids = (ui('adv_ids', []) || []).map(num); act('explore', { place: d.place, ids, runs: num(ui('adv_runs', 5), 5) }, { title: 'An expedition', slow: true }).then(() => { S.ui.adv_ids = []; render(); }); },
   quarry: () => { const ids = (ui('adv_ids', []) || []).map(num); act('quarry', { ids, runs: num(ui('adv_runs', 5), 5) }, { title: 'The Starfall Quarry', slow: true }).then(() => { S.ui.adv_ids = []; render(); }); },
   brew: () => act('brew', { id: num(ui('brewer', S.state.slimes.find((x) => !x.busy)?.id)), kind: ui('brew_kind', 'stamina'), grade: num(ui('brew_grade', 1), 1) }, { slow: true }),
   use_potion: () => { const [kind, grade] = String(ui('pot_sel', S.state.potions.stock[0] ? S.state.potions.stock[0].kind + ':' + S.state.potions.stock[0].grade : ':')).split(':'); act('use_potion', { id: S.sel, kind, grade: num(grade) }); },
@@ -1450,6 +1641,9 @@ const A = {
   talk: () => act('talk', { id: S.sel }),
   keeper_learn: (d) => act('keeper_learn', { key: d.key }),
   keeper_use: (d) => act('keeper_use', { key: d.key }),
+  craft_feather: () => act('craft_feather', { n: 1 }),
+  keeper_respec: () => confirm('Forget all learned skills? It costs gel and the price rises each time.') && act('keeper_respec', {}),
+  keeper_title: (d) => act('keeper_title', { key: d.key || '' }),
   bud: (d) => confirmThen('Have a child? It costs ' + cost(S.state.family.bud_cost) + '.', () => act('bud', { a: num(d.a), b: num(d.b) })),
   autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
   merge_gel: (d) => act('merge_gel', { n: d.n === 'max' ? Math.floor(S.state.wallet.white_gel / S.state.rates.gel_merge) : num(d.n) }),
@@ -1467,7 +1661,9 @@ const A = {
     confirmThen(`Sacrifice ${best.name} (Lv${best.level} ${best.class_name}) into this relic?\n\nIt becomes an EGO relic (stronger with the soul's level). ${best.name} is gone forever and the colony will mourn.`, () => act('fuse_ego', { uid: num(d.uid), id: best.id })); },
   study: (d) => act('study', { id: S.sel, element: d.el }),
   study_lib: (d) => act('study', { id: num(d.id), element: d.el }),
-  pull: (d) => { S.pull = null; return act('pull', { n: num(d.n), pay: d.pay }); },
+  lang: (d) => { I18N.set(d.c); document.documentElement.lang = I18N.lang; render(); },
+  sound: () => { SFX.toggle(); render(); },
+  pull: (d) => { if (d.pay === 'purple_gel' && num(d.n) >= 10 && !window.confirm(`Spend ${S.state.rates.pull_cost * num(d.n) * (1 - S.state.rates.bulk_discount)} purple gel on ${d.n} pulls?`)) return; S.pull = null; return act('pull', { n: num(d.n), pay: d.pay }); },
   party_create: () => act('party_create', { name: ui('pname', '') }).then(() => { S.ui.pname = ''; render(); }),
   party_add: (d) => { const id = num(ui('add_' + d.pid)); return id ? act('party_add', { pid: num(d.pid), id }) : toast('Choose a slime first.', true); },
   party_remove: (d) => act('party_remove', { id: num(d.id) }),
@@ -1502,6 +1698,7 @@ const A = {
     const rules = [0, 1, 2].map((i) => ({ if: ui(`plan_${key}_rc${i}`, (cur?.rules[i] || {}).if || ''), n: num(ui(`plan_${key}_rn${i}`, (cur?.rules[i] || {}).n ?? 10), 10), do: ui(`plan_${key}_ra${i}`, (cur?.rules[i] || {}).do || 'forage') })).filter((r) => r.if);
     act('set_plan', { key, slots, rules }); },
   reset_plan: (d) => { const key = d.key; for (let i = 0; i < 8; i++) delete S.ui[`plan_${key}_s${i}`]; for (let i = 0; i < 3; i++) { delete S.ui[`plan_${key}_rc${i}`]; } act('set_plan', { key, slots: Array(8).fill('work'), rules: [] }); },
+  toggle_row: (d) => { const s = slimeById(num(d.id)); if (s) act('set_row', { id: s.id, row: s.row === 'back' ? 'front' : 'back' }); },
   away_toggle: () => { S.awayOpen = !S.awayOpen; render(); },
   serve_hungry: () => act('serve_hungry'),
   wake_all: () => confirmThen('Wake everybody asleep in town?\n\nSlimes under 10% energy are left to sleep. Those under 50% energy wake grumpy (a mood cost).', () => act('wake_all')),
@@ -1524,7 +1721,7 @@ const A = {
   battle_pick: (d) => { const b = S.state.battle; const ab = b?.abilities.find((a) => a.key === d.key); if (!ab) return;
     if (ab.target === 'enemy' || ab.target === 'ally') {
       const side = ab.target === 'enemy' ? 'foes' : 'party';
-      const pool = b.units.filter((u) => u.alive && u.side === side && (side === 'foes' || !u.minion));
+      const pool = b.units.filter((u) => u.alive && u.side === side && (side === 'foes' || !u.minion) && (!ab.reach || side !== 'foes' || ab.reach.includes(u.i)));
       if (pool.length === 1) return act('battle_act', { ability: ab.key, target: pool[0].i }, { title: kindTitle() });
       S.ui.pick = ab.key; render();
     } else act('battle_act', { ability: ab.key }, { title: kindTitle() }); },
@@ -1566,9 +1763,23 @@ const A = {
     return A.merge_go(d); },
   merge_go: (d) => confirmThen(`Sacrifice ${d.dn} to feed ${d.tn}?\n\n${d.dn} is consumed for good (+${d.xp} XP for ${d.tn}).\nThe colony's morale will fall (about ${d.g} points in total), and repeated sacrifices compound.`,
     () => act('merge', { target: num(d.t), donor: num(d.d) })),
-  newgame: () => act('new_game', { seed: ui('seed') ? num(ui('seed')) : null, party_size: num(ui('psize', 5), 5) }).then(() => { S.tab = 'colony'; S.sel = null; S.pull = null; render(); }),
+  newgame: () => { const prev = rawLocal(); if (prev) { try { localStorage.setItem(LS_PREV, prev); } catch (e) { /* full */ } } return act('new_game', { seed: ui('seed') ? num(ui('seed')) : null, party_size: num(ui('psize', 5), 5) }).then(() => { S.tab = 'colony'; S.sel = null; S.pull = null; render(); }); },
   newgame2: () => confirmThen('Abandon this colony and start over? The current save will be overwritten.', () => { S.modal = null; S.state = null; S.feed = []; render(); }),
-  continue: async () => { const save = loadLocal(); const r = await backend.call('load', { save }); if (r.ok) { S.state = r.state; render(); } else toast(r.error, true); },
+  take_over: async () => { const save = loadLocal(); if (!save) return; let r; try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
+    if (r.ok) { S.otherTab = false; S.myAt = Date.now(); S.state = r.state; S.sel = null; render(); } else toast('Could not load the latest save: ' + r.error, true); },
+  continue: async () => { const save = loadLocal(); let r; try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
+    if (r.ok) { S.state = r.state; render(); } else { S.damaged = { error: r.error }; render(); } },
+  restore_backup: async () => { const save = loadLocal(LS_BAK); if (!save) return toast('No backup found.', true);
+    let r; try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
+    if (!r.ok) return toast('The backup is damaged too: ' + r.error, true);
+    const bad = rawLocal(); if (bad) { try { localStorage.setItem(LS_DAMAGED, bad); } catch (e) { /* full */ } }
+    S.damaged = null; S.state = r.state; saveLocal(r.save || save); toast('Backup restored.'); render(); },
+  copy_damaged: async () => { const raw = rawLocal(); if (!raw) return toast('Nothing to copy.', true);
+    try { await navigator.clipboard.writeText(raw); toast('Damaged save copied.'); } catch (e) { toast('Copying is blocked here.', true); } },
+  start_over: () => confirmThen('Start a new colony?\n\nThe damaged save is kept as a copy in this browser, but the new colony will replace it as your current save.', () => {
+    const bad = rawLocal(); if (bad) { try { localStorage.setItem(LS_DAMAGED, bad); } catch (e) { /* full */ } }
+    try { localStorage.removeItem(LS_KEY); } catch (e) { /* blocked */ }
+    S.damaged = null; S.lastSave = null; render(); }),
   export: async () => { await exportSave(); render(); },
   dismiss_news: () => { lsSet(LS_NEWS, S.state.whats_new.id); render(); },
   snooze_backup: () => { lsSet(LS_SNOOZE, Date.now()); render(); },
@@ -1595,11 +1806,23 @@ document.addEventListener('change', async (e) => {
   if (t.dataset.colorid) { act('set_color', { id: num(t.dataset.colorid), color: t.value }); return; }
   if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); return; }
   if (t.dataset.actChange === 'recipe') { act('set_recipe', { recipe: t.value }); return; }
+  if (t.dataset.actChange === 'row' && S.sel) { act('set_row', { id: S.sel, row: t.value }); return; }
   if (t.dataset.actChange === 'stance' && S.sel) { act('stance', { id: S.sel, stance: t.value }); return; }
   if (t.hasAttribute('data-import') && t.files[0]) {
-    try { const save = JSON.parse(await t.files[0].text()); const r = await backend.call('load', { save });
-      if (r.ok) { S.state = r.state; saveLocal(save); S.modal = null; toast('Save imported.'); render(); } else toast(r.error, true);
-    } catch (err) { toast('That file is not a valid save.', true); }
+    let save;
+    try { save = JSON.parse(await t.files[0].text()); } catch (err) { t.value = ''; return toast('That file is not a valid save.', true); }
+    t.value = '';
+    let p;
+    try { p = await backend.call('peek_save', { save }); } catch (err) { p = { ok: false, error: err.message }; }
+    if (!p.ok) return toast(p.error || 'That file is not a valid save.', true);
+    const i = p.result, mine = S.state ? `${S.state.slimes.length} slimes, day ${S.state.day + 1}` : 'no colony';
+    const go = async () => {
+      const prev = rawLocal(); if (prev) { try { localStorage.setItem(LS_PREV, prev); } catch (e) { /* full */ } }       // the colony being replaced is kept
+      const r = await backend.call('load', { save });
+      if (r.ok) { S.state = r.state; S.damaged = null; S.otherTab = false; saveLocal(save); S.modal = null; S.sel = null; toast('Save imported. The colony it replaced is kept as a backup.'); render(); } else toast(r.error, true);
+    };
+    if (S.state && S.state.slimes) confirmThen(`Replace your colony (${mine}) with this save: ${i.slimes} slimes, day ${i.day}, Keeper level ${i.keeper}, best floor ${i.best_floor}? Your current colony is kept as a backup you can restore from the start screen.`, go);
+    else go();
   }
 });
 document.addEventListener('input', (e) => {
@@ -1621,11 +1844,13 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.mo
 /* ---------------------------------------------------------------- boot */
 /* Live time: let the wall clock move the colony while the page is open (every 30 s, when nothing is being edited). */
 async function syncLive(force = false) {
-  if (!backend || !S.state || S.busy || S.modal || S.state.battle || S.state.clock.mode !== 'live') return;
+  if (!backend || !S.state || S.busy || S.syncing || S.otherTab || S.modal || S.state.battle || S.state.clock.mode !== 'live') return;
   const el = document.activeElement;
   if (!force && el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
-  const r = await backend.call('sync', {});
-  if (!r.ok) return;
+  S.syncing = true;
+  let r;
+  try { r = await backend.call('sync', {}); } catch (e) { return; } finally { S.syncing = false; }
+  if (!r || !r.ok || S.busy) return;
   const moved = r.state.tick !== S.state.tick;
   S.state = r.state;
   if (r.log && r.log.length) pushLog(r.log);
@@ -1640,9 +1865,11 @@ setInterval(() => syncLive(), 30000);
     backend = await chooseBackend(msg);
     S.backendName = backend.name;
     const save = loadLocal();
+    if (rawLocal() && !save) S.damaged = { error: 'The saved colony could not be read.' };            // present but not valid JSON
     if (save) {
-      const r = await backend.call('load', { save });
-      if (r.ok) { S.state = r.state; pushLog(['Welcome back, Keeper.']); }
+      let r;
+      try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
+      if (r.ok) { S.state = r.state; pushLog(['Welcome back, Keeper.']); } else S.damaged = { error: r.error };
     }
     render();
   } catch (e) {

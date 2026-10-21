@@ -37,6 +37,7 @@ An `Ability.fx` is a tuple of effect tuples, applied after the ability's main ef
   ("prism",)                       every hit lands with a random basic element
   ("terrain_boost", bonus)         +bonus damage on a terrain that has a hazard
   ("stack",)                       poison adds to a poison already running
+  ("imbue", element, turns)        the caster's physical attacks strike as that element for a while
   ("minion",)                      also raise one weak bone minion if the caster has none
   ("count", n)                     a summon calls n minions instead of one
 """
@@ -98,6 +99,8 @@ def tick(c, log: List[str]) -> str:
             return "dead"
     if c.marked[0] > 0:
         c.marked = (c.marked[0] - 1, c.marked[1])
+    if c.imbue[1] > 0:
+        c.imbue = (c.imbue[0], c.imbue[1] - 1)
     if c.untarget > 0:
         c.untarget -= 1
     if c.undying > 0:
@@ -135,6 +138,8 @@ def statuses(c) -> List[str]:
         out.append("🎯")
     if c.untarget:
         out.append("🫥")
+    if c.imbue[1] > 0:
+        out.append("🔥")
     if c.undying:
         out.append("♾")
     if c.counter[0] > 0:
@@ -229,6 +234,9 @@ def apply(bs, actor, ab, targets, everyone, log, cast_stat) -> None:
                     t.buffs.remove(b)
                 t.shield, t.counter, t.undying, t.untarget = 0.0, (0, 0.0), 0, 0
             log.append(f"  🧹 {actor.name} strips every foe's buffs and shields.")
+        elif kind == "imbue":
+            actor.imbue = (f[1], f[2])
+            log.append(f"  🔥 {actor.name}'s weapon is imbued with {f[1]} for {f[2]} turns.")
         elif kind == "revive":
             fallen = [c for c in everyone if c.side == actor.side and not c.alive and not c.minion and not c.yielded]
             if not fallen:

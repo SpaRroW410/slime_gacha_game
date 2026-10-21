@@ -18,7 +18,7 @@ SECTIONS: List[Dict[str, object]] = [
         "Form parties, train in the Academy, build the town, and push deeper into the dungeons for loot and permanent progress.",
     ]),
     dict(title="Slimes", icon="🫧", items=[
-        "Six classes - barbarian, mage, medic, rogue, ranger, necromancer - each with its own skills, discipline and stats. "
+        "Ten classes - barbarian, mage, medic, rogue, ranger, necromancer, bard, paladin, alchemist, druid - each with its own skills, discipline and stats. "
         "Rarity (common to legendary) shows as the slime's shape and ring; its body colour is yours to choose.",
         "Needs: energy, food, safety, belonging, esteem. Neglect is lethal; contentment gives more power.",
         "Skills: class skills by level, 24 rarity skills, 6 evolution skills, 12 pure and 12 hybrid capstones, star attributes, "
@@ -67,43 +67,23 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=8, group="Gameplay", title="Formations and front/back rows", status="planned",
-         text="Positions that change who can be targeted and how much damage is taken."),
-    dict(id=9, group="Gameplay", title="New classes: Bard, Paladin, Alchemist, Druid", status="planned",
-         text="Four more classes with their own skills, evolutions, capstones and star attributes."),
-    dict(id=10, group="Gameplay", title="Construction time and the Hatchery", status="planned",
-         text="Building upgrades that take game time (shown in the away bar), and a Hatchery building."),
-    dict(id=11, group="Gameplay", title="Gear set bonuses", status="planned", text="Bonuses for wearing matching sets."),
-    dict(id=12, group="Gameplay", title="Keeper achievements, titles and respec", status="planned",
-         text="An achievements list, titles, and a (costly) way to respec Keeper skills."),
-    dict(id=13, group="Gameplay", title="Imbue statuses and revival items", status="planned",
-         text="Timed elemental imbues (the barbarian's fire axe) and consumable resurrection."),
-    dict(id=15, group="Content", title="Campaign chapters", status="planned",
-         text="Story beats at floors and boss clears, from the story notes."),
-    dict(id=14, group="Platform", title="Named dungeon registry", status="planned",
-         text="Dungeons defined as data, so a new one can be added without code."),
-    dict(id=16, group="Platform", title="Daily free pull on the real clock", status="planned",
-         text="The daily pull resets by wall clock in both time modes, with offline catch-up."),
-    dict(id=20, group="Platform", title="Installable offline app (PWA)", status="planned",
-         text="A manifest and service worker so it installs on iPhone and Windows and works with no network."),
-    dict(id=23, group="Platform", title="Mod loader (plugins)", status="planned",
-         text="A documented plugin API with an example adding a class, a skill and an enemy."),
-    dict(id=18, group="Interface", title="Terminal manual battles and fleeing", status="planned",
-         text="Fight a wave simulation by hand in the terminal edition; decide and document fleeing."),
-    dict(id=21, group="Quality", title="Balance pass with a simulation harness", status="planned",
-         text="Extend the playtest tool to Pit depths, rarities, skills and capstones, and tune the numbers."),
-    dict(id=22, group="Quality", title="Localisation", status="planned", text="String catalogs and a language switch."),
-    dict(id=17, group="After floor 50", title="Animated battle arena", status="later",
-         text="Units that animate and show statuses, without touching the rules."),
-    dict(id=19, group="After floor 50", title="Art and sound", status="later",
-         text="Sprites and animated slimes in place of the CSS blobs, plus sound effects."),
+    dict(id=48, group="Mobile", title="Mobile performance", status="planned",
+         text="Faster turns, smaller replies, in-place updates, startup on low-end phones."),
+    dict(id=49, group="Mobile", title="Capacitor shell", status="planned",
+         text="Native saves with backups, app lifecycle, store builds."),
+    dict(id=50, group="Mobile", title="Store prep and compliance", status="planned",
+         text="Odds screen, age ratings, privacy labels, listings."),
+    dict(id=51, group="Mobile", title="Monetization decision (optional)", status="planned",
+         text="Whether real money buys gacha currency decides how much moves to a server."),
+    dict(id=52, group="Mobile", title="Beta and launch", status="planned",
+         text="Device testing, long sessions, crash reporting, release."),
 ]
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-21",
-                 text="Day plans for every post (shifts and if-rules), a compact Away bar, class filter in the Colony, mediation first in the Council, "
-                      "tired slimes use a free Rest Area bed, feeding uses the kitchen first, and party members can leave a party unless it is away together.")
+WHATS_NEW = dict(id="2026-11-07",
+                 text="Four new classes (Bard, Paladin, Alchemist, Druid), a Hatchery and timed upgrades, gear sets, achievements and titles, story chapters, animated battles with sound, "
+                      "an installable offline app, exact gacha odds, and a safer save (second-tab and import protection).")
 
 
 def build() -> Dict[str, object]:

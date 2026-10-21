@@ -22,8 +22,9 @@ def fresh(seed=1, n=0):
     g = Game(seed)
     g.wallet.add("white_gel", 100000)
     g.wallet.add("purple_gel", 100000)
-    if n:
-        g.pull(n)
+    while n > 0:
+        g.pull(min(n, config.PULL_MAX_N))
+        n -= config.PULL_MAX_N
     return g
 
 
@@ -103,19 +104,25 @@ class TestGacha(unittest.TestCase):
         with self.assertRaises(NotEnoughResources):
             g.pull(1, "white_gel")
 
-    def test_one_free_pull_per_day(self):
+    def test_one_free_pull_per_real_day(self):
         g = Game(1)
+        now = [86400.0 * 20000 + 3600]
+        g.clock_fn = lambda: now[0]
         self.assertTrue(g.free_pull_available())
         g.pull(1, "free")
         self.assertFalse(g.free_pull_available())
         with self.assertRaises(InvalidAction):
             g.pull(1, "free")
-        self.assertEqual(g.hours_to_free_pull(), config.DAY_TICKS)
-        g.tick(config.DAY_TICKS)
+        self.assertEqual(g.hours_to_free_pull(), 23)
+        g.tick(config.DAY_TICKS * 3)                 # game days do not refill it
+        self.assertFalse(g.free_pull_available())
+        now[0] -= 86400 * 2                          # nor does setting the clock back
+        self.assertFalse(g.free_pull_available())
+        now[0] += 86400 * 2 + 23 * 3600              # the next real day does
         self.assertTrue(g.free_pull_available())
         g.pull(1, "free")
         with self.assertRaises(InvalidAction):
-            g.pull(2, "free")                    # free pull is single only
+            g.pull(2, "free")                        # free pull is single only
 
     def test_pity_is_optional(self):
         g = fresh(3)
@@ -587,25 +594,25 @@ class TestDeath(unittest.TestCase):
 
 class TestExtensibility(unittest.TestCase):
     def test_add_bard_class_without_touching_engine(self):
-        register_ability(Ability("inspire", "Inspire", "heal", 0.5, "mag", "all_allies", 2))
+        register_ability(Ability("jig", "Jig", "heal", 0.5, "mag", "all_allies", 2))
         register_archetype(Archetype(
-            "bard", "Bard", "🎵", dict(hp=20, atk=3, defense=3, mag=8, spd=6),
-            dict(hp=3, atk=.5, defense=.5, mag=1.5, spd=.5), {1: "inspire"}, "heal"))
+            "jester", "Jester", "🎵", dict(hp=20, atk=3, defense=3, mag=8, spd=6),
+            dict(hp=3, atk=.5, defense=.5, mag=1.5, spd=.5), {1: "jig"}, "heal"))
         try:
             g = fresh(1)
-            s = g.gacha.make_slime("rare", "bard")
+            s = g.gacha.make_slime("rare", "jester")
             g.roster[s.id] = s
-            self.assertEqual(s.known_abilities(), ["inspire"])
-            p = g.create_party("bards")
+            self.assertEqual(s.known_abilities(), ["jig"])
+            p = g.create_party("jesters")
             for _ in range(5):
-                x = g.gacha.make_slime("rare", "bard")
+                x = g.gacha.make_slime("rare", "jester")
                 g.roster[x.id] = x
                 g.parties.add(p.id, x.id)
             g.battle(p.id, 1)                        # works in battle too
             seen = {x.archetype for x in fresh(1, 200).slimes()}
-            self.assertIn("bard", seen)              # appears in the gacha pool
+            self.assertIn("jester", seen)              # appears in the gacha pool
         finally:
-            ARCHETYPES.unregister("bard")
+            ARCHETYPES.unregister("jester")
 
     def test_bad_archetype_rejected(self):
         with self.assertRaises(ValueError):
@@ -663,3 +670,27 @@ class TestDisband(unittest.TestCase):
             s.in_dungeon = ""
         g.party_disband(pid)
         self.assertNotIn(pid, g.parties.parties)
+
+
+class TestOddsDisclosure(unittest.TestCase):
+    def test_odds_match_the_roll_and_sum_to_one(self):
+        g = Game(1)
+        for purple in (False, True):
+            o = g.gacha.odds(purple, False)
+            self.assertAlmostEqual(sum(o.values()), 1.0)
+        w, p = g.gacha.odds(False, False), g.gacha.odds(True, False)
+        self.assertGreater(p["uncommon"], w["uncommon"])           # purple boosts uncommon too
+        self.assertLess(p["common"], w["common"])
+        self.assertGreater(g.gacha.odds(False, True)["rare"], w["rare"])
+
+
+class TestBounds(unittest.TestCase):
+    def test_pull_and_colony_caps(self):
+        g = Game(1)
+        g.wallet.add("white_gel", 10 ** 6)
+        with self.assertRaises(InvalidAction):
+            g.pull(config.PULL_MAX_N + 1, "white_gel")
+        for _ in range(config.COLONY_MAX // config.PULL_MAX_N):
+            g.pull(config.PULL_MAX_N, "white_gel")
+        with self.assertRaises(InvalidAction):
+            g.pull(1, "white_gel")
