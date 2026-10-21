@@ -22,8 +22,9 @@ def fresh(seed=1, n=0):
     g = Game(seed)
     g.wallet.add("white_gel", 100000)
     g.wallet.add("purple_gel", 100000)
-    if n:
-        g.pull(n)
+    while n > 0:
+        g.pull(min(n, config.PULL_MAX_N))
+        n -= config.PULL_MAX_N
     return g
 
 
