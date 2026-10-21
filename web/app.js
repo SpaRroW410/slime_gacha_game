@@ -42,7 +42,7 @@ const pct = (v, m) => Math.max(0, Math.min(100, m ? (100 * v) / m : 0));
 const hashColor = (k) => { let h = 0; for (const c of String(k)) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 60% 62%)`; };
 const cost = (c) => Object.entries(c || {}).map(([k, v]) => `${v} ${RES[k]?.[0] || k}`).join(' ');
 const affordable = (c) => Object.entries(c || {}).every(([k, v]) => (S.state.wallet[k] || 0) >= v);
-const stars = (n) => `<span class="stars">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></span>`;
+const stars = (n) => `<span class="stars" role="img" aria-label="${n} of 5 stars"><span aria-hidden="true">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></span></span>`;
 const bar = (v, m, cls = '', label = '', right = '') => {
   const p = pct(v, m);
   const level = (cls === 'hp' || cls === 'need') ? (p < 25 ? 'lvl-low' : p < 55 ? 'lvl-mid' : 'lvl-ok') : '';
@@ -320,6 +320,7 @@ function render() {
   ${S.modal ? modalHtml() : ''}`;
   declutter();
   a11y(app);
+  backTrap();
   I18N.apply(app);
   window.scrollTo(0, keep);
 }
@@ -390,6 +391,14 @@ const DEATH = [[/Hollow Descent/, true, 'Death is permanent'], [/Scouting/, true
   [/Skirmish/, true, 'Death is permanent'], [/Gloop Pit/, false, ''], [/Wayfarer/, false, '']];
 /* Keyboard and screen-reader access: clickable divs (slime cards, rows) become focusable buttons that Enter / Space open, and the
    dialogs (drawer, modal, battle arena) get roles and keep Tab inside while they are open. */
+/* Android / browser Back closes the open card or dialog instead of leaving the game. */
+let backPushed = false;
+function backTrap() {
+  const open = !!(S.modal || S.sel);
+  if (open && !backPushed) { try { history.pushState({ sg: 1 }, ''); backPushed = true; } catch (e) { /* ignore */ } }
+  else if (!open && backPushed) { backPushed = false; try { if (history.state && history.state.sg) history.back(); } catch (e) { /* ignore */ } }
+}
+window.addEventListener('popstate', () => { if (backPushed) { backPushed = false; if (S.modal) A.closemodal(); else if (S.sel) A.closesel(); } });
 let dialogKey = '';
 function a11y(root) {
   root.querySelectorAll('[data-act]:not(button):not(a):not(input):not(select):not(label):not(summary)').forEach((el) => {
@@ -1834,11 +1843,13 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.mo
 /* ---------------------------------------------------------------- boot */
 /* Live time: let the wall clock move the colony while the page is open (every 30 s, when nothing is being edited). */
 async function syncLive(force = false) {
-  if (!backend || !S.state || S.busy || S.modal || S.state.battle || S.state.clock.mode !== 'live') return;
+  if (!backend || !S.state || S.busy || S.syncing || S.otherTab || S.modal || S.state.battle || S.state.clock.mode !== 'live') return;
   const el = document.activeElement;
   if (!force && el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
-  const r = await backend.call('sync', {});
-  if (!r.ok) return;
+  S.syncing = true;
+  let r;
+  try { r = await backend.call('sync', {}); } catch (e) { return; } finally { S.syncing = false; }
+  if (!r || !r.ok || S.busy) return;
   const moved = r.state.tick !== S.state.tick;
   S.state = r.state;
   if (r.log && r.log.length) pushLog(r.log);

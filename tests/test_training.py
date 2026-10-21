@@ -429,3 +429,14 @@ class ModLoaderTest(unittest.TestCase):
             ARCHETYPES.unregister("jester")
             ABILITIES.unregister("pratfall")
             ENEMIES.unregister("mirthless_mime")
+
+
+class SpellNameTest(unittest.TestCase):
+    def test_spell_names_are_checked(self):
+        from slime_gacha import spells
+        from slime_gacha.abilities import get_ability
+        from slime_gacha.errors import InvalidAction
+        a, b = get_ability("fireblob"), get_ability("spark")
+        for bad in ("<b>x</b>", "x" * 80):
+            with self.assertRaises(InvalidAction):
+                spells.design_fusion(a, b, bad)

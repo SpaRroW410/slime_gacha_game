@@ -58,7 +58,7 @@ Findings not yet re-verified against the current code; check each before fixing 
 - [x] **43. M9: time controls and active tab scroll out of view on phones** — header snaps back after each action.  *Done when:* the +1h/+4h/+1 day buttons and the active tab stay reachable at 375 px.
 - [x] **44. M10: toast messages block taps** — they accept taps and cover the pull buttons.  *Done when:* toasts let taps through and sit clear of the main buttons.
 - [x] **45. M11: slimes cannot be opened from the keyboard; dialogs lack roles** — slime cards are plain divs.  *Done when:* cards are focusable and open with Enter, dialogs have `role="dialog"` and trap focus.
-- [ ] **46. Minor bugs m1-m9** — Android back, light-theme contrast, star screen-reader text, small tap targets, constant animation, unguarded `syncLive`, no new-game backup, odd saved numbers, unchecked spell names.  *Done when:* each is fixed or consciously declined.
+- [x] **46. Minor bugs m1-m9** — Android back, light-theme contrast, star screen-reader text, small tap targets, constant animation, unguarded `syncLive`, no new-game backup, odd saved numbers, unchecked spell names.  *Done when:* each is fixed or consciously declined.
 
 ## Mobile (phase 2) — Capacitor route recommended in the same report
 - [ ] **47. Mobile M1: mobile UX** — 44 pt / 48 dp targets, bottom tab bar, fixed time controls, scroll positions kept, safe areas, Android back, purple ten-pull confirm.  *Done when:* the game is comfortable on a 375 px phone.

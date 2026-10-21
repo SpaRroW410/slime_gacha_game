@@ -56,6 +56,11 @@ def fused_key(a: str, b: str) -> str:
 
 def design_fusion(a: Ability, b: Ability, name: Optional[str] = None, creator: str = "") -> Ability:
     """Build (but don't register) the spell produced by fusing a and b."""
+    if name is not None:
+        name = " ".join(str(name).split())
+        if len(name) > config.NAME_MAX or any(c in name for c in "<>&\"'`"):
+            raise InvalidAction(f"A spell name must be at most {config.NAME_MAX} characters, without < > & or quotes.")
+        name = name or None
     if not a.element or not b.element:
         raise InvalidAction("Only elemental spells can be fused.")
     el = elements.combine(a.element, b.element)
