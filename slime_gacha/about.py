@@ -69,8 +69,6 @@ ROADMAP: List[Dict[str, object]] = [
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
     dict(id=23, group="Platform", title="Mod loader (plugins)", status="planned",
          text="A documented plugin API with an example adding a class, a skill and an enemy."),
-    dict(id=21, group="Quality", title="Balance pass with a simulation harness", status="planned",
-         text="Extend the playtest tool to Pit depths, rarities, skills and capstones, and tune the numbers."),
     dict(id=22, group="Quality", title="Localisation", status="planned", text="String catalogs and a language switch."),
     dict(id=35, group="QA", title="M1: reload during a manual battle undoes permadeath", status="planned",
          text="A battle you command by hand is not saved, so reloading brings dead slimes back."),
