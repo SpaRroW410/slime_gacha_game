@@ -319,6 +319,7 @@ function render() {
   ${S.state.battle ? ARENA.render(S.state.battle) : ''}
   ${S.modal ? modalHtml() : ''}`;
   declutter();
+  a11y(app);
   I18N.apply(app);
   window.scrollTo(0, keep);
 }
@@ -387,6 +388,33 @@ setInterval(tickEtas, 1000);
 /* Calm the page: long explanatory paragraphs under headings become (i) tooltips; dungeons say only whether death is possible. */
 const DEATH = [[/Hollow Descent/, true, 'Death is permanent'], [/Scouting/, true, 'The whole party is lost if scouting fails'],
   [/Skirmish/, true, 'Death is permanent'], [/Gloop Pit/, false, ''], [/Wayfarer/, false, '']];
+/* Keyboard and screen-reader access: clickable divs (slime cards, rows) become focusable buttons that Enter / Space open, and the
+   dialogs (drawer, modal, battle arena) get roles and keep Tab inside while they are open. */
+let dialogKey = '';
+function a11y(root) {
+  root.querySelectorAll('[data-act]:not(button):not(a):not(input):not(select):not(label):not(summary)').forEach((el) => {
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+    if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+  });
+  const dlg = root.querySelector('.modal, .drawer, .arena-wrap .arena');
+  root.querySelectorAll('.modal, .drawer, .arena').forEach((d) => { d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); if (!d.getAttribute('aria-label')) d.setAttribute('aria-label', (d.querySelector('h2,h3') || {}).textContent || 'Dialog'); });
+  const key = dlg ? (dlg.className + (dlg.querySelector('h2,h3') || {}).textContent) : '';
+  if (dlg && key !== dialogKey) { const f = dlg.querySelector('button, [tabindex="0"], input, select'); if (f) f.focus({ preventScroll: true }); }
+  dialogKey = key;
+}
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if ((e.key === 'Enter' || e.key === ' ') && t.matches && t.matches('[role="button"][data-act]:not(button)')) { e.preventDefault(); t.click(); return; }
+  if (e.key !== 'Tab') return;
+  const dlg = document.querySelector('.modal, .drawer, .arena');
+  if (!dlg) return;
+  const f = [...dlg.querySelectorAll('button:not([disabled]), [tabindex="0"], input:not([disabled]), select, a[href]')].filter((x) => x.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (!dlg.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 function declutter() {
   document.querySelectorAll('main .panel > h2, main .panel > h3').forEach((h) => {
     if (h.querySelector('.info')) return;

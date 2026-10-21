@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=45, group="QA", title="M11: keyboard access for slimes and dialogs", status="planned",
-         text="Slime cards focusable, dialogs with roles."),
     dict(id=46, group="QA", title="Minor bugs m1-m9", status="planned",
          text="Back button, contrast, star text for screen readers, tap targets, animation, sync guard, new-game backup, odd saves, spell names."),
     dict(id=47, group="Mobile", title="Mobile UX", status="planned",
