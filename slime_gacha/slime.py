@@ -6,7 +6,7 @@ from . import config
 from .abilities import get_ability
 from .archetypes import STAT_KEYS, Archetype, get_archetype
 from .equipment import gear_bonus
-from . import attributes, potions
+from . import attributes, potions, sanity
 from .items import Item, item_bonus
 from .specialization import SPECS, apply_shifts
 
@@ -110,6 +110,13 @@ class Slime:
         self.merge_bonus: Dict[str, float] = {}   # flat stats absorbed from merged donors (see ascension.py)
         self.in_dungeon: str = ""                 # "main" / "grind" / "scout" while committed to a dungeon
         self.style_xp: Dict[str, float] = {}      # fighting-style xp per discipline (see sparring.py)
+        self.sanity: float = float(config.SANITY_MAX.get(rarity, 80))   # mental reserve (sanity.py)
+        self.goal = None                                 # {"kind", "target", "text", "day"} (mind.py)
+        self.request = None                              # a pending request to the Keeper
+        self.trust: float = 50.0                         # trust in the Keeper, 0-100
+        self.drift: Dict[str, int] = {}                  # experience that slowly rewrites traits (ko / win / heal)
+        self.memories: List[dict] = []                  # what it remembers about others (memory.py)
+        self.cared = {"day": -1, "talk": 0, "pet": 0}  # how often the Keeper talked to / petted it today (diminishing returns)
         self.morale: float = config.MORALE_START  # fight readiness 0-100 (see social.py)
         self.attuned: List[str] = []              # basic elements this slime has attuned to
         self.mastery_xp: Dict[str, float] = {}    # per basic element
@@ -170,10 +177,14 @@ class Slime:
     def stamina(self) -> float:
         return round(self.stamina_frac * self.max_stamina, 1)
 
-    def mood(self) -> float:
+    def needs_mood(self) -> float:
         act = self.needs.active()
         wsum = sum(config.MOOD_WEIGHTS[k] for k in act)
         return sum(self.needs.get(k) * config.MOOD_WEIGHTS[k] for k in act) / wsum / 100.0
+
+    def mood(self) -> float:
+        """How the needs feel, capped by sanity: a worn-down slime cannot be fed or petted into happiness."""
+        return min(self.needs_mood(), sanity.mood_cap(self))
 
     def mood_label(self) -> str:
         m = self.mood()
@@ -234,7 +245,7 @@ class Slime:
                     total_xp=self.total_xp, stage=self.stage, behavior=self.behavior,
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
-                    merged=self.merged, grounded=self.grounded, brawls=self.brawls, row=self.row, style_xp=self.style_xp, morale=self.morale,
+                    merged=self.merged, grounded=self.grounded, brawls=self.brawls, row=self.row, style_xp=self.style_xp, morale=self.morale, sanity=round(self.sanity, 2), cared=self.cared, memories=self.memories, goal=self.goal, request=self.request, trust=round(self.trust, 1), drift=self.drift,
                     gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, buffs=self.buffs, parents=self.parents, parent_names=self.parent_names,
                     generation=self.generation, emotions=self.emotions,
                     emotion_floor=self.emotion_floor, awareness=self.awareness, temperament=self.temperament,
@@ -248,7 +259,7 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "brawls", "row", "style_xp", "morale", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
+                  "merged", "grounded", "brawls", "row", "style_xp", "morale", "sanity", "cared", "memories", "goal", "request", "trust", "drift", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
             if k in d:
                 setattr(s, k, d[k])
         s.items = {k: Item.from_dict(v) for k, v in (d.get("items") or {}).items()}

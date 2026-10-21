@@ -508,6 +508,7 @@ class TestGrindDungeon(unittest.TestCase):
             for s in g.slimes():
                 s.grounded = False
                 s.hp = s.max_hp
+                s.sanity = 100.0                          # (sanity is about rest, not this XP test)
                 s.emotions.clear()
                 for k in list(s.needs.v): s.needs.v[k] = 90.0
             runs += len(g.grind(pid, 4, 5, auto_rest=True).runs)

@@ -440,3 +440,144 @@ class SpellNameTest(unittest.TestCase):
         for bad in ("<b>x</b>", "x" * 80):
             with self.assertRaises(InvalidAction):
                 spells.design_fusion(a, b, bad)
+
+
+class SanityTest(unittest.TestCase):
+    def _g(self):
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.wallet.add("white_gel", 1000)
+        g.pull(2, "white_gel")
+        return g
+
+    def test_sanity_caps_mood_and_care_has_diminishing_returns(self):
+        from slime_gacha import sanity, config
+        g = self._g()
+        a, b = g.slimes()[:2]
+        a.rarity, b.rarity = "common", "legendary"
+        a.sanity, b.sanity = sanity.cap(a), sanity.cap(b)
+        self.assertGreater(sanity.cap(b), sanity.cap(a))                        # rarer = bigger reserve
+        la, lb = sanity.hit(a, 20), sanity.hit(b, 20)
+        self.assertGreater(la, lb)                                              # ... and loses less per blow
+        a.sanity = 0
+        for k in a.needs.v:
+            a.needs.v[k] = 100.0
+        self.assertLessEqual(a.mood(), config.SANITY_MOOD_FLOOR + 1e-9)         # fed and happy needs, still capped
+        self.assertTrue(g.refusal(a, "dungeon"))
+        a.sanity = 30
+        g.talk(a.id)
+        first = a.sanity
+        g.talk(a.id)
+        self.assertEqual(a.sanity, first)                                       # only the first talk of the day helps
+        self.assertGreater(first, 30)
+
+    def test_rest_rebuilds_sanity(self):
+        g = self._g()
+        s = g.slimes()[0]
+        s.sanity, s.state = 10, "sleeping"
+        g._sanity_tick()
+        self.assertGreater(s.sanity, 10)
+
+
+class MemoryTest(unittest.TestCase):
+    def _g(self):
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.wallet.add("white_gel", 1000)
+        g.pull(3, "white_gel")
+        return g
+
+    def test_grudges_shape_quarrels_and_reasons(self):
+        from slime_gacha import memory
+        g = self._g()
+        a, b, c = g.slimes()
+        self.assertEqual(memory.for_pair(a, b), (1.0, None))                 # strangers
+        memory.remember(a, "snack", b, g.day, 4.0)
+        f, why = memory.for_pair(a, b)
+        self.assertGreater(f, 1.0)
+        self.assertIn(b.name, why)
+        self.assertIn("snack", why)
+        self.assertEqual(g.conflicts.reason(a, b), why)                       # the quarrel is about the real grievance
+        memory.remember(b, "healed", a, g.day, 6.0)
+        memory.remember(a, "made_up", b, g.day, 6.0)
+        self.assertLess(memory.chance_factor(a, b), memory.chance_factor(b, c))   # shared thanks outweigh the old grudge
+
+    def test_memories_fade_merge_and_survive_saving(self):
+        from slime_gacha import memory, config
+        from slime_gacha.game import Game
+        g = self._g()
+        a, b = g.slimes()[:2]
+        memory.remember(a, "brawl", b, 0, 4.0)
+        memory.remember(a, "brawl", b, 1, 4.0)
+        self.assertEqual(len(a.memories), 1)                                  # the same thing again strengthens it
+        self.assertEqual(len(Game.from_dict(g.to_dict()).roster[a.id].memories), 1)
+        for _ in range(60):
+            memory.fade(a)
+        self.assertEqual(a.memories, [])                                      # and time heals
+        for i in range(30):
+            memory.remember(a, "slight", b, i * 10, 1.0 + i * 0.1, str(i))
+        self.assertLessEqual(len(a.memories), config.MEMORY_CAP)
+
+    def test_a_death_is_remembered_by_the_colony(self):
+        g = self._g()
+        a, b, c = g.slimes()
+        c.hp, c.death_cause = 0, "fell in battle"
+        g._reap([])
+        self.assertTrue(any(m["kind"] == "lost" and m["name"] == c.name for m in a.memories))
+
+
+class MindTest(unittest.TestCase):
+    def _g(self, n=4):
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.wallet.add("white_gel", 2000)
+        g.pull(n, "white_gel")
+        for s in g.slimes():
+            s.hp = s.max_hp
+            s.needs.v.update({k: 90.0 for k in s.needs.v})
+            s.emotions.clear()
+        return g
+
+    def test_a_fallen_friend_makes_a_slime_avoid_the_dungeons(self):
+        from slime_gacha import memory, mind
+        g = self._g()
+        a, b = g.slimes()[:2]
+        memory.remember(a, "lost", b, g.day, 6.0, "(fell in battle)")
+        a.goal = mind.choose_goal(g, a)
+        self.assertEqual(a.goal["kind"], "avoid_dungeons")
+        self.assertIn("refuses", g.refusal(a, "dungeon"))
+        self.assertEqual(g.refusal(a, "job"), "")                 # work is still fine
+        a.trust = 90
+        self.assertEqual(g.refusal(a, "dungeon"), "")             # a slime that trusts the Keeper goes anyway
+
+    def test_requests_and_trust(self):
+        from slime_gacha import sanity
+        g = self._g()
+        s = g.slimes()[0]
+        s.sanity = sanity.cap(s) * 0.2
+        r = __import__("slime_gacha.mind", fromlist=["x"]).make_request(g, s)
+        self.assertEqual(r["kind"], "rest")
+        s.request = r
+        before = s.trust
+        g.answer_request(s.id, True)
+        self.assertGreater(s.trust, before)
+        s.request = r
+        t = s.trust
+        g.answer_request(s.id, False)
+        self.assertLess(s.trust, t)
+        self.assertTrue(any(m["kind"] == "ignored" for m in s.memories))
+        with self.assertRaises(Exception):
+            g.answer_request(s.id, True)                            # nothing pending any more
+
+    def test_drift_changes_a_trait_and_a_day_runs(self):
+        from slime_gacha import mind
+        g = self._g()
+        s = g.slimes()[0]
+        s.traits = ["brave", "lazy"]
+        s.drift["ko"] = 6
+        ev = []
+        mind.drift(g, s, ev)
+        self.assertIn("timid", s.traits)
+        self.assertTrue(ev)
+        g.tick(24 * 3)                                             # goals, decisions and requests run with the days
+        self.assertTrue(all(x.goal for x in g.slimes()))

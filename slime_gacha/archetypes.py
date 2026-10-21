@@ -94,7 +94,7 @@ register_archetype(Archetype(
 register_archetype(Archetype(
     "bard", "Bard", "🎵", _s(28, 3, 3, 8, 7), _s(3.5, 0.5, 0.7, 1.7, 0.8),
     {1: "lilt", 3: "rally_song", 7: "lullaby"}, "heal",
-    discipline="magic",
+    discipline="archery",
     likes=("songs", "applause"), hunt_bonus={"essence": 1.2, "food": 1.1}, rivals=()))
 
 register_archetype(Archetype(
@@ -112,5 +112,5 @@ register_archetype(Archetype(
 register_archetype(Archetype(
     "druid", "Druid", "🌿", _s(32, 3, 4, 8, 5), _s(4.5, 0.5, 0.9, 1.8, 0.5),
     {1: "thorn_lash", 3: "bloom", 6: "tangle"}, "heal",
-    discipline="magic",
+    discipline="archery",
     likes=("moss", "rain"), hunt_bonus={"food": 1.4}, rivals=()))

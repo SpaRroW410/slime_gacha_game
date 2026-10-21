@@ -21,7 +21,7 @@ SECTIONS: List[Dict[str, object]] = [
         "Ten classes - barbarian, mage, medic, rogue, ranger, necromancer, bard, paladin, alchemist, druid - each with its own skills, discipline and stats. "
         "Rarity (common to legendary) shows as the slime's shape and ring; its body colour is yours to choose.",
         "Needs: energy, food, safety, belonging, esteem. Neglect is lethal; contentment gives more power.",
-        "Skills: class skills by level, 24 rarity skills, 6 evolution skills, 12 pure and 12 hybrid capstones, star attributes, "
+        "Skills: class skills by level, 40 rarity skills, 10 evolution skills, 20 pure and 20 hybrid capstones, star attributes, "
         "elemental spells (fusable, and they change form as mastery grows).",
         "Total power (001-999 tag in the Colony) sums stats, skills, attributes, mastery, styles and proficiency, times mood and morale.",
         "Slimes have personalities, friendships, couples, mentors and rivals; they quarrel when they share a place, and brawls leave "
@@ -81,8 +81,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-07",
-                 text="Four new classes (Bard, Paladin, Alchemist, Druid), a Hatchery and timed upgrades, gear sets, achievements and titles, story chapters, animated battles with sound, "
+WHATS_NEW = dict(id="2026-11-11",
+                 text="Eight new hybrid classes for the Bard, Druid, Paladin and Alchemist (each with a signature skill and a capstone), Bard and Druid now train archery, and avatars show evolution (cape, chevrons), hybrid weapon and proficiency stars. Slimes now have goals and make their own decisions (training on their own, visiting friends, refusing dungeons after a friend fell), ask you for things and build trust, and slowly change personality. Slimes also remember: who ate their snack, who healed them, who fell. Grudges make quarrels likelier and become the stated reason; thanks make them rarer (see Memories on the slime card). Also new: sanity — a mental reserve (bigger for rarer slimes) that caps the mood; talking and petting now help less when repeated the same day. Also: four new classes (Bard, Paladin, Alchemist, Druid), a Hatchery and timed upgrades, gear sets, achievements and titles, story chapters, animated battles with sound, "
                       "an installable offline app, exact gacha odds, and a safer save (second-tab and import protection).")
 
 

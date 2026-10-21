@@ -65,23 +65,11 @@ function stateLabel(s) {
   if (s.state === 'sleeping') return '😴 sleeping';
   return esc(s.state);
 }
-/* Class headgear: one small inline SVG per class, drawn on top of the slime's head (see .hat in style.css). */
-const HATS = {
-  barbarian: '<path d="M3 12h18v-2C21 6 17 4 12 4S3 6 3 10z" fill="#9aa3ad"/><path d="M3 10C1 8 1 5 2 3c2 1 3 3 3 5zM21 10c2-2 2-5 1-7-2 1-3 3-3 5z" fill="#f1e6cf"/>',
-  mage: '<path d="M12 0l7 12H5z" fill="#6f5bd6"/><rect x="2" y="11" width="20" height="3" rx="1.5" fill="#4d3fa3"/><circle cx="12" cy="6" r="1.3" fill="#ffe27a"/>',
-  medic: '<rect x="4" y="5" width="16" height="8" rx="3" fill="#fff"/><path d="M11 6h2v6h-2zM9 8h6v2H9z" fill="#e5484d"/>',
-  rogue: '<path d="M3 13C3 6 8 3 12 3s9 3 9 10c-3-3-6-3-9-3s-6 0-9 3z" fill="#3b4250"/>',
-  ranger: '<path d="M3 12c0-5 4-8 9-8s9 3 9 8z" fill="#4f8a4a"/><path d="M17 8c3-5 5-6 6-6-1 3-2 5-6 8z" fill="#e8d36b"/>',
-  necromancer: '<path d="M4 12l2-8 3 4 3-6 3 6 3-4 2 8z" fill="#7b4ba3"/><circle cx="12" cy="9" r="1.6" fill="#ecebe6"/>',
-  bard: '<path d="M3 12c1-5 5-7 10-6 3 1 6 3 8 6z" fill="#e0679d"/><path d="M13 6c2-4 6-5 8-4-1 3-4 5-8 6z" fill="#f4d35e"/>',
-  paladin: '<ellipse cx="12" cy="3" rx="8" ry="2.2" fill="none" stroke="#ffd95a" stroke-width="1.6"/><path d="M4 12c0-4 3-6 8-6s8 2 8 6z" fill="#c7ccd6"/>',
-  alchemist: '<rect x="3" y="7" width="18" height="5" rx="2.5" fill="#5b4a3a"/><circle cx="8" cy="9.5" r="3" fill="#7fd6e3" stroke="#d9a441" stroke-width="1.2"/><circle cx="16" cy="9.5" r="3" fill="#7fd6e3" stroke="#d9a441" stroke-width="1.2"/>',
-  druid: '<path d="M4 12c0-4 4-7 8-7s8 3 8 7z" fill="#6aa84f"/><path d="M8 6l2-4 2 3 2-3 2 4z" fill="#3f7d3a"/>',
-};
 function avatar(s, cls = '') {
   const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
-  return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)}" style="--c:${c}"><div class="body"><i></i><i></i></div><div class="mouth"></div>${HATS[s.archetype] ? `<svg class="hat" viewBox="0 0 24 14" aria-hidden="true">${HATS[s.archetype]}</svg>` : ''}<span class="em">${s.emoji}</span></div>`;
+  const g = AV.gear(s.archetype, s.rarity, { stage: s.stage, disc: s.spec && s.spec.disc, cm: !!(s.prof && s.prof.value >= 100), hm: !!(s.prof && s.prof.hybrid && s.prof.hybrid.value >= 100) });                     // class gear that grows with rarity (avatars.js); a mod class keeps its emoji
+  return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)} ${g.front ? 'geared' : ''}" style="--c:${c}">${g.back || ''}<div class="body"><i></i><i></i></div><div class="mouth"></div>${g.front || `<span class="em">${s.emoji}</span>`}</div>`;
 }
 /* The three-digit power tag (001-999) shown beside a slime's figure; the full number and parts are on its card. */
 const ptag = (s) => `<span class="ptag t${Math.min(4, Math.floor(s.power_tag / 250) + 1)}" title="Total power ${s.power}">⚡${String(s.power_tag).padStart(3, '0')}</span>`;
@@ -280,7 +268,49 @@ async function loadCouncil(rerender = true) {
 const confirmThen = (msg, fn) => { if (window.confirm(msg)) fn(); };
 
 /* ---------------------------------------------------------------- top-level render */
+/* Every render rebuilds the page, so anything the user was in the middle of is carried across: the scroll position of every scrolled
+   box (the top bar, the tab bar, lists, dialogs) and the text box being typed in, with its cursor. Boxes are matched by their path in
+   the page, so the same box in the new page gets the same position. */
+function pathOf(el, root) {
+  const p = [];
+  for (let n = el; n && n !== root; n = n.parentElement) p.push([...n.parentElement.children].indexOf(n));
+  return p.join('.') + ':' + el.tagName + '.' + el.className;
+}
+function captureView(root) {
+  const scrolls = [], focused = document.activeElement;
+  root.querySelectorAll('*').forEach((el) => { if ((el.scrollLeft || el.scrollTop) && el !== document.documentElement) scrolls.push([pathOf(el, root), el.scrollLeft, el.scrollTop]); });
+  let focus = null;
+  if (focused && focused.dataset && focused.dataset.ui && root.contains(focused)) {
+    let s = null, e = null;
+    try { s = focused.selectionStart; e = focused.selectionEnd; } catch (err) { /* number and select boxes have no selection */ }
+    focus = { ui: focused.dataset.ui, tag: focused.tagName, s, e };
+  }
+  return { scrolls, focus };
+}
+function restoreView(root, v) {
+  if (v.scrolls.length) {
+    const want = new Map(v.scrolls.map((x) => [x[0], x]));
+    root.querySelectorAll('*').forEach((el) => {
+      if (!el.scrollWidth && !el.scrollHeight) return;
+      const w = want.get(pathOf(el, root));
+      if (w) { el.scrollLeft = w[1]; el.scrollTop = w[2]; }
+    });
+  }
+  if (v.focus) {
+    const el = [...root.querySelectorAll(`[data-ui="${v.focus.ui}"]`)].find((x) => x.tagName === v.focus.tag);
+    if (el) {
+      el.focus({ preventScroll: true });
+      if (v.focus.s != null) { try { el.setSelectionRange(v.focus.s, v.focus.e); } catch (err) { /* not a text box */ } }
+    }
+  }
+}
 function render() {
+  const app = document.getElementById('app');
+  const view = captureView(app);
+  renderNow();
+  restoreView(app, view);
+}
+function renderNow() {
   const app = document.getElementById('app');
   if (!S.state) { app.innerHTML = welcome(); return; }
   if (S.state !== S._seen) { S._seen = S.state; S.stateAt = Date.now(); }   // the moment the timers were measured
@@ -526,6 +556,7 @@ function card(s) {
   if (s.dominant && !s.busy) b.push(badge(WISH[s.dominant], 'warn'));
   if (s.feelings.length && s.feelings[0].value >= 40) b.push(badge(`${s.feelings[0].emoji} ${esc(s.feelings[0].name)}`, s.feelings[0].kind === 'bad' ? 'warn' : 'ok'));
   if (s.morale_label === 'broken') b.push(badge('broken morale', 'bad'));
+  if (s.sanity_label === 'breaking' || s.sanity_label === 'frayed') b.push(badge(`🧠 ${s.sanity_label}`, s.sanity_label === 'breaking' ? 'bad' : 'warn'));
   if (s.outlook) b.push(badge(`${s.outlook.emoji} ${s.outlook.name}`, 'info'));
   return `<div class="scard ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">
     ${figure(s)}
@@ -561,6 +592,9 @@ function dOverview(s, { st, free, inDun }) {
     <small class="mute">⚡ Total power <b>${s.power}</b> = (${Object.entries(s.power_parts).map(([k, v]) => `${k} ${v}`).join(' + ')}) × mood &amp; morale ${s.power_mult} ${info('Total power sums what the slime is (stats: class, level, rarity, stars, stage, gear, relics, potions) and what it can do (skills scaled by the stat they use, capstones and spell forms counting extra, star attributes, elemental mastery, fighting styles, class proficiency), then multiplies by its current mood and morale.')}</small>
     ${bar(s.hp, s.max_hp, 'hp', 'HP')}${bar(s.xp, s.xp_next, 'xp', 'XP', s.level >= s.level_cap ? 'level cap' : `${s.xp}/${s.xp_next}`)}
     ${bar(s.morale, 100, 'morale', `Morale — ${s.morale_label}`, `power ×${s.morale_factor}`)}
+    ${sect(`On its mind ${s.request ? badge('request', 'warn') : ''}`, 'Slimes pick goals from what they remember, act on them when idle, and sometimes ask you for something. Granting requests builds trust; slimes who trust you put up with more, and refusals are remembered.', `<div class="stack"><small>🎯 ${s.goal ? esc(s.goal) : 'no particular goal'}</small><small class="mute">🤝 Trust in you: ${s.trust}/100</small>${s.request ? requestRow(s) : ''}</div>`)}
+    ${sect('Memories', 'What this slime remembers about the others. Grudges make quarrels likelier (and are their stated reason); thanks make them rarer. Memories fade over a few weeks.', s.memories.length ? `<div class="stack">${s.memories.map((m) => `<small class="${m.sign < 0 ? 'bad' : m.sign > 0 ? '' : 'mute'}">${m.sign < 0 ? '😠' : m.sign > 0 ? '💚' : '🕯'} ${esc(m.text)} <span class="mute">· day ${m.day + 1}</span></small>`).join('')}</div>` : '<small class="mute">Nothing on its mind yet.</small>')}
+    ${bar(s.sanity, s.sanity_max, 'sanity', `Sanity ${s.sanity}/${s.sanity_max} — ${s.sanity_label}`, s.mood_cap < 1 ? `mood capped at ${Math.round(s.mood_cap * 100)}%` : 'no cap')} ${info('Sanity is how much a slime can take. Deaths of friends, knock-outs, lost battles, brawls and long miserable stretches wear it down; sleep, the Rest Area, the Hospital, a calm happy home, a won fight, the Keeper\'s Soothe and one talk a day build it back. Low sanity caps the mood, so food and pets alone cannot fix a worn-down slime; below 20% it refuses dungeons, below 10% work. Rarer slimes have a bigger reserve and lose less per blow.')}
     ${bar(s.stamina, s.max_stamina, 'know', `⚡ Stamina`, `${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}
     ${s.buffs.length ? `<div class="row"><small class="mute">potion slots ${s.buffs.length}/${s.potion_slots}</small>${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}
     ${sect(`Needs ${s.dominant ? badge(WISH[s.dominant], 'warn') : badge('content', 'ok')}`, 'Needs fall over time. Unmet needs lower mood and morale, stir bad feelings and, at zero, hurt the slime. See the Guide tab for details.', Object.entries(s.needs).map(([k, v]) => bar(v, 100, 'need', NEED_NAME[k], v)).join(''))}
@@ -626,7 +660,7 @@ function dMind(s, { st, free, inDun }) {
   return `${sect('Feelings', 'Passing feelings shift stats in battle. The Guide tab lists what raises and lowers each one.', `<div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value))).join('') : '<small class="mute">Calm and unremarkable.</small>'}
       ${Object.keys(s.feeling_effects).length ? `<small class="mute">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
       ${s.awareness ? `<div>🧩 <b>Awareness: ${esc(s.awareness.name)}</b> <small class="mute">${s.awareness.points}/100${s.awareness.temperament ? ' · ' + (s.awareness.temperament === 'accept' ? 'at peace' : 'in despair') : ''}</small></div>` : ''}
-      <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''}>💬 Talk</button></div></div>`)}
+      <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button></div></div>`)}
     ${sect('Relationships', 'Ties form from bonds: friends, best friends, rivals, mentors and couples. See the People tab.', `<div class="stack" style="gap:3px">${s.relations.map((r) => { const o = slimeById(r.other); if (!o) return ''; const label = r.kind === 'mentor' ? (r.mentor === s.id ? '🎓 Mentee' : '🎓 Mentor') : em[r.kind]; return `<div>${label}: <b>${esc(o.name)}</b></div>`; }).join('') || '<small class="mute">No ties yet.</small>'}
       ${s.parents.length ? `<div>🥚 Child of <b>${s.parent_names.map(esc).join(' &amp; ')}</b> · generation ${s.generation}</div>` : ''}</div>`)}
     ${sect('Experience', 'What this slime has done most shapes its outlook.', `<small class="mute">${Object.entries(s.exp).map(([k, v]) => `${k} ${v}`).join(' · ') || 'no experience yet'}</small><p class="mute">Wins ${s.wins} · merged ${s.merged}</p>`)}`;
@@ -975,8 +1009,13 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, String(v)); } catch (e) 
 const BACKUP_DAYS = 3;
 function backupAge() { const t = Number(lsGet(LS_EXPORT)); return t ? (Date.now() - t) / 86400000 : null; }
 function backupDue() { const a = backupAge(); return (a === null || a >= BACKUP_DAYS) && Date.now() - Number(lsGet(LS_SNOOZE) || 0) > 86400000; }
+function requestRow(s) {
+  return `<div class="row between panel flat"><span>💬 <b>${esc(s.name)}</b> ${esc(s.request.text)}.</span><span class="row"><button class="btn small primary" data-act="answer_request" data-id="${s.id}" data-yes="1">Grant</button><button class="btn small" data-act="answer_request" data-id="${s.id}" data-yes="0">Decline</button></span></div>`;
+}
 function notices() {
   const n = S.state?.whats_new, out = [];
+  const asks = (S.state?.slimes || []).filter((x) => x.request).slice(0, 3);
+  if (asks.length) out.push(`<div class="panel flat stack"><b>💬 Requests</b>${asks.map(requestRow).join('')}</div>`);
   if (S.saveFailed) out.push(`<div class="panel flat row between warnbox" role="alert"><span>⚠️ <b>This browser is not keeping your colony</b> (storage is full or blocked, for example in a private window). Progress will be lost when you close the page. Export a save file now.</span><span class="row"><button class="btn small primary" data-act="export">⬇ Export</button></span></div>`);
   if (S.otherTab) out.push(`<div class="panel flat row between warnbox" role="alert"><span>⚠️ <b>Slime Gacha is open in another tab.</b> This tab is paused so the two cannot overwrite each other's progress.</span><span class="row"><button class="btn small primary" data-act="take_over">Load the latest save here</button></span></div>`);
   if (n && lsGet(LS_NEWS) !== n.id) out.push(`<div class="panel flat row between"><span>🆕 <b>What's new:</b> ${esc(n.text)}</span><button class="btn small" data-act="dismiss_news">Got it</button></div>`);
@@ -1641,6 +1680,7 @@ const A = {
   talk: () => act('talk', { id: S.sel }),
   keeper_learn: (d) => act('keeper_learn', { key: d.key }),
   keeper_use: (d) => act('keeper_use', { key: d.key }),
+  answer_request: (d) => act('answer_request', { id: num(d.id), accept: d.yes === '1' }),
   craft_feather: () => act('craft_feather', { n: 1 }),
   keeper_respec: () => confirm('Forget all learned skills? It costs gel and the price rises each time.') && act('keeper_respec', {}),
   keeper_title: (d) => act('keeper_title', { key: d.key || '' }),
@@ -1830,13 +1870,7 @@ document.addEventListener('input', (e) => {
   if (!t.dataset.ui) return;
   S.ui[t.dataset.ui] = t.value;
   if (!t.dataset.rerender) return;
-  const typing = t.matches('input[type=search], input[type=text]');
-  const pos = typing ? t.selectionStart : null;
-  render();
-  if (typing) {                       // the page was rebuilt: put the cursor back so the phone keyboard stays open
-    const again = document.querySelector(`input[data-ui="${t.dataset.ui}"]`);
-    if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (err) { /* not a text field */ } }
-  }
+  render();                           // (render() keeps the focus, the cursor and every scroll position, so typing is not interrupted)
 });
 document.addEventListener('toggle', (e) => { const k = e.target.dataset && e.target.dataset.keep; if (k) S.ui[k] = e.target.open; }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.modal) A.closemodal(); else if (S.sel) A.closesel(); } });

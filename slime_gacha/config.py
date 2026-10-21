@@ -481,3 +481,39 @@ FEATHER_HP = 0.3
 # bounds that keep replies and saves small on a phone
 PULL_MAX_N = 100                 # pulls in one action
 COLONY_MAX = 400                 # slimes the colony can hold
+
+# sanity (sanity.py): a mental reserve that caps the mood; rarer slimes have more and lose less per blow
+SANITY_MAX = {"common": 60, "uncommon": 70, "rare": 80, "epic": 90, "legendary": 100}
+SANITY_RESIST = {"common": 1.3, "uncommon": 1.15, "rare": 1.0, "epic": 0.85, "legendary": 0.7}   # x every loss
+SANITY_MOOD_FLOOR = 0.3          # mood cap at zero sanity (grumpy at best)
+SANITY_HIT = {"friend_died": 18, "slime_died": 3, "partner_died": 28, "knocked_out": 5, "battle_lost": 6, "brawl": 2.5, "quarrel": 1,
+              "miserable_hour": 0.5}
+SANITY_REST = {"sleeping": 0.8, "resting": 1.0, "ward": 1.5, "calm": 0.3}   # per hour; "calm" = idle at home in a good mood
+SANITY_WIN = 1.0                 # a won fight steadies a little
+SANITY_TALK = 6                  # the first talk of the day
+SANITY_SOOTHE = 8                # the Keeper's Soothe, for everyone
+SANITY_REFUSE = {"dungeon": 0.2, "job": 0.1}   # below this share of its reserve a slime refuses
+
+# memory (memory.py): what slimes remember about each other
+MEMORY_CAP = 14                  # memories a slime keeps
+MEMORY_MAX_WEIGHT = 10.0
+MEMORY_FADE = 0.93               # weight kept per game day (a strong memory lasts a few weeks)
+MEMORY_MIN_WEIGHT = 0.4
+MEMORY_MERGE_DAYS = 3            # the same thing happening again within this many days strengthens one memory
+MEMORY_GRUDGE_MIN = 2.0          # a grudge this strong can be the stated reason of a quarrel
+
+# the mind (mind.py): goals, decisions, requests, trust, drift
+GOAL_DAYS = 5                    # a goal is reconsidered after this many days
+GOAL_AVOID_MIN = 3.0             # memory weight of a fallen friend that makes a slime unable to face the dungeons
+GOAL_RIVAL_MIN = 3.0
+GOAL_FRIEND_MIN = 3.0
+DECIDE_CHANCE = 0.4              # per day, for an idle slime at home
+DECIDE_MAX_EVENTS = 3            # journal lines per day, so the log stays readable
+GOAL_TRAIN_XP = 0.6              # self-training XP per level
+REQUEST_CHANCE = 0.18            # per day per slime without a request
+REQUEST_DAYS = 3                 # an unanswered request lapses
+REQUEST_GRUDGE = 3.0
+REQUEST_FRIEND = 3.0
+TRUST_GRANT, TRUST_DENY, TRUST_DENY_REST = 6.0, 4.0, 8.0
+TRUST_REFUSE_SHIFT = 0.10        # at trust 100 the mood below which a slime refuses is this much lower (at 0: this much higher)
+DRIFT_AT = {"ko": 6, "win": 25, "heal": 15}
