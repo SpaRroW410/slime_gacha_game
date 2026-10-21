@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=40, group="QA", title="M6: failed saves are silent; no offline play", status="planned",
-         text="A warning when saving fails, and offline support."),
     dict(id=41, group="QA", title="M7: waiting gets slow in big colonies", status="planned",
          text="The healer aura recomputes too much: +1 day takes 11 s at 500 slimes."),
     dict(id=42, group="QA", title="M8: every action sends and stores everything", status="planned",

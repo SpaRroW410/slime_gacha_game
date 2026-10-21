@@ -52,7 +52,7 @@ Findings not yet re-verified against the current code; check each before fixing 
 - [x] **37. M3: free pulls repeat without limit** — the daily pull follows game days, which are free to skip; live mode can be gamed with the device clock.  *Done when:* one free pull per real day in both modes (see task 16).
 - [x] **38. M4: two tabs overwrite each other (static build)** — last save wins.  *Done when:* a second tab is detected and warned or shares one game.
 - [x] **39. M5: Import replaces the colony without asking** — any JSON loads as an empty colony.  *Done when:* import confirms, validates the file and backs up the current colony first.
-- [ ] **40. M6: failed saves are silent; no offline support** — storage errors are swallowed; no manifest or service worker.  *Done when:* a visible warning appears when saving fails and the page works offline (see task 20).
+- [x] **40. M6: failed saves are silent; no offline support** — storage errors are swallowed; no manifest or service worker.  *Done when:* a visible warning appears when saving fails and the page works offline (see task 20).
 - [ ] **41. M7: waiting gets very slow in big colonies** — `_healer_aura` rescans and recomputes `max_hp` per healer (+1 day: 0.4 s at 100 slimes, 11 s at 500).  *Done when:* +1 day under 1 s at 250 slimes in native Python.
 - [ ] **42. M8: every action sends and stores the full state and save** — 0.95 MB at 200 slimes; pull count unbounded.  *Done when:* replies carry deltas or are bounded, saves are written on a timer/pause, and pull count is capped.
 - [ ] **43. M9: time controls and active tab scroll out of view on phones** — header snaps back after each action.  *Done when:* the +1h/+4h/+1 day buttons and the active tab stay reachable at 375 px.

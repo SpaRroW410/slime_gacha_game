@@ -134,9 +134,15 @@ function saveLocal(save) {
   try {
     if (Date.now() - (S.bakAt || 0) > 300000) { const prev = localStorage.getItem(LS_KEY); if (prev) { localStorage.setItem(LS_BAK, prev); S.bakAt = Date.now(); } }
     const at = Date.now();
-    localStorage.setItem(LS_KEY, JSON.stringify({ save, at, tab: S.tabId }));
+    const text = JSON.stringify({ save, at, tab: S.tabId });
+    localStorage.setItem(LS_KEY, text);
+    if (localStorage.getItem(LS_KEY) !== text) throw new Error('write did not stick');
     S.myAt = at;
-  } catch (e) { /* storage may be blocked */ }
+    S.saveFailed = false;
+  } catch (e) {                                   // storage blocked, full or private: say so, the colony is only in memory
+    if (!S.saveFailed) toast('Could not save in this browser. Export your colony now.', true);
+    S.saveFailed = true;
+  }
 }
 /* Two tabs on one colony would overwrite each other's progress: every write is stamped with this tab's id, and a tab that sees a newer
    write from another tab stops acting (a banner offers to take over with the latest save). */
@@ -920,6 +926,7 @@ function backupAge() { const t = Number(lsGet(LS_EXPORT)); return t ? (Date.now(
 function backupDue() { const a = backupAge(); return (a === null || a >= BACKUP_DAYS) && Date.now() - Number(lsGet(LS_SNOOZE) || 0) > 86400000; }
 function notices() {
   const n = S.state?.whats_new, out = [];
+  if (S.saveFailed) out.push(`<div class="panel flat row between warnbox" role="alert"><span>⚠️ <b>This browser is not keeping your colony</b> (storage is full or blocked, for example in a private window). Progress will be lost when you close the page. Export a save file now.</span><span class="row"><button class="btn small primary" data-act="export">⬇ Export</button></span></div>`);
   if (S.otherTab) out.push(`<div class="panel flat row between warnbox" role="alert"><span>⚠️ <b>Slime Gacha is open in another tab.</b> This tab is paused so the two cannot overwrite each other's progress.</span><span class="row"><button class="btn small primary" data-act="take_over">Load the latest save here</button></span></div>`);
   if (n && lsGet(LS_NEWS) !== n.id) out.push(`<div class="panel flat row between"><span>🆕 <b>What's new:</b> ${esc(n.text)}</span><button class="btn small" data-act="dismiss_news">Got it</button></div>`);
   if (backupDue()) { const a = backupAge(); out.push(`<div class="panel flat row between warnbox"><span>💾 ${a === null ? 'You have never exported your colony.' : `Your last backup was ${Math.floor(a)} days ago.`} The only copy lives in this browser: export a save file now and then.</span><span class="row"><button class="btn small primary" data-act="export">⬇ Export</button><button class="btn small" data-act="snooze_backup">Later</button></span></div>`); }
