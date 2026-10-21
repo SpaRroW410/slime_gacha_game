@@ -173,13 +173,31 @@ const AV = (() => {
       <path d="M52 44c8-2 13-10 12-20-3 3-6 4-9 4 2 2 3 5 2 7-2 0-4 1-5 3 2 1 3 3 0 6z" fill="${f}" stroke="${s}" stroke-width=".8"/>
       <path d="M62 30c-3 1-5 1-7 1M63 36c-3 1-6 1-8 0" stroke="${s}" stroke-width=".6" fill="none"/>`; };
 
-  function gear(cls, rarity) {
+  /* Evolution, hybrid and mastery marks (all small, away from the face):
+       stage 1 "Greater"  a cape behind the body and one rank chevron (bottom left)
+       stage 2 "Prime"    a longer cape, gold shoulder spikes and two chevrons
+       hybrid             the second discipline's weapon in the other hand (left side)
+       class mastery      a gold star top right;  hybrid mastery: a teal star top left (proficiency 100) */
+  const DISC_ITEM = {
+    sword: `<rect x="9" y="30" width="2.4" height="22" rx="1" fill="#e3e8f0" stroke="#8a93a3" stroke-width=".6" transform="rotate(-12 10 41)"/><rect x="5" y="49" width="9" height="2.4" rx="1" fill="${goldD}" transform="rotate(-12 10 50)"/>`,
+    archery: `<path d="M12 30c-8 6-8 22 0 28" stroke="#c99a3f" stroke-width="2.4" fill="none"/><path d="M12 30v28" stroke="#f2ecdc" stroke-width=".8"/>`,
+    magic: `<rect x="9" y="34" width="2.4" height="24" rx="1.2" fill="#5e3b1a"/><circle cx="10.2" cy="32" r="4" fill="#8fe3ff" stroke="#c9a14b" stroke-width="1.1"/><circle cx="9" cy="30.8" r="1.1" fill="#fff"/>`,
+  };
+  const star = (x, y, c) => `<path d="M${x} ${y - 4.2}l1.4 3 3.2.4-2.4 2.2.7 3.2-2.9-1.7-2.9 1.7.7-3.2-2.4-2.2 3.2-.4z" fill="${c}" stroke="#fff6c8" stroke-width=".5"/>`;
+  const rank = (n) => Array.from({ length: n }, (_, i) => `<path d="M5 ${59 - i * 4}l5-3.2 5 3.2" stroke="${gold}" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+  const cape = (cls, stage) => { const c = AURA[cls]; return stage >= 2
+    ? `<path d="M16 38L4 62l14-5 6 5zM48 38l12 24-14-5-6 5z" fill="${c}" stroke="#1d1d2a" stroke-opacity=".35" stroke-width=".8"/><path d="M16 38L8 56l9-3zM48 38l8 18-9-3z" fill="#fff" fill-opacity=".18"/>`
+    : `<path d="M17 40L8 58l11-3 4 4zM47 40l9 18-11-3-4 4z" fill="${c}" stroke="#1d1d2a" stroke-opacity=".35" stroke-width=".8"/>`; };
+  const spikes = () => `<path d="M13 40l-5-8 8 3zM51 40l5-8-8 3z" fill="${gold}" stroke="${goldD}" stroke-width=".8"/>`;
+
+  function gear(cls, rarity, o = {}) {
     if (!HAT[cls]) return {};
-    const t = TIER[rarity] ?? 0;
+    const t = TIER[rarity] ?? 0, stage = o.stage || 0;
     const hat = HAT[cls][t <= 1 ? 0 : t === 2 ? 1 : 2];
     const item = t === 0 ? '' : ITEM[cls][t <= 2 ? (t === 1 ? 0 : 1) : t === 3 ? 1 : 2];
-    const back = t >= 3 ? aura(cls, t === 4) + (t === 4 ? wings(cls) : '') : '';
-    const front = hat + item + (t >= 3 ? sparks(cls, t === 4 ? 6 : 3) : '');
+    const back = (stage ? cape(cls, stage) : '') + (t >= 3 ? aura(cls, t === 4) + (t === 4 ? wings(cls) : '') : '');
+    const front = hat + item + (t >= 3 ? sparks(cls, t === 4 ? 6 : 3) : '') + (stage >= 2 ? spikes() : '') + (stage ? rank(stage) : '')
+      + (o.disc && DISC_ITEM[o.disc] ? DISC_ITEM[o.disc] : '') + (o.cm ? star(54, 8, '#ffd45a') : '') + (o.hm ? star(10, 8, '#5fe0d0') : '');
     const svg = (cl, inner) => inner ? `<svg class="${cl}" viewBox="0 0 64 64" aria-hidden="true">${inner}</svg>` : '';
     return { back: svg('gear-back', back), front: svg('gear-front', front) };
   }

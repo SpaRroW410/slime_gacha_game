@@ -22,9 +22,9 @@ def hybrid(g, cls="mage", spec="battlemage", disc="sword", rarity="legendary", s
 
 
 class TestHybridSkills(unittest.TestCase):
-    def test_twelve_hybrid_capstones_one_per_spec(self):
+    def test_twenty_hybrid_capstones_one_per_spec(self):
         self.assertEqual(set(specialization.HYBRID_CAPSTONES), set(specialization.SPECS))
-        self.assertEqual(len(specialization.HYBRID_CAPSTONES), 12)
+        self.assertEqual(len(specialization.HYBRID_CAPSTONES), 20)
 
     def test_capstone_needs_legendary_five_star_and_scales_with_second_proficiency(self):
         g = rich(61)
@@ -186,3 +186,30 @@ class TestSecondProficiencyAndDrift(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSecondWaveHybrids(unittest.TestCase):
+    NEW = {"songshot": ("bard", "magic"), "warchanter": ("bard", "sword"), "wildhunter": ("druid", "magic"), "thornblade": ("druid", "sword"),
+           "lightbringer": ("paladin", "magic"), "dawn_sentinel": ("paladin", "archery"), "flask_knight": ("alchemist", "sword"),
+           "bomb_archer": ("alchemist", "archery")}
+
+    def test_each_resolves_and_fights_with_its_skills(self):
+        import random
+        from slime_gacha.battle import BattleSystem
+        from slime_gacha.gacha import GachaSystem
+        from slime_gacha.resources import ResourceManager
+        from slime_gacha import bestiary, dungeon
+        g = GachaSystem(ResourceManager(), random.Random(3))
+        for key, (cls, disc) in self.NEW.items():
+            s = g.make_slime("legendary", cls, stars=5)
+            self.assertEqual(specialization.spec_for(s, disc).key, key)
+            s.spec, s.spec_disc, s.level, s.class_prof, s.spec_prof = key, disc, 30, 100.0, 100.0
+            known = s.known_abilities()
+            self.assertIn(specialization.SPECS[key].ability, known)
+            self.assertIn(specialization.HYBRID_CAPSTONES[key].key, known)
+            party = [s] + [g.make_slime("rare", c, stars=3) for c in ("barbarian", "medic", "ranger", "mage")]
+            for p in party:
+                p.level, p.hp = 30, p.max_hp
+            enemies = dungeon.grind_wave(30, 3, 5, random.Random(1))
+            rep = BattleSystem(random.Random(2), ResourceManager()).run(party, enemies, permadeath=False)
+            self.assertTrue(rep.log)

@@ -104,6 +104,40 @@ register_spec(Spec("nightstalker", "Nightstalker", "🌑🏹", {"spd": ("atk", 0
                    "silent_shot", "A rogue who kills from the dark."), cls=("rogue", "archery"))
 
 
+# ---- hybrids of the second wave (Bard, Druid, Paladin, Alchemist) ---------------------------------------------------------
+_ab("charming_shot", "Charming Shot", "damage", 1.5, "mag", "enemy", 2, "A shot wrapped in a melody: slows the target and may stun it.", 0, ("debuff", "spd", 0.3, 3), ("stun", 0.25))
+_ab("battle_hymn", "Battle Hymn", "heal", 0.3, "mag", "all_allies", 3, "A marching song: the party heals a little and hits harder for 3 turns.", 0, ("buff", "atk", 0.2, 3))
+_ab("rooting_shot", "Rooting Shot", "poison", 0.6, "atk", "enemy", 2, "A thorned arrow that roots the foe and poisons it.", 3, ("debuff", "spd", 0.3, 3))
+_ab("thorned_slash", "Thorned Slash", "damage", 1.5, "atk", "enemy", 2, "A bark-wrapped blade; the druid braces to strike back for 2 turns.", 0, ("counter_self", 2, 0.6))
+_ab("radiant_bolt", "Radiant Bolt", "damage", 1.7, "mag", "enemy", 2, "A bolt of light that mends the most wounded ally.", 0, ("heal_lowest", 0.4))
+_ab("shielded_arrow", "Shielded Arrow", "damage", 1.3, "atk", "enemy", 2, "Shoots from behind a raised oath-shield, which soaks damage.", 0, ("shield_self", 0.7))
+_ab("flask_bash", "Flask Bash", "damage", 1.5, "atk", "enemy", 2, "A flask smashed over the foe: its armor corrodes.", 0, ("debuff", "defense", 0.25, 3))
+_ab("bomb_arrow", "Bomb Arrow", "damage", 1.2, "atk", "all_enemies", 3, "An arrow with a fizzing flask on the tip: every foe burns.", 0, ("bleed", 2, 0.3))
+
+HYBRID_CAPSTONES.update(
+    songshot=_ab("serenade_volley", "Serenade Volley", "damage", 1.2, "mag", "all_enemies", 5, "A volley set to music: every foe is slowed, weakened and may be stunned.", 0, ("debuff", "atk", 0.25, 3), ("stun", 0.35)),
+    warchanter=_ab("anthem_of_war", "Anthem of War", "heal", 0.6, "mag", "all_allies", 5, "A roaring anthem: the party heals and gains attack and speed for 3 turns.", 0, ("buff", "atk", 0.3, 3), ("buff", "spd", 0.2, 3)),
+    wildhunter=_ab("briar_barrage", "Briar Barrage", "poison", 0.9, "atk", "all_enemies", 5, "Thorned arrows on every foe: stacking poison that softens their armor.", 3, ("stack",), ("debuff", "defense", 0.2, 3)),
+    thornblade=_ab("barkbound_fury", "Barkbound Fury", "damage", 2.2, "atk", "enemy", 4, "A furious blow behind a shell of bark: shields the druid and counters for 2 turns.", 0, ("shield_self", 1.0), ("counter_self", 2, 1.0)),
+    lightbringer=_ab("judgement_light", "Judgement of Light", "damage", 2.4, "mag", "all_enemies", 5, "Holy light on every foe, mending the most wounded ally and cutting through resistance.", 0, ("heal_lowest", 0.8), ("pierce", "resist", 0.5)),
+    dawn_sentinel=_ab("aegis_volley", "Aegis Volley", "damage", 1.4, "atk", "all_enemies", 5, "Arrows from behind an aegis: a heavy shield for the paladin and weaker foes.", 0, ("shield_self", 1.2), ("debuff", "atk", 0.2, 2)),
+    flask_knight=_ab("volatile_overdose", "Volatile Overdose", "damage", 2.6, "atk", "enemy", 4, "A reckless dose: the foe bleeds and its armor melts, and the knight is shielded.", 0, ("bleed", 3, 0.4), ("debuff", "defense", 0.3, 3), ("shield_self", 0.6)),
+    bomb_archer=_ab("carpet_bombardment", "Carpet Bombardment", "damage", 1.3, "atk", "all_enemies", 5, "Two volleys of bomb arrows that ignore part of the armor.", 0, ("hits", 2), ("pierce", "def", 0.4)),
+)
+
+for _key, _name, _emoji, _shifts, _sig, _desc, _cls in [
+    ("songshot", "Songshot", "🎵🏹", {"atk": ("mag", 0.5)}, "charming_shot", "Arrows that carry a tune: foes slow and stumble.", ("bard", "magic")),
+    ("warchanter", "Warchanter", "🎵⚔️", {"atk": ("mag", 0.3), "defense": ("mag", 0.3)}, "battle_hymn", "Sings the party into a frenzy while swinging a blade.", ("bard", "sword")),
+    ("wildhunter", "Wildhunter", "🌿🏹", {"atk": ("mag", 0.5)}, "rooting_shot", "Thorned arrows that root and poison.", ("druid", "magic")),
+    ("thornblade", "Thornblade", "🌿⚔️", {"atk": ("mag", 0.4), "defense": ("mag", 0.3)}, "thorned_slash", "A druid in bark armor with a blade that bites back.", ("druid", "sword")),
+    ("lightbringer", "Lightbringer", "🛡️✨", {"mag": ("atk", 0.5)}, "radiant_bolt", "A holy spellblade: every strike mends an ally.", ("paladin", "magic")),
+    ("dawn_sentinel", "Dawn Sentinel", "🛡️🏹", {"spd": ("atk", 0.3), "defense": ("atk", 0.2)}, "shielded_arrow", "A shielded ranged guardian.", ("paladin", "archery")),
+    ("flask_knight", "Flask Knight", "⚗️⚔️", {"atk": ("mag", 0.4), "defense": ("mag", 0.3)}, "flask_bash", "An armored alchemist who throws flasks in melee.", ("alchemist", "sword")),
+    ("bomb_archer", "Bomb Archer", "⚗️🏹", {"atk": ("mag", 0.5)}, "bomb_arrow", "Explosive arrows for every foe at once.", ("alchemist", "archery")),
+]:
+    register_spec(Spec(_key, _name, _emoji, _shifts, _sig, _desc), cls=_cls)
+
+
 def primary_discipline(slime) -> str:
     return get_archetype(slime.archetype).discipline
 

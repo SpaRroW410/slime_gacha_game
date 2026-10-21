@@ -68,7 +68,7 @@ function stateLabel(s) {
 function avatar(s, cls = '') {
   const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
-  const g = AV.gear(s.archetype, s.rarity);                     // class gear that grows with rarity (avatars.js); a mod class keeps its emoji
+  const g = AV.gear(s.archetype, s.rarity, { stage: s.stage, disc: s.spec && s.spec.disc, cm: !!(s.prof && s.prof.value >= 100), hm: !!(s.prof && s.prof.hybrid && s.prof.hybrid.value >= 100) });                     // class gear that grows with rarity (avatars.js); a mod class keeps its emoji
   return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)} ${g.front ? 'geared' : ''}" style="--c:${c}">${g.back || ''}<div class="body"><i></i><i></i></div><div class="mouth"></div>${g.front || `<span class="em">${s.emoji}</span>`}</div>`;
 }
 /* The three-digit power tag (001-999) shown beside a slime's figure; the full number and parts are on its card. */
