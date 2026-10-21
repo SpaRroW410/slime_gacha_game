@@ -19,7 +19,7 @@ from .academy import AcademySystem, Library
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
-from .errors import GameError, InvalidAction
+from .errors import GameError, InvalidAction, SaveError
 from .gacha import GachaSystem
 from .growth import add_xp, evolve, evolve_cost, lose_xp, merge, merge_gain
 from .hunt import HuntSystem, ZONES
@@ -3613,8 +3613,45 @@ class Game:
         with open(path, encoding="utf-8") as f:
             return cls.from_dict(json.load(f))
 
+    # the top-level shape every save has: key -> accepted types (a missing key is fine: old saves lack newer ones)
+    _SAVE_SHAPE = dict(tick=int, seed=(int, type(None)), wallet=dict, gacha=dict, parties=dict, slimes=list, buildings=(dict, type(None)),
+                       delves=dict, intel=dict, keeper=(dict, type(None)), pantry=dict, journal=list, graveyard=list, conflicts=list,
+                       bonds=list, bounties=list, expeditions=list, stranded=list, inventory=dict, plans=dict)
+
+    @classmethod
+    def check_save(cls, d) -> None:
+        """Refuse anything that is not a usable save: wrong shapes, a newer format, impossible numbers."""
+        if not isinstance(d, dict):
+            raise SaveError("This is not a Slime Gacha save.")
+        ver = d.get("version", 0)
+        if isinstance(ver, bool) or not isinstance(ver, int) or ver < 0:
+            raise SaveError("This is not a Slime Gacha save (no valid version).")
+        if ver > config.SAVE_VERSION:
+            raise SaveError(f"This save was made by a newer version of the game (format {ver}, this one reads up to {config.SAVE_VERSION}).")
+        for key, typ in cls._SAVE_SHAPE.items():
+            if key in d and (not isinstance(d[key], typ) or (typ is int and isinstance(d[key], bool))):
+                raise SaveError(f"This save is damaged: '{key}' has the wrong shape.")
+        if d.get("tick", 0) < 0:
+            raise SaveError("This save is damaged: time runs backwards.")
+        for k, v in (d.get("wallet") or {}).items():
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v < 0 or v > 10 ** 15:
+                raise SaveError(f"This save is damaged: '{k}' in the wallet is not a sensible amount.")
+        if not any(k in d for k in ("slimes", "wallet", "gacha")):
+            raise SaveError("This is not a Slime Gacha save.")
+
     @classmethod
     def from_dict(cls, d: dict) -> "Game":
+        """Load a save. Anything wrong with it raises SaveError (never a bare AttributeError or IndexError)."""
+        cls.check_save(d)
+        try:
+            return cls._from_dict(d)
+        except GameError:
+            raise
+        except Exception as e:                                # a save that passed the shape check but still breaks the loader
+            raise SaveError(f"This save is damaged and could not be read ({type(e).__name__}).") from e
+
+    @classmethod
+    def _from_dict(cls, d: dict) -> "Game":
         from .ai import Conflict
         from .archetypes import ARCHETYPES
         g = cls(d.get("seed"), d.get("parties", {}).get("size", config.PARTY_SIZE))

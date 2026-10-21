@@ -95,8 +95,6 @@ ROADMAP: List[Dict[str, object]] = [
          text="Units that animate and show statuses, without touching the rules."),
     dict(id=19, group="After floor 50", title="Art and sound", status="later",
          text="Sprites and animated slimes in place of the CSS blobs, plus sound effects."),
-    dict(id=34, group="QA", title="C1 (critical): a bad save locks players out", status="planned",
-         text="A damaged save in the browser build shows a traceback and no way out. It will be checked on load with start-fresh / restore options."),
     dict(id=35, group="QA", title="M1: reload during a manual battle undoes permadeath", status="planned",
          text="A battle you command by hand is not saved, so reloading brings dead slimes back."),
     dict(id=36, group="QA", title="M2: shown odds do not match the code", status="planned",
@@ -137,8 +135,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-23",
-                 text="Formations: every slime and monster stands in the front or back row. Melee blows reach only the front row, the back row is sheltered; set rows on the party card or in a slime's Orders.")
+WHATS_NEW = dict(id="2026-10-24",
+                 text="A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
 
 
 def build() -> Dict[str, object]:

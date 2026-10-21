@@ -79,8 +79,17 @@ function ghost(g) { // graveyard entry
 }
 
 /* ---------------------------------------------------------------- persistence + api */
-function saveLocal(save) { S.lastSave = save; try { localStorage.setItem(LS_KEY, JSON.stringify({ save, at: Date.now() })); } catch (e) { /* storage may be blocked */ } }
-function loadLocal() { try { const r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r).save : null; } catch (e) { return null; } }
+const LS_BAK = 'slimegacha.save.bak', LS_PREV = 'slimegacha.save.prev', LS_DAMAGED = 'slimegacha.save.damaged';
+/* The save is written after every action; every five minutes the save it replaces is kept as a backup, so a damaged save can be rolled back. */
+function saveLocal(save) {
+  S.lastSave = save;
+  try {
+    if (Date.now() - (S.bakAt || 0) > 300000) { const prev = localStorage.getItem(LS_KEY); if (prev) { localStorage.setItem(LS_BAK, prev); S.bakAt = Date.now(); } }
+    localStorage.setItem(LS_KEY, JSON.stringify({ save, at: Date.now() }));
+  } catch (e) { /* storage may be blocked */ }
+}
+const rawLocal = (key = LS_KEY) => { try { return localStorage.getItem(key); } catch (e) { return null; } };
+function loadLocal(key = LS_KEY) { try { const r = rawLocal(key); return r ? JSON.parse(r).save : null; } catch (e) { return null; } }
 
 function toast(msg, err = false) {
   const box = document.getElementById('toasts');
@@ -322,6 +331,19 @@ function declutter() {
 
 function welcome() {
   const saved = loadLocal();
+  if (S.damaged) {
+    const bak = loadLocal(LS_BAK);
+    return `<div class="welcome panel stack">
+      <h1>Your save could not be loaded</h1>
+      <p class="mute">${esc(S.damaged.error || 'The saved colony is damaged.')}</p>
+      <p>Nothing has been deleted: the damaged save is still in this browser. You can go back to the last backup, copy the damaged save to keep or repair it, or start a new colony (the damaged save is kept as a copy).</p>
+      <div class="stack">
+        ${bak ? '<button class="btn primary" data-act="restore_backup">↩ Restore the last backup</button>' : '<small class="mute">There is no backup yet (one is made every few minutes of play).</small>'}
+        <button class="btn" data-act="copy_damaged">📋 Copy the damaged save text</button>
+        <label class="btn" style="display:block">⬆ Import a save file<input type="file" accept=".json,application/json" data-import hidden></label>
+        <button class="btn danger" data-act="start_over">🗑 Start a new colony</button>
+      </div></div>`;
+  }
   return `<div class="welcome panel">
     <div class="blob big"><div class="body"><i></i><i></i></div><span class="em">🟢</span></div>
     <h1>Slime Gacha</h1>
@@ -1575,9 +1597,21 @@ const A = {
     return A.merge_go(d); },
   merge_go: (d) => confirmThen(`Sacrifice ${d.dn} to feed ${d.tn}?\n\n${d.dn} is consumed for good (+${d.xp} XP for ${d.tn}).\nThe colony's morale will fall (about ${d.g} points in total), and repeated sacrifices compound.`,
     () => act('merge', { target: num(d.t), donor: num(d.d) })),
-  newgame: () => act('new_game', { seed: ui('seed') ? num(ui('seed')) : null, party_size: num(ui('psize', 5), 5) }).then(() => { S.tab = 'colony'; S.sel = null; S.pull = null; render(); }),
+  newgame: () => { const prev = rawLocal(); if (prev) { try { localStorage.setItem(LS_PREV, prev); } catch (e) { /* full */ } } return act('new_game', { seed: ui('seed') ? num(ui('seed')) : null, party_size: num(ui('psize', 5), 5) }).then(() => { S.tab = 'colony'; S.sel = null; S.pull = null; render(); }); },
   newgame2: () => confirmThen('Abandon this colony and start over? The current save will be overwritten.', () => { S.modal = null; S.state = null; S.feed = []; render(); }),
-  continue: async () => { const save = loadLocal(); const r = await backend.call('load', { save }); if (r.ok) { S.state = r.state; render(); } else toast(r.error, true); },
+  continue: async () => { const save = loadLocal(); let r; try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
+    if (r.ok) { S.state = r.state; render(); } else { S.damaged = { error: r.error }; render(); } },
+  restore_backup: async () => { const save = loadLocal(LS_BAK); if (!save) return toast('No backup found.', true);
+    let r; try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
+    if (!r.ok) return toast('The backup is damaged too: ' + r.error, true);
+    const bad = rawLocal(); if (bad) { try { localStorage.setItem(LS_DAMAGED, bad); } catch (e) { /* full */ } }
+    S.damaged = null; S.state = r.state; saveLocal(r.save || save); toast('Backup restored.'); render(); },
+  copy_damaged: async () => { const raw = rawLocal(); if (!raw) return toast('Nothing to copy.', true);
+    try { await navigator.clipboard.writeText(raw); toast('Damaged save copied.'); } catch (e) { toast('Copying is blocked here.', true); } },
+  start_over: () => confirmThen('Start a new colony?\n\nThe damaged save is kept as a copy in this browser, but the new colony will replace it as your current save.', () => {
+    const bad = rawLocal(); if (bad) { try { localStorage.setItem(LS_DAMAGED, bad); } catch (e) { /* full */ } }
+    try { localStorage.removeItem(LS_KEY); } catch (e) { /* blocked */ }
+    S.damaged = null; S.lastSave = null; render(); }),
   export: async () => { await exportSave(); render(); },
   dismiss_news: () => { lsSet(LS_NEWS, S.state.whats_new.id); render(); },
   snooze_backup: () => { lsSet(LS_SNOOZE, Date.now()); render(); },
@@ -1608,7 +1642,7 @@ document.addEventListener('change', async (e) => {
   if (t.dataset.actChange === 'stance' && S.sel) { act('stance', { id: S.sel, stance: t.value }); return; }
   if (t.hasAttribute('data-import') && t.files[0]) {
     try { const save = JSON.parse(await t.files[0].text()); const r = await backend.call('load', { save });
-      if (r.ok) { S.state = r.state; saveLocal(save); S.modal = null; toast('Save imported.'); render(); } else toast(r.error, true);
+      if (r.ok) { S.state = r.state; S.damaged = null; saveLocal(save); S.modal = null; toast('Save imported.'); render(); } else toast(r.error, true);
     } catch (err) { toast('That file is not a valid save.', true); }
   }
 });
@@ -1650,9 +1684,11 @@ setInterval(() => syncLive(), 30000);
     backend = await chooseBackend(msg);
     S.backendName = backend.name;
     const save = loadLocal();
+    if (rawLocal() && !save) S.damaged = { error: 'The saved colony could not be read.' };            // present but not valid JSON
     if (save) {
-      const r = await backend.call('load', { save });
-      if (r.ok) { S.state = r.state; pushLog(['Welcome back, Keeper.']); }
+      let r;
+      try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
+      if (r.ok) { S.state = r.state; pushLog(['Welcome back, Keeper.']); } else S.damaged = { error: r.error };
     }
     render();
   } catch (e) {

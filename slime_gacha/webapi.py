@@ -1080,6 +1080,8 @@ class Session:
             return self._fail(f"Unknown {str(e).strip(chr(39))}.")
         except (ValueError, TypeError) as e:
             return self._fail(f"Bad request: {e}")
+        except Exception as e:                        # never let a stray error kill the session: report it and keep the game as it was
+            return self._fail(f"Something went wrong ({type(e).__name__}: {e}). Your colony is unchanged.")
 
     def call_json(self, cmd: str, args_json: str = "{}") -> str:
         """String in / string out - what the Pyodide transport uses."""
