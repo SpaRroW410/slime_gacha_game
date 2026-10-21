@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -147,8 +147,6 @@ def ability_view(a) -> dict:
                 element=a.element, tier=a.tier, creator=a.creator, description=a.description, forms=spells.mutation_view(a))
 
 
-_AWAY_PLACE = dict(rescue="🛟 Rescue mission", stranded="🆘 Stranded", grind="🫧 Gloop Pit", adventure="🧭 Wayfarer's Rift", quarry="💎 Starfall Quarry", scout="🔭 Scouting",
-                   lab="⚗️ Alchemy Lab", wave="🧪 Wave simulation", train="🥊 Training Grounds", main="🕳 Hollow Descent")
 
 
 def away_view(g: Game) -> list:
@@ -192,7 +190,7 @@ def away_view(g: Game) -> list:
     for e in g.expeditions:
         ids = [i for i in e["ids"] if i in g.roster]
         if ids:
-            where = _AWAY_PLACE.get(g.roster[ids[0]].in_dungeon, "🕳 Dungeon")
+            where = (places_mod.PLACES.get(g.roster[ids[0]].in_dungeon).title if g.roster[ids[0]].in_dungeon in places_mod.PLACES else "🕳 Dungeon")
             out.append(item("expedition", where, ids, g.remaining_hours(e["until"]) if g.timed else None))
     for pid, d in g.delves.items():
         ids = [m.id for m in g._members_in("main", pid)]
@@ -325,6 +323,7 @@ def snapshot(g: Game) -> dict:
                                 for e in g.expeditions] if g.timed else []),
         reports=[dict(id=h['id'], title=h['title'], battles=h['battles'], summary=h['summary']) for h in g.held if h['paid']],
         held=[dict(title=h['title'], hours=max(0, h['due'] - g.tick_count)) for h in g.held if not h['paid']],
+        places=[dict(key=p.key, name=p.name, emoji=p.emoji, blurb=p.blurb, drop=p.drop, loot=p.loot) for p in places_mod.PLACES if p.kind == "expedition" and p.drop == "loot"],
         stress=round(g.sacrifice_stress, 2), feathers=dict(have=g.feathers, cost=config.FEATHER_COST, hp=config.FEATHER_HP),
         gift=dict(morale=config.GIFT_MORALE_COST, morale_gain=config.GIFT_MORALE_GAIN, peace=config.GIFT_PEACE_COST,
                   potion=config.GIFT_POTION_PURPLE, merge_gear=config.GEAR_MERGE_COUNT, scrap=config.GEAR_SCRAP_REFUND),
@@ -721,6 +720,12 @@ def _quarry(g, a):
     return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
 
 
+@command("explore")
+def _explore(g, a):
+    r = g.explore(str(a.get("place", "")), [int(x) for x in a.get("ids", [])], _i(a, "runs", 1))
+    return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
 @command("keeper_learn")
 def _keeper_learn(g, a):
     return _msg(g.keeper_learn(a.get("key", "")))
@@ -1047,7 +1052,7 @@ def _skirmish(g, a):
     return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a), a.get("lo") and _i(a, "lo"), a.get("hi") and _i(a, "hi"), _i(a, "waves", 1)))
 
 
-SESSION_TITLES = dict(grind="The Gloop Pit", adventure="The Wayfarer's Rift", quarry="The Starfall Quarry", skirmish="Wave simulation",
+SESSION_TITLES = dict(grind="The Gloop Pit", adventure="The Wayfarer's Rift", quarry="The Starfall Quarry", explore="An expedition", skirmish="Wave simulation",
                       wave="Wave simulation", delve_next="The Hollow Descent", spar="Sparring match", spar_parties="Party sparring")
 
 

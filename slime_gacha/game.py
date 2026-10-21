@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements
+from . import achievements, places
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -764,7 +764,7 @@ class Game:
         """Care (feeding, petting, sleeping, talking, potions) is impossible while a slime is inside a dungeon -
         unless the Vice Keeper is in there with them."""
         s = self.slime(sid)
-        if s.in_dungeon in ("main", "grind", "scout", "adventure", "quarry", "stranded") and not self.vice_reaches(s):
+        if s.in_dungeon in places.away_kinds() and not self.vice_reaches(s):
             raise InvalidAction(f"{s.name} is inside a dungeon - you cannot tend to them until they are back.")
         return s
 
@@ -2258,7 +2258,7 @@ class Game:
     def _herb_drop(self, where: str, foes: int, log: List[str], terrain=None) -> None:
         """Coloured herbs for the Alchemy Lab. The terrain decides the main colour (so the daily Pit's herb changes
         with its theme); plentiful in the Pit, a few elsewhere."""
-        p = config.HERB_DROP.get(where, 0)
+        p = places.PLACES.get(where).herb if where in places.PLACES else config.HERB_DROP.get(where, 0)
         got: Dict[str, int] = {}
         local = config.TERRAIN_HERB.get(terrain.kind) if terrain else None
         for _ in range(foes):
@@ -2784,6 +2784,13 @@ class Game:
         is ASCENSION STONES (and a little XP), not relics."""
         return self._expedition("quarry", sids, runs, False)
 
+    def explore(self, key: str, sids: List[int], runs: int = 5) -> GrindResult:
+        """Send a party to any data-defined expedition place (places.py)."""
+        p = places.PLACES.get(key) if key in places.PLACES else None
+        if not p or p.kind != "expedition":
+            raise InvalidAction(f"'{key}' is not a place you can explore.")
+        return self._expedition(key, sids, runs, False)
+
     def _expedition(self, kind: str, sids: List[int], runs: int, lure: bool) -> GrindResult:
         """A party of 1-5 slimes (any slimes, no formal party needed) fights waves one level ABOVE their average,
         hunting relics. Nobody dies (like the Pit): a knocked-out slime loses morale and its relics are damaged.
@@ -2833,14 +2840,14 @@ class Game:
                         lure = False
                         res.summary.append("   (out of purple gel - the lure is spent)")
                 avg = sum(s.level for s in members) / len(members)
-                theme = dungeon.pit_theme(self.dungeon_seed ^ (0xA11 if kind == "adventure" else 0x57A), self.day * 8 + (n % 8))
+                pl = places.PLACES.get(kind)
+                theme = dungeon.pit_theme(self.dungeon_seed ^ pl.salt, self.day * 8 + (n % 8))
                 enemies = dungeon.grind_wave(avg, 3 + config.ADV_MONSTER_LEVEL,
                                            max(1, round(len(members) * config.ADV_FOE_RATIO)), self.rng, theme)
                 rep = self._run_battle(members, enemies, permadeath=False, split_xp=False,
-                                       xp_mult=(config.ADV_XP_MULT if kind == "adventure" else config.QUARRY_XP_MULT),
+                                       xp_mult=pl.xp_mult,
                                        terrain=theme.terrain)
-                place = "🧭 The Wayfarer's Rift" if kind == "adventure" else "💎 The Starfall Quarry"
-                rep.log.insert(0, f"{place} (monsters ~lvl {dungeon.grind_level(avg, 4)}) - "
+                rep.log.insert(0, f"{pl.title} (monsters ~lvl {dungeon.grind_level(avg, 4)}) - "
                                   f"{theme.terrain.emoji} {theme.terrain.name}")
                 self._after_battle(members, rep, scale=0.4)
                 events: List[str] = []
@@ -2849,7 +2856,7 @@ class Game:
                     self.social.shift_morale(s, config.GRIND_DEATH_MORALE)
                     events.append(f"💫 {s.name} was knocked out: morale {config.GRIND_DEATH_MORALE:+.0f}.")
                 self._ko_wear(downed, events)
-                if rep.victory and kind == "quarry":
+                if rep.victory and pl.drop == "stones":
                     for _ in enemies:
                         if self.rng.random() < config.QUARRY_DROP_PER_FOE * (1 + 0.2 * self.keeper.rank("stonecutter")):
                             got = ascension.roll_stone(self.rng)
@@ -2859,7 +2866,14 @@ class Game:
                 if rep.victory:
                     self._herb_drop(kind, len(enemies), events, theme.terrain)
                     self._farm_loot(len(enemies), events)
-                if rep.victory and kind != "quarry":
+                if rep.victory and pl.loot:
+                    for _ in enemies:
+                        for res, (chance, lo, hi) in pl.loot.items():
+                            if self.rng.random() < chance:
+                                n_ = self.rng.randint(lo, hi)
+                                self.wallet.add(res, n_)
+                                events.append(f"🎒 Found {n_} {res.replace('_', ' ')}.")
+                if rep.victory and pl.drop == "relics":
                     self._stone_side_drop("adventure", len(enemies), events)
                     for _ in enumerate(enemies):
                         if self.rng.random() < config.ADV_DROP_PER_FOE:
@@ -3810,6 +3824,6 @@ class Game:
                         sl.state = "idle"
         away = {i for e in g.expeditions for i in e["ids"]}      # a battle that was open when the game was saved is gone:
         for sl in g.slimes():                                     # free its party (the Descent keeps its own delve flags)
-            if sl.in_dungeon in ("grind", "scout", "adventure", "quarry", "rescue") and sl.id not in away:
+            if sl.in_dungeon in places.session_kinds() and sl.id not in away:
                 sl.in_dungeon = ""
         return g

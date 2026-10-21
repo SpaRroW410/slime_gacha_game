@@ -11,12 +11,12 @@ const WISH = { energy: 'needs sleep', food: 'is hungry', safety: 'feels unsafe (
 const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'],
   ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide'], ['about', 'ℹ️ About']];
 const SUBS = {
-  dungeons: [['descent', 'Hollow Descent'], ['scouting', 'Scouting'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['hunts', 'Hunts & foraging'], ['wave', 'Wave simulation']],
+  dungeons: [['descent', 'Hollow Descent'], ['scouting', 'Scouting'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['places', 'More places'], ['hunts', 'Hunts & foraging'], ['wave', 'Wave simulation']],
   town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
   academy: [['training', '🥋 Training & sparring'], ['library', '📚 Library & spells']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
-const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'stranded', 'rescue'];
+const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'mossy_burrows', 'stranded', 'rescue'];
 
 let backend = null;
 const S = { state: null, tab: 'colony', sel: null, sort: 'power', filter: 'all', feed: [], modal: null, pull: null,
@@ -743,6 +743,7 @@ function dungeons() {
   else if (v === 'scouting') body = `<div class="grid cols2">${p.stranded}${p.scouting}</div>`;
   else if (v === 'pit') body = `<div class="grid cols2">${p.pit}</div>`;
   else if (v === 'quarry') body = quarryView();
+  else if (v === 'places') body = placesView();
   else if (v === 'hunts') body = huntsView();
   else if (v === 'wave') body = `<div class="grid cols2">${p.wave}</div>`;
   else body = riftView();
@@ -755,6 +756,14 @@ function slimePickRow(a) {
   const st = S.state;
   const sel = new Set((ui('adv_ids', []) || []).map(num));
   return { sel, html: `<div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>` };
+}
+function placesView() {
+  const st = S.state, a = st.gear.adventure;
+  const pick = slimePickRow(a);
+  return `<div class="grid cols2">${st.places.map((p) => `<div class="panel stack"><h2>${p.emoji} ${esc(p.name)}</h2><p class="mute">${esc(p.blurb)} Any <b>1–${a.max_party}</b> slimes may go; monsters are one level above the party; nobody dies. Finds: ${Object.keys(p.loot).map((k) => esc(k.replace('_', ' '))).join(', ')}.</p>
+    ${pick.html}
+    <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" data-rerender="1" style="width:70px"></label>
+      <button class="btn primary" data-act="explore" data-place="${p.key}" ${pick.sel.size ? '' : 'disabled'}>${p.emoji} Explore (${pick.sel.size}/${a.max_party})</button></div></div>`).join('')}</div>`;
 }
 function quarryView() {
   const st = S.state, a = st.gear.adventure;
@@ -1481,6 +1490,7 @@ const A = {
   slime_star: () => act('slime_star', { id: S.sel }),
   merge_stones: (d) => act('merge_stones', { rarity: d.r }),
   destroy_slime: (d) => confirmThen(`Destroy ${d.n} in the Destruction Chamber?\n\nYou receive ${d.y}. ${d.n} is gone forever and the colony will mourn (sacrifice stress).`, () => act('destroy_slime', { id: num(d.id) }).then(() => { S.sel = null; render(); })),
+  explore: (d) => { const ids = (ui('adv_ids', []) || []).map(num); act('explore', { place: d.place, ids, runs: num(ui('adv_runs', 5), 5) }, { title: 'An expedition', slow: true }).then(() => { S.ui.adv_ids = []; render(); }); },
   quarry: () => { const ids = (ui('adv_ids', []) || []).map(num); act('quarry', { ids, runs: num(ui('adv_runs', 5), 5) }, { title: 'The Starfall Quarry', slow: true }).then(() => { S.ui.adv_ids = []; render(); }); },
   brew: () => act('brew', { id: num(ui('brewer', S.state.slimes.find((x) => !x.busy)?.id)), kind: ui('brew_kind', 'stamina'), grade: num(ui('brew_grade', 1), 1) }, { slow: true }),
   use_potion: () => { const [kind, grade] = String(ui('pot_sel', S.state.potions.stock[0] ? S.state.potions.stock[0].kind + ':' + S.state.potions.stock[0].grade : ':')).split(':'); act('use_potion', { id: S.sel, kind, grade: num(grade) }); },

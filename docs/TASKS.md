@@ -30,7 +30,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 - [ ] **15. Campaign chapters from STORY.md** — story beats at floors and boss clears.  *Done when:* chapters trigger from data and are readable in game.
 
 ## Platform
-- [ ] **14. Named dungeon registry** — dungeons defined as data.  *Done when:* Descent, Pit, Rift and Quarry load from definitions and a new one can be added without code.
+- [x] **14. Named dungeon registry** — dungeons defined as data.  *Done when:* Descent, Pit, Rift and Quarry load from definitions and a new one can be added without code.
 - [ ] **16. Daily free pull on the real clock** — in both time modes, with offline catch-up.  *Done when:* the pull resets by wall clock everywhere.
 - [ ] **20. PWA manifest and service worker** — installable offline play.  *Done when:* installs on iPhone and Windows and works with no network.
 - [ ] **23. Mod loader (`plugins/`) with docs** — documented plugin API with an example.  *Done when:* an example plugin adds a class, a skill and an enemy.

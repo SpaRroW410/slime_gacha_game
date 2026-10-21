@@ -347,3 +347,25 @@ class ImbueAndFeatherTest(unittest.TestCase):
         g.craft_feather(2)
         self.assertEqual(g.feathers, 2)
         self.assertEqual(Game.from_dict(g.to_dict()).feathers, 2)
+
+
+class PlacesTest(unittest.TestCase):
+    def test_data_defined_place_runs(self):
+        import json, os, tempfile
+        from slime_gacha import places
+        from slime_gacha.game import Game
+        d = [dict(key="test_cave", name="Test Cave", emoji="🕳", loot={"food": [1.0, 2, 2]}, salt=5)]
+        path = os.path.join(tempfile.mkdtemp(), "p.json")
+        json.dump(d, open(path, "w"))
+        self.assertEqual(places.load_json(path), 1)
+        g = Game(8)
+        g.wallet.add("white_gel", 3000)
+        g.pull(3, "white_gel")
+        for s in g.slimes():
+            s.level = 20
+        before = g.wallet.get("food")
+        r = g.explore("test_cave", [s.id for s in g.slimes()], 2)
+        self.assertTrue(r.runs)
+        self.assertGreaterEqual(g.wallet.get("food"), before)
+        with self.assertRaises(Exception):
+            g.explore("main", [1], 1)
