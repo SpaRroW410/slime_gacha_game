@@ -89,7 +89,7 @@ label.f { display: flex; gap: 6px; align-items: center; font-size: .9rem; color:
   animation: bob 3.2s ease-in-out infinite; flex: none; display: block; }
 .blob .body { --w: 52px; --h: 44px; position: absolute; left: 50%; top: 54%; width: var(--w); height: var(--h); transform: translate(-50%, -50%);
   border-radius: 50% 50% 44% 44% / 62% 62% 38% 38%;
-  background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .75), var(--c) 38%, color-mix(in srgb, var(--c) 60%, #000) 100%);
+  background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .75), var(--c) 38%, color-mix(in srgb, var(--c) 76%, #000) 100%);
   box-shadow: 0 5px 0 -2px color-mix(in srgb, var(--c) 50%, #000), 0 7px 12px rgba(0, 0, 0, .3); }
 .blob .body::before, .blob .body::after { content: ""; position: absolute; display: none; background: color-mix(in srgb, var(--c) 78%, #fff); }
 .blob i { position: absolute; top: 42%; width: 7px; height: 9px; border-radius: 50%; background: #10201a; z-index: 1; }
@@ -311,8 +311,8 @@ html { overflow-x: clip; max-width: 100%; -webkit-text-size-adjust: 100%; text-s
 body { overflow-x: clip; max-width: 100vw; }
 nav.tabs, .topscroll { max-width: 100%; contain: inline-size; }
 
-/* class headgear drawn over the slime's head */
-.blob .hat { position: absolute; left: 50%; top: 10%; width: 52%; transform: translateX(-50%); z-index: 3; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+/* class headgear: sits on the dome of the head, below the rarity ears / tip / crown and above the eyes */
+.blob .hat { position: absolute; left: 50%; top: 20%; width: 40%; transform: translateX(-50%); z-index: 3; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
 .blob.sm .hat { display: none; }
 table.odds { width: 100%; border-collapse: collapse; font-size: .85rem; margin: 6px 0; } table.odds th, table.odds td { padding: 3px 6px; border-bottom: 1px solid var(--line); text-align: left; }
 
