@@ -55,8 +55,8 @@ Findings not yet re-verified against the current code; check each before fixing 
 - [x] **40. M6: failed saves are silent; no offline support** — storage errors are swallowed; no manifest or service worker.  *Done when:* a visible warning appears when saving fails and the page works offline (see task 20).
 - [x] **41. M7: waiting gets very slow in big colonies** — `_healer_aura` rescans and recomputes `max_hp` per healer (+1 day: 0.4 s at 100 slimes, 11 s at 500).  *Done when:* +1 day under 1 s at 250 slimes in native Python.
 - [x] **42. M8: every action sends and stores the full state and save** — 0.95 MB at 200 slimes; pull count unbounded.  *Done when:* replies carry deltas or are bounded, saves are written on a timer/pause, and pull count is capped.
-- [ ] **43. M9: time controls and active tab scroll out of view on phones** — header snaps back after each action.  *Done when:* the +1h/+4h/+1 day buttons and the active tab stay reachable at 375 px.
-- [ ] **44. M10: toast messages block taps** — they accept taps and cover the pull buttons.  *Done when:* toasts let taps through and sit clear of the main buttons.
+- [x] **43. M9: time controls and active tab scroll out of view on phones** — header snaps back after each action.  *Done when:* the +1h/+4h/+1 day buttons and the active tab stay reachable at 375 px.
+- [x] **44. M10: toast messages block taps** — they accept taps and cover the pull buttons.  *Done when:* toasts let taps through and sit clear of the main buttons.
 - [ ] **45. M11: slimes cannot be opened from the keyboard; dialogs lack roles** — slime cards are plain divs.  *Done when:* cards are focusable and open with Enter, dialogs have `role="dialog"` and trap focus.
 - [ ] **46. Minor bugs m1-m9** — Android back, light-theme contrast, star screen-reader text, small tap targets, constant animation, unguarded `syncLive`, no new-game backup, odd saved numbers, unchecked spell names.  *Done when:* each is fixed or consciously declined.
 

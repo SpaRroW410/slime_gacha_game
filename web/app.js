@@ -305,7 +305,6 @@ function render() {
       ${fp.available ? chip('🎁 free pull', 'ok') : ''}
       <button class="chip chipbtn" data-act="sound" aria-label="Sound effects" title="Sound effects on/off">${SFX.on ? '🔊' : '🔇'}</button>
       ${st.stress >= 0.1 ? chip(`😖 ${st.stress}`, 'bad') : ''}
-      ${clk.mode === 'turn' ? `<div class="seg small"><button data-act="wait" data-h="1">+1h</button><button data-act="wait" data-h="4">+4h</button><button data-act="wait" data-h="24">+1 day</button></div>` : ''}
     </div>
   </header>
   ${S.stockOpen ? `<div class="popover" id="stockpop"><div class="row" style="gap:6px">${stock.map(([k, v]) => chip(`${RES[k]?.[0] || ''} ${RES[k]?.[1] || k}: <b>${v}</b>`)).join('')}</div></div>` : ''}
@@ -314,6 +313,7 @@ function render() {
   ${awayBar()}
   ${notices()}
   <main>${tabContent()}</main>
+  ${clk.mode === 'turn' ? `<div class="timebar" role="group" aria-label="Pass time"><button data-act="wait" data-h="1">+1h</button><button data-act="wait" data-h="4">+4h</button><button data-act="wait" data-h="24">+1 day</button></div>` : ''}
   <section style="padding:0 16px 20px;max-width:1280px;margin:0 auto;width:100%"><details><summary class="mute">Event log</summary><div class="feed">${S.feed.map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Nothing yet.</small>'}</div></details></section>
   ${S.sel && slimeById(S.sel) ? `<div class="scrim" data-act="closesel"></div>${drawer(slimeById(S.sel))}` : ''}
   ${S.state.battle ? ARENA.render(S.state.battle) : ''}
