@@ -440,3 +440,40 @@ class SpellNameTest(unittest.TestCase):
         for bad in ("<b>x</b>", "x" * 80):
             with self.assertRaises(InvalidAction):
                 spells.design_fusion(a, b, bad)
+
+
+class SanityTest(unittest.TestCase):
+    def _g(self):
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.wallet.add("white_gel", 1000)
+        g.pull(2, "white_gel")
+        return g
+
+    def test_sanity_caps_mood_and_care_has_diminishing_returns(self):
+        from slime_gacha import sanity, config
+        g = self._g()
+        a, b = g.slimes()[:2]
+        a.rarity, b.rarity = "common", "legendary"
+        a.sanity, b.sanity = sanity.cap(a), sanity.cap(b)
+        self.assertGreater(sanity.cap(b), sanity.cap(a))                        # rarer = bigger reserve
+        la, lb = sanity.hit(a, 20), sanity.hit(b, 20)
+        self.assertGreater(la, lb)                                              # ... and loses less per blow
+        a.sanity = 0
+        for k in a.needs.v:
+            a.needs.v[k] = 100.0
+        self.assertLessEqual(a.mood(), config.SANITY_MOOD_FLOOR + 1e-9)         # fed and happy needs, still capped
+        self.assertTrue(g.refusal(a, "dungeon"))
+        a.sanity = 30
+        g.talk(a.id)
+        first = a.sanity
+        g.talk(a.id)
+        self.assertEqual(a.sanity, first)                                       # only the first talk of the day helps
+        self.assertGreater(first, 30)
+
+    def test_rest_rebuilds_sanity(self):
+        g = self._g()
+        s = g.slimes()[0]
+        s.sanity, s.state = 10, "sleeping"
+        g._sanity_tick()
+        self.assertGreater(s.sanity, 10)

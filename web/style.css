@@ -333,3 +333,4 @@ nav.tabs { top: calc(56px + env(safe-area-inset-top)); }
 .blob .gear-back, .blob .gear-front { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .blob .gear-back { z-index: 0; } .blob.geared .body { z-index: 1; } .blob.geared .mouth { z-index: 2; } .blob .gear-front { z-index: 3; }
 .blob.geared .gear-front, .blob.geared .gear-back { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+.bar.sanity > i { background: linear-gradient(90deg, #7b6bff, #b58cff); }

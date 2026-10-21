@@ -514,6 +514,7 @@ function card(s) {
   if (s.dominant && !s.busy) b.push(badge(WISH[s.dominant], 'warn'));
   if (s.feelings.length && s.feelings[0].value >= 40) b.push(badge(`${s.feelings[0].emoji} ${esc(s.feelings[0].name)}`, s.feelings[0].kind === 'bad' ? 'warn' : 'ok'));
   if (s.morale_label === 'broken') b.push(badge('broken morale', 'bad'));
+  if (s.sanity_label === 'breaking' || s.sanity_label === 'frayed') b.push(badge(`🧠 ${s.sanity_label}`, s.sanity_label === 'breaking' ? 'bad' : 'warn'));
   if (s.outlook) b.push(badge(`${s.outlook.emoji} ${s.outlook.name}`, 'info'));
   return `<div class="scard ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">
     ${figure(s)}
@@ -549,6 +550,7 @@ function dOverview(s, { st, free, inDun }) {
     <small class="mute">⚡ Total power <b>${s.power}</b> = (${Object.entries(s.power_parts).map(([k, v]) => `${k} ${v}`).join(' + ')}) × mood &amp; morale ${s.power_mult} ${info('Total power sums what the slime is (stats: class, level, rarity, stars, stage, gear, relics, potions) and what it can do (skills scaled by the stat they use, capstones and spell forms counting extra, star attributes, elemental mastery, fighting styles, class proficiency), then multiplies by its current mood and morale.')}</small>
     ${bar(s.hp, s.max_hp, 'hp', 'HP')}${bar(s.xp, s.xp_next, 'xp', 'XP', s.level >= s.level_cap ? 'level cap' : `${s.xp}/${s.xp_next}`)}
     ${bar(s.morale, 100, 'morale', `Morale — ${s.morale_label}`, `power ×${s.morale_factor}`)}
+    ${bar(s.sanity, s.sanity_max, 'sanity', `Sanity ${s.sanity}/${s.sanity_max} — ${s.sanity_label}`, s.mood_cap < 1 ? `mood capped at ${Math.round(s.mood_cap * 100)}%` : 'no cap')} ${info('Sanity is how much a slime can take. Deaths of friends, knock-outs, lost battles, brawls and long miserable stretches wear it down; sleep, the Rest Area, the Hospital, a calm happy home, a won fight, the Keeper\'s Soothe and one talk a day build it back. Low sanity caps the mood, so food and pets alone cannot fix a worn-down slime; below 20% it refuses dungeons, below 10% work. Rarer slimes have a bigger reserve and lose less per blow.')}
     ${bar(s.stamina, s.max_stamina, 'know', `⚡ Stamina`, `${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}
     ${s.buffs.length ? `<div class="row"><small class="mute">potion slots ${s.buffs.length}/${s.potion_slots}</small>${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}
     ${sect(`Needs ${s.dominant ? badge(WISH[s.dominant], 'warn') : badge('content', 'ok')}`, 'Needs fall over time. Unmet needs lower mood and morale, stir bad feelings and, at zero, hurt the slime. See the Guide tab for details.', Object.entries(s.needs).map(([k, v]) => bar(v, 100, 'need', NEED_NAME[k], v)).join(''))}
@@ -614,7 +616,7 @@ function dMind(s, { st, free, inDun }) {
   return `${sect('Feelings', 'Passing feelings shift stats in battle. The Guide tab lists what raises and lowers each one.', `<div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value))).join('') : '<small class="mute">Calm and unremarkable.</small>'}
       ${Object.keys(s.feeling_effects).length ? `<small class="mute">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
       ${s.awareness ? `<div>🧩 <b>Awareness: ${esc(s.awareness.name)}</b> <small class="mute">${s.awareness.points}/100${s.awareness.temperament ? ' · ' + (s.awareness.temperament === 'accept' ? 'at peace' : 'in despair') : ''}</small></div>` : ''}
-      <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''}>💬 Talk</button></div></div>`)}
+      <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button></div></div>`)}
     ${sect('Relationships', 'Ties form from bonds: friends, best friends, rivals, mentors and couples. See the People tab.', `<div class="stack" style="gap:3px">${s.relations.map((r) => { const o = slimeById(r.other); if (!o) return ''; const label = r.kind === 'mentor' ? (r.mentor === s.id ? '🎓 Mentee' : '🎓 Mentor') : em[r.kind]; return `<div>${label}: <b>${esc(o.name)}</b></div>`; }).join('') || '<small class="mute">No ties yet.</small>'}
       ${s.parents.length ? `<div>🥚 Child of <b>${s.parent_names.map(esc).join(' &amp; ')}</b> · generation ${s.generation}</div>` : ''}</div>`)}
     ${sect('Experience', 'What this slime has done most shapes its outlook.', `<small class="mute">${Object.entries(s.exp).map(([k, v]) => `${k} ${v}`).join(' · ') || 'no experience yet'}</small><p class="mute">Wins ${s.wins} · merged ${s.merged}</p>`)}`;

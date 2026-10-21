@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements, places, story
+from . import achievements, places, story, sanity
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -212,6 +212,7 @@ class Game:
                 for e in ("anger", "sadness", "fear", "anxiety", "loneliness", "guilt"):
                     emotions.soothe(s, e, 30)
                 s.needs.add("belonging", 5)
+                sanity.heal(s, config.SANITY_SOOTHE)
             msg = "🫧 You hum to the colony. Bad feelings ease."
         elif key == "favor":
             self.gacha.favor = True
@@ -548,6 +549,7 @@ class Game:
             self._stranded_tick(events)
             self._stamina_tick()
             self._emotion_tick(events)
+            self._sanity_tick()
             if self.tick_count % 24 == config.RELATIONS_HOUR:
                 self._relations_day(events)
                 self._proficiency_day(events)
@@ -610,8 +612,37 @@ class Game:
         line = line or emotions.say(s, self.mood_rng)
         top = emotions.dominant(s, 1)
         feel = f" ({emotions.EMOTIONS[top[0][0]].emoji} {emotions.EMOTIONS[top[0][0]].name.lower()})" if top else ""
-        emotions.feel(s, "affection", 3)
-        return f'{s.name}{feel}: "{line}"'
+        n = self._cared(s, "talk")
+        emotions.feel(s, "affection", 3 if n == 1 else 0)
+        if n == 1:                                       # the first talk of the day really helps; more is just chatter
+            sanity.heal(s, config.SANITY_TALK)
+            for e in ("sadness", "anxiety", "loneliness"):
+                emotions.soothe(s, e, 10)
+        note = "" if n == 1 else " (you already talked today: it helps less)"
+        return f'{s.name}{feel}: "{line}"{note}'
+
+    def _cared(self, s: Slime, kind: str) -> int:
+        """Count talks / pets today for this slime (1 = the first): the Keeper's attention wears off when repeated."""
+        if s.cared.get("day") != self.day:
+            s.cared = {"day": self.day, "talk": 0, "pet": 0}
+        s.cared[kind] = s.cared.get(kind, 0) + 1
+        return s.cared[kind]
+
+    def _sanity_tick(self) -> None:
+        """Hourly: rest, the Hospital and a calm home rebuild sanity; a miserable stretch wears it down."""
+        ward = set(self.ward)
+        for s in self.slimes():
+            if s.in_dungeon or s.state == "hunting":
+                continue
+            if s.id in ward and s.state == "resting":
+                sanity.heal(s, config.SANITY_REST["ward"])
+            elif s.state in ("sleeping", "resting"):
+                sanity.heal(s, config.SANITY_REST[s.state] * (1 + 0.1 * (self.buildings.level("barracks") - 1)))
+            nm = s.needs_mood()
+            if nm < 0.25:
+                sanity.hit(s, config.SANITY_HIT["miserable_hour"])
+            elif nm > 0.65 and s.state == "idle":
+                sanity.heal(s, config.SANITY_REST["calm"])
 
     def _relations_day(self, events: List[str]) -> None:
         before = len(self.relations.rel)
@@ -627,6 +658,7 @@ class Game:
                 continue
             k = r["kind"]
             if k == "couple":
+                sanity.hit(o, config.SANITY_HIT["partner_died"])
                 emotions.feel(o, "sadness", 55)
                 emotions.feel(o, "anger", 15)
                 emotions.feel(o, "loneliness", 25)
@@ -751,6 +783,7 @@ class Game:
             self._lose_ties(s)
             self.social.forget(s.id)
             for o in self.slimes():                      # grief: friends hurt more
+                sanity.hit(o, config.SANITY_HIT["friend_died" if o.id in friends else "slime_died"])
                 o.needs.add("belonging", -25 if o.id in friends else -8)
                 emotions.feel(o, "sadness", 35 if o.id in friends else 8)
                 if o.id in friends:
@@ -1117,6 +1150,8 @@ class Game:
             return "is in too bleak a mood and refuses"
         if s.emotions.get("anger", 0) >= config.REFUSE_ANGER:
             return "is in a rage and refuses"
+        if sanity.frac(s) < config.SANITY_REFUSE[kind]:
+            return "is too shaken and refuses (low sanity: let it rest)"
         return ""
 
     def admit_hurt(self) -> List[str]:
@@ -1203,9 +1238,10 @@ class Game:
 
     def pet(self, sid: int) -> str:
         s = self._tend(sid)
-        s.needs.add("belonging", 15)
-        s.needs.add("esteem", 5)
-        gh = 1 + 0.5 * self.keeper.rank("gentle_hands")
+        k = 0.5 ** (self._cared(s, "pet") - 1)           # each pet the same day counts half as much as the last
+        s.needs.add("belonging", 15 * k)
+        s.needs.add("esteem", 5 * k)
+        gh = (1 + 0.5 * self.keeper.rank("gentle_hands")) * k
         emotions.feel(s, "joy", 12 * gh)
         emotions.feel(s, "affection", 8 * gh)
         emotions.soothe(s, "loneliness", 15 * gh)
@@ -1444,11 +1480,13 @@ class Game:
         if kind == "quarrel":
             self.social.add_bond(a, b, -3)
             for s in (a, b):
+                sanity.hit(s, config.SANITY_HIT["quarrel"])
                 self.social.shift_morale(s, -3)
                 emotions.feel(s, "anger", 18)
         elif kind == "brawl":
             self.social.add_bond(a, b, -10)
             for s in (a, b):
+                sanity.hit(s, config.SANITY_HIT["brawl"])
                 self.social.shift_morale(s, -15)
                 emotions.feel(s, "anger", 40)
                 emotions.feel(s, "sadness", 10)
@@ -2004,6 +2042,7 @@ class Game:
                 if sid in self.roster and self.roster[sid].hp > 0:
                     report.log.extend(add_xp(self.roster[sid], int(xp_ * mx)))
             for s in alive:
+                sanity.heal(s, config.SANITY_WIN * scale)
                 emotions.feel(s, "joy", 14 * scale + 4)
                 emotions.feel(s, "pride", (10 + (15 if boss else 0)) * scale + 2)
                 emotions.soothe(s, "fear", 10)
@@ -2012,6 +2051,7 @@ class Game:
                     s.awareness += 3.0
         elif report.winner == "foes":
             for s in alive:
+                sanity.hit(s, config.SANITY_HIT["battle_lost"] * scale)
                 emotions.feel(s, "sadness", 18 * scale + 4)
                 emotions.feel(s, "anger", 12 * scale + 2)
                 emotions.feel(s, "fear", 12 * scale + 2)
@@ -2876,6 +2916,7 @@ class Game:
                 downed = list(rep.fallen)
                 for s in downed:
                     self.social.shift_morale(s, config.GRIND_DEATH_MORALE)
+                    sanity.hit(s, config.SANITY_HIT["knocked_out"])
                     events.append(f"💫 {s.name} was knocked out: morale {config.GRIND_DEATH_MORALE:+.0f}.")
                 self._ko_wear(downed, events)
                 if rep.victory and pl.drop == "stones":
@@ -3587,6 +3628,7 @@ class Game:
                     grinder = outlook.has(s, "pit")
                     mloss = config.GRIND_DEATH_MORALE * (config.OUTLOOK_GRINDER_MORALE if grinder else 1)
                     self.social.shift_morale(s, mloss)                          # an XP farm: a knock-out costs morale, never XP
+                    sanity.hit(s, config.SANITY_HIT["knocked_out"] * (0.5 if grinder else 1))
                     events.append(f"💫 {s.name} was knocked out: morale {mloss:+.0f}.")
                 for s in members:                               # everyone who went in gains Pit experience
                     outlook.bump(s, "pit")

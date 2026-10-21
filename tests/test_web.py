@@ -150,7 +150,7 @@ class TestCommands(unittest.TestCase):
         self.assertTrue(w["state"]["reports"][0]["battles"])
         s.call("ack_report", {"id": w["state"]["reports"][0]["id"]})
         for sl in s.game.slimes():
-            sl.hp, sl.state, sl.grounded = sl.max_hp, "idle", False
+            sl.hp, sl.state, sl.grounded, sl.sanity = sl.max_hp, "idle", False, 100.0
             sl.needs.v.update({k: 90.0 for k in sl.needs.v})
             sl.emotions.clear()
         s.call("party_fill", {"pid": 1})                                                        # (a scout may have fallen)

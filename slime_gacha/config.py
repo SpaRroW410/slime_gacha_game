@@ -481,3 +481,15 @@ FEATHER_HP = 0.3
 # bounds that keep replies and saves small on a phone
 PULL_MAX_N = 100                 # pulls in one action
 COLONY_MAX = 400                 # slimes the colony can hold
+
+# sanity (sanity.py): a mental reserve that caps the mood; rarer slimes have more and lose less per blow
+SANITY_MAX = {"common": 60, "uncommon": 70, "rare": 80, "epic": 90, "legendary": 100}
+SANITY_RESIST = {"common": 1.3, "uncommon": 1.15, "rare": 1.0, "epic": 0.85, "legendary": 0.7}   # x every loss
+SANITY_MOOD_FLOOR = 0.3          # mood cap at zero sanity (grumpy at best)
+SANITY_HIT = {"friend_died": 18, "slime_died": 3, "partner_died": 28, "knocked_out": 5, "battle_lost": 6, "brawl": 8, "quarrel": 2,
+              "miserable_hour": 0.5}
+SANITY_REST = {"sleeping": 0.8, "resting": 1.0, "ward": 1.5, "calm": 0.3}   # per hour; "calm" = idle at home in a good mood
+SANITY_WIN = 1.0                 # a won fight steadies a little
+SANITY_TALK = 6                  # the first talk of the day
+SANITY_SOOTHE = 8                # the Keeper's Soothe, for everyone
+SANITY_REFUSE = {"dungeon": 0.2, "job": 0.1}   # below this share of its reserve a slime refuses
