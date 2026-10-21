@@ -50,7 +50,7 @@ Findings not yet re-verified against the current code; check each before fixing 
 - [x] **35. M1: reloading during a manual battle undoes permadeath** — `Game.flow` is memory-only.  *Done when:* reload mid-battle cannot revive dead slimes or refight the floor.
 - [x] **36. M2: shown odds do not match the code** — purple is x3.57 not x5 and boosts uncommon; star odds and the 3-star minimum are not shown; Favor covers all ten pulls; README, `gacha.py` docstring and `docs/SDD.md` list old rates.  *Done when:* exact odds per pull button are shown and every doc agrees with the code.
 - [x] **37. M3: free pulls repeat without limit** — the daily pull follows game days, which are free to skip; live mode can be gamed with the device clock.  *Done when:* one free pull per real day in both modes (see task 16).
-- [ ] **38. M4: two tabs overwrite each other (static build)** — last save wins.  *Done when:* a second tab is detected and warned or shares one game.
+- [x] **38. M4: two tabs overwrite each other (static build)** — last save wins.  *Done when:* a second tab is detected and warned or shares one game.
 - [ ] **39. M5: Import replaces the colony without asking** — any JSON loads as an empty colony.  *Done when:* import confirms, validates the file and backs up the current colony first.
 - [ ] **40. M6: failed saves are silent; no offline support** — storage errors are swallowed; no manifest or service worker.  *Done when:* a visible warning appears when saving fails and the page works offline (see task 20).
 - [ ] **41. M7: waiting gets very slow in big colonies** — `_healer_aura` rescans and recomputes `max_hp` per healer (+1 day: 0.4 s at 100 slimes, 11 s at 500).  *Done when:* +1 day under 1 s at 250 slimes in native Python.

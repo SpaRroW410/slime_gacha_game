@@ -133,9 +133,19 @@ function saveLocal(save) {
   S.lastSave = save;
   try {
     if (Date.now() - (S.bakAt || 0) > 300000) { const prev = localStorage.getItem(LS_KEY); if (prev) { localStorage.setItem(LS_BAK, prev); S.bakAt = Date.now(); } }
-    localStorage.setItem(LS_KEY, JSON.stringify({ save, at: Date.now() }));
+    const at = Date.now();
+    localStorage.setItem(LS_KEY, JSON.stringify({ save, at, tab: S.tabId }));
+    S.myAt = at;
   } catch (e) { /* storage may be blocked */ }
 }
+/* Two tabs on one colony would overwrite each other's progress: every write is stamped with this tab's id, and a tab that sees a newer
+   write from another tab stops acting (a banner offers to take over with the latest save). */
+S.tabId = Math.random().toString(36).slice(2);
+function otherTabWrote() {
+  try { const r = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); return !!(r && r.tab && r.tab !== S.tabId && r.at > (S.myAt || 0)); } catch (e) { return false; }
+}
+try { S.myAt = (JSON.parse(localStorage.getItem(LS_KEY) || 'null') || {}).at || 0; } catch (e) { S.myAt = 0; }       // whatever is stored when this tab opens counts as seen
+window.addEventListener('storage', (e) => { if (e.key === LS_KEY && otherTabWrote()) { S.otherTab = true; if (S.state) render(); } });
 const rawLocal = (key = LS_KEY) => { try { return localStorage.getItem(key); } catch (e) { return null; } };
 function loadLocal(key = LS_KEY) { try { const r = rawLocal(key); return r ? JSON.parse(r).save : null; } catch (e) { return null; } }
 
@@ -190,6 +200,7 @@ async function exportSave() {
 }
 async function act(cmd, args = {}, opt = {}) {
   if (S.busy) return null;
+  if (S.state && cmd !== 'state' && (S.otherTab || otherTabWrote())) { S.otherTab = true; render(); return null; }
   S.busy = true;
   if (opt.slow) { const v = document.createElement('div'); v.className = 'busy-veil'; v.id = 'veil'; v.innerHTML = '<div class="spin"></div>'; document.body.appendChild(v); }
   let res;
@@ -909,6 +920,7 @@ function backupAge() { const t = Number(lsGet(LS_EXPORT)); return t ? (Date.now(
 function backupDue() { const a = backupAge(); return (a === null || a >= BACKUP_DAYS) && Date.now() - Number(lsGet(LS_SNOOZE) || 0) > 86400000; }
 function notices() {
   const n = S.state?.whats_new, out = [];
+  if (S.otherTab) out.push(`<div class="panel flat row between warnbox" role="alert"><span>⚠️ <b>Slime Gacha is open in another tab.</b> This tab is paused so the two cannot overwrite each other's progress.</span><span class="row"><button class="btn small primary" data-act="take_over">Load the latest save here</button></span></div>`);
   if (n && lsGet(LS_NEWS) !== n.id) out.push(`<div class="panel flat row between"><span>🆕 <b>What's new:</b> ${esc(n.text)}</span><button class="btn small" data-act="dismiss_news">Got it</button></div>`);
   if (backupDue()) { const a = backupAge(); out.push(`<div class="panel flat row between warnbox"><span>💾 ${a === null ? 'You have never exported your colony.' : `Your last backup was ${Math.floor(a)} days ago.`} The only copy lives in this browser: export a save file now and then.</span><span class="row"><button class="btn small primary" data-act="export">⬇ Export</button><button class="btn small" data-act="snooze_backup">Later</button></span></div>`); }
   return out.length ? `<div style="padding:0 16px;max-width:1280px;margin:8px auto 0;width:100%">${out.join('')}</div>` : '';
@@ -1695,6 +1707,8 @@ const A = {
     () => act('merge', { target: num(d.t), donor: num(d.d) })),
   newgame: () => { const prev = rawLocal(); if (prev) { try { localStorage.setItem(LS_PREV, prev); } catch (e) { /* full */ } } return act('new_game', { seed: ui('seed') ? num(ui('seed')) : null, party_size: num(ui('psize', 5), 5) }).then(() => { S.tab = 'colony'; S.sel = null; S.pull = null; render(); }); },
   newgame2: () => confirmThen('Abandon this colony and start over? The current save will be overwritten.', () => { S.modal = null; S.state = null; S.feed = []; render(); }),
+  take_over: async () => { const save = loadLocal(); if (!save) return; let r; try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
+    if (r.ok) { S.otherTab = false; S.myAt = Date.now(); S.state = r.state; S.sel = null; render(); } else toast('Could not load the latest save: ' + r.error, true); },
   continue: async () => { const save = loadLocal(); let r; try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
     if (r.ok) { S.state = r.state; render(); } else { S.damaged = { error: r.error }; render(); } },
   restore_backup: async () => { const save = loadLocal(LS_BAK); if (!save) return toast('No backup found.', true);
