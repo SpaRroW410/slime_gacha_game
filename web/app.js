@@ -1751,9 +1751,20 @@ document.addEventListener('change', async (e) => {
   if (t.dataset.actChange === 'row' && S.sel) { act('set_row', { id: S.sel, row: t.value }); return; }
   if (t.dataset.actChange === 'stance' && S.sel) { act('stance', { id: S.sel, stance: t.value }); return; }
   if (t.hasAttribute('data-import') && t.files[0]) {
-    try { const save = JSON.parse(await t.files[0].text()); const r = await backend.call('load', { save });
-      if (r.ok) { S.state = r.state; S.damaged = null; saveLocal(save); S.modal = null; toast('Save imported.'); render(); } else toast(r.error, true);
-    } catch (err) { toast('That file is not a valid save.', true); }
+    let save;
+    try { save = JSON.parse(await t.files[0].text()); } catch (err) { t.value = ''; return toast('That file is not a valid save.', true); }
+    t.value = '';
+    let p;
+    try { p = await backend.call('peek_save', { save }); } catch (err) { p = { ok: false, error: err.message }; }
+    if (!p.ok) return toast(p.error || 'That file is not a valid save.', true);
+    const i = p.result, mine = S.state ? `${S.state.slimes.length} slimes, day ${S.state.day + 1}` : 'no colony';
+    const go = async () => {
+      const prev = rawLocal(); if (prev) { try { localStorage.setItem(LS_PREV, prev); } catch (e) { /* full */ } }       // the colony being replaced is kept
+      const r = await backend.call('load', { save });
+      if (r.ok) { S.state = r.state; S.damaged = null; S.otherTab = false; saveLocal(save); S.modal = null; S.sel = null; toast('Save imported. The colony it replaced is kept as a backup.'); render(); } else toast(r.error, true);
+    };
+    if (S.state && S.state.slimes) confirmThen(`Replace your colony (${mine}) with this save: ${i.slimes} slimes, day ${i.day}, Keeper level ${i.keeper}, best floor ${i.best_floor}? Your current colony is kept as a backup you can restore from the start screen.`, go);
+    else go();
   }
 });
 document.addEventListener('input', (e) => {

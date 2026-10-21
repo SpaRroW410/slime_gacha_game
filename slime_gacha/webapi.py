@@ -1083,6 +1083,11 @@ class Session:
             if cmd == "new_game":
                 self.new_game(args.get("seed"), args.get("party_size", 5))
                 return self._ok(["A new colony begins. The Last Gacha Well hums..."], {})
+            if cmd == "peek_save":                      # look inside a save without touching the colony in play
+                g2 = Game.from_dict(args["save"])
+                return dict(ok=True, error=None, log=[], state=None, save=None,
+                            result=dict(slimes=len(g2.roster), day=g2.day + 1, keeper=g2.keeper.level, best_floor=g2.best_floor,
+                                        gel=g2.wallet.get("white_gel"), purple=g2.wallet.get("purple_gel")))
             if cmd == "load":
                 self.game = Game.from_dict(args["save"])
                 self.game.deferred_turn = True

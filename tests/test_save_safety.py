@@ -78,3 +78,18 @@ class ReloadMidBattleTest(unittest.TestCase):
         self.assertIsNone(t.game.flow)
         self.assertIsNone(t.game.pending_battle)
         self.assertIn("fought it out", " ".join(out["log"]))
+
+
+class PeekSaveTest(unittest.TestCase):
+    def test_peek_reads_a_save_without_replacing_the_colony(self):
+        from slime_gacha.webapi import Session
+        a, b = Session(), Session()
+        a.call("new_game", {"seed": 1})
+        b.call("new_game", {"seed": 2})
+        b.game.wallet.add("white_gel", 100)
+        b.call("pull", {"n": 3, "pay": "white_gel"})
+        r = a.call("peek_save", {"save": b.game.to_dict()})
+        self.assertTrue(r["ok"], r["error"])
+        self.assertEqual(r["result"]["slimes"], 3)
+        self.assertEqual(len(a.game.roster), 0)                      # the colony in play is untouched
+        self.assertFalse(a.call("peek_save", {"save": {"nope": 1}})["ok"])
