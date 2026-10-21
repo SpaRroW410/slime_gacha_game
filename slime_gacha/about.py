@@ -74,8 +74,6 @@ ROADMAP: List[Dict[str, object]] = [
     dict(id=21, group="Quality", title="Balance pass with a simulation harness", status="planned",
          text="Extend the playtest tool to Pit depths, rarities, skills and capstones, and tune the numbers."),
     dict(id=22, group="Quality", title="Localisation", status="planned", text="String catalogs and a language switch."),
-    dict(id=19, group="After floor 50", title="Art and sound", status="later",
-         text="Sprites and animated slimes in place of the CSS blobs, plus sound effects."),
     dict(id=35, group="QA", title="M1: reload during a manual battle undoes permadeath", status="planned",
          text="A battle you command by hand is not saved, so reloading brings dead slimes back."),
     dict(id=36, group="QA", title="M2: shown odds do not match the code", status="planned",
@@ -114,8 +112,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-03",
-                 text="The terminal version can now fight Pit runs and wave simulations by hand (there is no flee: hand the fight over to the slimes instead). Battles are animated: slimes bob, lunge, flash when hit and show damage numbers. The free daily pull now follows the real calendar (resets at midnight UTC) in every time mode. Story chapters unlock as you play; read them in People > Records. Dungeons are now data: a new \"More places\" tab has the first extra one, the Mossy Burrows. Barbarians learn Flame Brand (a fire imbue), and Phoenix Feathers brewed in the Alchemy tab save a slime that would die in battle. The Keeper tab has achievements with wearable titles, and you can respec your skills for a gel price. Gear sets: wear two or three matching armory pieces for a bonus (shown in the Armory and on the slime card). Building upgrades now take game hours (see them in the Away bar), and a new Hatchery gives back some pull gel. Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
+WHATS_NEW = dict(id="2026-11-04",
+                 text="Slimes wear class headgear and the game has sound effects (toggle with the speaker in the top bar). The terminal version can now fight Pit runs and wave simulations by hand (there is no flee: hand the fight over to the slimes instead). Battles are animated: slimes bob, lunge, flash when hit and show damage numbers. The free daily pull now follows the real calendar (resets at midnight UTC) in every time mode. Story chapters unlock as you play; read them in People > Records. Dungeons are now data: a new \"More places\" tab has the first extra one, the Mossy Burrows. Barbarians learn Flame Brand (a fire imbue), and Phoenix Feathers brewed in the Alchemy tab save a slime that would die in battle. The Keeper tab has achievements with wearable titles, and you can respec your skills for a gel price. Gear sets: wear two or three matching armory pieces for a bonus (shown in the Armory and on the slime card). Building upgrades now take game hours (see them in the Away bar), and a new Hatchery gives back some pull gel. Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
 
 
 def build() -> Dict[str, object]:
