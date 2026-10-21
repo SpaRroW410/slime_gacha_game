@@ -83,7 +83,7 @@ ROADMAP: List[Dict[str, object]] = [
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
 WHATS_NEW = dict(id="2026-11-07",
                  text="Four new classes (Bard, Paladin, Alchemist, Druid), a Hatchery and timed upgrades, gear sets, achievements and titles, story chapters, animated battles with sound, "
-                      "an installable offline app, a Spanish translation (Menu > Language), exact gacha odds, and a safer save (second-tab and import protection).")
+                      "an installable offline app, exact gacha odds, and a safer save (second-tab and import protection).")
 
 
 def build() -> Dict[str, object]:

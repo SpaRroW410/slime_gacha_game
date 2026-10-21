@@ -1,4 +1,4 @@
-/* Localisation. Catalogs map the English text to a translation (gettext style): web/lang_<code>.js calls I18N.add(code, name, map).
+/* Localisation (framework only: no second language ships yet; add web/lang_<code>.js and a script tag in index.html). Catalogs map the English text to a translation (gettext style): web/lang_<code>.js calls I18N.add(code, name, map).
    Keys may contain {n}-style placeholders ("{n}h left"). I18N.apply(root) translates the rendered page (text nodes and title /
    aria-label / placeholder attributes); I18N.tr(text) translates one message (toasts, the event log). Anything missing from a catalog
    stays English, so a language can grow a little at a time. A leading emoji or symbol is kept as it is. */
