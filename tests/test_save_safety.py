@@ -51,3 +51,30 @@ class TestBadSaves(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReloadMidBattleTest(unittest.TestCase):
+    def test_reload_cannot_undo_a_hand_fought_battle(self):
+        from slime_gacha.webapi import Session
+        s = Session()
+        s.call("new_game", {"seed": 8})
+        s.game.wallet.add("white_gel", 500)
+        s.call("pull", {"n": 5, "pay": "white_gel"})
+        s.call("party_create", {"name": "A"})
+        s.call("party_fill", {"pid": 1})
+        for sl in s.game.slimes():
+            sl.level = 20
+            sl.hp = sl.max_hp
+            sl.needs.v.update({k: 90.0 for k in sl.needs.v})
+            sl.emotions.clear()
+        r = s.call("skirmish", {"pid": 1, "tier": 1, "manual": True})
+        self.assertTrue(r["ok"], r["error"])
+        self.assertTrue(r["result"].get("pending"))
+        save = r["save"]
+        self.assertIsNotNone(save["pending_battle"])
+        t = Session()
+        out = t.call("load", {"save": save})
+        self.assertTrue(out["ok"], out["error"])
+        self.assertIsNone(t.game.flow)
+        self.assertIsNone(t.game.pending_battle)
+        self.assertIn("fought it out", " ".join(out["log"]))

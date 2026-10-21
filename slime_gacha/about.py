@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=35, group="QA", title="M1: reload during a manual battle undoes permadeath", status="planned",
-         text="A battle you command by hand is not saved, so reloading brings dead slimes back."),
     dict(id=36, group="QA", title="M2: shown odds do not match the code", status="planned",
          text="Purple-gel odds, star odds and the 3-star minimum will be shown exactly, and the docs corrected."),
     dict(id=38, group="QA", title="M4: two tabs overwrite each other's saves", status="planned",

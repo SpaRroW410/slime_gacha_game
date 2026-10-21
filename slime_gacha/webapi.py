@@ -1081,6 +1081,15 @@ class Session:
             if cmd == "load":
                 self.game = Game.from_dict(args["save"])
                 self.game.deferred_turn = True
+                pend, self.game.pending_battle = self.game.pending_battle, None
+                if pend and pend.get("cmd") in HANDLERS:        # the save was taken mid-battle: leaving does not undo it
+                    for sl in self.game.slimes():            # (the session's own away-flags are set again by the re-run)
+                        if sl.in_dungeon in ("wave", "grind"):
+                            sl.in_dungeon = ""
+                    r = self.call(pend["cmd"], dict(pend.get("args") or {}, manual=False))
+                    if r["ok"]:
+                        r["log"] = ["Save loaded. You left in the middle of a battle you were commanding: the slimes fought it out on their own."] + r["log"]
+                    return r
                 return self._ok(["Save loaded."], {})
             if self.game is None:
                 return dict(ok=False, error="No game in progress.", log=[], result={}, state=None, save=None)
@@ -1096,6 +1105,10 @@ class Session:
             g.last_due = 0
             before = g.wallet.to_dict()
             log, result = HANDLERS[cmd](g, args)
+            if cmd not in BATTLE_CMDS:                 # a battle left waiting for orders is remembered in the save (see "load")
+                g.pending_battle = dict(cmd=cmd, args=dict(args)) if g.flow is not None else None
+            elif g.flow is None:
+                g.pending_battle = None
             battles = result.get("battle") if isinstance(result, dict) else None
             if battles and g.timed and g.last_due > g.tick_count and cmd in SESSION_TITLES:      # the party is away: the report and haul come with it
                 hours = g.last_due - g.tick_count

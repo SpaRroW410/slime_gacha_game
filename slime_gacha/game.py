@@ -107,6 +107,7 @@ class Game:
         self.next_held = 1
         self.last_due = 0                              # tick the party of the last session is back (set when it leaves; read by the web layer)
         self.construction: Dict[str, int] = {}        # building -> tick its upgrade finishes (timed play only)
+        self.pending_battle = None                    # {"cmd", "args"} of a hand-fought battle in progress: a reload fights it out on auto
         self.chapters: List[str] = []                 # story chapters unlocked (story.py)
         self.feathers = 0                              # Phoenix Feathers: a fallen party member rises instead of dying
         self.plans: Dict[str, dict] = {}               # day plans of the posts (jobs.py): eight shifts and "if" rules
@@ -3679,7 +3680,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -3704,7 +3705,7 @@ class Game:
     # the top-level shape every save has: key -> accepted types (a missing key is fine: old saves lack newer ones)
     _SAVE_SHAPE = dict(tick=int, seed=(int, type(None)), wallet=dict, gacha=dict, parties=dict, slimes=list, buildings=(dict, type(None)),
                        delves=dict, intel=dict, keeper=(dict, type(None)), pantry=dict, journal=list, graveyard=list, conflicts=list,
-                       bonds=list, bounties=list, expeditions=list, stranded=list, inventory=dict, plans=dict, construction=dict, chapters=list)
+                       bonds=list, bounties=list, expeditions=list, stranded=list, inventory=dict, plans=dict, construction=dict, chapters=list, pending_battle=(dict, type(None)))
 
     @classmethod
     def check_save(cls, d) -> None:
@@ -3822,6 +3823,7 @@ class Game:
         g.next_held = d.get("next_held", 1)
         g.ward = [i for i in d.get("ward", []) if i in g.roster]
         g.construction = {k: int(v) for k, v in (d.get("construction") or {}).items() if k in BUILDINGS}
+        g.pending_battle = d.get("pending_battle") if isinstance(d.get("pending_battle"), dict) else None
         g.chapters = [k for k in d.get("chapters", []) if k in {c.key for c in story.CHAPTERS}]
         g.feathers = max(0, int(d.get("feathers", 0)))
         g.plans = {k: v for k, v in (d.get("plans") or {}).items() if k in jobs.JOBS}
