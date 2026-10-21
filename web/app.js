@@ -129,8 +129,19 @@ const SFX = {
 /* ---------------------------------------------------------------- persistence + api */
 const LS_BAK = 'slimegacha.save.bak', LS_PREV = 'slimegacha.save.prev', LS_DAMAGED = 'slimegacha.save.damaged';
 /* The save is written after every action; every five minutes the save it replaces is kept as a backup, so a damaged save can be rolled back. */
+/* The save is large (about 1 MB at 200 slimes), so it is written to storage at most every 3 seconds, and at once when the page is hidden or closed;
+   S.lastSave always holds the newest one in memory. */
 function saveLocal(save) {
   S.lastSave = save;
+  S.dirty = true;
+  if (S.saveTimer) return;
+  S.saveTimer = setTimeout(flushSave, 3000);
+}
+function flushSave() {
+  clearTimeout(S.saveTimer); S.saveTimer = null;
+  if (!S.dirty || !S.lastSave) return;
+  S.dirty = false;
+  const save = S.lastSave;
   try {
     if (Date.now() - (S.bakAt || 0) > 300000) { const prev = localStorage.getItem(LS_KEY); if (prev) { localStorage.setItem(LS_BAK, prev); S.bakAt = Date.now(); } }
     const at = Date.now();
@@ -151,6 +162,8 @@ function otherTabWrote() {
   try { const r = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); return !!(r && r.tab && r.tab !== S.tabId && r.at > (S.myAt || 0)); } catch (e) { return false; }
 }
 try { S.myAt = (JSON.parse(localStorage.getItem(LS_KEY) || 'null') || {}).at || 0; } catch (e) { S.myAt = 0; }       // whatever is stored when this tab opens counts as seen
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+window.addEventListener('pagehide', flushSave);
 window.addEventListener('storage', (e) => { if (e.key === LS_KEY && otherTabWrote()) { S.otherTab = true; if (S.state) render(); } });
 const rawLocal = (key = LS_KEY) => { try { return localStorage.getItem(key); } catch (e) { return null; } };
 function loadLocal(key = LS_KEY) { try { const r = rawLocal(key); return r ? JSON.parse(r).save : null; } catch (e) { return null; } }

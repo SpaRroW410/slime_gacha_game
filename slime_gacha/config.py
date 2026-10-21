@@ -477,3 +477,7 @@ HATCHERY_REFUND = 0.05                           # per Hatchery level above 1: s
 # Phoenix Feather: a consumable that lifts a slime that would die in battle back to its feet
 FEATHER_COST = {"purple_gel": 2, "essence": 20}
 FEATHER_HP = 0.3
+
+# bounds that keep replies and saves small on a phone
+PULL_MAX_N = 100                 # pulls in one action
+COLONY_MAX = 400                 # slimes the colony can hold

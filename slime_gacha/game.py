@@ -253,6 +253,10 @@ class Game:
     def pull(self, n: int = 1, pay: str = "white_gel") -> List[Slime]:
         """pay = 'free' (1 per game day) | 'white_gel' | 'purple_gel' (10 each; purple boosts rare odds)."""
         before = self.wallet.get("purple_gel" if pay == "purple_gel" else "white_gel")
+        if n > config.PULL_MAX_N:
+            raise InvalidAction(f"Pull at most {config.PULL_MAX_N} slimes at a time.")
+        if len(self.roster) + n > config.COLONY_MAX:
+            raise InvalidAction(f"The colony cannot hold more than {config.COLONY_MAX} slimes: room for {max(0, config.COLONY_MAX - len(self.roster))} more.")
         if pay == "free" and not self.free_pull_available():
             raise InvalidAction("You already used today's free pull (it resets at midnight UTC).")
         new = self.gacha.pull(n, pay, self.real_day())

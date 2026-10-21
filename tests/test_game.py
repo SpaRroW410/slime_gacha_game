@@ -681,3 +681,15 @@ class TestOddsDisclosure(unittest.TestCase):
         self.assertGreater(p["uncommon"], w["uncommon"])           # purple boosts uncommon too
         self.assertLess(p["common"], w["common"])
         self.assertGreater(g.gacha.odds(False, True)["rare"], w["rare"])
+
+
+class TestBounds(unittest.TestCase):
+    def test_pull_and_colony_caps(self):
+        g = Game(1)
+        g.wallet.add("white_gel", 10 ** 6)
+        with self.assertRaises(InvalidAction):
+            g.pull(config.PULL_MAX_N + 1, "white_gel")
+        for _ in range(config.COLONY_MAX // config.PULL_MAX_N):
+            g.pull(config.PULL_MAX_N, "white_gel")
+        with self.assertRaises(InvalidAction):
+            g.pull(1, "white_gel")
