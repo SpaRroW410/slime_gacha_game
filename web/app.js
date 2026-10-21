@@ -19,7 +19,7 @@ const SUBS = {
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'mossy_burrows', 'stranded', 'rescue'];
 
 let backend = null;
-const S = { state: null, tab: 'colony', sel: null, sort: 'power', filter: 'all', feed: [], modal: null, pull: null,
+const S = { moreN: 100, state: null, tab: 'colony', sel: null, sort: 'power', filter: 'all', feed: [], modal: null, pull: null,
   council: null, pv: null, busy: false, ui: {}, backendName: '', sub: {}, dtab: 'overview', guide: null, about: null, stockOpen: false };
 
 /* ---------------------------------------------------------------- helpers */
@@ -37,6 +37,16 @@ const manualOn = () => !!S.ui.manual;
 const cmdToggle = () => `<button class="btn small ${manualOn() ? 'primary' : ''}" data-act="toggle_manual" title="Fight turn by turn: every slime acts on its own turn. You can hand the fight back to the slimes at any time.">🎮 Take command: ${manualOn() ? 'ON' : 'off'}</button>`;
 const num = (x, d = 0) => { const n = parseInt(x, 10); return Number.isFinite(n) ? n : d; };
 const slimeById = (id) => S.state.slimes.find((s) => s.id === id);
+/* The state carries a slim view of every slime; the open one's full view (the drawer's fields) is fetched when it is opened and the
+   server then keeps it in every reply (the client tells it which card is open). */
+async function needDetail(id) {
+  const s = slimeById(id);
+  if (!s || s.detail !== false || !backend) return;
+  let r; try { r = await backend.call('slime_detail', { id }); } catch (e) { return; }
+  if (!r || !r.ok || S.sel !== id) return;
+  const i = S.state.slimes.findIndex((x) => x.id === id);
+  if (i >= 0) { S.state.slimes[i] = { ...r.result.slime, detail: true }; render(); }
+}
 const partyById = (id) => S.state.parties.find((p) => p.id === id);
 const pct = (v, m) => Math.max(0, Math.min(100, m ? (100 * v) / m : 0));
 const hashColor = (k) => { let h = 0; for (const c of String(k)) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 60% 62%)`; };
@@ -211,7 +221,7 @@ async function act(cmd, args = {}, opt = {}) {
   S.busy = true;
   if (opt.slow) { const v = document.createElement('div'); v.className = 'busy-veil'; v.id = 'veil'; v.innerHTML = '<div class="spin"></div>'; document.body.appendChild(v); }
   let res;
-  try { res = await backend.call(cmd, args); } catch (e) { toast('Connection problem: ' + e.message, true); res = null; }
+  try { res = await backend.call(cmd, { ...args, _sel: S.sel }); } catch (e) { toast('Connection problem: ' + e.message, true); res = null; }
   S.busy = false;
   document.getElementById('veil')?.remove();
   if (!res) { render(); return null; }
@@ -533,7 +543,8 @@ function colony() {
   ${big ? `<div class="row" style="margin-bottom:8px"><input type="search" data-ui="roster_q" data-rerender="1" value="${esc(ui('roster_q', ''))}" placeholder="Find a slime (name, class, rarity)" style="max-width:300px"><small class="mute">Showing the top ${Math.min(TOP, list.length)} by ${esc(S.sort)}; the rest are in the list below.</small></div>` : ''}
   <div class="grid roster">${list.slice(0, big ? TOP : list.length).map(card).join('') || '<p class="mute">No slimes match.</p>'}</div>
   ${big && list.length > TOP ? `<details class="rosmore" data-keep="moreOpen" ${ui('moreOpen', false) ? 'open' : ''}><summary><b>${list.length - TOP} more slimes</b> <small class="mute">(compact list)</small></summary>
-    <div class="slist">${list.slice(TOP).map(srow).join('')}</div></details>` : ''}`;
+    <div class="slist">${ui('moreOpen', false) ? list.slice(TOP, TOP + S.moreN).map(srow).join('') : ''}</div>
+    ${ui('moreOpen', false) && list.length > TOP + S.moreN ? `<button class="btn small" data-act="more_slimes">Show ${Math.min(100, list.length - TOP - S.moreN)} more</button>` : ''}</details>` : ''}`;
 }
 function srow(s) {
   const a = awayOf(s.id);
@@ -567,6 +578,7 @@ function card(s) {
 }
 
 function drawer(s) {
+  if (s.detail === false) return '<div class="drawer"><p class="mute" style="padding:16px">Loading…</p></div>';
   const st = S.state;
   const free = !s.busy;
   const inDun = DUNGEON_KINDS.includes(s.in_dungeon);
@@ -1652,7 +1664,7 @@ const A = {
   stock: () => { S.stockOpen = !S.stockOpen; render(); },
   info: (d, el) => toggleTip(el),
   dtab: (d) => { S.dtab = d.t; render(); },
-  sel: (d) => { S.sel = num(d.id); render(); },
+  sel: (d) => { S.sel = num(d.id); render(); needDetail(S.sel); },
   closesel: () => { S.sel = null; render(); },
   closemodal: () => { const m = S.modal; S.modal = null; if (m && m.report_id) return act('ack_report', { id: m.report_id }); render(); },
   battle_nav: (d) => { const m = S.modal; m.i = Math.max(0, Math.min(m.battles.length - 1, (m.i ?? m.battles.length - 1) + num(d.d))); render(); },
@@ -1702,6 +1714,7 @@ const A = {
   study: (d) => act('study', { id: S.sel, element: d.el }),
   study_lib: (d) => act('study', { id: num(d.id), element: d.el }),
   lang: (d) => { I18N.set(d.c); document.documentElement.lang = I18N.lang; render(); },
+  more_slimes: () => { S.moreN += 100; render(); },
   sound: () => { SFX.toggle(); render(); },
   pull: (d) => { if (d.pay === 'purple_gel' && num(d.n) >= 10 && !window.confirm(`Spend ${S.state.rates.pull_cost * num(d.n) * (1 - S.state.rates.bulk_discount)} purple gel on ${d.n} pulls?`)) return; S.pull = null; return act('pull', { n: num(d.n), pay: d.pay }); },
   party_create: () => act('party_create', { name: ui('pname', '') }).then(() => { S.ui.pname = ''; render(); }),
@@ -1872,7 +1885,7 @@ document.addEventListener('input', (e) => {
   if (!t.dataset.rerender) return;
   render();                           // (render() keeps the focus, the cursor and every scroll position, so typing is not interrupted)
 });
-document.addEventListener('toggle', (e) => { const k = e.target.dataset && e.target.dataset.keep; if (k) S.ui[k] = e.target.open; }, true);
+document.addEventListener('toggle', (e) => { const k = e.target.dataset && e.target.dataset.keep; if (k) { const was = S.ui[k]; S.ui[k] = e.target.open; if (k === 'moreOpen' && was !== e.target.open) render(); } }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.modal) A.closemodal(); else if (S.sel) A.closesel(); } });
 
 /* ---------------------------------------------------------------- boot */

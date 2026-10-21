@@ -5,7 +5,12 @@
  */
 let call = null;
 
+const T0 = performance.now();
+const lap = (what) => { try { console.log(`[boot] ${what}: ${Math.round(performance.now() - T0)} ms`); } catch (e) { /* ignore */ } };
+
 async function init(bases) {
+  const zipReq = fetch('slime_gacha.zip').then((r) => r.arrayBuffer());       // the game's files download while the Python runtime starts
+  zipReq.catch(() => {});
   let py = null, lastErr;
   for (const base of bases) {
     try {
@@ -16,9 +21,12 @@ async function init(bases) {
     } catch (e) { lastErr = e; }
   }
   if (!py) throw lastErr || new Error('Pyodide unavailable');
+  lap('python runtime ready');
   postMessage({ type: 'progress', text: 'Unpacking the game…' });
-  const zip = await (await fetch('slime_gacha.zip')).arrayBuffer();
+  const zip = await zipReq;
   py.unpackArchive(zip, 'zip');
+  lap('game unpacked');
+  postMessage({ type: 'progress', text: 'Waking the Well…' });
   py.runPython(`
 from slime_gacha.registry import load_plugins
 from slime_gacha.webapi import Session
@@ -26,6 +34,7 @@ load_plugins()
 SESSION = Session()
 `);
   call = py.runPython('SESSION.call_json');
+  lap('game imported');
 }
 
 onmessage = async (e) => {

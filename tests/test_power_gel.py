@@ -79,6 +79,7 @@ class TestTotalPower(unittest.TestCase):
         from slime_gacha.webapi import snapshot
         g = rich(65)
         slime(g, "mage")
+        g.detail_id = g.slimes()[0].id                      # the open card gets the full view; the others a slim one
         v = snapshot(g)["slimes"][0]
         self.assertEqual(set(v["power_parts"]), {"stats", "skills", "attributes", "mastery", "styles", "proficiency"})
         self.assertGreater(v["power"], 0)

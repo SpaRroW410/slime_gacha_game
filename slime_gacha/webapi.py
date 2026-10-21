@@ -234,8 +234,31 @@ def _jobs_view(g: Game) -> dict:
     )
 
 
+# Fields only the slime card (the drawer) reads: sent for the open slime only, so a big colony's reply stays small.
+_DRAWER_ONLY = ("level_cap", "total_xp", "job_levels", "behavior", "merged", "wins", "row_set", "power_parts", "power_mult", "goal", "trust",
+                "memories", "sanity", "sanity_max", "mood_cap", "talked", "morale_factor", "attuned", "element_slots", "mastery_paused",
+                "style_label", "feeling_effects", "awareness", "relations", "parents", "parent_names", "generation", "merge_bonus", "core",
+                "max_stamina", "star_attrs", "next_star_attr", "rarity_skills", "next_rarity_skill", "weapons", "gear_sets", "task", "hunt",
+                "can_evolve", "evolve_cost", "exp")
+
+
+def light_view(v: dict) -> dict:
+    """The slime as the lists, parties and avatars need it: no drawer-only fields, a short proficiency and only the ready specializations."""
+    for k in _DRAWER_ONLY:
+        v.pop(k, None)
+    prof = v.get("prof") or {}
+    hyb = prof.get("hybrid")
+    v["prof"] = dict(value=prof.get("value", 0), hybrid=(dict(value=hyb["value"]) if hyb else None))
+    v["spec_options"] = [o for o in v.get("spec_options", []) if o["ok"]]
+    v["detail"] = False
+    return v
+
+
 def snapshot(g: Game) -> dict:
-    slimes = [slime_view(g, s) for s in g.slimes()]
+    sel = getattr(g, "detail_id", None)
+    slimes = [slime_view(g, s) if s.id == sel else light_view(slime_view(g, s)) for s in g.slimes()]
+    for v in slimes:
+        v.setdefault("detail", True)
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
                     synergy=round(g.party_synergy(p.id) - 1, 4) if len(p.members) > 1 else 0.0,
                     in_delve=p.id in g.delves, away=any(g.slime(i).busy for i in p.members), activity=g.party_activity(p.id),
@@ -1070,6 +1093,7 @@ SESSION_TITLES = dict(grind="The Gloop Pit", adventure="The Wayfarer's Rift", qu
 
 
 # ---- session -----------------------------------------------------------------------------------------------
+READ_ONLY = {"state", "sync", "slime_detail", "peek_save"}       # commands that change nothing (unless the clock moved): no save in the reply
 BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift"}
 
 
@@ -1085,8 +1109,15 @@ class Session:
         self.game.deferred_turn = True                 # turn mode: sessions keep the party away until the player waits
 
     def call(self, cmd: str, args: Optional[dict] = None) -> dict:
-        args = args or {}
+        args = dict(args or {})
+        sel = args.pop("_sel", None)                       # the slime whose card is open: it gets the full view in the state
+        if self.game is not None:
+            self.game.detail_id = sel
         try:
+            if cmd == "slime_detail":                      # one slime's full view, without the rest of the state
+                if self.game is None:
+                    return dict(ok=False, error="No game in progress.", log=[], result={}, state=None, save=None)
+                return dict(ok=True, error=None, log=[], result=dict(slime=slime_view(self.game, self.game.slime(int(args.get("id", 0))))), state=None, save=None)
             if cmd == "new_game":
                 self.new_game(args.get("seed"), args.get("party_size", 5))
                 return self._ok(["A new colony begins. The Last Gacha Well hums..."], {})
@@ -1121,6 +1152,7 @@ class Session:
             g = self.game
             g.last_due = 0
             before = g.wallet.to_dict()
+            tick0 = g.tick_count
             log, result = HANDLERS[cmd](g, args)
             if cmd not in BATTLE_CMDS:                 # a battle left waiting for orders is remembered in the save (see "load")
                 g.pending_battle = dict(cmd=cmd, args=dict(args)) if g.flow is not None else None
@@ -1132,7 +1164,8 @@ class Session:
                 g.hold_session(before, g.last_due, SESSION_TITLES[cmd], battles, log)
                 result = {k: v for k, v in result.items() if k != "battle"}
                 log = [f"{SESSION_TITLES[cmd]}: the party set out. The report and the haul arrive in {hours}h."]
-            return self._ok(woke + log, result)
+            moved = bool(woke) or g.tick_count != tick0
+            return self._ok(woke + log, result, save=cmd not in READ_ONLY or moved)
         except GameError as e:
             return self._fail(str(e))
         except KeyError as e:                         # unknown zone / class / spell keys from the client
@@ -1147,9 +1180,9 @@ class Session:
         return json.dumps(self.call(cmd, json.loads(args_json or "{}")))
 
     # -- envelopes
-    def _ok(self, log, result) -> dict:
+    def _ok(self, log, result, save: bool = True) -> dict:
         return dict(ok=True, error=None, log=log, result=result, state=snapshot(self.game),
-                    save=self.game.to_dict())
+                    save=self.game.to_dict() if save else None)
 
     def _fail(self, msg: str) -> dict:
         return dict(ok=False, error=msg, log=[], result={},

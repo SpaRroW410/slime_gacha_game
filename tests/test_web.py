@@ -72,7 +72,7 @@ class TestSaveLoad(unittest.TestCase):
         s.call("party_create", {"name": "A"})
         s.call("party_fill", {"pid": 1})
         s.call("wait", {"hours": 5})
-        res = s.call("state")
+        res = s.call("wait", {"hours": 1})
         save = json.loads(json.dumps(res["save"]))      # as the browser stores it
         t = Session()
         self.assertTrue(t.call("load", {"save": save})["ok"])
@@ -95,7 +95,7 @@ class TestCommands(unittest.TestCase):
                           ("council", {})]:
             r = s.call(cmd, args)
             self.assertTrue(r["ok"], (cmd, r["error"]))
-        self.assertEqual(s.call("stance", dict(id=a, stance="defend"))["state"]["slimes"][0]["behavior"], "defend")
+        self.assertEqual(s.call("stance", dict(id=a, stance="defend", _sel=a))["state"]["slimes"][0]["behavior"], "defend")
         self.assertEqual(s.call("wait", dict(hours=500))["log"][0], "72 hour(s) pass.")   # clamped
 
     def test_party_and_spar_and_battle_payload(self):
@@ -245,3 +245,21 @@ class TestServer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSlimViews(unittest.TestCase):
+    def test_state_is_slim_until_a_card_is_opened(self):
+        s = session(pulls=20)
+        light = s.call("state")
+        self.assertIsNone(light["save"])                                  # a read changes nothing: no save to send
+        v = light["state"]["slimes"][0]
+        self.assertFalse(v["detail"])
+        self.assertNotIn("power_parts", v)
+        self.assertIn("value", v["prof"])                                 # avatars still get proficiency
+        sid = v["id"]
+        one = s.call("slime_detail", {"id": sid})["result"]["slime"]
+        self.assertIn("power_parts", one)
+        full = s.call("state", {"_sel": sid})["state"]["slimes"]
+        self.assertTrue(next(x for x in full if x["id"] == sid)["detail"])
+        self.assertEqual(sum(1 for x in full if x["detail"]), 1)
+        self.assertIsNotNone(s.call("wait", {"hours": 1})["save"])        # a change does carry the save
