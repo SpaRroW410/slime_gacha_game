@@ -383,3 +383,25 @@ class StoryTest(unittest.TestCase):
         g.tick(6)
         self.assertIn("crust", g.chapters)
         self.assertEqual(Game.from_dict(g.to_dict()).chapters, g.chapters)
+
+
+class CliHandFightTest(unittest.TestCase):
+    def test_fight_by_hand_runs_a_wave_simulation(self):
+        from unittest import mock
+        from slime_gacha import cli
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.wallet.add("white_gel", 3000)
+        g.pull(5, "white_gel")
+        p = g.create_party("A")
+        g.party_autofill(p.id)
+        for s in g.slimes():
+            s.level = 15
+            s.hp, s.state, s.grounded = s.max_hp, "idle", False
+            s.needs.v.update({k: 90.0 for k in s.needs.v})
+            s.emotions.clear()
+        res = g.battle(p.id, 1, manual=True)
+        with mock.patch.object(cli, "_ask", side_effect=lambda *_: "a"), mock.patch("builtins.print"):
+            res = cli.fight_by_hand(g, res)
+        self.assertTrue(res.log)
+        self.assertIsNone(g.flow)

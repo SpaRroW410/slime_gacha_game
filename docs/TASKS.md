@@ -38,7 +38,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 - [x] **27. Descent reinforcements and limited camping** — a party camping on floor N can be joined by another party that has cleared the floors below; they fight together. A 5-star mage proficient in two elements can instead *call* reinforcements straight to the floor for purple gel (cost +1 per 5 floors). Camping time is limited by the scout percentage and the floor (floor 3: 3 hours); there is always a chance of ambush while camping, and it drops when the floor below starts to clear (a reinforcing party is on the way).  *Done when:* a second party can reach a camping party and the two fight as one; the mage call works and costs gel; camp length and ambush chance follow floor and scout %; tests cover each rule.
 
 ## Interface
-- [ ] **18. CLI turn prompts for manual battles + optional flee** — terminal manual fights.  *Done when:* `main.py` can fight a wave simulation by hand; flee decided and documented.
+- [x] **18. CLI turn prompts for manual battles + optional flee** — terminal manual fights.  *Done when:* `main.py` can fight a wave simulation by hand; flee decided and documented.
 
 ## Quality
 - [ ] **21. Balance pass with a simulation harness** — extend `tools/playtest.py` to Pit depths, rarities, skills and capstones.  *Done when:* a report covers each system and numbers are tuned in `config.py`.
