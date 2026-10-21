@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=47, group="Mobile", title="Mobile UX", status="planned",
-         text="Touch targets, bottom tab bar, fixed time controls, safe areas, back button."),
     dict(id=48, group="Mobile", title="Mobile performance", status="planned",
          text="Faster turns, smaller replies, in-place updates, startup on low-end phones."),
     dict(id=49, group="Mobile", title="Capacitor shell", status="planned",

@@ -288,7 +288,8 @@ function render() {
     const r = S.state.reports[0];
     S.modal = { type: 'battle', battles: r.battles, title: `📜 ${r.title} — report`, summary: r.summary, report_id: r.id };
   }
-  const keep = window.scrollY;
+  const keep = S.nextScroll != null ? S.nextScroll : window.scrollY;
+  S.nextScroll = null;
   const st = S.state;
   const fp = st.free_pull;
   const clk = st.clock;
@@ -1606,7 +1607,7 @@ function modalHtml() {
 
 /* ---------------------------------------------------------------- actions */
 const A = {
-  tab: (d) => { S.tab = d.t; S.pull = d.t === 'gacha' ? S.pull : null; S.stockOpen = false;
+  tab: (d) => { S.scrollOf = S.scrollOf || {}; S.scrollOf[S.tab] = window.scrollY; S.nextScroll = S.scrollOf[d.t] || 0; S.tab = d.t; S.pull = d.t === 'gacha' ? S.pull : null; S.stockOpen = false;
     if (d.t === 'guide') loadGuide(); if (d.t === 'about') loadAbout(); if (onCouncil()) loadCouncil(); else render(); },
   sub: (d) => { S.sub[d.t] = d.s; if (onCouncil()) loadCouncil(); else render(); },
   stock: () => { S.stockOpen = !S.stockOpen; render(); },
@@ -1662,7 +1663,7 @@ const A = {
   study_lib: (d) => act('study', { id: num(d.id), element: d.el }),
   lang: (d) => { I18N.set(d.c); document.documentElement.lang = I18N.lang; render(); },
   sound: () => { SFX.toggle(); render(); },
-  pull: (d) => { S.pull = null; return act('pull', { n: num(d.n), pay: d.pay }); },
+  pull: (d) => { if (d.pay === 'purple_gel' && num(d.n) >= 10 && !window.confirm(`Spend ${S.state.rates.pull_cost * num(d.n) * (1 - S.state.rates.bulk_discount)} purple gel on ${d.n} pulls?`)) return; S.pull = null; return act('pull', { n: num(d.n), pay: d.pay }); },
   party_create: () => act('party_create', { name: ui('pname', '') }).then(() => { S.ui.pname = ''; render(); }),
   party_add: (d) => { const id = num(ui('add_' + d.pid)); return id ? act('party_add', { pid: num(d.pid), id }) : toast('Choose a slime first.', true); },
   party_remove: (d) => act('party_remove', { id: num(d.id) }),

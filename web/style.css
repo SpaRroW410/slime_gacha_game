@@ -326,3 +326,6 @@ main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 /* small screens: comfortable tap targets, and only the big slime figures keep bobbing (saves battery) */
 @media (pointer: coarse) { .btn.small, .seg button, nav.tabs button, .chipbtn { min-height: 40px; } .btn.small { padding-left: 12px; padding-right: 12px; } }
 .srow .blob, .scard .blob, .mini .blob { animation: none; }
+header.top { padding-top: env(safe-area-inset-top); height: calc(56px + env(safe-area-inset-top)); }
+nav.tabs { top: calc(56px + env(safe-area-inset-top)); }
+@media (pointer: coarse) { body { -webkit-tap-highlight-color: transparent; } }

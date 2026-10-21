@@ -61,7 +61,7 @@ Findings not yet re-verified against the current code; check each before fixing 
 - [x] **46. Minor bugs m1-m9** — Android back, light-theme contrast, star screen-reader text, small tap targets, constant animation, unguarded `syncLive`, no new-game backup, odd saved numbers, unchecked spell names.  *Done when:* each is fixed or consciously declined.
 
 ## Mobile (phase 2) — Capacitor route recommended in the same report
-- [ ] **47. Mobile M1: mobile UX** — 44 pt / 48 dp targets, bottom tab bar, fixed time controls, scroll positions kept, safe areas, Android back, purple ten-pull confirm.  *Done when:* the game is comfortable on a 375 px phone.
+- [x] **47. Mobile M1: mobile UX** — 44 pt / 48 dp targets, fixed time controls (the tab bar stays at the top: nine tabs scroll sideways and sit under the header; a bottom bar would cost a second row beside the time controls), scroll positions kept, safe areas, Android back, purple ten-pull confirm.  *Done when:* the game is comfortable on a 375 px phone.
 - [ ] **48. Mobile M2: performance** — engine hot spots, smaller replies, in-place page updates, lazy rosters, startup measured on low-end phones.  *Done when:* Pyodide startup and big-colony turns are acceptable on a 2 GB Android phone and an iPhone SE.
 - [ ] **49. Mobile M3: Capacitor shell** — native storage with atomic writes and rotating checksummed backups, lifecycle (save on pause, stop timers), store builds.  *Done when:* builds run on iOS and Android with safe saves.
 - [ ] **50. Mobile M4: store prep and compliance** — odds screen, age-rating answers, privacy labels, listings, regional rules.  *Done when:* TestFlight and Play internal testing builds are submitted.
