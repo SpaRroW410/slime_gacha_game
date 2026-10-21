@@ -69,5 +69,5 @@ Findings not yet re-verified against the current code; check each before fixing 
 - [ ] **52. Mobile M6: beta and launch** — device testing, long sessions, crash reporting, release.  *Done when:* released.
 
 ## After floor 50 (art and sound)
-- [ ] **17. Animated battle arena** — replace `ARENA.render`.  *Done when:* units animate and statuses show without touching rules.
+- [x] **17. Animated battle arena** — replace `ARENA.render`.  *Done when:* units animate and statuses show without touching rules.
 - [ ] **19. Art pass: sprites, animated slimes, sound** — replace the CSS blobs, add sound effects.  *Done when:* every slime class and rarity has art and the main actions have sound.

@@ -1383,20 +1383,34 @@ function giftPanel(pid) {
    Every unit has data-unit="<index>" and classes (.alive/.dead/.acting/.targetable) a stylesheet or canvas can hook. */
 const EL_EMOJI = { fire: '🔥', water: '💧', earth: '🪨', air: '🌪', light: '✨', dark: '🌑', lightning: '⚡', ice: '❄', steam: '♨', mud: '🟤', lava: '🌋', storm: '⛈' };
 const ARENA = {
-  unit(u, b, targetable) {
+  prev: {}, prevKey: '',
+  /* Animation lives here too: a unit that lost HP since the last render flashes and floats a damage number, a healed one
+     glows green, the acting one lunges, the fallen squash flat. All CSS (see .arena in style.css); nothing touches the rules. */
+  track(b) {
+    const key = b.units.map((u) => u.name).join('|');
+    if (key !== this.prevKey) { this.prev = {}; this.prevKey = key; }
+    const next = {}, delta = {};
+    b.units.forEach((u) => { const old = this.prev[u.i]; if (old != null && old.alive && u.hp !== old.hp) delta[u.i] = u.hp - old.hp; if (old != null && old.alive && !u.alive) delta[u.i] = delta[u.i] || -old.hp; next[u.i] = { hp: u.hp, alive: u.alive }; });
+    this.prev = next;
+    return delta;
+  },
+  unit(u, b, targetable, delta) {
     const acting = b.waiting === u.i, pct = u.max_hp ? Math.max(0, Math.min(100, 100 * u.hp / u.max_hp)) : 0;
-    const cls = ['unit', u.alive ? 'alive' : 'dead', acting ? 'acting' : '', targetable ? 'targetable' : '', u.side].join(' ');
+    const d = delta[u.i];
+    const cls = ['unit', u.alive ? 'alive' : 'dead', acting ? 'acting' : '', targetable ? 'targetable' : '', u.side, d < 0 ? 'hit' : d > 0 ? 'healed' : ''].join(' ');
     return `<div class="${cls}" data-unit="${u.i}" ${targetable ? `data-act="battle_target" data-i="${u.i}"` : ''}>
-      <div class="uname">${esc(u.emoji)} ${esc(u.name)} <small class="mute" title="${u.row === 'back' ? 'Back row: sheltered, but melee blows cannot be struck from here' : 'Front row'}">${u.row === 'back' ? '⬅ back' : '▶ front'}</small>${u.element ? ` <small>${EL_EMOJI[u.element] || esc(u.element)}</small>` : ''}</div>
+      ${d ? `<span class="float ${d < 0 ? 'dmg' : 'heal'}">${d > 0 ? '+' : ''}${d}</span>` : ''}
+      <div class="uname"><span class="blob">${esc(u.emoji)}</span> ${esc(u.name)} <small class="mute" title="${u.row === 'back' ? 'Back row: sheltered, but melee blows cannot be struck from here' : 'Front row'}">${u.row === 'back' ? '⬅ back' : '▶ front'}</small>${u.element ? ` <small>${EL_EMOJI[u.element] || esc(u.element)}</small>` : ''}</div>
       <div class="bar ${pct < 30 ? 'lvl-low' : pct < 60 ? 'lvl-mid' : 'lvl-ok'}"><i style="width:${pct}%"></i></div>
       <small class="mute">${u.hp}/${u.max_hp}${u.stamina != null ? ` · ⚡${u.stamina}/${u.stamina_max}` : ''}</small>
       <div class="ustat">${(u.status || []).map((x) => `<span>${esc(x)}</span>`).join('')}${u.guard ? '<span>🛡</span>' : ''}${u.poison ? `<span>☠${u.poison}</span>` : ''}${!u.alive ? '<span>💀</span>' : ''}${u.minion ? '<span>👻</span>' : ''}</div></div>`;
   },
   render(b) {
+    const delta = this.track(b);
     const pick = S.ui.pick ? b.abilities.find((a) => a.key === S.ui.pick) : null;
     const tside = pick ? (pick.target === 'enemy' ? 'foes' : 'party') : null;
     const can = (u, side) => !!pick && u.alive && u.side === tside && (side === 'foes' || !u.minion) && (!pick.reach || side !== 'foes' || pick.reach.includes(u.i));
-    const half = (side, row) => `<div class="rowcol ${row}">${b.units.filter((u) => u.side === side && (u.row || 'front') === row).map((u) => this.unit(u, b, can(u, side))).join('')}</div>`;
+    const half = (side, row) => `<div class="rowcol ${row}">${b.units.filter((u) => u.side === side && (u.row || 'front') === row).map((u) => this.unit(u, b, can(u, side), delta)).join('')}</div>`;
     const col = (side) => `<div class="rows ${side}">${side === 'party' ? half(side, 'back') + half(side, 'front') : half(side, 'front') + half(side, 'back')}</div>`;
     const order = b.order.map((i) => { const u = b.units[i]; return `<span class="ord ${u.side} ${i === b.current ? 'now' : ''}" title="${esc(u.name)}">${esc(u.emoji)}</span>`; }).join('');
     const w = b.waiting != null ? b.units[b.waiting] : null;
