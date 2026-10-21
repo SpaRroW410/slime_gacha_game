@@ -587,14 +587,19 @@ function dGear(s, { st, free }) {
 /* ---------------------------------------------------------------- gacha */
 function gacha() {
   const st = S.state, r = st.rates, c = r.pull_cost;
-  const rates = Object.entries(r.rarity).map(([k, v]) => `${chip(`${k} ${v}%`, k)}`).join(' ');
+  const pc = (x) => (x * 100 >= 10 ? (x * 100).toFixed(1) : x * 100 >= 1 ? (x * 100).toFixed(2) : (x * 100).toFixed(3)) + '%';
+  const od = r.odds, col = od.favor ? ['white_favor', 'purple_favor'] : ['white', 'purple'];
+  const oddsTable = `<details><summary>Exact odds ${od.favor ? '(Fortune\'s Favor is active)' : ''}</summary><table class="odds"><thead><tr><th>Rarity</th><th>⚪ white / free</th><th>🟣 purple</th><th>★1 ★2 ★3 ★4 ★5 (given that rarity)</th></tr></thead><tbody>${Object.keys(od.white).map((k) => `<tr><td>${chip(k, k)}</td><td>${pc(od[col[0]][k])}</td><td>${pc(od[col[1]][k])}</td><td>${r.stars[k].map((x) => pc(x)).join(' · ')}</td></tr>`).join('')}</tbody></table>
+    <small class="mute">These are the chances used for every pull, for one pull or ten. Purple gel multiplies the rare-or-better weights ×${r.purple_boost}, which is about ×${(((1 - od.purple.common) / (1 - od.white.common))).toFixed(1)} on the chance of anything above common. ${od.luck > 1 ? `Your Lucky Charm (×${od.luck.toFixed(1)}) is included. ` : ''}Fortune's Favor doubles the rare-or-better weights for your whole next pull, a ten-pull included. ${r.scholar.join(', ')} are never pulled below ${r.scholar_min}★. No pity timers; no hidden rates.</small></details>`;
+  const rates = Object.entries(od[col[0]]).map(([k, v]) => `${chip(`${k} ${pc(v)}`, k)}`).join(' ');
   const w = st.wallet;
   const price = (n) => n >= r.bulk_n ? Math.round(c * n * (1 - r.bulk_discount)) : c * n;
   const b = (n, pay, label, cls) => `<button class="btn ${cls}" data-act="pull" data-n="${n}" data-pay="${pay}" ${w[pay] >= price(n) ? '' : 'disabled'}>${label}<br><small>${price(n)} ${RES[pay][0]}${n >= r.bulk_n ? ` (−${Math.round(r.bulk_discount * 100)}%)` : ''}</small></button>`;
   return `<div class="panel well">
     <div class="blob big"><div class="body"><i></i><i></i></div><span class="em">🎰</span></div>
     <h2>The Last Gacha Well</h2>
-    <p class="mute">Each pull wakes a slime. Odds: ${rates}. Stars 1–5 fall off exponentially (steeper for higher rarities).<br>⚪ White gel and 🟣 purple gel cost ${c} per pull (pull ${r.bulk_n} or more at once for ${Math.round(r.bulk_discount * 100)}% off) — purple gel multiplies rare+ odds ×${r.purple_boost}.</p>
+    <p class="mute">Each pull wakes a slime. Odds (white / free pull): ${rates}.<br>⚪ White gel and 🟣 purple gel cost ${c} per pull (pull ${r.bulk_n} or more at once for ${Math.round(r.bulk_discount * 100)}% off) — purple gel multiplies rare+ odds ×${r.purple_boost}.</p>
+    ${oddsTable}
     <div class="row" style="justify-content:center;gap:12px">
       <button class="btn primary" data-act="pull" data-n="1" data-pay="free" ${st.free_pull.available ? '' : 'disabled'}>🎁 Free daily pull<br><small>${st.free_pull.available ? 'ready!' : `in ${st.free_pull.hours}h`}</small></button>
       ${b(1, 'white_gel', '⚪ Pull ×1', '')}${b(10, 'white_gel', '⚪ Pull ×10', '')}

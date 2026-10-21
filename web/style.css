@@ -314,3 +314,4 @@ nav.tabs, .topscroll { max-width: 100%; contain: inline-size; }
 /* class headgear drawn over the slime's head */
 .blob .hat { position: absolute; left: 50%; top: 10%; width: 52%; transform: translateX(-50%); z-index: 3; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
 .blob.sm .hat { display: none; }
+table.odds { width: 100%; border-collapse: collapse; font-size: .85rem; margin: 6px 0; } table.odds th, table.odds td { padding: 3px 6px; border-bottom: 1px solid var(--line); text-align: left; }

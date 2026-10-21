@@ -1,6 +1,6 @@
 # Software Design Document — Slime Gacha (prototype v0.1)
 
-> **v0.2 changes**: permadeath, rarity 90/9/0.9/0.09, 1–5★ ratings, white/purple gel currencies, free daily pull, fixed-size parties (§5.1, 5.9, 5.10).
+> **v0.2 changes**: permadeath, rarity 90/8/1.9/0.09/0.01, 1–5★ ratings, white/purple gel currencies, free daily pull, fixed-size parties (§5.1, 5.9, 5.10).
 > **v0.8 changes**: per-slime dungeon progress + checkpoint exits, floor-level scouting that kills incomplete parties, specialization (hybrid classes), outlook (§5.11, §5.15, §5.17).
 > **v0.7 changes**: browser front-end (§5.16): JSON command API, local server, Pyodide static build.
 > **v0.6 changes**: no-exit delves, scouting intel, Pit defeat penalties + gear recovery, equipment & Armory, sacrifice stress (§5.11, §5.15).
@@ -77,13 +77,13 @@ through a dispatch table, so a new *kind* = one handler function; a new *ability
 ## 5. Systems
 
 ### 5.1 GachaSystem (`gacha.py`)
-- **Rarity** weights (config): common 90 / rare 9 / epic 0.9 / legendary 0.09 (normalised by `random.choices`).
-- **Stars** 1–5: `P(star=k) ∝ exp(−λ·(k−1))`, with λ per rarity `{common .7, rare 1.0, epic 1.3, legendary 1.6}`.
+- **Rarity** weights (config): common 90 / uncommon 8 / rare 1.9 / epic 0.09 / legendary 0.01, normalised. `GachaSystem.odds()` returns the exact chances the roll uses (Lucky Charm and Favor included) and the Gacha tab shows them.
+- **Stars** 1–5: `P(star=k) ∝ exp(−λ·(k−1))`, with λ per rarity `{common .7, uncommon .85, rare 1.0, epic 1.3, legendary 1.6}`.
   Each step down the ladder costs a constant factor (exponential), and higher rarities fall off faster, so
   a 5★ common ≈ 3 % while a 5★ legendary ≈ 0.13 %. Stars multiply stats `[1.0, 1.1, 1.25, 1.45, 1.7]`.
 - **Payment**: `pull(n, pay)` with `pay ∈ {free, white_gel, purple_gel}`. White/purple gel cost 10 each per pull.
-  **Purple gel** multiplies the rare/epic/legendary weights by `PURPLE_RARITY_BOOST` (5×).
-- **Free daily pull**: one per game day (`day = tick // 24`); `last_free_day` is persisted.
+  **Purple gel** multiplies every non-common weight by `PURPLE_RARITY_BOOST` (5×) - uncommon included - which is about 3.6× on the chance of anything above common after normalising. Mages, medics and necromancers are never pulled below 3★. Fortune's Favor doubles the non-common weights for the whole next pull (a ten-pull included).
+- **Free daily pull**: one per real UTC day in every time mode (`Game.real_day()`); `last_free_day` and `last_free_ts` are persisted, and a clock set back cannot earn another.
 - **Pity** is optional and **off by default** (`PITY_* = 0`) so the published rates are honest.
 - Stats = archetype base × rarity mult × star mult × stage mult × variance.
 

@@ -669,3 +669,15 @@ class TestDisband(unittest.TestCase):
             s.in_dungeon = ""
         g.party_disband(pid)
         self.assertNotIn(pid, g.parties.parties)
+
+
+class TestOddsDisclosure(unittest.TestCase):
+    def test_odds_match_the_roll_and_sum_to_one(self):
+        g = Game(1)
+        for purple in (False, True):
+            o = g.gacha.odds(purple, False)
+            self.assertAlmostEqual(sum(o.values()), 1.0)
+        w, p = g.gacha.odds(False, False), g.gacha.odds(True, False)
+        self.assertGreater(p["uncommon"], w["uncommon"])           # purple boosts uncommon too
+        self.assertLess(p["common"], w["common"])
+        self.assertGreater(g.gacha.odds(False, True)["rare"], w["rare"])

@@ -17,6 +17,7 @@ from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
 from .battle import default_row as battle_default_row
 from .buildings import BUILDINGS
+from .gacha import GachaSystem
 from .errors import GameError, InvalidAction
 from .game import Game
 from .growth import can_evolve, evolve_cost
@@ -364,6 +365,10 @@ def snapshot(g: Game) -> dict:
         classes=[dict(key=a.key, name=a.name, emoji=a.emoji) for a in all_archetypes()],
         stances=list(BEHAVIORS),
         rates=dict(rarity=config.RARITY_RATES, purple_boost=config.PURPLE_RARITY_BOOST,
+                   odds=dict(white=g.gacha.odds(False, False), purple=g.gacha.odds(True, False), white_favor=g.gacha.odds(False, True),
+                             purple_favor=g.gacha.odds(True, True), luck=g.gacha.luck, favor=g.gacha.favor),
+                   stars={r: GachaSystem.star_probabilities(r) for r in config.RARITIES}, scholar=sorted(config.SCHOLAR_CLASSES),
+                   scholar_min=config.SCHOLAR_MIN_STARS,
                    pull_cost=config.PULL_COST, gel_merge=config.GEL_MERGE, bulk_n=config.PULL_BULK_N, bulk_discount=config.PULL_BULK_DISCOUNT),
         mercy=dict(spar_cost=config.SPAR_COST, train_ticks=config.SPAR_TICKS),
         spec=dict(cost=config.SPEC_COST, style=config.SPEC_MIN_STYLE, level=config.SPEC_MIN_LEVEL, table=_spec_table()),

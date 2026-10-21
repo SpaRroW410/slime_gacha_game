@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=36, group="QA", title="M2: shown odds do not match the code", status="planned",
-         text="Purple-gel odds, star odds and the 3-star minimum will be shown exactly, and the docs corrected."),
     dict(id=38, group="QA", title="M4: two tabs overwrite each other's saves", status="planned",
          text="A second open tab will be detected."),
     dict(id=39, group="QA", title="M5: Import replaces the colony without asking", status="planned",
