@@ -205,6 +205,7 @@ main h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
 .arena { pointer-events: auto; width: min(900px, 98vw); max-height: 96vh; overflow-y: auto; }
 .arena .field { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: start; margin: 8px 0; }
 .arena .side { display: grid; gap: 6px; } .arena .vs { align-self: center; color: var(--mute); font-weight: 700; }
+.arena .rows { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: start; } .arena .rowcol { display: grid; gap: 6px; }
 .arena .unit { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; background: var(--card); }
 .arena .unit.dead { opacity: .35; } .arena .unit.acting { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
 .arena .unit.targetable { cursor: pointer; border-color: var(--bad); animation: pulse 1s infinite alternate; }

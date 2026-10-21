@@ -15,6 +15,7 @@ from . import buildings as bld_mod, about as about_mod, power as power_mod, modi
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
+from .battle import default_row as battle_default_row
 from .buildings import BUILDINGS
 from .errors import GameError, InvalidAction
 from .game import Game
@@ -38,7 +39,7 @@ def slime_view(g: Game, s) -> dict:
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
-        ward=s.id in g.ward, refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
+        row=(s.row or battle_default_row(s)), row_set=s.row, ward=s.id in g.ward, refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
         mood=s.mood_label(), power=(tp := power_mod.total_power(s))["total"], power_tag=power_mod.display(tp["total"]), power_parts=tp["parts"], power_mult=tp["multiplier"],
         morale=round(s.morale), morale_label=SocialEngine.morale_label(s.morale),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
@@ -455,6 +456,11 @@ def _set_plan(g, a):
 def _ack_report(g, a):
     g.ack_report(_i(a, "id"))
     return [], {}
+
+
+@command("set_row")
+def _set_row(g, a):
+    return _msg(g.set_row(_i(a, "id"), str(a.get("row", "auto"))))
 
 
 @command("wake_all")

@@ -153,6 +153,7 @@ class TestCommands(unittest.TestCase):
             sl.hp, sl.state, sl.grounded = sl.max_hp, "idle", False
             sl.needs.v.update({k: 90.0 for k in sl.needs.v})
             sl.emotions.clear()
+        s.call("party_fill", {"pid": 1})                                                        # (a scout may have fallen)
         e = s.call("enter_dungeon", {"pid": 1})
         self.assertTrue(e["ok"], e["error"])
         self.assertIn("1", e["state"]["dungeon"]["delves"])

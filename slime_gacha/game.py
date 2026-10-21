@@ -1134,6 +1134,15 @@ class Game:
                 out.append(f"{s.name} leaves the {jobs.JOBS[s.job].name.lower() if s.job in jobs.JOBS else 'job'} for training. " + jobs.stop(self, s))
         return out
 
+    def set_row(self, sid: int, row: str) -> str:
+        """Choose where a slime stands in a fight: "front", "back" or "auto" (casters and archers at the back)."""
+        from .battle import default_row
+        if row not in ("front", "back", "auto"):
+            raise InvalidAction("A row is front, back or auto.")
+        s = self.slime(sid)
+        s.row = "" if row == "auto" else row
+        return f"{s.name} will stand in the {s.row or default_row(s) + ' (automatic)'} row."
+
     def set_behavior(self, sid: int, stance: str) -> str:
         if stance not in BEHAVIORS:
             raise InvalidAction(f"Stance must be one of {', '.join(BEHAVIORS)}.")

@@ -439,7 +439,8 @@ function dOverview(s, { st, free, inDun }) {
       })()}
       ${s.can_evolve ? `<button class="btn small primary" data-act="do" data-c="evolve" ${free ? '' : 'disabled'}>🌟 Evolve (${s.evolve_cost} ✨)</button>` : ''}</div>
       ${st.potions.stock.length ? `<div class="row"><select data-ui="pot_sel">${st.potions.stock.map((p) => `<option value="${p.kind}:${p.grade}">${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}</option>`).join('')}</select><button class="btn small" data-act="use_potion" ${inDun ? 'disabled' : ''}>Drink</button></div>` : ''}`)}
-    ${sect('Orders', 'Stance decides what the slime does in a fight. Hunting sends it out for gel, food and essence.', `<div class="row"><label class="f">Stance <select data-act-change="stance">${st.stances.map((x) => `<option ${x === s.behavior ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>
+    ${sect('Orders', 'Stance decides what the slime does in a fight. Hunting sends it out for gel, food and essence.', `<div class="row"><label class="f">Row <select data-act-change="row" title="Where it stands in a fight: melee blows only reach the front row while someone stands there; the back row is sheltered but cannot swing melee well"><option value="auto" ${s.row_set ? '' : 'selected'}>auto (${s.row})</option><option value="front" ${s.row_set === 'front' ? 'selected' : ''}>front</option><option value="back" ${s.row_set === 'back' ? 'selected' : ''}>back</option></select></label>
+      <label class="f">Stance <select data-act-change="stance">${st.stances.map((x) => `<option ${x === s.behavior ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>
       <div class="row"><select data-ui="zone">${st.zones.map((z) => `<option value="${z.key}" ${z.key === zone ? 'selected' : ''}>${esc(z.name)} (${z.duration}h)</option>`).join('')}</select>
         <button class="btn small" data-act="hunt" ${free && s.state === 'idle' ? '' : 'disabled'}>🏞 Hunt</button>${s.state === 'hunting' ? '<button class="btn small" data-act="do" data-c="recall">Recall</button>' : ''}</div>`)}
     <p>${s.traits.map((t) => badge(t)).join(' ')}</p>`;
@@ -538,6 +539,7 @@ function mini(id, removeBtn = false) {
   const s = slimeById(id);
   if (!s) return '';
   return `<div class="mini" data-act="sel" data-id="${s.id}">${avatar(s, 'sm')}<span>${esc(s.name)}</span>${bar(s.hp, s.max_hp, 'hp')}
+    <button class="btn small" data-act="toggle_row" data-id="${s.id}" title="${s.row === 'back' ? 'Back row (tap to move to the front)' : 'Front row (tap to move to the back)'}">${s.row === 'back' ? '⬅ back' : '▶ front'}</button>
     ${removeBtn ? `<button class="btn small" data-act="party_remove" data-id="${s.id}" title="Remove from party">✕</button>` : ''}</div>`;
 }
 function parties() {
@@ -1345,7 +1347,7 @@ const ARENA = {
     const acting = b.waiting === u.i, pct = u.max_hp ? Math.max(0, Math.min(100, 100 * u.hp / u.max_hp)) : 0;
     const cls = ['unit', u.alive ? 'alive' : 'dead', acting ? 'acting' : '', targetable ? 'targetable' : '', u.side].join(' ');
     return `<div class="${cls}" data-unit="${u.i}" ${targetable ? `data-act="battle_target" data-i="${u.i}"` : ''}>
-      <div class="uname">${esc(u.emoji)} ${esc(u.name)}${u.element ? ` <small>${EL_EMOJI[u.element] || esc(u.element)}</small>` : ''}</div>
+      <div class="uname">${esc(u.emoji)} ${esc(u.name)} <small class="mute" title="${u.row === 'back' ? 'Back row: sheltered, but melee blows cannot be struck from here' : 'Front row'}">${u.row === 'back' ? '⬅ back' : '▶ front'}</small>${u.element ? ` <small>${EL_EMOJI[u.element] || esc(u.element)}</small>` : ''}</div>
       <div class="bar ${pct < 30 ? 'lvl-low' : pct < 60 ? 'lvl-mid' : 'lvl-ok'}"><i style="width:${pct}%"></i></div>
       <small class="mute">${u.hp}/${u.max_hp}${u.stamina != null ? ` · ⚡${u.stamina}/${u.stamina_max}` : ''}</small>
       <div class="ustat">${(u.status || []).map((x) => `<span>${esc(x)}</span>`).join('')}${u.guard ? '<span>🛡</span>' : ''}${u.poison ? `<span>☠${u.poison}</span>` : ''}${!u.alive ? '<span>💀</span>' : ''}${u.minion ? '<span>👻</span>' : ''}</div></div>`;
@@ -1353,7 +1355,9 @@ const ARENA = {
   render(b) {
     const pick = S.ui.pick ? b.abilities.find((a) => a.key === S.ui.pick) : null;
     const tside = pick ? (pick.target === 'enemy' ? 'foes' : 'party') : null;
-    const col = (side) => b.units.filter((u) => u.side === side).map((u) => this.unit(u, b, !!pick && u.alive && u.side === tside && (side === 'foes' || !u.minion))).join('');
+    const can = (u, side) => !!pick && u.alive && u.side === tside && (side === 'foes' || !u.minion) && (!pick.reach || side !== 'foes' || pick.reach.includes(u.i));
+    const half = (side, row) => `<div class="rowcol ${row}">${b.units.filter((u) => u.side === side && (u.row || 'front') === row).map((u) => this.unit(u, b, can(u, side))).join('')}</div>`;
+    const col = (side) => `<div class="rows ${side}">${side === 'party' ? half(side, 'back') + half(side, 'front') : half(side, 'front') + half(side, 'back')}</div>`;
     const order = b.order.map((i) => { const u = b.units[i]; return `<span class="ord ${u.side} ${i === b.current ? 'now' : ''}" title="${esc(u.name)}">${esc(u.emoji)}</span>`; }).join('');
     const w = b.waiting != null ? b.units[b.waiting] : null;
     const abil = w ? b.abilities.map((a) => {
@@ -1506,6 +1510,7 @@ const A = {
     const rules = [0, 1, 2].map((i) => ({ if: ui(`plan_${key}_rc${i}`, (cur?.rules[i] || {}).if || ''), n: num(ui(`plan_${key}_rn${i}`, (cur?.rules[i] || {}).n ?? 10), 10), do: ui(`plan_${key}_ra${i}`, (cur?.rules[i] || {}).do || 'forage') })).filter((r) => r.if);
     act('set_plan', { key, slots, rules }); },
   reset_plan: (d) => { const key = d.key; for (let i = 0; i < 8; i++) delete S.ui[`plan_${key}_s${i}`]; for (let i = 0; i < 3; i++) { delete S.ui[`plan_${key}_rc${i}`]; } act('set_plan', { key, slots: Array(8).fill('work'), rules: [] }); },
+  toggle_row: (d) => { const s = slimeById(num(d.id)); if (s) act('set_row', { id: s.id, row: s.row === 'back' ? 'front' : 'back' }); },
   away_toggle: () => { S.awayOpen = !S.awayOpen; render(); },
   serve_hungry: () => act('serve_hungry'),
   wake_all: () => confirmThen('Wake everybody asleep in town?\n\nSlimes under 10% energy are left to sleep. Those under 50% energy wake grumpy (a mood cost).', () => act('wake_all')),
@@ -1528,7 +1533,7 @@ const A = {
   battle_pick: (d) => { const b = S.state.battle; const ab = b?.abilities.find((a) => a.key === d.key); if (!ab) return;
     if (ab.target === 'enemy' || ab.target === 'ally') {
       const side = ab.target === 'enemy' ? 'foes' : 'party';
-      const pool = b.units.filter((u) => u.alive && u.side === side && (side === 'foes' || !u.minion));
+      const pool = b.units.filter((u) => u.alive && u.side === side && (side === 'foes' || !u.minion) && (!ab.reach || side !== 'foes' || ab.reach.includes(u.i)));
       if (pool.length === 1) return act('battle_act', { ability: ab.key, target: pool[0].i }, { title: kindTitle() });
       S.ui.pick = ab.key; render();
     } else act('battle_act', { ability: ab.key }, { title: kindTitle() }); },
@@ -1599,6 +1604,7 @@ document.addEventListener('change', async (e) => {
   if (t.dataset.colorid) { act('set_color', { id: num(t.dataset.colorid), color: t.value }); return; }
   if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); return; }
   if (t.dataset.actChange === 'recipe') { act('set_recipe', { recipe: t.value }); return; }
+  if (t.dataset.actChange === 'row' && S.sel) { act('set_row', { id: S.sel, row: t.value }); return; }
   if (t.dataset.actChange === 'stance' && S.sel) { act('stance', { id: S.sel, stance: t.value }); return; }
   if (t.hasAttribute('data-import') && t.files[0]) {
     try { const save = JSON.parse(await t.files[0].text()); const r = await backend.call('load', { save });

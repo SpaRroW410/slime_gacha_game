@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=8, group="Gameplay", title="Formations and front/back rows", status="planned",
-         text="Positions that change who can be targeted and how much damage is taken."),
     dict(id=9, group="Gameplay", title="New classes: Bard, Paladin, Alchemist, Druid", status="planned",
          text="Four more classes with their own skills, evolutions, capstones and star attributes."),
     dict(id=10, group="Gameplay", title="Construction time and the Hatchery", status="planned",
@@ -101,8 +99,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-22",
-                 text="Dungeon and sparring reports, and the resources they earn, now arrive when the party is back (the report opens by itself) instead of the moment it leaves.")
+WHATS_NEW = dict(id="2026-10-23",
+                 text="Formations: every slime and monster stands in the front or back row. Melee blows reach only the front row, the back row is sheltered; set rows on the party card or in a slime's Orders.")
 
 
 def build() -> Dict[str, object]:

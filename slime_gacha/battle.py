@@ -41,6 +41,23 @@ class Enemy:
 
 ENEMIES: "Registry[Enemy]" = Registry("enemy")
 
+# ---- formations: front and back rows ----------------------------------------------------------------------------
+# Melee single-target attacks can only reach the front row while a front-row foe stands; arrows, spells, area attacks and
+# backstabs reach anyone. A melee fighter in the back row hits for less; whoever stands in the back row takes less damage.
+RANGED_WORDS = ("arrow", "shot", "volley", "snipe", "dart", "bolt", "barrage", "shadows", "backstab", "stab_back")
+BACK_ROLES = ("caster", "support", "hunter")           # monsters that fight from the back row
+BACK_DISCIPLINES = ("archery", "magic")                # classes that default to the back row
+
+
+def is_melee(ab) -> bool:
+    """A single-target physical attack that has to be struck from close up."""
+    return (ab.target == "enemy" and ab.kind in ("damage", "drain", "poison") and ab.stat == "atk" and not ab.element
+            and not any(w in ab.key for w in RANGED_WORDS))
+
+
+def default_row(slime) -> str:
+    return "back" if slime.arch.discipline in BACK_DISCIPLINES else "front"
+
 
 def register_enemy(e: Enemy) -> Enemy:
     return ENEMIES.register(e, e.key)
@@ -129,6 +146,7 @@ class Combatant:
     spec_uses: int = 0              # hybrid skills used this fight (second-discipline practice)
     cap_scale: Dict[str, float] = field(default_factory=dict)   # ability key -> strength factor (hybrid capstones)
     hybrid: frozenset = frozenset() # keys that count as hybrid practice
+    row: str = "front"              # formation: "front" | "back" (see BattleSystem.reachable)
 
     @property
     def alive(self) -> bool:
@@ -214,12 +232,14 @@ class BattleSystem:
                          cap_scale=({attributes.hybrid_capstone(s): attributes.hybrid_scale(s)} if attributes.hybrid_capstone(s) else {}),
                          hybrid=frozenset(attributes.hybrid_keys(s)),
                          style=sparring.style_levels(s), morale=s.morale, mods=_merge_mods(_merge_mods(items_mod.battle_mods(s), attributes.battle_mods(s)), emods),
-                         stamina=s.stamina, stamina_max=s.max_stamina, sta_regen=attributes.regen_per_round(s))
+                         stamina=s.stamina, stamina_max=s.max_stamina, sta_regen=attributes.regen_per_round(s),
+                         row=(s.row if s.row in ("front", "back") else default_row(s)))
 
     @staticmethod
     def from_enemy(e: Enemy) -> Combatant:
         return Combatant(e.name, e.emoji, "foes", dict(e.stats), float(e.stats["hp"]), list(e.abilities),
-                         "attack", 1.0, e, element=e.element, weak=tuple(e.weak), resists=tuple(e.resists))
+                         "attack", 1.0, e, element=e.element, weak=tuple(e.weak), resists=tuple(e.resists),
+                         row=("back" if e.role in BACK_ROLES else "front"))
 
     # -- main loop -----------------------------------------------------------
     def run(self, party, enemies: List[Enemy], permadeath: bool = True, split_xp: bool = True,
@@ -342,6 +362,14 @@ class BattleSystem:
             for t in targets:
                 if not t.alive and t.side != actor.side:
                     log.append(f"  {t.emoji}{t.name} is defeated!")
+
+    @staticmethod
+    def reachable(actor, ab, foes):
+        """Foes this attack can reach: a melee blow only the front row (summoned minions count as front), unless nobody stands there."""
+        if not is_melee(ab):
+            return foes
+        front = [c for c in foes if c.row == "front" or c.minion]
+        return front or foes
 
     @staticmethod
     def targetable(foes):
@@ -560,6 +588,7 @@ class BattleSystem:
             return [self.rng.choice(foes)]
         if ability.key == "backstab":
             return [min(foes, key=lambda c: c.hp)]
+        foes = self.reachable(actor, ability, foes)
         real = [c for c in foes if not c.minion] or foes
         if ability.kind == "utility":                       # debuffs, marks and stuns go to the most dangerous foe
             return [max(real, key=lambda c: c.stat("atk") + c.stat("mag"))]
@@ -660,6 +689,10 @@ def _damage_value(bs: BattleSystem, actor, ability, target):
         raw *= 1 + actor.mods.get("spell_power", 0.0)
         raw *= 1 - min(0.5, target.mods.get("resist", 0.0)) * (1 - pierce.get("resist", 0.0))
     raw *= 1 - min(0.5, target.mods.get("guard", 0.0)) * (1 - pierce.get("guard", 0.0))
+    if target.row == "back":
+        raw *= config.ROW_BACK_GUARD                       # (formation) the back row is sheltered
+    if actor.row == "back" and is_melee(ability):
+        raw *= config.ROW_BACK_MELEE                       # (formation) a melee fighter in the back row cannot swing properly
     if target.marked[0] > 0:
         raw *= 1 + target.marked[1]
     tb = fx.find(ability, "terrain_boost")
@@ -890,7 +923,9 @@ class BattleRun:
                             target=a.target, cooldown=cd, cost=cost,
                             winded=bool(actor.stamina_max and actor.stamina < cost), ready=cd == 0,
                             eff=({i: round(c.matchup(a.element), 2) for i, c in foes}
-                                 if a.element and a.target in ("enemy", "all_enemies") else {})))
+                                 if a.element and a.target in ("enemy", "all_enemies") else {}),
+                            reach=([i for i, c in foes if c in BattleSystem.reachable(actor, a, [x for _, x in foes])]
+                                   if a.target == "enemy" else None)))
         return out
 
     def act(self, ability_key: str, target: Optional[int] = None) -> None:
@@ -906,7 +941,7 @@ class BattleRun:
         allies = [c for c in self.everyone if c.side == actor.side and c.alive]
         foes = self.bs.targetable([c for c in self.everyone if c.side != actor.side and c.alive])
         if ab.target in ("enemy", "ally"):
-            pool = foes if ab.target == "enemy" else [c for c in allies if not c.minion] or allies
+            pool = self.bs.reachable(actor, ab, foes) if ab.target == "enemy" else [c for c in allies if not c.minion] or allies
             if target is None:
                 tgt = None
             else:
@@ -925,7 +960,7 @@ class BattleRun:
                     alive=c.alive, minion=c.minion, element=c.element or "", guard=c.guard,
                     poison=c.poison[0] if c.poison[0] > 0 else 0,
                     stamina=int(c.stamina) if c.stamina_max else None, stamina_max=int(c.stamina_max) or None,
-                    winded=c.winded, status=fx.statuses(c))
+                    winded=c.winded, status=fx.statuses(c), row=c.row)
 
     def view(self, tail: int = 40) -> dict:
         t = self.terrain
