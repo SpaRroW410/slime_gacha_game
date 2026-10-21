@@ -22,7 +22,7 @@ The roadmap (`ROADMAP.md`) stays the milestone history; this file is what is lef
 - [x] **8. Formations and front/back rows** — every combatant stands in the front or back row (`Slime.row`, "auto" = casters and archers at the back; monsters by role): melee single-target blows reach only the front row while it stands (arrows, spells, area attacks and backstabs reach anyone), the back row takes x0.8 damage and a melee fighter there hits for x0.75. Set per slime on the party card and in Orders; the manual arena draws the rows and offers only reachable targets.  *Done when:* met; `tests/test_rows.py`, Guide.
 - [x] **9. New classes: Bard, Paladin, Alchemist, Druid** — four archetypes with 4 rarity skills, an evolution skill, 2 capstones and star attributes each.  *Done when:* all four pull, level, fight and appear in the Guide.
 - [x] **10. Construction time and the Hatchery** — upgrades take game time; a Hatchery building (the Pantry now lives in the Kitchen).  *Done when:* upgrades show in the away bar and the Hatchery has effects.
-- [ ] **11. Gear set bonuses** — bonuses for matching sets.  *Done when:* shown in Armory and slime card, balanced.
+- [x] **11. Gear set bonuses** — bonuses for matching sets.  *Done when:* shown in Armory and slime card, balanced.
 - [ ] **12. Keeper achievements, titles and respec** — achievements list, titles, skill respec.  *Done when:* People > Keeper shows them and respec costs something.
 - [ ] **13. Imbue statuses and revival items** — e.g. Barbarian fire-axe imbue as a timed status; consumable resurrection.  *Done when:* both use fx and are tested.
 

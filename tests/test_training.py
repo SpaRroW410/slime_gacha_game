@@ -298,3 +298,15 @@ class TestPartyTraining(unittest.TestCase):
         self.assertGreater(g.social.synergy(members), before)
         self.assertEqual(g.wallet.get("white_gel"), white - 1)          # one white gel for the whole party
         self.assertEqual(len(g.facility_users("spar_party")), 0)         # it is a training yard, not the sparring arena
+
+
+class GearSetTest(unittest.TestCase):
+    def test_set_bonus(self):
+        from slime_gacha import equipment as eq
+        none = eq.gear_bonus({"weapon": "wooden_club"})
+        two = eq.gear_bonus({"weapon": "wooden_club", "armor": "leather_wrap"})
+        three = eq.gear_bonus({"weapon": "wooden_club", "armor": "leather_wrap", "charm": "lucky_pebble"})
+        self.assertEqual(none["atk"], 3)
+        self.assertGreater(two["atk"], 3)
+        self.assertGreater(three["atk"], two["atk"])
+        self.assertEqual(eq.set_status({"weapon": "wooden_club"})[0]["bonus"], {})

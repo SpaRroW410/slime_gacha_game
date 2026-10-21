@@ -524,7 +524,9 @@ function dGear(s, { st, free }) {
       ${cur ? `<button class="btn small" data-act="unequip" data-slot="${sl}" ${free ? '' : 'disabled'}>Remove</button>` : ''}</span></div>`;
   }).join('');
   const relics = Object.values(s.items).map((it) => `<div class="row between"><span>${it.emoji} <b>${esc(it.name)}</b> ${chip(it.rarity, RARITY_CLS[it.rarity])} ${stars(it.stars)} Lv${it.level} <small class="mute">💞${it.compat}%</small></span><button class="btn small" data-act="item_unequip" data-id="${s.id}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Remove</button></div>`).join('');
-  return `${sect('Gear', 'Plain armory gear. Relics (below) come from the Rift and are managed in Town → Armory & relics.', `<div class="stack">${slots}</div>`)}
+  const bt = (b) => Object.entries(b || {}).map(([k, v]) => `+${v} ${k}`).join(' ');
+  const sets = (s.gear_sets || []).map((x) => `<small class="${x.bonus && Object.keys(x.bonus).length ? '' : 'mute'}">${x.emoji} <b>${esc(x.name)}</b> ${x.count}/3 · ${Object.keys(x.bonus).length ? bt(x.bonus) : 'wear 2 pieces for a bonus'}${x.next ? ` <span class="mute">(next: ${bt(x.next)})</span>` : ''}</small>`).join('');
+  return `${sect('Gear', 'Plain armory gear. Relics (below) come from the Rift and are managed in Town → Armory & relics. Matching set pieces give a bonus.', `<div class="stack">${slots}${sets}</div>`)}
     ${sect('Relics', 'Unique equipment with rarity, stars, mods and a compatibility with this slime.', relics || '<small class="mute">No relics worn.</small>')}
     ${sect('Weapons', 'A slime remembers up to three weapon families; practice sharpens them.', `<small class="mute">Favourite: ${s.weapons.favourite} · remembers ${s.weapons.memory.length}/${s.weapons.slots}</small>
       ${Object.entries(s.weapons.proficiency).map(([f, p]) => `<div>${f}${s.weapons.memory.includes(f) ? '' : ' <small class="mute">(forgotten)</small>'} <b>Lv${p.level}</b> <small class="mute">${p.uses} uses</small></div>`).join('')}
@@ -1300,6 +1302,7 @@ function townAll() {
       <small class="mute">When on, slimes help themselves to up to ${Math.round(st.potions.autonomy_share * 100)}% of your stocks without asking: they drink potions (tired ones stamina, hurt ones vigor, class-suited ones before a trip), mend worn gear, dress themselves from the relic vault and armory, and brew potions the colony is short of — the rest is yours.</small></div></div>
   <div class="grid cols2" style="margin-top:12px">
     <div class="panel stack"><h2>🛠️ Armory</h2><p class="mute">Gear is usable by any class. The Armory level limits which tier it sells. Gear also drops in dungeons — but a fallen slime's gear can be lost.</p>
+      <details><summary>🧩 Gear sets</summary><div class="stack">${st.gear.sets.map((x) => `<small>${x.emoji} <b>${esc(x.name)}</b>: ${x.pieces.map((k) => esc((st.gear.all.find((g) => g.key === k) || {}).name || k)).join(', ')}<br><span class="mute">2 pieces: ${stat(x.bonus[2])} · 3 pieces: ${stat(x.bonus[3])}</span></small>`).join('')}</div></details>
       <table><tbody>${st.gear.shop.map((g) => `<tr><td>${g.emoji} <b>${esc(g.name)}</b><br><small class="mute">T${g.tier} ${g.slot} · ${stat(g.stats)}</small></td><td>${cost(g.cost)}</td>
         <td><button class="btn small" data-act="buy_gear" data-key="${g.key}" ${affordable(g.cost) ? '' : 'disabled'}>Buy</button></td></tr>`).join('')}</tbody></table></div>
     <div class="panel stack"><h2>🎒 Inventory</h2>
