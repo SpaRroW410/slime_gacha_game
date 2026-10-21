@@ -311,9 +311,6 @@ html { overflow-x: clip; max-width: 100%; -webkit-text-size-adjust: 100%; text-s
 body { overflow-x: clip; max-width: 100vw; }
 nav.tabs, .topscroll { max-width: 100%; contain: inline-size; }
 
-/* class headgear: sits on the dome of the head, below the rarity ears / tip / crown and above the eyes */
-.blob .hat { position: absolute; left: 50%; top: 20%; width: 40%; transform: translateX(-50%); z-index: 3; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
-.blob.sm .hat { display: none; }
 table.odds { width: 100%; border-collapse: collapse; font-size: .85rem; margin: 6px 0; } table.odds th, table.odds td { padding: 3px 6px; border-bottom: 1px solid var(--line); text-align: left; }
 
 /* time controls: always on screen at the bottom, large enough to tap, clear of the toasts above them */
@@ -329,3 +326,10 @@ main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 header.top { padding-top: env(safe-area-inset-top); height: calc(56px + env(safe-area-inset-top)); }
 nav.tabs { top: calc(56px + env(safe-area-inset-top)); }
 @media (pointer: coarse) { body { -webkit-tap-highlight-color: transparent; } }
+
+/* class gear (avatars.js): drawn in the slime's 64x64 box, behind (aura, wings) and in front (hat, item) of the body; the rarity
+   ears / tip / crown give way to it, the rarity ring and the legendary glow stay */
+.blob.geared .body::before, .blob.geared .body::after { display: none !important; }
+.blob .gear-back, .blob .gear-front { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.blob .gear-back { z-index: 0; } .blob.geared .body { z-index: 1; } .blob.geared .mouth { z-index: 2; } .blob .gear-front { z-index: 3; }
+.blob.geared .gear-front, .blob.geared .gear-back { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }

@@ -1,0 +1,6 @@
+<!doctype html><meta charset=utf-8><link rel=stylesheet href="/style.css"><script src="/avatars.js"></script><style>body{padding:12px}td,th{padding:8px 10px;text-align:center}.blob{animation:none!important}</style><div id=o></div><script>const CLASS_COLORS = { barbarian: '#e5604d', mage: '#8a7cff', medic: '#4cc38a', rogue: '#aab2c0', ranger: '#e0b341', necromancer: '#a56bd1', bard: '#f08fc0', paladin: '#f2d36b', alchemist: '#5ec8d8', druid: '#7bb661' };
+const R=['common','uncommon','rare','epic','legendary'];
+let h='<table><tr><th></th>'+R.map(r=>'<th>'+r+'</th>').join('')+'<th>big</th></tr>';
+for(const a of AV.classes){h+='<tr><th>'+a+'</th>'+R.map(r=>{const g=AV.gear(a,r);return '<td><div class="blob geared '+r+' m-happy" style="--c:'+CLASS_COLORS[a]+'">'+(g.back||'')+'<div class="body"><i></i><i></i></div><div class="mouth"></div>'+g.front+'</div></td>'}).join('')+
+'<td>'+(()=>{const g=AV.gear(a,'legendary');return '<div class="blob big geared legendary m-happy" style="--c:'+CLASS_COLORS[a]+'">'+g.back+'<div class="body"><i></i><i></i></div><div class="mouth"></div>'+g.front+'</div>'})()+'</td></tr>';}
+document.getElementById('o').innerHTML=h+'</table>';</script>

@@ -65,23 +65,11 @@ function stateLabel(s) {
   if (s.state === 'sleeping') return '😴 sleeping';
   return esc(s.state);
 }
-/* Class headgear: one small inline SVG per class, drawn on top of the slime's head (see .hat in style.css). */
-const HATS = {
-  barbarian: '<path d="M3 12h18v-2C21 6 17 4 12 4S3 6 3 10z" fill="#9aa3ad"/><path d="M3 10C1 8 1 5 2 3c2 1 3 3 3 5zM21 10c2-2 2-5 1-7-2 1-3 3-3 5z" fill="#f1e6cf"/>',
-  mage: '<path d="M12 0l7 12H5z" fill="#6f5bd6"/><rect x="2" y="11" width="20" height="3" rx="1.5" fill="#4d3fa3"/><circle cx="12" cy="6" r="1.3" fill="#ffe27a"/>',
-  medic: '<rect x="4" y="5" width="16" height="8" rx="3" fill="#fff"/><path d="M11 6h2v6h-2zM9 8h6v2H9z" fill="#e5484d"/>',
-  rogue: '<path d="M3 13C3 6 8 3 12 3s9 3 9 10c-3-3-6-3-9-3s-6 0-9 3z" fill="#3b4250"/>',
-  ranger: '<path d="M3 12c0-5 4-8 9-8s9 3 9 8z" fill="#4f8a4a"/><path d="M17 8c3-5 5-6 6-6-1 3-2 5-6 8z" fill="#e8d36b"/>',
-  necromancer: '<path d="M4 12l2-8 3 4 3-6 3 6 3-4 2 8z" fill="#7b4ba3"/><circle cx="12" cy="9" r="1.6" fill="#ecebe6"/>',
-  bard: '<path d="M3 12c1-5 5-7 10-6 3 1 6 3 8 6z" fill="#e0679d"/><path d="M13 6c2-4 6-5 8-4-1 3-4 5-8 6z" fill="#f4d35e"/>',
-  paladin: '<ellipse cx="12" cy="3" rx="8" ry="2.2" fill="none" stroke="#ffd95a" stroke-width="1.6"/><path d="M4 12c0-4 3-6 8-6s8 2 8 6z" fill="#c7ccd6"/>',
-  alchemist: '<rect x="3" y="7" width="18" height="5" rx="2.5" fill="#5b4a3a"/><circle cx="8" cy="9.5" r="3" fill="#7fd6e3" stroke="#d9a441" stroke-width="1.2"/><circle cx="16" cy="9.5" r="3" fill="#7fd6e3" stroke="#d9a441" stroke-width="1.2"/>',
-  druid: '<path d="M4 12c0-4 4-7 8-7s8 3 8 7z" fill="#6aa84f"/><path d="M8 6l2-4 2 3 2-3 2 4z" fill="#3f7d3a"/>',
-};
 function avatar(s, cls = '') {
   const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
-  return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)}" style="--c:${c}"><div class="body"><i></i><i></i></div><div class="mouth"></div>${HATS[s.archetype] ? `<svg class="hat" viewBox="0 0 24 14" aria-hidden="true">${HATS[s.archetype]}</svg>` : ''}<span class="em">${s.emoji}</span></div>`;
+  const g = AV.gear(s.archetype, s.rarity);                     // class gear that grows with rarity (avatars.js); a mod class keeps its emoji
+  return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)} ${g.front ? 'geared' : ''}" style="--c:${c}">${g.back || ''}<div class="body"><i></i><i></i></div><div class="mouth"></div>${g.front || `<span class="em">${s.emoji}</span>`}</div>`;
 }
 /* The three-digit power tag (001-999) shown beside a slime's figure; the full number and parts are on its card. */
 const ptag = (s) => `<span class="ptag t${Math.min(4, Math.floor(s.power_tag / 250) + 1)}" title="Total power ${s.power}">⚡${String(s.power_tag).padStart(3, '0')}</span>`;
