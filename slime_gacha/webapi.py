@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -324,6 +324,7 @@ def snapshot(g: Game) -> dict:
         reports=[dict(id=h['id'], title=h['title'], battles=h['battles'], summary=h['summary']) for h in g.held if h['paid']],
         held=[dict(title=h['title'], hours=max(0, h['due'] - g.tick_count)) for h in g.held if not h['paid']],
         places=[dict(key=p.key, name=p.name, emoji=p.emoji, blurb=p.blurb, drop=p.drop, loot=p.loot) for p in places_mod.PLACES if p.kind == "expedition" and p.drop == "loot"],
+        story=[dict(key=c.key, title=c.title, hint=c.hint, done=c.key in g.chapters, text=c.text if c.key in g.chapters else "") for c in story_mod.CHAPTERS],
         stress=round(g.sacrifice_stress, 2), feathers=dict(have=g.feathers, cost=config.FEATHER_COST, hp=config.FEATHER_HP),
         gift=dict(morale=config.GIFT_MORALE_COST, morale_gain=config.GIFT_MORALE_GAIN, peace=config.GIFT_PEACE_COST,
                   potion=config.GIFT_POTION_PURPLE, merge_gear=config.GEAR_MERGE_COUNT, scrap=config.GEAR_SCRAP_REFUND),

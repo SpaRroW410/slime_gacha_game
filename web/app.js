@@ -1351,7 +1351,8 @@ function council() {
 /* ---------------------------------------------------------------- records */
 function records() {
   const st = S.state;
-  return `<div class="grid cols2"><div class="panel"><h2>🪦 Memorial Pond</h2>${st.graveyard.length ? st.graveyard.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0">${ghost(g)}<div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">hour ${g.tick}: ${esc(g.cause)}</small></div></div>`).join('') : '<p class="mute">Nobody has fallen yet.</p>'}</div>
+  const tale = `<div class="panel stack" style="margin-bottom:12px"><h2>📖 The Great Gloop <small class="mute">${st.story.filter((c) => c.done).length}/${st.story.length}</small></h2>${st.story.map((c) => c.done ? `<details><summary><b>${esc(c.title)}</b></summary><p>${esc(c.text)}</p></details>` : `<div class="mute">🔒 <b>${esc(c.title.replace(/^\d+\. /, '???  '))}</b> — ${esc(c.hint)}</div>`).join('')}</div>`;
+  return tale + `<div class="grid cols2"><div class="panel"><h2>🪦 Memorial Pond</h2>${st.graveyard.length ? st.graveyard.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0">${ghost(g)}<div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">hour ${g.tick}: ${esc(g.cause)}</small></div></div>`).join('') : '<p class="mute">Nobody has fallen yet.</p>'}</div>
     <div class="panel"><h2>📜 Journal</h2><div class="feed" style="max-height:60vh">${st.journal.slice().reverse().map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Quiet so far.</small>'}</div></div></div>`;
 }
 

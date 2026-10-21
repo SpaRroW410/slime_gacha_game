@@ -369,3 +369,17 @@ class PlacesTest(unittest.TestCase):
         self.assertGreaterEqual(g.wallet.get("food"), before)
         with self.assertRaises(Exception):
             g.explore("main", [1], 1)
+
+
+class StoryTest(unittest.TestCase):
+    def test_chapters_unlock_from_play(self):
+        from slime_gacha.game import Game
+        g = Game(8)
+        self.assertEqual(g.chapters, [])
+        g.wallet.add("white_gel", 100)
+        g.pull(1, "white_gel")
+        self.assertIn("wake", g.chapters)
+        g.best_floor = 5
+        g.tick(6)
+        self.assertIn("crust", g.chapters)
+        self.assertEqual(Game.from_dict(g.to_dict()).chapters, g.chapters)

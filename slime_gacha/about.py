@@ -67,8 +67,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=15, group="Content", title="Campaign chapters", status="planned",
-         text="Story beats at floors and boss clears, from the story notes."),
     dict(id=16, group="Platform", title="Daily free pull on the real clock", status="planned",
          text="The daily pull resets by wall clock in both time modes, with offline catch-up."),
     dict(id=20, group="Platform", title="Installable offline app (PWA)", status="planned",
@@ -124,8 +122,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-30",
-                 text="Dungeons are now data: a new \"More places\" tab has the first extra one, the Mossy Burrows. Barbarians learn Flame Brand (a fire imbue), and Phoenix Feathers brewed in the Alchemy tab save a slime that would die in battle. The Keeper tab has achievements with wearable titles, and you can respec your skills for a gel price. Gear sets: wear two or three matching armory pieces for a bonus (shown in the Armory and on the slime card). Building upgrades now take game hours (see them in the Away bar), and a new Hatchery gives back some pull gel. Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
+WHATS_NEW = dict(id="2026-10-31",
+                 text="Story chapters unlock as you play; read them in People > Records. Dungeons are now data: a new \"More places\" tab has the first extra one, the Mossy Burrows. Barbarians learn Flame Brand (a fire imbue), and Phoenix Feathers brewed in the Alchemy tab save a slime that would die in battle. The Keeper tab has achievements with wearable titles, and you can respec your skills for a gel price. Gear sets: wear two or three matching armory pieces for a bonus (shown in the Armory and on the slime card). Building upgrades now take game hours (see them in the Away bar), and a new Hatchery gives back some pull gel. Four new classes can now be pulled: Bard, Paladin, Alchemist and Druid, each with its own skills, evolutions and capstones. A damaged or foreign save no longer locks you out: you get a clear message and can restore the automatic backup, copy the save, import a file or start fresh (nothing is deleted).")
 
 
 def build() -> Dict[str, object]:
