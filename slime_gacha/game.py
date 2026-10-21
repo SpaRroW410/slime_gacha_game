@@ -763,15 +763,17 @@ class Game:
     def _healer_aura(self, slimes, events) -> None:
         """Idle slimes on the 'heal' stance who know a heal patch up the most wounded idle friend."""
         from .abilities import get_ability
-        for h in slimes:
-            if h.state != "idle" or h.behavior != "heal":
-                continue
-            if not any(get_ability(k).kind == "heal" for k in h.known_abilities()):
-                continue
-            hurt = [o for o in slimes if o is not h and o.state != "hunting" and o.hp < o.max_hp]
-            if hurt:
-                t = min(hurt, key=lambda o: o.hp / o.max_hp)
-                t.hp = min(t.max_hp, t.hp + max(1, int(t.max_hp * 0.1)))
+        healers = [h for h in slimes if h.state == "idle" and h.behavior == "heal"
+                   and any(get_ability(k).kind == "heal" for k in h.known_abilities())]
+        if not healers:
+            return
+        mx = {o.id: o.max_hp for o in slimes if o.state != "hunting"}          # max HP is computed once per slime, not per healer
+        hurt = [o for o in slimes if o.id in mx and o.hp < mx[o.id]]
+        for h in healers:
+            t = min((o for o in hurt if o is not h and o.hp < mx[o.id]), key=lambda o: o.hp / mx[o.id], default=None)
+            if t:
+                m = mx[t.id]
+                t.hp = min(m, t.hp + max(1, int(m * 0.1)))
                 t.needs.add("belonging", 3)
                 events.append(f"💚 {h.name} tends to {t.name}.")
 

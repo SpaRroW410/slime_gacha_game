@@ -150,10 +150,21 @@ class ConflictEngine:
         self.hook = None                # Game sets: callable(kind, a, b[, success]) for bonds / morale
         self.calm = 1.0                 # Keeper skill (Peacemaker): multiplies the quarrel chance
         self._next = 1
+        self._idx, self._idx_key = set(), None
+        self._open = None               # set of open pairs, only while tick() scans for new quarrels
 
     # -- helpers -----------------------------------------------------------
     def open_between(self, a_id: int, b_id: int):
         return next((c for c in self.conflicts if {c.a, c.b} == {a_id, b_id}), None)
+
+    def has_between(self, a_id: int, b_id: int) -> bool:
+        """Like open_between, but O(1) while a tick scans every pair (the index is rebuilt at the start of each scan)."""
+        if self._open is not None:
+            return frozenset((a_id, b_id)) in self._open
+        key = (len(self.conflicts), self.conflicts[-1].id if self.conflicts else 0, self._next)     # ids only grow: any add or remove changes this
+        if self._idx_key != key:
+            self._idx, self._idx_key = {frozenset((c.a, c.b)) for c in self.conflicts}, key
+        return frozenset((a_id, b_id)) in self._idx
 
     def get(self, cid: int):
         return next((c for c in self.conflicts if c.id == cid), None)
@@ -205,6 +216,13 @@ class ConflictEngine:
         # new conflicts
         awake = [s for s in slimes if s.state not in ("sleeping", "resting") and s.alive]
         busy = {i for c in self.conflicts for i in (c.a, c.b)}      # one quarrel at a time per slime
+        self._open = {frozenset((c.a, c.b)) for c in self.conflicts}
+        try:
+            self._scan(awake, busy, events)
+        finally:
+            self._open = None
+
+    def _scan(self, awake, busy, events) -> None:
         for i, a in enumerate(awake):
             for b in awake[i + 1:]:
                 if a.id in busy or b.id in busy:
@@ -215,6 +233,7 @@ class ConflictEngine:
                     c = Conflict(self._next, a.id, b.id, 1, 0, self.reason(a, b))
                     self._next += 1
                     self.conflicts.append(c)
+                    self._open.add(frozenset((a.id, b.id)))
                     busy.update((a.id, b.id))
                     events.append(f"⚡ Conflict #{c.id}: {a.name} and {b.name} are fighting over {c.reason}!")
                     if self.hook:

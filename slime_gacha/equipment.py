@@ -94,6 +94,8 @@ def set_bonus(equipped: Dict[str, str]) -> Dict[str, float]:
 
 
 def gear_bonus(equipped: Dict[str, str]) -> Dict[str, float]:
+    if not equipped:
+        return {}
     out: Dict[str, float] = dict(set_bonus(equipped))
     for key in equipped.values():
         if key in GEAR:
