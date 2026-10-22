@@ -237,8 +237,9 @@ def build() -> list:
         dict(title="Time", icon="⏳", blurb="Two ways time can pass.", items=[
             dict(name="Turn-based", text="Time passes when you act or press the wait buttons. Every activity costs game hours."),
             dict(name="Live (wall clock)", text=f"Time passes by itself. At home the clock runs at {c.LIVE_LOBBY_RATE:g} game hour per real hour "
-                                                f"(study, hunts and brewing take real time); while any party is in a dungeon it runs "
-                                                f"{c.LIVE_DUNGEON_RATE:g}x faster. Speed presets multiply both. Offline progress is capped at "
+                                                f"(study, hunts and brewing take real time) and it never speeds up. Only dungeon trips are compressed: they pass "
+                                                f"{c.LIVE_DUNGEON_RATE / c.LIVE_LOBBY_RATE:g}x faster than home life, so a trip of 3 dungeon hours costs 1 colony hour. "
+                                                f"The speed presets multiply the whole clock. Offline progress is capped at "
                                                 f"{c.LIVE_CATCHUP_MAX_HOURS} game hours."),
             dict(name="Clearing a floor", text="Takes longer deeper down, shorter if the party is stronger than the floor and if it has been "
                                                f"scouted (up to {c.CLEAR_KNOWLEDGE_CUT:.0%} faster). Bigger parties are a little slower.")]),

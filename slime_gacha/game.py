@@ -119,6 +119,7 @@ class Game:
         self.stranded: List[dict] = []                 # overdue scouts waiting for a rescue party (see scout / rescue)
         self.next_stranded = 1
         self._owed = 0.0                               # hours the current session still has to pay (live mode)
+        self._trip = False                             # ... and whether they are dungeon hours (compressed) rather than home hours
         self.deferred_turn = False                     # turn mode: sessions keep their slimes away until the player waits the time out
         self._arena: Optional[str] = None              # the sparring facility the current session uses (live mode bookkeeping)
         self.clock_fn = time.time
@@ -301,8 +302,8 @@ class Game:
         if mode == "turn" and not self.deferred_turn:
             self.expeditions_flush()
             return "Turn-based time: time passes when you say so."
-        return (f"Live time: {config.LIVE_LOBBY_RATE * self.time_scale:g} game hour(s) per real hour at home, "
-                f"{config.LIVE_DUNGEON_RATE * self.time_scale:g} while a party is in a dungeon.")
+        return (f"Live time: {config.LIVE_LOBBY_RATE * self.time_scale:g} game hour(s) per real hour; dungeon trips pass "
+                f"{config.LIVE_DUNGEON_RATE / config.LIVE_LOBBY_RATE:g}x faster than home life.")
 
     def expeditions_flush(self) -> None:
         """Leaving live mode: everyone who was away comes home at once."""
@@ -313,9 +314,15 @@ class Game:
             d.pop("ready_tick", None)
 
     def clock_rate(self) -> float:
-        """Game hours per real hour right now: faster while a party is away in a dungeon."""
-        busy = bool(self.expeditions or self.delves)
-        return (config.LIVE_DUNGEON_RATE if busy else config.LIVE_LOBBY_RATE) * self.time_scale
+        """Game hours per real hour: the colony always runs at the home speed. (Dungeon trips are what run faster: see trip().)"""
+        return config.LIVE_LOBBY_RATE * self.time_scale
+
+    def trip(self, hours: float) -> int:
+        """Colony hours a dungeon trip of `hours` takes. In live mode a trip passes DUNGEON/LOBBY times (3x) faster than home life, so
+        3 hours of dungeon work cost 1 colony hour while everyone at home keeps living at the normal speed. Turn mode is 1:1."""
+        if not self.live:
+            return int(math.ceil(hours))
+        return max(1, int(math.ceil(hours * config.LIVE_LOBBY_RATE / config.LIVE_DUNGEON_RATE - 1e-9)))
 
     def sync(self) -> List[str]:
         """Live mode: turn elapsed wall-clock time into game hours (at most a capped catch-up). No-op in turn mode."""
@@ -341,7 +348,12 @@ class Game:
         if not self.timed:
             return self.tick(int(hours)) if hours >= 1 else []
         self._owed += hours
+        self._trip = True                                  # these are dungeon hours: they pass faster than home life in live mode
         return []
+
+    def _owed_ticks(self) -> int:
+        """The colony hours the session still has to pay: dungeon trips are compressed, home activities are not."""
+        return self.trip(self._owed) if self._trip and self._owed > 0 else int(math.ceil(self._owed))
 
     # ---- training and sparring facilities ----------------------------------------------------------------------
     def facility_capacity(self, key: str) -> int:
@@ -372,14 +384,14 @@ class Game:
         if not self.timed:
             return self.tick(int(hours))
         self._set_flag(slimes, kind)
-        self._owed = hours
+        self._owed, self._trip = hours, False
         self._arena = arena
         self._release(slimes)
         return []
 
     def _release(self, party) -> None:
         """End of a session: free the party now (turn mode) or when its time has been paid (live mode)."""
-        owed, self._owed = int(math.ceil(self._owed)), 0.0
+        owed, self._owed, self._trip = self._owed_ticks(), 0.0, False
         arena, self._arena = self._arena, None
         alive = [s for s in party if s.id in self.roster]
         if self.timed and owed > 0 and alive:
@@ -512,11 +524,11 @@ class Game:
             self._xp("scout", config.KEEPER_XP["scout"])
             out.append(f"✅ The rescuers reach the scouts and bring {len(scouts)} slime(s) home.")
             self._set_flag(scouts, "rescue")
-            self._owed = hours
+            self._owed, self._trip = hours, True
             self._release(members + scouts)
         else:
             out.append("✖ The rescuers could not break through to the scouts." if members else "☠ The rescue party is gone.")
-            self._owed = hours
+            self._owed, self._trip = hours, True
             self._release(members)
         self.journal.extend(out)
         return out
@@ -3251,8 +3263,8 @@ class Game:
             if q in self.delves:
                 self.delves[q]["hours"] += spent
                 if self.timed:
-                    self.delves[q]["ready_tick"] = self.tick_count + spent
-                    self.last_due = max(self.last_due, self.tick_count + spent)
+                    self.delves[q]["ready_tick"] = self.tick_count + self.trip(spent)
+                    self.last_due = max(self.last_due, self.tick_count + self.trip(spent))
                 if not self._members_in("main", q):        # everyone starved / died in the meantime
                     self.delves.pop(q, None)
         self._owed = 0.0
@@ -3306,7 +3318,7 @@ class Game:
         self._spend(config.STOP_REST_HOURS)
         self.delves[pid]["hours"] += config.STOP_REST_HOURS
         if self.timed:
-            self.delves[pid]["ready_tick"] = self.tick_count + config.STOP_REST_HOURS
+            self.delves[pid]["ready_tick"] = self.tick_count + self.trip(config.STOP_REST_HOURS)
         return f"🏕 {self.parties.get(pid).name} rests safely at the wayside stop ({config.STOP_REST_HOURS}h)."
 
     def stop_buy(self, pid: int, item: str) -> str:
@@ -3414,8 +3426,8 @@ class Game:
             if s.state == "sleeping":
                 s.state = "idle"
         if self.timed and pid in self.delves:
-            self.delves[pid]["ready_tick"] = self.tick_count + int(math.ceil(self._owed))
-        self._owed = 0.0
+            self.delves[pid]["ready_tick"] = self.tick_count + self._owed_ticks()
+        self._owed, self._trip = 0.0, False
         self.journal.extend(out)
         return out
 

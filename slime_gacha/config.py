@@ -466,7 +466,7 @@ CLEAR_BASE_HOURS = 1.5           # game hours to clear floor 0 ...
 CLEAR_HOURS_PER_FLOOR = 0.08     # ... plus this per floor (floor 50: ~5.5h before level and knowledge)
 CLEAR_KNOWLEDGE_CUT = 0.40       # a fully scouted floor is cleared 40% faster
 LIVE_LOBBY_RATE = 1.0            # game hours per REAL hour at home (study, hunts ... take wall-clock time)
-LIVE_DUNGEON_RATE = 3.0          # game hours per real hour while any party is in a dungeon
+LIVE_DUNGEON_RATE = 3.0          # dungeon trips pass this / LIVE_LOBBY_RATE times faster than home life (the colony itself never speeds up)
 LIVE_SCALES = (1, 6, 60)         # speed presets multiplying both rates
 LIVE_CATCHUP_MAX_HOURS = 48      # offline progress is capped (game hours)
 

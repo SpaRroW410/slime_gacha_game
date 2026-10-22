@@ -581,3 +581,27 @@ class MindTest(unittest.TestCase):
         self.assertTrue(ev)
         g.tick(24 * 3)                                             # goals, decisions and requests run with the days
         self.assertTrue(all(x.goal for x in g.slimes()))
+
+
+class SeparateRequestTest(unittest.TestCase):
+    def test_leaving_a_party_keeps_the_slime_in_the_colony_and_refills_the_place(self):
+        from slime_gacha import memory, mind
+        from slime_gacha.game import Game
+        g = Game(8)
+        g.wallet.add("white_gel", 3000)
+        g.pull(8, "white_gel")
+        for s in g.slimes():
+            s.hp = s.max_hp
+            s.needs.v.update({k: 90.0 for k in s.needs.v})
+            s.emotions.clear()
+        p = g.create_party("A")
+        g.party_autofill(p.id)
+        a, b = g.party_members(p.id)[:2]
+        memory.remember(a, "brawl", b, g.day, 6.0)
+        a.request = mind.make_request(g, a)
+        self.assertEqual(a.request["kind"], "separate")
+        g.answer_request(a.id, True)
+        self.assertIn(a.id, g.roster)                                  # still in the colony
+        self.assertIsNone(g.parties.party_of(a.id))
+        self.assertEqual(a.state, "idle")
+        self.assertEqual(len(g.parties.get(p.id).members), g.parties.size)   # the empty place was refilled

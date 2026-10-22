@@ -382,7 +382,7 @@ function liveBar() {
   if (clk.mode !== 'live') return '';
   const rate = clk.rate_now || clk.lobby_rate;
   const mins = (h) => { const m = Math.round(h / rate * 60); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`; };
-  return `<div class="livebar"><span>⏱ Live time — home ×${clk.lobby_rate}, dungeons ×${clk.dungeon_rate}${rate ? ` · now ×${rate}` : ''}</span></div>`;
+  return `<div class="livebar"><span>⏱ Live time — the colony runs at ×${clk.lobby_rate}; dungeon trips pass ×${+(clk.dungeon_rate / clk.lobby_rate).toFixed(2)} faster (3 trip hours = 1 colony hour)</span></div>`;
 }
 
 /* ---- timers for everything that keeps slimes away (hunts, study, dungeon trips, scouting, the Descent) ----

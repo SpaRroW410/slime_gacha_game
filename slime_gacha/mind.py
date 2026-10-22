@@ -105,6 +105,17 @@ def make_request(g, s):
     return None
 
 
+def _replacement(g, pid: int, leaver):
+    """The best free, healthy slime at home to fill the place the leaver left, avoiding anyone the party-mates hold a grudge against."""
+    p = g.parties.get(pid)
+    if len(p.members) >= g.parties.size or g.party_activity(pid):
+        return None
+    mates = [g.roster[i] for i in p.members if i in g.roster]
+    ok = [o for o in g.slimes() if o.id != leaver.id and not g.parties.party_of(o.id) and _free_at_home(g, o) and not g.refusal(o, "dungeon")
+          and o.hp >= o.max_hp * 0.6 and all(memory.opinion(m, o)["grudge"] < config.REQUEST_GRUDGE and memory.opinion(o, m)["grudge"] < config.REQUEST_GRUDGE for m in mates)]
+    return max(ok, key=lambda o: (o.level, o.power_rating()), default=None)
+
+
 def answer(g, sid: int, accept: bool) -> str:
     s = g.slime(sid)
     r = s.request
@@ -129,9 +140,16 @@ def answer(g, sid: int, accept: bool) -> str:
         g.parties.add(p.id, s.id)
         msg = f"{s.name} joins {p.name}."
     elif k == "separate":
+        pid = r.get("party")
         g.party_remove(s.id)
         sanity.heal(s, 4)
         msg = f"{s.name} leaves the party, relieved."
+        sub = _replacement(g, pid, s) if pid in g.parties.parties else None       # a party needs a full roster to go anywhere
+        if sub:
+            g.parties.add(pid, sub.id)
+            msg += f" {sub.name} takes the empty place in {g.parties.get(pid).name}."
+        else:
+            msg += f" {g.parties.get(pid).name} is one short now: fill the place from the Parties tab." if pid in g.parties.parties else ""
     else:
         msg = jobs.assign(g, s, r["job"])
     s.trust = min(100.0, s.trust + config.TRUST_GRANT)

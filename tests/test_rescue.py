@@ -104,7 +104,10 @@ class TestSeveralDelvesLive(unittest.TestCase):
             g.delve_next(a)                                            # A is still busy
         self.assertEqual({v["kind"] for v in away_view(g)}, {"delve"})
         self.assertEqual(len([v for v in away_view(g) if v["kind"] == "delve"]), 2)
-        g.tick(max(ta, tb))                                            # time passes for both
+        g.tick(max(ta, tb))                                            # time passes for both (a trip is short in colony hours: the wounds stay)
+        for pid in (a, b):
+            for s in members(g, pid):
+                s.hp = s.max_hp
         g.delve_next(a)
         g.delve_next(b)
         self.assertEqual(g.delves[a]["floor"] + g.delves[b]["floor"] > 4, True)
