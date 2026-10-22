@@ -334,3 +334,6 @@ nav.tabs { top: calc(56px + env(safe-area-inset-top)); }
 .blob .gear-back { z-index: 0; } .blob.geared .body { z-index: 1; } .blob.geared .mouth { z-index: 2; } .blob .gear-front { z-index: 3; }
 .blob.geared .gear-front, .blob.geared .gear-back { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
 .bar.sanity > i { background: linear-gradient(90deg, #7b6bff, #b58cff); }
+.bigsvg { display: inline-block; position: relative; width: 150px; height: 150px; flex: none; } .bigsvg .slime-svg { width: 100%; height: 100%; display: block; }
+.bigsvg .ptag { position: absolute; right: -4px; top: 0; }
+.stack > small { display: block; }

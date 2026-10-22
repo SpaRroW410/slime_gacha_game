@@ -81,6 +81,26 @@ function avatar(s, cls = '') {
   const g = AV.gear(s.archetype, s.rarity, { stage: s.stage, disc: s.spec && s.spec.disc, cm: !!(s.prof && s.prof.value >= 100), hm: !!(s.prof && s.prof.hybrid && s.prof.hybrid.value >= 100) });                     // class gear that grows with rarity (avatars.js); a mod class keeps its emoji
   return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)} ${g.front ? 'geared' : ''}" style="--c:${c}">${g.back || ''}<div class="body"><i></i><i></i></div><div class="mouth"></div>${g.front || `<span class="em">${s.emoji}</span>`}</div>`;
 }
+/* The big avatar (slime card): the layered SVG from avatar-svg.js, with the face chosen from the slime's state and feelings. A class the
+   SVG does not know (a mod) keeps the small CSS avatar. */
+function svgEmotion(s) {
+  if (s.state === 'sleeping' || s.state === 'resting') return 'sleeping';
+  const f = (s.feelings || [])[0];
+  if (f && f.value >= 50) {
+    if (['anger', 'determination'].includes(f.key)) return 'angry';
+    if (['sadness', 'loneliness', 'guilt', 'fear', 'dread', 'anxiety'].includes(f.key)) return 'sad';
+    if (['joy', 'pride', 'affection', 'wonder'].includes(f.key)) return 'happy';
+  }
+  return s.mood === 'miserable' ? 'miserable' : s.mood === 'grumpy' ? 'sad' : 'happy';
+}
+function bigAvatar(s) {
+  if (!SVG_AV.classes.includes(s.archetype)) return figure(s, 'big');
+  const p = s.prof || {}, h = p.hybrid || {};
+  const cfg = { cls: s.archetype, rarity: s.rarity, stars: s.stars, stage: Math.min(2, s.stage || 0), emotion: svgEmotion(s),
+    hybrid: s.spec && s.spec.disc ? s.spec.disc : null, capstone: !!((p.earned && p.value >= 70) || (h.capstone && h.capstone.usable)),
+    mastery: (p.value || 0) >= 100, hybridMastery: (h.value || 0) >= 100 };
+  return `<span class="figwrap bigsvg">${SVG_AV.render(cfg)}${ptag(s)}</span>`;
+}
 /* The three-digit power tag (001-999) shown beside a slime's figure; the full number and parts are on its card. */
 const ptag = (s) => `<span class="ptag t${Math.min(4, Math.floor(s.power_tag / 250) + 1)}" title="Total power ${s.power}">⚡${String(s.power_tag).padStart(3, '0')}</span>`;
 const figure = (s, cls = '') => `<span class="figwrap">${avatar(s, cls)}${ptag(s)}</span>`;
@@ -589,7 +609,7 @@ function drawer(s) {
   return `<aside class="drawer">
     <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button> <input type="color" class="colpick" data-colorid="${s.id}" value="${s.color || CLASS_COLORS[s.archetype] || '#5be0a0'}" title="Slime colour (ring colour stays with rarity)"> ${s.color ? `<button class="btn small" data-act="set_color" data-id="${s.id}" data-reset="1" title="Back to class colour">↺</button>` : ''}</h2><button class="btn small" data-act="closesel">✕</button></div>
     ${s.grounded ? `<div class="row panel flat"><small>🚫 Grounded after a brawl: no hunts, drills or parties until the quarrel is mediated.</small><button class="btn small" data-act="unground" data-id="${s.id}">Let out</button></div>` : ''}
-    <div class="row" style="margin:8px 0">${figure(s, 'big')}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
+    <div class="row" style="margin:8px 0">${bigAvatar(s)}<div><div><b>${esc(s.title)}</b> ${chip(s.rarity, s.rarity)}</div><div>${stars(s.stars)} · Lv${s.level}/${s.level_cap} · stage ${s.stage}</div>
       <div class="mute">${s.state}${s.in_dungeon ? ' · inside ' + s.in_dungeon : ''} · mood ${s.mood}${s.party ? ' · 👥 ' + esc(partyById(s.party)?.name) : ''}</div></div></div>
     <div class="seg dtabs">${tabs.map(([k, n]) => `<button class="${dt === k ? 'on' : ''}" data-act="dtab" data-t="${k}">${n}</button>`).join('')}</div>
     ${body}
