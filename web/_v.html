@@ -1,0 +1,12 @@
+<!doctype html><meta charset=utf-8><script src="/avatar-svg.js"></script>
+<style>body{background:#0b0f19;color:#e2e8f0;font:13px system-ui;padding:14px;margin:0}h3{margin:14px 0 6px;font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em}
+.row{display:flex;gap:10px;flex-wrap:wrap}.c{width:128px;text-align:center}.c div{width:128px;height:128px}small{color:#94a3b8;font-size:11px}</style><div id=o></div>
+<script>
+const cell=(cfg,l)=>'<div class=c><div>'+SVG_AV.render(cfg)+'</div><small>'+l+'</small></div>';
+const base={cls:'barbarian',rarity:'rare',stars:1,stage:1,emotion:'happy',hybrid:null};
+let h='<h3>Stars change (rare Barbarian, Greater): 1 → 5 stars</h3><div class=row>'+[1,2,3,4,5].map(s=>cell({...base,stars:s},s+'★')).join('')+'</div>';
+h+='<h3>Emotions (mage, common)</h3><div class=row>'+SVG_AV.emotions.map(e=>cell({...base,cls:'mage',rarity:'common',stage:0,emotion:e},e)).join('')+'</div>';
+h+='<h3>Evolution (paladin, epic, 3★): base → Greater → Prime → capstone (proficiency 100 + stars)</h3><div class=row>'+[['base',{stage:0}],['Greater',{stage:1}],['Prime',{stage:2}],['Prime + capstone',{stage:2,capstone:1,mastery:1}]].map(([l,o])=>cell({...base,cls:'paladin',rarity:'epic',stars:3,...o},l)).join('')+'</div>';
+h+='<h3>Hybrids (class + second discipline): Bard+magic Songshot, Druid+sword Thornblade, Alchemist+archery Bomb Archer, Paladin+magic Lightbringer</h3><div class=row>'+[['bard','magic'],['druid','sword'],['alchemist','archery'],['paladin','magic']].map(([c,d])=>cell({...base,cls:c,hybrid:d,rarity:'epic',stars:4,stage:2,hybridMastery:1},c+' + '+d)).join('')+'</div>';
+h+='<h3>Rarity (necromancer, 2★)</h3><div class=row>'+SVG_AV.rarities.map(r=>cell({...base,cls:'necromancer',rarity:r,stars:2,stage:1,emotion:'angry'},r)).join('')+'</div>';
+document.getElementById('o').innerHTML=h;</script>
