@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import collections
 import random
 
-from slime_gacha import awakening, config, emotions, grief, meaning, memory, sanity
+from slime_gacha import awakening, config, coping, emotions, grief, meaning, memory, sanity
 from slime_gacha.ai import Conflict
 from slime_gacha.game import Game
 
@@ -686,6 +686,83 @@ class TestGrief(unittest.TestCase):
     def test_grief_is_saved(self):
         g, a, b, c = self.loss()
         self.assertEqual(Game.from_dict(g.to_dict()).roster[a.id].grief, a.grief)
+
+
+class TestCopingAndComfort(unittest.TestCase):
+    def test_personality_decides_how_it_copes(self):
+        g = colony()
+        for traits, st in ((["chatty"], "seek"), (["kind", "grumpy"], "help"), (["grumpy"], "vent"), (["timid"], "withdraw"),
+                           (["lazy"], "sleep"), ([], "dwell")):
+            self.assertEqual(coping.style(make(g, traits=traits)), st)
+
+    def test_healthy_coping_eases_and_dwelling_lingers(self):
+        g = colony()
+        brave, plain = make(g, traits=["brave"]), make(g)
+        for s in (brave, plain):
+            s.emotions["sadness"] = 70
+        coping.cope(g, brave, random.Random(1), [])
+        coping.cope(g, plain, random.Random(1), [])
+        self.assertLess(brave.emotions["sadness"], 70)
+        self.assertGreater(plain.emotions["sadness"], 70)
+
+    def test_venting_can_start_a_quarrel(self):
+        g = colony()
+        a, b = make(g, traits=["grumpy"]), make(g)
+        a.emotions["anger"] = 80
+        events = []
+        with mock.patch.object(config, "VENT_QUARREL", 1.0):
+            coping.cope(g, a, random.Random(2), events)
+        self.assertLess(a.emotions["anger"], 80)
+        self.assertTrue(g.conflicts.open_between(a.id, b.id))
+        self.assertIn("snaps at", events[0])
+
+    def test_once_a_day_and_only_at_home(self):
+        g = colony()
+        a = make(g, traits=["brave"])
+        a.emotions["fear"] = 80
+        events = []
+        coping.hourly(g, events)
+        coping.hourly(g, events)
+        self.assertEqual(sum(a.name in e for e in events), 1)
+        b = make(g, traits=["brave"])
+        b.emotions["fear"], b.in_dungeon = 80, "main"
+        self.assertFalse(coping.cope(g, b, random.Random(1), []))
+
+    def test_a_friend_cheers_it_up(self):
+        g = colony()
+        a, f = make(g), make(g)
+        g.social.add_bond(a, f, 40)
+        a.emotions["loneliness"] = 70
+        events = []
+        self.assertTrue(coping.comfort(g, a, random.Random(1), events))
+        self.assertLess(a.emotions["loneliness"], 70)
+        self.assertGreater(memory.opinion(a, f)["gratitude"], 0)
+        self.assertIn("cheers them up", events[0])
+
+    def test_fear_spreads_in_a_party_away(self):
+        g = colony(9, 5)
+        p = g.create_party("P")
+        g.party_autofill(p.id)
+        ms = g.party_members(p.id)
+        for m in ms:
+            m.in_dungeon = "main"
+        ms[0].emotions["fear"] = 80
+        coping.contagion(g)
+        self.assertGreater(ms[1].emotions.get("fear", 0), 0)
+
+    def test_cuddles_go_to_friends_and_are_summarised(self):
+        g = colony()
+        a, f, x = make(g), make(g), make(g)
+        g.social.add_bond(a, f, 40)
+        self.assertIs(g.needs.buddy_fn(a, [x, f]), f)
+        a.needs.set("belonging", 10)
+        events = []
+        g.needs._autonomy(a, [a, f, x], events)
+        self.assertFalse(any("cuddles up" in e for e in events))
+        self.assertEqual(g.needs.cuddles, {a.name: 1})
+        out = []
+        g._relations_day(out)
+        self.assertTrue(any("cuddle(s) at home today" in e for e in out))
 
 
 class TestBehaviourTargets(unittest.TestCase):

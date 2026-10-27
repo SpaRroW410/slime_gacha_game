@@ -44,6 +44,8 @@ class NeedsEngine:
         self.meal_hook = None            # Game sets: callable(slime) -> bool, a hungry slime eats a cooked dish from the pantry
         self.rest_hook = None            # Game sets: callable(slime) -> bool, sends a wounded slime to the Rest Area
         self.skip_meal = None            # Game sets: callable(slime, events) -> bool, a slime in deep despair leaves its food
+        self.buddy_fn = None             # Game sets: callable(slime, candidates) -> the one it cuddles up to (a friend first)
+        self.cuddles: Dict[str, int] = {}   # name -> cuddles today (summarised once a day instead of a line each)
 
     def tick(self, slimes: List, events: List[str]) -> None:
         slimes = [s for s in slimes if s.alive]
@@ -126,10 +128,10 @@ class NeedsEngine:
                     events.append(f"{s.name} munches some food.")
             if n.get("belonging") < config.NEED_THRESHOLD and len(idle) > 1:
                 buddies = [o for o in idle if o is not s]
-                b = self.rng.choice(buddies)
+                b = self.buddy_fn(s, buddies) if self.buddy_fn else self.rng.choice(buddies)
                 n.add("belonging", 20)
                 b.needs.add("belonging", 10)
-                events.append(f"{s.name} cuddles up to {b.name}.")
+                self.cuddles[s.name] = self.cuddles.get(s.name, 0) + 1
 
 
 # ---- conflicts ------------------------------------------------------------------
@@ -302,6 +304,15 @@ class ConflictEngine:
         if self.memory_fn:                          # shared history: grudges make it harder, gratitude easier
             p /= self.memory_fn(a, b)[0]
         return p
+
+    def start(self, a, b, reason: str) -> Conflict:
+        """Start a quarrel now (e.g. one slime snapping at another), unless either is already in one."""
+        c = Conflict(self._next, a.id, b.id, 1, 0, reason)
+        self._next += 1
+        self.conflicts.append(c)
+        if self.hook:
+            self.hook("quarrel", a, b)
+        return c
 
     def _cold_war(self, c, by_id, events) -> None:
         """A feud that has brawled enough burns out: no more fights, but no friendship for a while either."""

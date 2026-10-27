@@ -490,6 +490,16 @@ GRIEF_DEPART_SCALE = 0.5        # a slime that leaves is missed at half the dept
 GRIEF_LINES = 3                  # journal lines about grief per day
 GRIEF_GATHER_DAYS = 7            # a gathering at the Memorial Pond can be held within this many days of a death
 GRIEF_GATHER, GRIEF_GATHER_SANITY, GRIEF_GATHER_BOND = 15, 4, 3
+# Coping and comfort (coping.py)
+COPE_AT = 50                     # a bad feeling this strong makes a slime at home act on it (once a day)
+COPE_EASE = 20                   # how much a healthy way of coping eases it (styles differ: 0.6x to 1.5x)
+COPE_DWELL = 4                   # dwelling on it makes it this much worse
+VENT_QUARREL = 0.3               # chance that snapping at someone starts a quarrel
+COMFORT_AT = 45                  # a friend at home notices sadness, fear, anxiety or loneliness this strong
+COMFORT_EASE, COMFORT_SANITY = 18, 2
+CONTAGION = {"fear": 3, "joy": 2}            # per hour, to party-mates away together, from a member at CONTAGION_AT or more
+CONTAGION_AT = 60
+COPE_LINES_PER_HOUR, COPE_LINES_PER_DAY = 2, 8   # journal lines about coping and comfort
 MEANING_DAYS = 7                 # days of record every other slime keeps (meaning.py)
 BURNOUT_DAYS = 5                 # flat days (purpose low, not lonely) before a slime burns out
 BURNOUT_PURPOSE = 0.35           # purpose (with care counted) below this is a flat day

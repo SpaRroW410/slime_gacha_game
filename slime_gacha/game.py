@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements, places, story, sanity, memory, meaning, mind, grief
+from . import achievements, places, story, sanity, memory, meaning, mind, grief, coping
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -84,6 +84,8 @@ class Game:
         self.social = SocialEngine(self.conflicts, self.buildings)
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
         self.needs.skip_meal = self._skips_meal                   # deep despair: it stops feeding itself
+        self.needs.buddy_fn = lambda s, cands: max(cands, key=lambda o: self.social.bond(s, o))   # a lonely slime seeks a friend first
+        self.coping_today = 0                                     # journal lines about coping today (coping.py)
         self.departed: List[dict] = []                            # slimes the Keeper let leave the colony
         self.memorials: set = set()                               # graveyard ids the colony has gathered for
         self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
@@ -553,6 +555,7 @@ class Game:
             self._stranded_tick(events)
             self._stamina_tick()
             self._emotion_tick(events)
+            coping.hourly(self, events)
             self._sanity_tick()
             if self.tick_count % 24 == config.RELATIONS_HOUR:
                 self._relations_day(events)
@@ -685,6 +688,12 @@ class Game:
                 events.append(f"🤝 {f.name} helps {a.name} and {b.name} make peace.")
 
     def _relations_day(self, events: List[str]) -> None:
+        self.coping_today = 0
+        cud = self.needs.cuddles
+        if cud:
+            top = max(cud, key=cud.get)
+            events.append(f"🫂 {sum(cud.values())} cuddle(s) at home today; {top} needed the most company ({cud[top]}).")
+            self.needs.cuddles = {}
         self._peacemaking(events)
         grief.daily(self, events)
         for s in self.slimes():

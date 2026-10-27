@@ -31,6 +31,7 @@ EVENTS = collections.OrderedDict([
     ("quarrel", r"Conflict #"), ("brawl", r"💥"), ("made_up", r"make up|patch things up|apologi|helps .+ make peace"),
     ("cold_war", r"stop speaking"), ("friends", r"have become friends"), ("best_friends", r"are best friends"),
     ("rivals", r"become rivals"), ("cuddle", r"cuddle"), ("death", r"has died"),
+    ("coped", r" is feeling \w+"), ("cheered", r"cheers them up"),
 ])
 
 
@@ -259,6 +260,10 @@ TARGETS = [
     ("most slimes are not burned out", "hands_off", lambda r: r["burnt"] <= 0.25, "a varied colony life is not a grind"),
     ("grief lasts", "grief", lambda r: 7 <= r["grief_days"] <= 21, "grief over a partner takes one to three weeks"),
     ("company shortens grief", "grief_supported", lambda r: r["grief_days"] < 15, "a friend and someone who listens help"),
+    ("friends look after each other", "hands_off", lambda r: r["events"].get("cheered", 0) >= 1,
+     "friends notice when someone is down and cheer them up"),
+    ("bad feelings are acted on", "hands_off", lambda r: r["events"].get("coped", 0) >= 3,
+     "people do something with a bad feeling: talk, help, train, sleep, snap"),
     ("but not overnight", "recovery", lambda r: r["recovered_on"] is None or r["recovered_on"] >= 5, "recovery takes days to weeks"),
 ]
 

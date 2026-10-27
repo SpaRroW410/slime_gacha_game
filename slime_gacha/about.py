@@ -78,8 +78,6 @@ ROADMAP: List[Dict[str, object]] = [
          text="Whether real money buys gacha currency decides how much moves to a server."),
     dict(id=52, group="Mobile", title="Beta and launch", status="planned",
          text="Device testing, long sessions, crash reporting, release."),
-    dict(id=61, group="Slime minds", title="Coping and comfort", status="planned",
-         text="Each slime copes in its own way, and friends comfort each other when they are down."),
     dict(id=62, group="Slime minds", title="An inner voice that remembers", status="planned",
          text="What a slime says comes from its memories, goals and the reasons for its feelings."),
     dict(id=63, group="Slime minds", title="Daily rhythm and hobbies", status="planned",
