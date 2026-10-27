@@ -109,8 +109,9 @@ class RelationshipEngine:
         slimes = {s.id: s for s in game.slimes()}
         social, emo = game.social, game.emotions_mod
         match = 1 + 0.25 * game.keeper.rank("matchmaker")
-        # 1. companionship: idle slimes who like each other grow closer
-        idle = [s for s in slimes.values() if s.state == "idle" and not s.busy]
+        # 1. companionship: slimes who share the colony's days (idle, resting or at a post in town - not away on a trip or a
+        #    foraging walk) and like each other grow closer
+        idle = [s for s in slimes.values() if s.state in ("idle", "resting", "sleeping", "working") and not s.in_dungeon]
         cold = game.conflicts.cold
         for i, a in enumerate(idle):
             for b in idle[i + 1:]:

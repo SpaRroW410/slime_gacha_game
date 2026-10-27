@@ -29,7 +29,7 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 | good days happen | attentive Keeper | joy, calm and affection add up to 10+ on an ordinary hour |
 | everyday joy | attentive Keeper | people who are looked after are mildly cheerful most of the time |
 | care builds bonds | attentive Keeper | more friends than rivals |
-| ordinary goals | hands-off colony | most slimes want something other than revenge (open: task 58) |
+| ordinary goals | hands-off colony | most slimes want something other than revenge |
 | loved legendary is fine | legendary, loved | it absorbs the truth and carries on (settled or at peace) |
 | lonely legendary despairs | legendary, alone | isolation is what breaks people |
 | unloved worker is a cog | legendary, at a post, unseen | flat, going through the motions |
@@ -60,9 +60,13 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 - **Awakening** (`awakening.py`): a 14-day record of care, connection, purpose and hardship decides settled, peace, cog or
   despair, reviewed every 3 days. Despair deepens: withdrawal, then self-neglect, then breakdowns and a request to leave.
   A cog asks to be taken off its post, later to leave.
+- **Goals** (`mind.py`): a weighted pool - get stronger, master a style, see a friend, make a new one, court someone, teach
+  a mentee, explore, make something, take it easy, be noticed - shaped by traits, outlook, needs and ties; a grudge is one
+  candidate. Thanks outlast minor grudges when memory is full. Slimes who share the colony's days (idle, resting, at a post)
+  grow closer.
 - **Leaving** (`mind.py`, `Game.depart`): only with the Keeper's yes; friends miss it, its gear stays, Records lists it.
 
 ## Still to do
 
-Tasks 58-65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
+Tasks 59-65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
 voice, daily rhythm, relationship texture, appraisal, rituals, a "why it feels this way" view).

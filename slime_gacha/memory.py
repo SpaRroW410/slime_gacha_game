@@ -44,7 +44,7 @@ def remember(s, kind: str, other, day: int, weight: float = 3.0, note: str = "")
             return
     s.memories.append(dict(kind=kind, other=oid, name=name, day=day, weight=min(config.MEMORY_MAX_WEIGHT, weight), note=note))
     if len(s.memories) > config.MEMORY_CAP:               # forget the faintest
-        s.memories.remove(min(s.memories, key=lambda m: m["weight"]))
+        s.memories.remove(min(s.memories, key=lambda m: m["weight"] * (1.5 if KINDS[m["kind"]][0] > 0 else 1.0)))   # thanks outlast minor grudges
 
 
 def fade(s) -> None:

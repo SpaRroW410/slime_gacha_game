@@ -74,7 +74,7 @@ Findings not yet re-verified against the current code; check each before fixing 
 - [x] **55. Feelings return to a baseline (T2)** — trait baselines, contentment over days, needs simmer but never boil; the feelings' dice are saved.  *Done when:* met (everyday joy about 9, was 0).
 - [x] **56. Care makes friends, not rivals (T4)** — a failed talk means not yet, making up counts towards friendship, calmer trait odds.  *Done when:* met.
 - [x] **57. Legendary outcomes (T3)** — 14-day record, settled / peace / cog / despair, 70% Keeper share, deepening despair, leaving with permission.  *Done when:* met.
-- [ ] **58. Goals people actually have (T7)** — a weighted pool (master a style, befriend, court, protect a mentee, explore, craft, rest, praise); grudges one candidate among many.  *Done when:* the "ordinary goals" target passes.
+- [x] **58. Goals people actually have (T7)** — a weighted pool (master a style, befriend, court, protect a mentee, explore, craft, rest, praise); grudges one candidate among many.  *Done when:* met (0-2 of 20 slimes want revenge, was 9-18); slimes at home or at a post grow closer, not only idle ones at noon.
 - [ ] **59. Meaning for every slime (T5)** — the record's purpose for all slimes, a Praise action, burnout for non-legendaries.  *Done when:* any slime can feel like a cog, and praise lifts it.
 - [ ] **60. Grief that lasts and comes in waves (T6)** — tied to the "lost" memory, 1-3 weeks, reminders, the Memorial gathering.  *Done when:* grief lasts 7-21 days in the harness (now about 1).
 - [ ] **61. Coping styles (T8)** and **friends comfort each other (T9)** — visible actions when a bad feeling passes 50; cuddle lines as a daily summary.  *Done when:* both show in the journal and cuddle lines drop below 3 a day.

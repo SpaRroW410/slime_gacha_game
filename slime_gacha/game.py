@@ -1539,7 +1539,7 @@ class Game:
                 hungry, other = (a, b) if a.needs.get("food") <= b.needs.get("food") else (b, a)
                 memory.remember(hungry, "snack", other, self.day, 3.0)
             elif kind == "quarrel":
-                memory.remember(b, "quarrel", a, self.day, 2.0, why)       # whoever started it is remembered by the other
+                memory.remember(b, "quarrel", a, self.day, 1.5, why)       # whoever started it is remembered by the other (a spat weighs less than a brawl)
             else:
                 memory.remember(a, "brawl", b, self.day, 4.0)
                 memory.remember(b, "brawl", a, self.day, 4.0)

@@ -6,6 +6,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import collections
 import random
 
 from slime_gacha import awakening, config, emotions, memory, sanity
@@ -493,9 +494,66 @@ class TestLeaving(unittest.TestCase):
         self.assertEqual(self.asking(g, s)["kind"], "leave")
 
 
+class TestEverydayGoals(unittest.TestCase):
+    def test_goals_are_mostly_ordinary(self):
+        from slime_gacha import mind
+        g = colony(5, 16)
+        for s in g.slimes():                                             # everyone holds a grudge against someone
+            o = next(o for o in g.slimes() if o is not s)
+            memory.remember(s, "brawl", o, g.day, 4.0)
+        kinds = collections.Counter()
+        for day in range(6):
+            g.tick_count = day * 24 * 5
+            for s in g.slimes():
+                kinds[mind.choose_goal(g, s)["kind"]] += 1
+        self.assertGreaterEqual(len(kinds), 6)                           # many kinds of wanting
+        self.assertLess(kinds["rival"] / sum(kinds.values()), 0.35)      # a grudge is one candidate, not the default
+
+    def test_personality_shapes_what_it_wants(self):
+        from slime_gacha import mind
+        g = colony(5, 6)
+        s = g.slimes()[0]
+        s.traits = ["lazy", "proud"]
+        w = {goal["kind"]: weight for weight, goal in mind._goal_options(g, s)}
+        s.traits = ["kind", "timid"]
+        w2 = {goal["kind"]: weight for weight, goal in mind._goal_options(g, s)}
+        self.assertGreater(w["rest"], w2["rest"])
+        self.assertGreater(w["praise"], w2["praise"])
+
+    def test_new_goals_are_acted_on(self):
+        from slime_gacha import mind
+        g = colony(5, 0)
+        a, b = make(g), make(g, "mage")
+        for x in (a, b):
+            x.needs.v.update({k: 90.0 for k in x.needs.v})
+        for kind, target, word in (("befriend", b.id, "conversation"), ("court", b.id, "flower"), ("explore", 0, "woods"),
+                                   ("craft", 0, "own hands"), ("rest", 0, "easy"), ("praise", 0, "shows off"), ("master", 0, "practises")):
+            a.goal = dict(kind=kind, target=target, day=g.day, text="")
+            events = []
+            with mock.patch.object(config, "DECIDE_CHANCE", 1.0):
+                self.assertTrue(mind.decide(g, a, events), kind)
+            self.assertIn(word, events[-1])
+
+    def test_thanks_outlast_minor_grudges_when_memory_is_full(self):
+        g = colony()
+        a, b = make(g), make(g)
+        memory.remember(a, "healed", b, 0, 1.0)
+        for i in range(config.MEMORY_CAP):
+            memory.remember(a, "quarrel", make(g), 0, 1.2)
+        self.assertTrue(any(m["kind"] == "healed" for m in a.memories))
+
+    def test_slimes_at_home_grow_closer_even_at_work(self):
+        g = colony()
+        a, b = make(g), make(g)
+        a.state = "working"
+        with mock.patch.object(g.social, "compat", return_value=40):
+            g.relations.daily(g, g.mood_rng, [], g.day)
+        self.assertGreater(g.social.bond(a, b), 0)
+
+
 class TestBehaviourTargets(unittest.TestCase):
     """A small run of tools/minds_sim.py: the colony and legendary scenarios must meet the behaviour targets."""
-    PENDING = {"ordinary goals"}          # task T7 (goals people actually have) is still to do
+    PENDING = set()                       # targets whose task is still to do
 
     @classmethod
     def setUpClass(cls):
