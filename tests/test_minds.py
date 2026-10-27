@@ -493,5 +493,27 @@ class TestLeaving(unittest.TestCase):
         self.assertEqual(self.asking(g, s)["kind"], "leave")
 
 
+class TestBehaviourTargets(unittest.TestCase):
+    """A small run of tools/minds_sim.py: the colony and legendary scenarios must meet the behaviour targets."""
+    PENDING = {"ordinary goals"}          # task T7 (goals people actually have) is still to do
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
+        import minds_sim
+        cls.sim = minds_sim
+        cls.results = dict(hands_off=[minds_sim.run_colony(1, 14, 25, keeper=False)],
+                           attentive=[minds_sim.run_colony(1, 14, 25, keeper=True)],
+                           recovery=[minds_sim.run_recovery(4)],
+                           **{"legend_" + life: [minds_sim.run_legend(3, life)] for life in minds_sim.LIVES})
+
+    def test_targets(self):
+        for name, share, why in self.sim.check(self.results):
+            if name in self.PENDING:
+                continue
+            with self.subTest(target=name):
+                self.assertEqual(share, 1.0, why)
+
+
 if __name__ == "__main__":
     unittest.main()

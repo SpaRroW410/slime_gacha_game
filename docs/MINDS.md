@@ -1,0 +1,68 @@
+# Slime minds
+
+How slimes feel, fight, bond and grieve, measured against how people behave in the same situations. The harness
+`tools/minds_sim.py` runs seeded colonies for weeks and checks the targets below; `tests/test_minds.py` runs a small version
+on every test run.
+
+```bash
+python3 tools/minds_sim.py                 # report (about 5 seconds)
+python3 tools/minds_sim.py --seeds 3       # over three seeds
+python3 tools/minds_sim.py --check         # exit 1 if a target fails
+```
+
+## Decisions (from the Keeper, October 2026)
+
+1. Waking up to being code stays **legendary only** (5-star legendaries).
+2. A slime **may leave** the colony, but **only with the Keeper's permission**.
+3. The Keeper's care can fix **up to 70%**: it stands in for at most 70% of a slime's connection and purpose
+   (`config.KEEPER_CARE_SHARE`). Enough to settle a slime, not to give it peace on its own.
+4. Despair may go **darker than withdrawal**: self-neglect (it stops feeding itself; the Keeper must feed it by hand) and
+   breakdowns, ending in a request to leave. Nothing beyond that.
+
+## Targets
+
+| Target | Scenario | What a person would do |
+|---|---|---|
+| feuds cool off | hands-off colony | a feud blows up once or twice, then people avoid each other or make up |
+| anger is an episode | hands-off colony | anger at 30+ for at most a fifth of the time |
+| sadness is an episode | hands-off colony | sadness at 30+ for at most a fifth of the time |
+| good days happen | attentive Keeper | joy, calm and affection add up to 10+ on an ordinary hour |
+| everyday joy | attentive Keeper | people who are looked after are mildly cheerful most of the time |
+| care builds bonds | attentive Keeper | more friends than rivals |
+| ordinary goals | hands-off colony | most slimes want something other than revenge (open: task 57) |
+| loved legendary is fine | legendary, loved | it absorbs the truth and carries on (settled or at peace) |
+| lonely legendary despairs | legendary, alone | isolation is what breaks people |
+| unloved worker is a cog | legendary, at a post, unseen | flat, going through the motions |
+| despair can lift | recovery | company and care pull people back out |
+| but not overnight | recovery | recovery takes days to weeks |
+
+## Before and after (seed 1, 20 slimes, 45 days)
+
+| | Before | After |
+|---|---|---|
+| Brawls, hands-off | 1,054 (one feud: 131) | 68 (at most 2 per feud) |
+| Anger at 30+, hands-off | 77% of the time | 4% |
+| Sadness at 30+, hands-off | 72% | under 1% |
+| Everyday joy, attentive | 0 | about 9 |
+| Rivals vs friends, attentive (first test) | 26 vs 15, no best friends or couples | 5 vs 18 |
+| Legendary, loved | despair | at peace |
+| Legendary, working and unseen | despair | a cog |
+| Despair after 30 days of care | never lifted | lifts in about a week |
+
+## How it works
+
+- **Feuds** (`ai.py`): spats mend on their own (kind slimes fastest, grumpy and proud slowest, grudges make it harder); once
+  a day a guilty slime may apologise or a friend of both may make peace; after a brawl both keep apart for a day; a feud
+  brawls at most twice, then becomes a 7-day cold war. A failed Keeper's talk means "not ready yet" (try again in 6 hours).
+  Making up counts towards friendship and leaves both calm for a day.
+- **Usual mood** (`emotions.py`): feelings settle to a baseline from traits plus contentment (a slow 0-100 that follows
+  mood over days). Needs keep a feeling simmering (at most 60); only events push it higher.
+- **Awakening** (`awakening.py`): a 14-day record of care, connection, purpose and hardship decides settled, peace, cog or
+  despair, reviewed every 3 days. Despair deepens: withdrawal, then self-neglect, then breakdowns and a request to leave.
+  A cog asks to be taken off its post, later to leave.
+- **Leaving** (`mind.py`, `Game.depart`): only with the Keeper's yes; friends miss it, its gear stays, Records lists it.
+
+## Still to do
+
+Tasks 53-64 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
+voice, daily rhythm, relationship texture, appraisal, rituals, a "why it feels this way" view).
