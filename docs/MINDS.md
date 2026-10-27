@@ -35,6 +35,8 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 | unloved worker is a cog | legendary, at a post, unseen | flat, going through the motions |
 | despair can lift | recovery | company and care pull people back out |
 | but not overnight | recovery | recovery takes days to weeks |
+| grief lasts | partner dies, no support | one to three weeks |
+| company shortens grief | the same, a friend at home and daily talks | under 15 days |
 | unseen work burns out | a common at one post, unseen | the same post every day, nobody noticing: going through the motions |
 | praise keeps the spark | the same, praised daily | recognition gives the same work meaning |
 | most slimes are not burned out | hands-off colony | a varied colony life is not a grind |
@@ -66,6 +68,10 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 - **Meaning** (`meaning.py`): every slime keeps a week of care, connection, purpose and hardship (a legendary two weeks).
   Flat days while not lonely burn a slime out (muted joy and pride, mood capped, asks off its post); Praise, choice and
   variety bring the spark back.
+- **Grief** (`grief.py`): those close to a slime that dies (is sacrificed, or leaves: half) grieve by tie - partner 90,
+  best friend 70, mentor 50, friend 45, acquaintance 25 - fading 4 a day (+3 with a friend at home, +2 on a day the Keeper
+  talks). It holds sadness and loneliness up, returns on weekly anniversaries and in the dungeon where it happened, and a
+  gathering at the Memorial Pond eases it and brings the mourners closer.
 - **Goals** (`mind.py`): a weighted pool - get stronger, master a style, see a friend, make a new one, court someone, teach
   a mentee, explore, make something, take it easy, be noticed - shaped by traits, outlook, needs and ties; a grudge is one
   candidate. Thanks outlast minor grudges when memory is full. Slimes who share the colony's days (idle, resting, at a post)
@@ -74,5 +80,5 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 
 ## Still to do
 
-Tasks 60-65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
+Tasks 61-65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
 voice, daily rhythm, relationship texture, appraisal, rituals, a "why it feels this way" view).

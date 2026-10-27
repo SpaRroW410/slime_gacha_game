@@ -131,7 +131,18 @@ def baseline(slime) -> Dict[str, float]:
     for k, f in CONTENT_SINK.items():
         if c < CONTENT_BAD:
             out[k] = out.get(k, 0.0) + (CONTENT_BAD - c) * f
+    gw = grief_weight(slime)
+    if gw:                                                        # grief keeps sadness and loneliness up while it lasts
+        from . import config
+        out["sadness"] = out.get("sadness", 0.0) + config.GRIEF_SADNESS * gw
+        out["loneliness"] = out.get("loneliness", 0.0) + config.GRIEF_LONELY * gw
     return out
+
+
+def grief_weight(slime) -> float:
+    """How much grief weighs on it (the deepest loss, plus a little of the others) - see grief.py."""
+    ds = sorted((x["depth"] for x in getattr(slime, "grief", None) or []), reverse=True)
+    return (ds[0] + 0.3 * sum(ds[1:])) if ds else 0.0
 
 
 def content_label(slime) -> str:

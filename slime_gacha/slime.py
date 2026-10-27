@@ -102,6 +102,7 @@ class Slime:
         self.awareness = 0.0                      # 5-star legendaries realise they are code (see awakening.py)
         self.temperament = ""                     # how an awakened slime takes it: settled | peace | cog | despair
         self.life = None                          # its daily record (care, connection, purpose, hardship), see awakening.py
+        self.grief: List[dict] = []               # losses it is still grieving (grief.py)
         self.low_days = 0                         # consecutive days with sanity 'breaking' (mind.py: may ask to leave)
         self.parents: List[int] = []              # lineage: ids of the two parents (budding)
         self.parent_names: List[str] = []
@@ -251,7 +252,7 @@ class Slime:
                     merged=self.merged, grounded=self.grounded, brawls=self.brawls, row=self.row, style_xp=self.style_xp, morale=self.morale, sanity=round(self.sanity, 2), cared=self.cared, memories=self.memories, goal=self.goal, request=self.request, trust=round(self.trust, 1), drift=self.drift,
                     gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, buffs=self.buffs, parents=self.parents, parent_names=self.parent_names,
                     generation=self.generation, emotions=self.emotions,
-                    emotion_floor=self.emotion_floor, content=self.content, awareness=self.awareness, temperament=self.temperament, life=meaning.pack(self.life), low_days=self.low_days,
+                    emotion_floor=self.emotion_floor, content=self.content, awareness=self.awareness, temperament=self.temperament, life=meaning.pack(self.life), low_days=self.low_days, grief=self.grief,
                     proficiency=self.proficiency, weapon_memory=self.weapon_memory, in_dungeon=self.in_dungeon, progress=self.progress, exp=self.exp, spec=self.spec, spec_disc=self.spec_disc,
                     attuned=self.attuned, mastery_xp=self.mastery_xp, spells=self.spells,
                     task=self.task, class_prof=round(self.class_prof, 2), prof_idle=self.prof_idle, pure_earned=self.pure_earned, color=self.color, star_peak=self.star_peak, job=self.job, job_xp=dict(self.job_xp), job_clock=self.job_clock,
@@ -262,7 +263,7 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "brawls", "row", "style_xp", "morale", "sanity", "cared", "memories", "goal", "request", "trust", "drift", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "content", "awareness", "temperament", "life", "low_days", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
+                  "merged", "grounded", "brawls", "row", "style_xp", "morale", "sanity", "cared", "memories", "goal", "request", "trust", "drift", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "content", "awareness", "temperament", "life", "low_days", "grief", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
             if k in d:
                 setattr(s, k, d[k])
         s.life = meaning.unpack(s.life)

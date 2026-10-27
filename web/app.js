@@ -661,6 +661,7 @@ function dMind(s, { st, free, inDun }) {
       <div title="How life has felt over the last few days. Feelings settle back to a slime's usual mood, and a good life lifts it.">🌤 Contentment: <b>${esc(s.content_label)}</b> <small class="mute">${s.content}/100</small></div>
       ${Object.keys(s.feeling_effects).length ? `<small class="mute">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
       ${s.awareness ? awarenessHtml(s.awareness) : ''}
+      ${(s.grief || []).length ? `<div>🕯 Grieving ${s.grief.map((x) => `<b>${esc(x.name)}</b> <small class="mute">(${x.days} day${x.days === 1 ? '' : 's'} ago)</small>`).join(', ')}</div>` : ''}
       ${s.burnt ? '<div class="warn">😶 Going through the motions: the same days, nothing chosen, nobody noticing. Praise, a change of routine or a choice of its own brings the spark back.</div>' : ''}
       ${s.meaning && !s.awareness?.outcome ? `<small class="mute">Last week: care ${Math.round(s.meaning.care * 100)}% · connection ${Math.round(s.meaning.connection * 100)}% · purpose ${Math.round(s.meaning.purpose * 100)}% · hardship ${Math.round(s.meaning.hardship * 100)}%</small>` : ''}
       <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button>
@@ -1540,7 +1541,7 @@ function council() {
 function records() {
   const st = S.state;
   const tale = `<div class="panel stack" style="margin-bottom:12px"><h2>📖 The Great Gloop <small class="mute">${st.story.filter((c) => c.done).length}/${st.story.length}</small></h2>${st.story.map((c) => c.done ? `<details><summary><b>${esc(c.title)}</b></summary><p>${esc(c.text)}</p></details>` : `<div class="mute">🔒 <b>${esc(c.title.replace(/^\d+\. /, '???  '))}</b> — ${esc(c.hint)}</div>`).join('')}</div>`;
-  return tale + `<div class="grid cols2"><div class="panel"><h2>🪦 Memorial Pond</h2>${st.graveyard.length ? st.graveyard.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0">${ghost(g)}<div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">hour ${g.tick}: ${esc(g.cause)}</small></div></div>`).join('') : '<p class="mute">Nobody has fallen yet.</p>'}</div>
+  return tale + `<div class="grid cols2"><div class="panel"><h2>🪦 Memorial Pond</h2>${st.graveyard.length ? st.graveyard.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0">${ghost(g)}<div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">hour ${g.tick}: ${esc(g.cause)}</small>${g.gather ? `<br><button class="btn small" data-act="memorial" data-gid="${g.id}" title="Everyone at home who is grieving gathers to remember: it eases their grief and brings them closer.">🕯 Gather at the pond</button>` : ''}</div></div>`).join('') : '<p class="mute">Nobody has fallen yet.</p>'}</div>
     ${(st.departed || []).length ? `<div class="panel"><h2>👋 Left the colony</h2>${st.departed.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0"><div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">day ${g.day + 1}: you let them go</small></div></div>`).join('')}</div>` : ''}
     <div class="panel"><h2>📜 Journal</h2><div class="feed" style="max-height:60vh">${st.journal.slice().reverse().map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Quiet so far.</small>'}</div></div></div>`;
 }
@@ -1703,6 +1704,7 @@ const A = {
   slime_repair: () => act('slime_repair', { id: S.sel }),
   talk: () => act('talk', { id: S.sel }),
   praise: () => act('praise', { id: S.sel }),
+  memorial: (d) => act('memorial', { gid: num(d.gid) }),
   keeper_learn: (d) => act('keeper_learn', { key: d.key }),
   keeper_use: (d) => act('keeper_use', { key: d.key }),
   answer_request: (d) => { const s = slimeById(num(d.id));

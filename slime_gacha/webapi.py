@@ -45,7 +45,8 @@ def slime_view(g: Game, s) -> dict:
         morale=round(s.morale), morale_label=SocialEngine.morale_label(s.morale),
         goal=(s.goal or {}).get("text", ""), request=s.request, trust=round(s.trust), memories=memory_mod.recent(s), sanity=round(s.sanity), sanity_max=config.SANITY_MAX[s.rarity], sanity_label=sanity_mod.label(s), mood_cap=round(sanity_mod.mood_cap(s), 2),
         talked=bool(s.cared.get("day") == g.day and s.cared.get("talk")),
-        praised=bool(s.cared.get("day") == g.day and s.cared.get("praise")), burnt=meaning_mod.burned_out(s),
+        praised=bool(s.cared.get("day") == g.day and s.cared.get("praise")),
+        grief=[dict(name=x["name"], depth=round(x["depth"]), days=g.day - x["day"]) for x in s.grief], burnt=meaning_mod.burned_out(s),
         meaning=({k: round(v, 2) for k, v in meaning_mod.scores(s).items()} if s.life and s.life.get("days") else None),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
         abilities=[dict(key=k, name=get_ability(k).name, element=get_ability(k).element,
@@ -303,7 +304,7 @@ def snapshot(g: Game) -> dict:
         conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason, retry=c.retry, cool=c.cool,
                         brawls=c.brawls, away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
                    for c in g.conflicts.conflicts],
-        graveyard=list(g.graveyard)[-50:], departed=list(g.departed)[-50:], journal=list(g.journal)[-60:],
+        graveyard=[dict(e, gather=g.can_gather(e)) for e in list(g.graveyard)[-50:]], departed=list(g.departed)[-50:], journal=list(g.journal)[-60:],
         dungeon=dict(
             best_floor=g.best_floor, boss_every=config.MAIN_BOSS_EVERY, floors=g.intel_report(),
             max_floor=dungeon.MAX_FLOOR, cleared=g.descent_cleared,
@@ -498,6 +499,11 @@ def _pet(g, a):
 @command("praise")
 def _praise(g, a):
     return _msg(g.praise(_i(a, "id")))
+
+
+@command("memorial")
+def _memorial(g, a):
+    return g.memorial(_i(a, "gid")), {}
 
 
 @command("stance")

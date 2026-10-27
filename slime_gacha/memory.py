@@ -21,6 +21,7 @@ KINDS: Dict[str, tuple] = {
     "slight":    (-1, "{n} got something they wanted{note}"),
     "healed":    (+1, "{n} tended to them when they were hurt"),
     "peace":     (+1, "{n} helped them make peace{note}"),
+    "comforted": (+1, "{n} sat with them while they grieved"),
     "made_up":   (+1, "{n} made peace with them after a quarrel"),
     "comrade":   (+1, "{n} fought beside them and won{note}"),
     "carried":   (+1, "{n} stayed close when they fell{note}"),

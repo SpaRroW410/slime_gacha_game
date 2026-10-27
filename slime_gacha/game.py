@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements, places, story, sanity, memory, meaning, mind
+from . import achievements, places, story, sanity, memory, meaning, mind, grief
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -85,6 +85,7 @@ class Game:
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
         self.needs.skip_meal = self._skips_meal                   # deep despair: it stops feeding itself
         self.departed: List[dict] = []                            # slimes the Keeper let leave the colony
+        self.memorials: set = set()                               # graveyard ids the colony has gathered for
         self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
         self.conflicts.memory_fn = memory.for_pair
         self.conflicts.hook = self._social_hook
@@ -685,6 +686,7 @@ class Game:
 
     def _relations_day(self, events: List[str]) -> None:
         self._peacemaking(events)
+        grief.daily(self, events)
         for s in self.slimes():
             memory.fade(s)
         mind.daily(self, events)
@@ -826,6 +828,7 @@ class Game:
             friends = {i for f in self.conflicts.friends if s.id in f for i in f if i != s.id}
             self.conflicts.forget(s.id)
             friends |= {i for k, v in self.social.bonds.items() if s.id in k and v >= 20 for i in k if i != s.id}
+            grief.start(self, s, s.in_dungeon)               # those close to it will grieve for weeks (before the ties go)
             self._lose_ties(s)
             self.social.forget(s.id)
             for o in self.slimes():                      # grief: friends hurt more
@@ -2340,6 +2343,27 @@ class Game:
         n = ascension.merge_stones(self.wallet, rarity)
         return f"💎 {n * config.STONE_MERGE} {rarity} stones fuse into {n} {ascension.next_rarity(rarity)}."
 
+    def can_gather(self, entry: dict) -> bool:
+        """Can the colony still gather at the Memorial Pond for this one? Within a week, once, and someone at home grieves."""
+        if entry.get("id") in self.memorials or self.tick_count - entry.get("tick", 0) > 24 * config.GRIEF_GATHER_DAYS:
+            return False
+        return any(not s.busy and any(x["other"] == entry["id"] for x in s.grief) for s in self.slimes())
+
+    def memorial(self, gid: int) -> List[str]:
+        entry = next((e for e in reversed(self.graveyard) if e.get("id") == gid), None)
+        if not entry:
+            raise InvalidAction("Nobody by that name rests at the Memorial Pond.")
+        if entry["id"] in self.memorials:
+            raise InvalidAction(f"The colony has already gathered for {entry['name']}.")
+        if self.tick_count - entry.get("tick", 0) > 24 * config.GRIEF_GATHER_DAYS:
+            raise InvalidAction(f"It has been too long; {entry['name']}'s friends have had to carry on.")
+        out = grief.gather(self, entry)
+        if not out:
+            raise InvalidAction(f"Nobody at home is grieving {entry['name']} right now.")
+        self.memorials.add(entry["id"])
+        self.journal.extend(out)
+        return out
+
     def _skips_meal(self, s: Slime, events: List[str]) -> bool:
         """Deep despair: the slime leaves its food (the Keeper can still feed it by hand). Warns once a day."""
         if not awakening.skips_meal(s, self.mood_rng):
@@ -2353,6 +2377,7 @@ class Game:
         """The Keeper lets a slime leave the colony for good: its gear comes home, its friends miss it (no sacrifice stress)."""
         friends = [self.roster[r["other"]] for r in self.relations.of(s.id)
                    if r["other"] in self.roster and r["kind"] in ("friend", "best_friend", "couple", "mentor")]
+        grief.start(self, s, "", config.GRIEF_DEPART_SCALE)          # a parting hurts, if less than a death
         self._return_gear(s)
         if self.vice == s.id:
             self.vice = None
@@ -2380,6 +2405,7 @@ class Game:
         relief = self.unwelcome(s)                            # destroying a troublemaker upsets nobody
         friends = {i for f in self.conflicts.friends if s.id in f for i in f if i != s.id}
         friends |= {i for k, v in self.social.bonds.items() if s.id in k and v >= 20 for i in k if i != s.id}
+        grief.start(self, s, "")                             # a sacrifice is a loss like any other to those who loved it
         self._return_gear(s)
         del self.roster[s.id]
         self.conflicts.forget(s.id)
@@ -3862,7 +3888,7 @@ class Game:
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
-                    parties=self.parties.to_dict(), graveyard=self.graveyard, departed=self.departed[-50:],
+                    parties=self.parties.to_dict(), graveyard=self.graveyard, departed=self.departed[-50:], memorials=sorted(self.memorials)[-50:],
                     wallet=self.wallet.to_dict(), gacha=self.gacha.to_dict(),
                     slimes=[s.to_dict() for s in self.slimes()],
                     conflicts=[c.to_dict() for c in self.conflicts.conflicts],
@@ -3984,6 +4010,7 @@ class Game:
         g.parties.load(d.get("parties", {}), set(g.roster))
         g.graveyard = d.get("graveyard", [])
         g.departed = list(d.get("departed", []))
+        g.memorials = set(d.get("memorials", []))
         g.conflicts.conflicts = [Conflict(**c) for c in d.get("conflicts", [])
                                  if c["a"] in g.roster and c["b"] in g.roster]
         g.delves = {int(k): v for k, v in d.get("delves", {}).items()

@@ -205,8 +205,8 @@ def run_worker(seed: int = 6, praised: bool = False, days: int = 21) -> dict:
     return dict(burnt=meaning.burned_out(w), purpose=round(meaning.scores(w)["purpose"], 2), mood=round(w.mood(), 2))
 
 
-def run_grief(seed: int = 5) -> dict:
-    """Partner dies: how long until sadness drops below 10, and what sanity does meanwhile."""
+def run_grief(seed: int = 5, supported: bool = False) -> dict:
+    """Partner dies: how long until sadness drops below 10. `supported`: a close friend is at home and the Keeper talks daily."""
     g = colony(seed, 0)
     a = g.gacha.make_slime("common", "barbarian")
     b = g.gacha.make_slime("common", "mage")
@@ -216,10 +216,14 @@ def run_grief(seed: int = 5) -> dict:
         g.roster[s.id] = s
     g.relations.rel[relationships.key(a, b)] = dict(kind="couple", since=0)
     g.social.add_bond(a, b, 60)
+    if supported:
+        g.social.add_bond(a, c, 40)
     b.hp, b.death_cause = 0, "an accident"
     g.tick(1)
     track = {}
     for h in range(1, 24 * 40 + 1):
+        if supported and g.tick_count % 24 == 9:
+            g.talk(a.id)
         g.tick(1)
         if h in (24, 72, 24 * 7, 24 * 14):
             track[h] = round(emotions.level(a, "sadness"), 1)
@@ -253,6 +257,8 @@ TARGETS = [
     ("unseen work burns out", "worker_unseen", lambda r: r["burnt"], "the same post every day, nobody noticing: going through the motions"),
     ("praise keeps the spark", "worker_praised", lambda r: not r["burnt"], "recognition gives the same work meaning"),
     ("most slimes are not burned out", "hands_off", lambda r: r["burnt"] <= 0.25, "a varied colony life is not a grind"),
+    ("grief lasts", "grief", lambda r: 7 <= r["grief_days"] <= 21, "grief over a partner takes one to three weeks"),
+    ("company shortens grief", "grief_supported", lambda r: r["grief_days"] < 15, "a friend and someone who listens help"),
     ("but not overnight", "recovery", lambda r: r["recovered_on"] is None or r["recovered_on"] >= 5, "recovery takes days to weeks"),
 ]
 
@@ -268,6 +274,7 @@ def run_all(seeds=(1,), slimes: int = 20, days: int = 45) -> dict:
         out["worker_unseen"].append(run_worker(sd + 5, False))
         out["worker_praised"].append(run_worker(sd + 5, True))
         out["grief"].append(run_grief(sd + 4))
+        out["grief_supported"].append(run_grief(sd + 4, supported=True))
     return out
 
 
@@ -304,8 +311,9 @@ def report(results: dict) -> str:
             lines.append(f"- {key.replace('_', ' ')}: burned out {r['burnt']}, purpose {r['purpose']}, mood {r['mood']}")
     for r in results["recovery"]:
         lines.append(f"- recovery: started `{r['start']}`, outcome `{r['outcome']}`, lifted on day {r['recovered_on']}")
-    for r in results["grief"]:
-        lines.append(f"- grief: sadness {r['sadness_at']} (hours after) - over after {r['grief_days']} days")
+    for key in ("grief", "grief_supported"):
+        for r in results.get(key, []):
+            lines.append(f"- {key.replace('_', ' ')}: sadness {r['sadness_at']} (hours after) - over after {r['grief_days']} days")
     lines += ["", "## Targets", "", "| Target | Passed | What a person would do |", "|---|---|---|"]
     for name, share, why in check(results):
         lines.append(f"| {name} | {pct(share)} | {why} |")

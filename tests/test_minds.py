@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import collections
 import random
 
-from slime_gacha import awakening, config, emotions, meaning, memory, sanity
+from slime_gacha import awakening, config, emotions, grief, meaning, memory, sanity
 from slime_gacha.ai import Conflict
 from slime_gacha.game import Game
 
@@ -616,6 +616,78 @@ class TestMeaningForEverySlime(unittest.TestCase):
         self.assertEqual(mind.urgent_request(g, s)["kind"], "change")
 
 
+class TestGrief(unittest.TestCase):
+    def loss(self, kind="couple"):
+        g = colony()
+        a, b, c = make(g), make(g, "mage"), make(g, "rogue")
+        g.relations.rel[frozenset((a.id, b.id))] = dict(kind=kind, since=0)
+        g.social.add_bond(a, b, 60)
+        b.hp, b.death_cause = 0, "a fall"
+        g._reap([])
+        return g, a, b, c
+
+    def test_depth_follows_the_tie(self):
+        for kind, depth in (("couple", 90), ("best_friend", 70), ("friend", 45)):
+            g, a, b, c = self.loss(kind)
+            self.assertEqual(a.grief[0]["depth"], depth)
+            self.assertEqual(c.grief, [])                                  # a stranger does not grieve
+
+    def test_grief_holds_sadness_up_for_weeks(self):
+        g, a, b, c = self.loss()
+        g.tick(24 * 3)
+        self.assertGreater(emotions.level(a, "sadness"), 25)             # not gone in two days any more
+        self.assertGreater(emotions.level(a, "loneliness"), 5)
+        g.tick(24 * 25)
+        self.assertEqual(a.grief, [])
+        self.assertLess(emotions.level(a, "sadness"), 10)
+
+    def test_a_friend_sits_with_it(self):
+        g, a, b, c = self.loss()
+        g.social.add_bond(a, c, 40)
+        events = []
+        before = a.grief[0]["depth"]
+        grief.daily(g, events)
+        self.assertEqual(a.grief[0]["depth"], before - config.GRIEF_FADE - config.GRIEF_COMFORT)
+        self.assertTrue(any(f"{c.name} sits with {a.name}" in e for e in events))
+        self.assertGreater(memory.opinion(a, c)["gratitude"], 0)
+
+    def test_anniversaries_bring_it_back(self):
+        g, a, b, c = self.loss()
+        a.emotions["sadness"] = 0
+        g.tick_count += 24 * 7
+        events = []
+        grief.daily(g, events)
+        self.assertGreater(emotions.level(a, "sadness"), 20)
+        self.assertTrue(any("1 week ago today" in e for e in events))
+
+    def test_a_gathering_at_the_memorial_pond(self):
+        g, a, b, c = self.loss()
+        d = make(g, "medic")
+        g.relations.rel[frozenset((d.id, b.id))] = dict(kind="friend", since=0)
+        d.grief = [dict(other=b.id, name=b.name, depth=45.0, start=45.0, day=0, where="", gathered=False)]
+        entry = g.graveyard[-1]
+        self.assertTrue(g.can_gather(entry))
+        depth = a.grief[0]["depth"]
+        out = g.memorial(entry["id"])
+        self.assertIn("Memorial Pond", out[0])
+        self.assertEqual(a.grief[0]["depth"], depth - config.GRIEF_GATHER)
+        self.assertGreater(g.social.bond(a, d), 0)                        # the mourners grow closer
+        self.assertFalse(g.can_gather(entry))
+        with self.assertRaises(Exception):
+            g.memorial(entry["id"])                                       # once per loss
+
+    def test_leaving_is_missed_at_half_depth(self):
+        g = colony()
+        a, b = make(g), make(g)
+        g.relations.rel[frozenset((a.id, b.id))] = dict(kind="best_friend", since=0)
+        g.depart(b, "test")
+        self.assertEqual(a.grief[0]["depth"], 70 * config.GRIEF_DEPART_SCALE)
+
+    def test_grief_is_saved(self):
+        g, a, b, c = self.loss()
+        self.assertEqual(Game.from_dict(g.to_dict()).roster[a.id].grief, a.grief)
+
+
 class TestBehaviourTargets(unittest.TestCase):
     """A small run of tools/minds_sim.py: the colony and legendary scenarios must meet the behaviour targets."""
     PENDING = set()                       # targets whose task is still to do
@@ -628,6 +700,7 @@ class TestBehaviourTargets(unittest.TestCase):
         cls.results = dict(hands_off=[minds_sim.run_colony(1, 14, 25, keeper=False)],
                            attentive=[minds_sim.run_colony(1, 14, 25, keeper=True)],
                            recovery=[minds_sim.run_recovery(4)],
+                           grief=[minds_sim.run_grief(5)], grief_supported=[minds_sim.run_grief(5, True)],
                            worker_unseen=[minds_sim.run_worker(6, False)], worker_praised=[minds_sim.run_worker(6, True)],
                            **{"legend_" + life: [minds_sim.run_legend(3, life)] for life in minds_sim.LIVES})
 
