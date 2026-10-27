@@ -6,8 +6,10 @@ that is carried through gives the post's output and a small bonus resource. A po
 level in that trade (earned per shift, kept when switching), a natural talent (+25%) and the building's level
 (+10% per level above 1).
 
-  Trainers (3)   Training Grounds   one per discipline (sword / archery / magic), 2 stars or more: faster proficiency
-                                    and fighting-style gains for drills and spars in their discipline
+  Trainers (3)   Training Grounds   one per discipline (sword / archery / magic), 2 stars or more, and a class that fights
+                                    in that discipline (a swordsman cannot teach magic): faster proficiency and fighting-style
+                                    gains for drills and spars in their discipline, but only for pupils whose own proficiency
+                                    in it is lower than the trainer's
   Librarian      Library            hurries students along and gives attuned slimes mastery
   Blacksmith     Armory             mends worn gear and, slowly, forges weapons and relics from the colony's materials
   Brewer         Alchemy Lab        brews basic potions from herbs the colony holds
@@ -43,11 +45,11 @@ class Job:
 
 
 JOBS: Dict[str, Job] = {j.key: j for j in (
-    Job("trainer_sword", "Sword Trainer", "🗡️", "training_grounds", "Drills and sparring in the sword style gain proficiency faster.",
+    Job("trainer_sword", "Sword Trainer", "🗡️", "training_grounds", "Drills and sparring in the sword style gain proficiency faster for pupils who know less than the trainer.",
         ("barbarian", "rogue"), 2, (), "sword"),
-    Job("trainer_archery", "Archery Trainer", "🏹", "training_grounds", "Drills and sparring in the archery style gain proficiency faster.",
+    Job("trainer_archery", "Archery Trainer", "🏹", "training_grounds", "Drills and sparring in the archery style gain proficiency faster for pupils who know less than the trainer.",
         ("ranger", "rogue"), 2, (), "archery"),
-    Job("trainer_magic", "Magic Trainer", "🔮", "training_grounds", "Drills and sparring in the magic style gain proficiency faster.",
+    Job("trainer_magic", "Magic Trainer", "🔮", "training_grounds", "Drills and sparring in the magic style gain proficiency faster for pupils who know less than the trainer.",
         ("mage", "necromancer"), 2, (), "magic"),
     Job("librarian", "Librarian", "📚", "library", "Hurries students along and catalogues lore: attuned slimes at home gain mastery.",
         ("mage", "necromancer")),
@@ -117,6 +119,8 @@ def why_not(game, slime, key: str) -> str:
         return f"needs {job.min_stars}+ stars"
     if job.classes and slime.archetype not in job.classes:
         return "only " + "/".join(job.classes) + "s may hold this post"
+    if job.discipline and teaching_prof(slime, job) is None:
+        return f"does not fight in the {job.discipline} style (a {slime.arch.name} cannot teach it)"
     if (why := game.refusal(slime, "job")):
         return why
     if slime.needs.get("energy") < config.TASK_MIN_ENERGY:
@@ -309,11 +313,34 @@ def at_home(game, exclude=None) -> list:
 
 
 # ---- trainers -------------------------------------------------------------------------------------------------------
-def trainer_bonus(game, discipline: str) -> float:
-    """Multiplier on proficiency and style gains in a discipline while its trainer is appointed (1.0 without)."""
+def proficiency_in(slime, discipline: str) -> Optional[float]:
+    """The slime's proficiency in a discipline: its class's own, or its second (specialised) one; None if it has neither."""
+    if slime.arch.discipline == discipline:
+        return slime.class_prof
+    if slime.spec and slime.spec_disc == discipline:
+        return slime.spec_prof
+    return None
+
+
+def teaching_prof(slime, job: Job) -> Optional[float]:
+    """What a trainer's pupils are measured against: its proficiency in the post's discipline, whether that is its class's own,
+    its second one, or (for a class with a natural knack for the post, like a rogue's archery) its class proficiency. None: it cannot teach."""
+    p = proficiency_in(slime, job.discipline)
+    return slime.class_prof if p is None and slime.archetype in job.talents else p
+
+
+def trainer_bonus(game, discipline: str, pupil=None) -> float:
+    """Multiplier on proficiency and style gains in a discipline while its trainer is appointed (1.0 without).
+    The trainer must fight in that discipline, and with a `pupil` given only teaches one whose own proficiency in it is
+    lower than the trainer's (nobody can teach themselves, and a master has nothing to learn from a novice)."""
     key = TRAINERS.get(discipline)
     t = holder(game, key) if key else None
     if t is None or t.state not in ("working", "hunting"):
+        return 1.0
+    mine = teaching_prof(t, JOBS[key])
+    if mine is None:
+        return 1.0
+    if pupil is not None and (proficiency_in(pupil, discipline) or 0.0) >= mine:
         return 1.0
     b = config.TRAINER_BONUS + config.TRAINER_BONUS_PER_LEVEL * (level(t, key) - 1)
     b *= 1.25 if t.archetype in JOBS[key].talents else 1.0

@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-27-troublemakers",
-                 text="Troublemakers, judged fairly: a slime is one when it has come to blows with more than 5% of the colony this month (at least 2 different slimes), not because a single feud ran its course or because it was snapped at. Merging or destroying one costs no morale and no sacrifice stress; only its partner and best friend grieve, at half depth, and those it fought with breathe easier. After a removal the Keeper's shadow falls: quarrels are rarer for a week, and slimes with fights of their own wonder if they are next. A slime you talked with or made peace for holds back a little for 3 days. A liked slime is now grieved whether it is merged or destroyed.")
+WHATS_NEW = dict(id="2026-10-27-strike-forces",
+                 text="The Hollow Descent now takes more parties at once: the first floor of each segment fits one party, the second two, the third three, the fourth four and the boss floor five, and a mage's call adds one more beyond that. Choose who joins in the new Strike force list on each party's card and fight them together. A floor you fight by hand costs no waiting afterwards. Trainers must fight in the style they teach (a swordsman cannot teach magic) and only help pupils who know less than they do. Slimes that are resting, foraging or on a post now show it on their cards and in the Parties tab, each with a Call back button.")
 
 
 def build() -> Dict[str, object]:

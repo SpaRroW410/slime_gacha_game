@@ -79,7 +79,7 @@ class Game:
         self.buildings = BuildingManager(self.wallet)
         self.library = Library(self.wallet, self.buildings)
         self.academy = AcademySystem(self.wallet, self.rng, self.library, self.buildings)
-        self.academy.trainer_mult = lambda discipline: jobs.trainer_bonus(self, discipline)
+        self.academy.trainer_mult = lambda discipline, pupil=None: jobs.trainer_bonus(self, discipline, pupil)
         self.needs.meal_hook = lambda s: jobs.eat_from_pantry(self, s)
         self.social = SocialEngine(self.conflicts, self.buildings)
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
@@ -1454,13 +1454,13 @@ class Game:
 
     def _spar_reward(self, res: SparResult, s: Slime, d, won: Optional[bool], cap: int, dummy: bool = False) -> None:
         """Style XP, class proficiency and a little morale for one sparring slime."""
-        mult = self.buildings.style_mult() * jobs.trainer_bonus(self, d.key)        # an appointed trainer speeds it up
+        mult = self.buildings.style_mult() * jobs.trainer_bonus(self, d.key, s)     # an appointed trainer speeds it up (if it knows more)
         before = sparring.style_level(s, d.key)
         xp = sparring.style_xp_for(s, d.key, won, mult, dummy)
         if outlook.has(s, "spar"):
             xp *= config.OUTLOOK_DUELIST_STYLE
         outlook.bump(s, "spar")
-        tb = jobs.trainer_bonus(self, d.key)
+        tb = jobs.trainer_bonus(self, d.key, s)
         self.practise_discipline(s, d.key, config.PROF_SPAR_OWN * tb, config.PROF_SPAR_OTHER)
         after = sparring.gain_style_xp(s, d.key, xp, cap)
         self.social.shift_morale(s, 2 + (2 if won else 0))
@@ -1727,7 +1727,7 @@ class Game:
             d = s.arch.discipline
             gain = self.academy.drill_gain(s, d, tier) * (config.WOUNDED_DRILL if s.hp < s.max_hp * config.WOUNDED_BELOW else 1.0)
             attributes.practise(s, d, gain, 0.5)
-            sparring.gain_style_xp(s, d, config.DRILL_STYLE_XP * style * self.buildings.style_mult() * jobs.trainer_bonus(self, d),
+            sparring.gain_style_xp(s, d, config.DRILL_STYLE_XP * style * self.buildings.style_mult() * jobs.trainer_bonus(self, d, s),
                                    self.buildings.style_cap())
             s.needs.add("energy", -8)
             s.needs.add("esteem", 4)
@@ -2242,7 +2242,7 @@ class Game:
         events: List[str] = []
         self._after_battle(party, report)
         self._reap(events)
-        if hours:
+        if hours and not self._by_hand():                    # a fight you led yourself needs no waiting
             events.extend(self._spend(hours))
         report.log.extend(events)
         self.journal.extend(events)
@@ -3412,6 +3412,21 @@ class Game:
         return [q for q, e in self.delves.items() if q != pid and e["floor"] == d["floor"]
                 and not (self.timed and e.get("ready_tick", 0) > self.tick_count) and self._members_in("main", q)]
 
+    def force_cap(self, floor: int) -> int:
+        """How many parties can fight a floor of the Descent together: the floor's place in its segment (the first floor of
+        a segment, 1, 6, 11 ..., is a narrow passage for one party; the second, 2, 7, 12 ..., fits two; and so on up to the
+        boss floors 5, 10, 15 ... that take a whole segment's worth)."""
+        return (floor - 1) % config.MAIN_BOSS_EVERY + 1
+
+    def force_limit(self, floor: int, pids: Sequence[int]) -> int:
+        """The force_cap of the floor, plus one more party when a mage's call (call_reinforcements) brought one of them."""
+        called = any(self.delves.get(q, {}).get("called") == floor for q in pids)
+        return self.force_cap(floor) + (1 if called else 0)
+
+    def _by_hand(self) -> bool:
+        """Is the fight in progress being commanded by hand? Winning it through your own orders is its own effort: no waiting."""
+        return bool(self.flow and self.flow.get("manual"))
+
     def _delve_gen(self, pid: int, join: Sequence[int] = ()):
         d = self.delves.get(pid)
         if not d:
@@ -3425,6 +3440,11 @@ class Game:
                 raise InvalidAction(f"{self.parties.get(q).name} is not on floor {d['floor']} of the Descent, ready to fight.")
             self._delve_wait(self.delves[q])
             pids.append(q)
+        limit = self.force_limit(d["floor"], pids)
+        if len(pids) > limit:
+            hint = "" if limit > self.force_cap(d["floor"]) else " (a mage's call can bring one more)"
+            raise InvalidAction(f"Floor {d['floor']} is too narrow for {len(pids)} parties: only {limit} can fight here together"
+                                f" (the floors of a segment take 1, 2, 3, 4 and 5 parties in turn){hint}.")
         party = [s for q in pids for s in self._members_in("main", q)]
         for s in party:
             if s.state == "sleeping":
@@ -3447,6 +3467,7 @@ class Game:
         boss = dungeon.is_boss_floor(floor)
         report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}{' (BOSS)' if boss else ''}: {info.title} "
                              f"[knowledge {k:.0f}%]" + (f" - {len(pids)} parties fight together" if len(pids) > 1 else ""))
+        by_hand = self._by_hand()
         self._after_battle(party, report, boss=boss)
         survivors = [s for s in party if s.hp > 0]
         events: List[str] = []
@@ -3490,7 +3511,9 @@ class Game:
             for q in pids:
                 self.delves.pop(q, None)
         self._reap(events)
-        spent = dungeon.clear_hours(floor, avg_level, k, len(party))
+        spent = 0 if by_hand else dungeon.clear_hours(floor, avg_level, k, len(party))
+        if by_hand and report.victory:
+            events.append("   ⏱ You led this fight yourself: no waiting, the party is ready for the next floor.")
         self._owed = 0.0
         events.extend(self._spend(spent))
         for q in pids:
@@ -3618,9 +3641,9 @@ class Game:
         pre: List[str] = []
         self._autonomy_prepare(party, pre)
         self._set_flag(party, "main")
-        self.delves[rid] = dict(floor=floor, start=floor, hours=0, camped=0)
+        self.delves[rid] = dict(floor=floor, start=floor, hours=0, camped=0, called=floor)
         return (f"📯 {mages[0].name} calls {self.parties.get(rid).name} to floor {floor} ({cost} purple gel). "
-                f"The two parties can now fight together.")
+                f"The two parties can now fight together, one party beyond what the floor normally takes.")
 
     def delve_camp(self, pid: int, hours: int = 4) -> List[str]:
         """Rest INSIDE the dungeon (sleep: ~8%/h healing, eats food). Ambushes can strike; intel reduces them."""

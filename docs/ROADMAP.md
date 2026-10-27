@@ -125,6 +125,10 @@ As of 27 October 2026:
 - [x] **64. Relationship texture (T12), appraisal (T13), rituals (T14)** — bonds fade without time together, jealousy, apologies, per-trait reactions, hatch days.  *Done when:* met (relationships.py fading and jealousy, apologies for grudges, kind slimes forgive sooner, appraisal.py, rituals.py: hatch days, anniversaries, feasts).
 - [x] **65. Why it feels this way (T16)** — top causes per feeling, a colony mood summary (the legendary card already shows its outcome and record).  *Done when:* met (emotions.note_cause and causes(); reasons under each feeling; Colony mood panel).
 - [x] **66. Troublemakers and the Keeper's shadow** — the zero-cost rule for removing a troublemaker held up against the new minds: no grief beyond the partner's and best friend's half grief, a fair test (fought with more than 5% of the colony in 30 days, at least 2 slimes; snapped-at slimes not blamed), relief for its foes, fewer quarrels for a while after a removal (fear), and respect after the Keeper's talks.  *Done when:* met (zero morale and stress, half grief for partner and best friend only; quarrels x0.69-0.83 over the first 3 days after a removal, about half on day one).
+- [x] **67. Descent strike forces** — a floor takes 1-5 parties by its place in the segment (1, 6, 11: one; 2, 7, 12: two; ... boss floors 5, 10, 15: five), chosen in a Strike force list on each party's Descent card; a mage's call adds one more beyond the limit.  *Done when:* met (`Game.force_cap` / `force_limit`, refused beyond them; the fight stays the turn-by-turn simulation).
+- [x] **68. No waiting after a fight led by hand** — Descent floors and wave simulations fought by hand leave the party ready at once.  *Done when:* met (`Game._by_hand`; switching to auto halfway brings the wait back; the Pit's daily session budget is unchanged).
+- [x] **69. Trainer rules** — a trainer must fight in the post's discipline (or have a natural knack for it) and only speeds up pupils whose own proficiency is lower.  *Done when:* met (`jobs.teaching_prof`, `trainer_bonus(pupil)`; the appointment list shows why a slime cannot hold the post).
+- [x] **70. Call back from anywhere** — resting, foraging, hunting, studying and posted slimes show what they are doing and get a Call back button on cards, rows and in the Parties tab.  *Done when:* met.
 
 ### After floor 50 (art and sound)
 
@@ -388,6 +392,11 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Send a whole party to Scouting, the Rift, the Quarry and Places
 - [x] The static build never hangs at "Loading Python runtime": progress, a watchdog with safe mode, Repair, network-first offline copy
 - [x] One planning document (this file) with the full commit history (`tools/changelog.py`)
+
+### M25 — Strike forces and call-backs (27 October 2026)
+- [x] Descent: 1-5 parties per floor by its place in the segment, a Strike force picker, one extra party by a mage's call (task 67)
+- [x] No waiting after a Descent floor or wave simulation fought by hand (68)
+- [x] Trainers: class and pupil rules (69); Call back everywhere a slime is away (70)
 
 ### M24 — Troublemakers and the Keeper's shadow (27 October 2026)
 - [x] A troublemaker: came to blows with more than 5% of the colony (rounded down, at least 2 slimes) in 30 days, or disliked by most; one feud or being snapped at is not enough

@@ -65,6 +65,22 @@ function stateLabel(s) {
   if (s.state === 'sleeping') return '😴 sleeping';
   return esc(s.state);
 }
+/* "Call back" for a slime that is resting, hunting, studying, foraging or at a post. Inside a dungeon it cannot be reached. */
+function callBtn(s, label = true) {
+  if (s.in_dungeon || DUNGEON_KINDS.includes(s.in_dungeon)) return '';
+  const t = label ? ' Call back' : '';
+  if (s.state === 'working' && s.job) return `<button class="btn small" data-act="stop_job" data-id="${s.id}" data-confirm="1" data-jn="${esc(s.job.name)}" title="Call ${esc(s.name)} off the ${esc(s.job.name)} post (the shift in progress is lost)">📞${t}</button>`;
+  if (['resting', 'hunting', 'studying'].includes(s.state)) return `<button class="btn small" data-act="do" data-c="recall" data-id="${s.id}" title="${s.state === 'hunting' && s.job ? 'Call back from foraging: it goes straight back to its post' : s.state === 'resting' ? 'Take it out of the rest area' : 'Call it home'}">📞${t}</button>`;
+  return '';
+}
+/* What an away slime is doing, in a few words (foraging, on a post, resting, hunting, drilling). */
+function doing(s) {
+  if (s.state === 'hunting') return s.job ? '🧺 foraging' : '🏞 hunting';
+  if (s.state === 'working') return `👷 on post${s.job ? ': ' + esc(s.job.name) : ''}`;
+  if (s.state === 'studying') return '📚 studying';
+  if (s.state === 'resting' || s.state === 'sleeping') return stateLabel(s);
+  return '';
+}
 function avatar(s, cls = '') {
   const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
@@ -547,22 +563,22 @@ function moodPanel(m) {
 }
 function srow(s) {
   const a = awayOf(s.id);
-  const tag = s.in_dungeon ? `🕳 ${esc(s.in_dungeon)}` : s.state !== 'idle' ? stateLabel(s) : '';
+  const tag = s.in_dungeon ? `🕳 ${esc(s.in_dungeon)}` : s.state !== 'idle' ? (doing(s) || stateLabel(s)) : '';
   return `<div class="srow ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">${figure(s, 'sm')}
     <span class="sname">${s.is_vice ? '🎖 ' : ''}${esc(s.name)}</span><span class="smeta">${esc(s.class_name)} · ${s.stars}★ ${esc(s.rarity)} · Lv${s.level}</span>
     <span class="shp">${bar(s.hp, s.max_hp, 'hp')}</span>
-    <span class="stag">${a ? `⏳ ${etaHtml(a)}` : tag}${s.party ? ` 👥 ${esc(partyById(s.party)?.name || '')}` : ''}${s.hp < s.max_hp * 0.4 ? ' 🩹' : ''}${s.dominant && !s.busy ? ' ❗' : ''}</span></div>`;
+    <span class="stag">${a ? `⏳ ${etaHtml(a)}` : tag}${s.party ? ` 👥 ${esc(partyById(s.party)?.name || '')}` : ''}${s.hp < s.max_hp * 0.4 ? ' 🩹' : ''}${s.dominant && !s.busy ? ' ❗' : ''}</span>${callBtn(s, false)}</div>`;
 }
 function card(s) {
   const b = [];
   if (s.in_dungeon) b.push(badge('🕳 ' + s.in_dungeon, 'bad'));
-  else if (s.state !== 'idle') b.push(badge(s.state, s.state === 'hunting' ? 'info' : ''));
+  else if (s.state !== 'idle') b.push(badge(doing(s) || s.state, s.state === 'hunting' ? 'info' : ''));
   if (s.is_vice) b.push(badge('🎖 Vice Keeper', 'ok'));
   { const a = awayOf(s.id); if (a) b.push(badge(`⏳ ${etaHtml(a)}`, 'warn')); }
   if (s.party) b.push(badge('👥 ' + esc(partyById(s.party)?.name || s.party)));
   if (s.hp < s.max_hp * 0.4) b.push(badge('wounded', 'warn'));
   if (s.grounded) b.push(badge('grounded', 'bad'));
-  if (s.job) b.push(badge(`${s.job.emoji} ${esc(s.job.name)}`, 'ok'));
+  if (s.job && s.state !== 'working') b.push(badge(`${s.job.emoji} ${esc(s.job.name)}`, 'ok'));
   if (s.dominant && !s.busy) b.push(badge(WISH[s.dominant], 'warn'));
   if (s.feelings.length && s.feelings[0].value >= 40) b.push(badge(`${s.feelings[0].emoji} ${esc(s.feelings[0].name)}`, s.feelings[0].kind === 'bad' ? 'warn' : 'ok'));
   if (s.morale_label === 'broken') b.push(badge('broken morale', 'bad'));
@@ -573,7 +589,7 @@ function card(s) {
     <div class="nm">${esc(s.name)}</div><div class="sub">${esc(s.title)} · Lv${s.level}</div>
     <div>${stars(s.stars)}</div>
     ${bar(s.hp, s.max_hp, 'hp')}
-    <div class="badges">${b.join('')}</div></div>`;
+    <div class="badges">${b.join('')}</div>${callBtn(s) ? `<div style="margin-top:4px">${callBtn(s)}</div>` : ''}</div>`;
 }
 
 function drawer(s) {
@@ -738,8 +754,9 @@ function gacha() {
 function mini(id, removeBtn = false) {
   const s = slimeById(id);
   if (!s) return '';
-  return `<div class="mini" data-act="sel" data-id="${s.id}">${avatar(s, 'sm')}<span>${esc(s.name)}</span>${bar(s.hp, s.max_hp, 'hp')}
-    <button class="btn small" data-act="toggle_row" data-id="${s.id}" title="${s.row === 'back' ? 'Back row (tap to move to the front)' : 'Front row (tap to move to the back)'}">${s.row === 'back' ? '⬅ back' : '▶ front'}</button>
+  const d = doing(s);
+  return `<div class="mini" data-act="sel" data-id="${s.id}">${avatar(s, 'sm')}<span>${esc(s.name)}</span>${d ? `<small class="mute">${d}</small>` : ''}${bar(s.hp, s.max_hp, 'hp')}
+    ${callBtn(s, false)}<button class="btn small" data-act="toggle_row" data-id="${s.id}" title="${s.row === 'back' ? 'Back row (tap to move to the front)' : 'Front row (tap to move to the back)'}">${s.row === 'back' ? '⬅ back' : '▶ front'}</button>
     ${removeBtn ? `<button class="btn small" data-act="party_remove" data-id="${s.id}" title="Remove from party">✕</button>` : ''}</div>`;
 }
 function parties() {
@@ -802,6 +819,30 @@ function reinforcePanel(pid, v) {
     ${home.length ? `<select data-ui="${key}">${home.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
     <button class="btn small" data-act="call_reinforcements" data-pid="${pid}" ${st.wallet.purple_gel >= v.call_cost ? '' : 'disabled'}>Call · ${v.call_cost} 🟣</button>` : '<small class="mute">no party is free</small>'}</div>`;
 }
+/* The strike force: the parties on the same floor that fight it together. A floor takes 1-5 parties by its place in the segment
+   (1, 6, 11 one; 2, 7, 12 two; ... 5, 10, 15 five), plus one more when a mage's call brought a party. */
+function forceState(pid, v) {
+  const dl = S.state.dungeon.delves;
+  const power = (p) => p.members.reduce((a, id) => a + (slimeById(id)?.power || 0), 0);
+  const cands = v.joinable.map(partyById).filter(Boolean).sort((a, b) => power(b) - power(a));
+  const limitFor = (ids) => v.force_cap + (v.called || ids.some((q) => dl[q]?.called) ? 1 : 0);
+  let sel = S.ui['force_' + pid];
+  if (!Array.isArray(sel)) { sel = []; for (const p of cands) if (2 + sel.length <= limitFor([...sel, p.id])) sel.push(p.id); }
+  sel = sel.filter((id) => v.joinable.includes(id));
+  while (sel.length && 1 + sel.length > limitFor(sel)) sel.pop();
+  S.ui['force_' + pid] = sel;
+  return { cands, sel, power, limit: limitFor(sel), canAdd: (q) => 2 + sel.length <= limitFor([...sel, q]) };
+}
+function forceBox(pid, v) {
+  const f = forceState(pid, v), total = 1 + f.sel.length;
+  const key = 'forceOpen_' + pid;
+  const mine = partyById(+pid);
+  return `<details class="panel flat" data-keep="${key}" ${ui(key, true) ? 'open' : ''}><summary><b>⚔ Strike force</b> ${chip(`${total}/${f.limit} part${f.limit === 1 ? 'y' : 'ies'}`, total >= f.limit ? 'warn' : 'ok')}
+      <small class="mute">floor ${v.floor} takes ${v.force_cap} part${v.force_cap === 1 ? 'y' : 'ies'}${v.called ? ' + the one a mage called' : ''}</small></summary>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><span class="chip ok">✔ ${esc(mine?.name || '')} · ⚡ ${mine ? Math.round(f.power(mine)) : 0}</span>
+      ${f.cands.map((p) => { const on = f.sel.includes(p.id); return `<button class="btn small ${on ? 'primary' : ''}" data-act="force_toggle" data-pid="${pid}" data-q="${p.id}" ${on || f.canAdd(p.id) ? '' : 'disabled title="The floor has no room for another party"'}>${on ? '✔' : '＋'} ${esc(p.name)} · ⚡ ${Math.round(f.power(p))}</button>`; }).join('') || '<small class="mute">No other party is on this floor yet.</small>'}</div>
+    <small class="mute">Together they fight as one force: ⚡ ${Math.round(f.power(mine || { members: [] }) + f.sel.reduce((a, q) => a + f.power(partyById(q) || { members: [] }), 0))} combined power. The fight is the usual turn-by-turn battle, so more power wins more often.</small></details>`;
+}
 function dungeonsAll() {
   const st = S.state, d = st.dungeon;
   const delves = Object.entries(d.delves);
@@ -824,8 +865,9 @@ function dungeonsAll() {
       <p class="mute">${v.hours}h inside · this floor ${v.knowledge.toFixed(0)}% known · clearing it takes ~${v.next_hours} game hour${v.next_hours === 1 ? '' : 's'}${S.state.clock.mode === 'live' ? ` (~${Math.max(1, Math.round(v.next_hours / S.state.clock.dungeon_rate * 60))} real min)` : ''}</p>
       ${v.ready_in > 0 ? `<div class="chip bad">⏱ busy — ${S.state.clock.mode === 'live' ? `back in ~${Math.max(1, Math.round(v.ready_in / (S.state.clock.rate_now || 1) * 60))} real min` : `${v.ready_in}h to go (press +1h / +4h)`}</div>` : ''}
       <div class="row">${v.members.map((id) => mini(id)).join('')}</div>
+      ${v.joinable.length || v.force_cap > 1 ? forceBox(pid, v) : `<small class="mute">Floor ${v.floor} is a narrow passage: one party at a time${v.callers.length ? ' (a mage can still call one more)' : ''}.</small>`}
       <div class="row" style="margin-top:6px"><button class="btn primary" data-act="delve_next" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight floor ${v.floor}</button>${cmdToggle()}
-        ${v.joinable.map((q) => `<button class="btn primary" data-act="delve_next" data-pid="${pid}" data-join="${q}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight together with ${esc(partyById(q)?.name)}</button>`).join('')}
+        ${forceState(pid, v).sel.length ? `<button class="btn primary" data-act="delve_next" data-pid="${pid}" data-join="${forceState(pid, v).sel.join(',')}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight together (${1 + forceState(pid, v).sel.length} parties)</button>` : ''}
         <input type="number" min="1" max="24" value="${camp}" data-ui="camp_h" style="width:70px"><button class="btn" data-act="delve_camp" data-pid="${pid}" ${v.ready_in > 0 || v.camp_left <= 0 ? 'disabled' : ''}>⛺ Camp (h)</button>
         <button class="btn ${v.can_leave ? 'primary' : ''}" data-act="leave_dungeon" data-pid="${pid}" ${v.can_leave ? '' : 'disabled'} title="${v.can_leave ? 'Climb out' : 'Only possible at a checkpoint'}">🚪 Leave</button></div>
       ${v.can_leave ? '' : `<div class="row"><small class="mute">No free way out until the boss of floor ${v.boss_floor} falls.</small>
@@ -1001,6 +1043,7 @@ function holdWhy(s, j) {
   if (s.grounded) return 'grounded';
   if (s.stars < j.min_stars) return `needs ${j.min_stars}★`;
   if (j.classes.length && !j.classes.includes(s.archetype)) return 'wrong class';
+  if (j.discipline && s.discipline !== j.discipline && s.spec?.disc !== j.discipline && !j.talents.includes(s.archetype)) return `not a ${j.discipline} fighter`;
   if (s.refuse_job) return s.refuse_job.replace(/^is /, '');
   if (s.needs.energy < 25) return 'too tired';
   return '';
@@ -1793,6 +1836,7 @@ const A = {
   reset_plan: (d) => { const key = d.key; for (let i = 0; i < 8; i++) delete S.ui[`plan_${key}_s${i}`]; for (let i = 0; i < 3; i++) { delete S.ui[`plan_${key}_rc${i}`]; } act('set_plan', { key, slots: Array(8).fill('work'), rules: [] }); },
   toggle_row: (d) => { const s = slimeById(num(d.id)); if (s) act('set_row', { id: s.id, row: s.row === 'back' ? 'front' : 'back' }); },
   away_toggle: () => { S.awayOpen = !S.awayOpen; render(); },
+  force_toggle: (d) => { const k = 'force_' + d.pid, q = num(d.q), sel = Array.isArray(S.ui[k]) ? S.ui[k] : []; S.ui[k] = sel.includes(q) ? sel.filter((x) => x !== q) : [...sel, q]; render(); },
   serve_hungry: () => act('serve_hungry'),
   wake_all: () => confirmThen('Wake everybody asleep in town?\n\nSlimes under 10% energy are left to sleep. Those under 50% energy wake grumpy (a mood cost).', () => act('wake_all')),
   stop_job: (d) => d.confirm ? confirmThen(`Dismiss this slime from the ${d.jn} post?\n\nThe shift in progress is not finished: no work is done for it (nothing is cooked, forged or brewed, no herbs are found).`, () => act('stop_job', { id: num(d.id) })) : act('stop_job', { id: num(d.id) }),
@@ -1805,7 +1849,7 @@ const A = {
   appoint_vice: () => { const id = num(S.ui.vice_pick); if (id) confirmThen('Appoint this slime as Vice Keeper?\n\nIt can mediate, feed and tend slimes in its own group even inside a dungeon, and settles quarrels by itself. It cannot merge or destroy, and cannot itself be merged or destroyed while in office.', () => act('appoint_vice', { id })); },
   dismiss_vice: () => act('dismiss_vice', {}),
   toggle_manual: () => { S.ui.manual = !manualOn(); render(); },
-  delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn(), join: d.join ? [num(d.join)] : [] }, { title: 'The Hollow Descent' }),
+  delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn(), join: d.join ? String(d.join).split(',').map(num) : [] }, { title: 'The Hollow Descent' }),
   stop_rest: (d) => act('delve_stop_rest', { pid: num(d.pid) }),
   stop_buy: (d) => act('delve_stop_buy', { pid: num(d.pid), item: d.item }),
   rescue: (d) => { const ids = (S.ui.rescue_ids || []).map(num); if (!ids.length) return toast('Pick at least one rescuer.', true);
