@@ -13,21 +13,26 @@ class ServerBackend {
 }
 
 const PYODIDE_BASES = ['vendor/pyodide/', 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/'];
+/* Boot watchdog: a phone may stall (a dropped download, or the browser quietly stopping the worker under memory pressure).
+   No progress for this long means give up on that way of running Python and try the next (or show the repair screen). */
+const BOOT_STALL_MS = 60000;
 
 /* Pyodide in a Web Worker: the page stays responsive during long sessions. */
 class WorkerBackend {
   constructor(onProgress) { this.name = 'In-browser Python (Pyodide, web worker)'; this.onProgress = onProgress || (() => {}); this.pending = new Map(); this.nextId = 1; }
   init() {
     return new Promise((resolve, reject) => {
-      let w;
-      try { w = new Worker('pyodide-worker.js'); } catch (e) { reject(e); return; }
+      let w, last = Date.now(), done = false;
+      const finish = (err) => { if (done) return; done = true; clearInterval(dog); if (err) { try { w.terminate(); } catch (e) { /* gone */ } reject(err); } else resolve(); };
+      const dog = setInterval(() => { if (Date.now() - last > BOOT_STALL_MS) finish(new Error('the background Python stopped responding')); }, 2000);
+      try { w = new Worker('pyodide-worker.js'); } catch (e) { finish(e); return; }
       this.worker = w;
-      w.onerror = (e) => { const err = new Error(e.message || 'worker failed'); reject(err); this._failAll(err); };
+      w.onerror = (e) => { const err = new Error(e.message || 'worker failed'); finish(err); this._failAll(err); };
       w.onmessage = (e) => {
         const m = e.data;
-        if (m.type === 'progress') this.onProgress(m.text);
-        else if (m.type === 'ready') resolve();
-        else if (m.type === 'error') reject(new Error(m.error));
+        if (m.type === 'progress') { last = Date.now(); this.onProgress(m.text); }
+        else if (m.type === 'ready') finish();
+        else if (m.type === 'error') finish(new Error(m.error));
         else if (m.type === 'result' || m.type === 'fail') {
           const p = this.pending.get(m.id);
           if (!p) return;
@@ -55,13 +60,19 @@ class PyodideBackend {
     let lastErr;
     for (const base of PYODIDE_BASES) {
       try {
-        this.onProgress('Loading Python runtime…');
-        await new Promise((res, rej) => {
-          const s = document.createElement('script');
-          s.src = base + 'pyodide.js'; s.onload = res; s.onerror = () => rej(new Error('cannot load ' + s.src));
-          document.head.appendChild(s);
-        });
-        this.py = await loadPyodide({ indexURL: base });
+        this.onProgress(base.startsWith('http') ? 'Loading the Python runtime from the internet (safe mode)…' : 'Loading the Python runtime (safe mode)…');
+        const attempt = (async () => {
+          if (typeof loadPyodide === 'undefined') {
+            await new Promise((res, rej) => {
+              const s = document.createElement('script');
+              s.src = base + 'pyodide.js'; s.onload = res; s.onerror = () => rej(new Error('cannot load ' + s.src));
+              document.head.appendChild(s);
+            });
+          }
+          return loadPyodide({ indexURL: base });
+        })();
+        this.py = await Promise.race([attempt,                  // a copy that never answers is given up on
+          new Promise((_, rej) => setTimeout(() => rej(new Error('Python did not start in time')), 3 * BOOT_STALL_MS))]);
         break;
       } catch (e) { lastErr = e; }
     }
@@ -87,7 +98,7 @@ async function chooseBackend(onProgress) {
   } catch (e) { /* not served by serve.py -> static mode */ }
   if (typeof Worker !== 'undefined' && !/[?&]noworker/.test(location.search)) {
     try { const w = new WorkerBackend(onProgress); await w.init(); return w; }
-    catch (e) { console.warn('web worker unavailable, running Python on the main thread:', e); }
+    catch (e) { console.warn('web worker unavailable, running Python on the main thread:', e); onProgress('Switching to safe mode…'); }
   }
   const b = new PyodideBackend(onProgress);
   await b.init();

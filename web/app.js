@@ -1939,8 +1939,38 @@ async function syncLive(force = false) {
 }
 setInterval(() => syncLive(), 30000);
 
+/* If the game cannot start: try again, repair the offline copy (service worker and its cache - never the saved colony),
+   or run Python in safe mode (on the page itself). Offered on the error screen, and on the loading screen if it seems stuck. */
+function bootHelp() {
+  return `<div class="stack" style="margin-top:12px"><small class="mute">Your saved colony stays on this device whichever you choose.</small>
+    <div class="row" style="justify-content:center"><button class="btn primary" data-boot="retry">↻ Try again</button>
+    <button class="btn" data-boot="repair">🧹 Repair and reload</button>
+    <button class="btn" data-boot="safe">🛟 Safe mode</button></div></div>`;
+}
+async function repairOffline() {
+  try { for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) await r.unregister(); } catch (e) { /* none */ }
+  try { for (const k of await caches.keys()) if (k.startsWith('slimegacha-')) await caches.delete(k); } catch (e) { /* none */ }
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest && e.target.closest('[data-boot]');
+  if (!b) return;
+  const k = b.dataset.boot;
+  if (k === 'repair') { b.textContent = 'Repairing…'; await repairOffline(); location.replace(location.pathname); }
+  else if (k === 'safe') location.replace(location.pathname + '?noworker');
+  else location.reload();
+});
+
 (async function boot() {
-  const msg = (t) => { const el = document.getElementById('boot-msg'); if (el) el.textContent = t; };
+  let lastMsg = Date.now(), started = Date.now();
+  const msg = (t) => { lastMsg = Date.now(); const el = document.getElementById('boot-msg'); if (el) el.textContent = t; };
+  const stuck = setInterval(() => {                       // nothing new for a while: say so, and offer the way out
+    const el = document.getElementById('boot-msg');
+    if (!el) return clearInterval(stuck);
+    const quiet = Math.round((Date.now() - lastMsg) / 1000);
+    if (quiet >= 20 && !document.getElementById('boot-help')) {
+      el.insertAdjacentHTML('afterend', `<div id="boot-help"><p class="mute">Still working… (${Math.round((Date.now() - started) / 1000)} s). The first start downloads about 10 MB; if nothing moves, try one of these:</p>${bootHelp()}</div>`);
+    }
+  }, 2000);
   try {
     backend = await chooseBackend(msg);
     S.backendName = backend.name;
@@ -1951,9 +1981,12 @@ setInterval(() => syncLive(), 30000);
       try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
       if (r.ok) { S.state = r.state; pushLog(['Welcome back, Keeper.']); } else S.damaged = { error: r.error };
     }
+    clearInterval(stuck);
     render();
   } catch (e) {
+    clearInterval(stuck);
     document.getElementById('app').innerHTML = `<div class="welcome panel"><h2>Could not start the game</h2><p class="mute">${esc(e.message)}</p>
-      <p>Run <code>python3 serve.py</code> in the project folder and open the printed address, or use the static build (see README).</p></div>`;
+      ${bootHelp()}
+      <p class="mute">Playing from your own computer? Run <code>python3 serve.py</code> in the project folder and open the printed address.</p></div>`;
   }
 })();
