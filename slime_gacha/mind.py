@@ -12,7 +12,7 @@
 import random
 from typing import List
 
-from . import awakening, config, emotions, jobs, memory, outlook, sanity, sparring
+from . import awakening, config, emotions, jobs, meaning, memory, outlook, sanity, sparring
 from .errors import InvalidAction
 from .growth import add_xp
 
@@ -188,7 +188,7 @@ def urgent_request(g, s):
         return dict(kind="leave", target=0, day=g.day, why=why, text=LEAVE_TEXT[why])
     if s.low_days >= config.LEAVE_SANITY_DAYS and s.trust < config.LEAVE_TRUST and not asked:
         return dict(kind="leave", target=0, day=g.day, why="low", text=LEAVE_TEXT["low"])
-    if awakening.wants_change(s) and s.job:
+    if (awakening.wants_change(s) or meaning.burned_out(s)) and s.job:
         return dict(kind="change", target=0, day=g.day,
                     text="asks to be taken off their post: \"I'd like to choose what I do for a while.\"")
     return None

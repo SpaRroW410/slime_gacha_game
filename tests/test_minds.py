@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import collections
 import random
 
-from slime_gacha import awakening, config, emotions, memory, sanity
+from slime_gacha import awakening, config, emotions, meaning, memory, sanity
 from slime_gacha.ai import Conflict
 from slime_gacha.game import Game
 
@@ -291,7 +291,7 @@ class TestLifeRecord(unittest.TestCase):
         self.assertAlmostEqual(awakening.life(s)["acc"]["care"], 0.9)
         plain = make(g)
         g.talk(plain.id)
-        self.assertIsNone(plain.life)                                  # only 5-star legendaries keep a record
+        self.assertEqual(plain.life["acc"]["care"], 0.5)               # every slime keeps a record (meaning.py)
 
     def test_sanity_lost_counts_as_hardship(self):
         g = colony()
@@ -551,6 +551,71 @@ class TestEverydayGoals(unittest.TestCase):
         self.assertGreater(g.social.bond(a, b), 0)
 
 
+class TestMeaningForEverySlime(unittest.TestCase):
+    def test_every_slime_keeps_a_week(self):
+        g = colony()
+        s = make(g)
+        for _ in range(config.MEANING_DAYS + 3):
+            meaning.close_day(g, s)
+        self.assertEqual(len(s.life["days"]), config.MEANING_DAYS)
+        L = legend(g)
+        for _ in range(config.LIFE_DAYS + 3):
+            meaning.close_day(g, L)
+        self.assertEqual(len(L.life["days"]), config.LIFE_DAYS)        # a legendary keeps two weeks for its awakening
+
+    def test_praise_is_recognition(self):
+        g = colony()
+        s = make(g)
+        s.needs.set("esteem", 30)
+        msg = g.praise(s.id)
+        self.assertIn("did well", msg)
+        self.assertGreater(s.needs.get("esteem"), 30)
+        self.assertGreater(emotions.level(s, "pride"), 0)
+        e = meaning.close_day(g, s)
+        self.assertGreater(e["care"], 0)
+        self.assertGreaterEqual(e["purpose"], 0.2)                       # being noticed counts as an achievement
+        self.assertIn("already praised", g.praise(s.id))
+
+    def test_flat_days_burn_a_slime_out_and_praise_brings_it_back(self):
+        g = colony()
+        s = make(g)
+        lf = meaning.life(s)
+        events = []
+        for d in range(config.BURNOUT_DAYS + 4):
+            lf["days"] = [dict(day=d, care=0.0, connection=0.5, purpose=0.1, hardship=0.0)] * config.MEANING_DAYS
+            lf["acc"] = meaning._fresh_acc(s)
+            with mock.patch.object(meaning, "close_day"):
+                meaning.daily(g, s, events)
+        self.assertTrue(meaning.burned_out(s))
+        self.assertTrue(any("going through the motions" in e for e in events))
+        emotions.feel(s, "joy", 90)
+        self.assertLessEqual(s.emotions["joy"], config.BURNOUT_FEELING_CAP)
+        self.assertLessEqual(s.mood(), config.BURNOUT_MOOD_CAP)
+        for d in range(6):
+            lf["days"] = [dict(day=d, care=0.8, connection=0.5, purpose=0.6, hardship=0.0)] * config.MEANING_DAYS
+            with mock.patch.object(meaning, "close_day"):
+                meaning.daily(g, s, events)
+        self.assertFalse(meaning.burned_out(s))
+        self.assertTrue(any("spark back" in e for e in events))
+
+    def test_a_lonely_slime_is_not_burned_out_but_lonely(self):
+        g = colony()
+        s = make(g)
+        meaning.life(s)["days"] = [dict(day=0, care=0.0, connection=0.1, purpose=0.1, hardship=0.0)] * config.MEANING_DAYS
+        for _ in range(config.BURNOUT_DAYS + 2):
+            with mock.patch.object(meaning, "close_day"):
+                meaning.daily(g, s, [])
+        self.assertFalse(meaning.burned_out(s))
+
+    def test_a_burned_out_worker_asks_for_a_change(self):
+        from slime_gacha import mind
+        g = colony()
+        s = make(g)
+        s.job, s.state = "chef", "working"
+        meaning.life(s)["burnt"] = True
+        self.assertEqual(mind.urgent_request(g, s)["kind"], "change")
+
+
 class TestBehaviourTargets(unittest.TestCase):
     """A small run of tools/minds_sim.py: the colony and legendary scenarios must meet the behaviour targets."""
     PENDING = set()                       # targets whose task is still to do
@@ -563,6 +628,7 @@ class TestBehaviourTargets(unittest.TestCase):
         cls.results = dict(hands_off=[minds_sim.run_colony(1, 14, 25, keeper=False)],
                            attentive=[minds_sim.run_colony(1, 14, 25, keeper=True)],
                            recovery=[minds_sim.run_recovery(4)],
+                           worker_unseen=[minds_sim.run_worker(6, False)], worker_praised=[minds_sim.run_worker(6, True)],
                            **{"legend_" + life: [minds_sim.run_legend(3, life)] for life in minds_sim.LIVES})
 
     def test_targets(self):

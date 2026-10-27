@@ -35,6 +35,9 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 | unloved worker is a cog | legendary, at a post, unseen | flat, going through the motions |
 | despair can lift | recovery | company and care pull people back out |
 | but not overnight | recovery | recovery takes days to weeks |
+| unseen work burns out | a common at one post, unseen | the same post every day, nobody noticing: going through the motions |
+| praise keeps the spark | the same, praised daily | recognition gives the same work meaning |
+| most slimes are not burned out | hands-off colony | a varied colony life is not a grind |
 
 ## Before and after (seed 1, 20 slimes, 45 days)
 
@@ -60,6 +63,9 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 - **Awakening** (`awakening.py`): a 14-day record of care, connection, purpose and hardship decides settled, peace, cog or
   despair, reviewed every 3 days. Despair deepens: withdrawal, then self-neglect, then breakdowns and a request to leave.
   A cog asks to be taken off its post, later to leave.
+- **Meaning** (`meaning.py`): every slime keeps a week of care, connection, purpose and hardship (a legendary two weeks).
+  Flat days while not lonely burn a slime out (muted joy and pride, mood capped, asks off its post); Praise, choice and
+  variety bring the spark back.
 - **Goals** (`mind.py`): a weighted pool - get stronger, master a style, see a friend, make a new one, court someone, teach
   a mentee, explore, make something, take it easy, be noticed - shaped by traits, outlook, needs and ties; a grudge is one
   candidate. Thanks outlast minor grudges when memory is full. Slimes who share the colony's days (idle, resting, at a post)
@@ -68,5 +74,5 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 
 ## Still to do
 
-Tasks 59-65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
+Tasks 60-65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
 voice, daily rhythm, relationship texture, appraisal, rituals, a "why it feels this way" view).

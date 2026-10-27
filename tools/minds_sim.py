@@ -23,7 +23,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from slime_gacha import awakening, emotions, jobs, relationships, sanity  # noqa: E402
+from slime_gacha import awakening, emotions, jobs, meaning, relationships, sanity  # noqa: E402
 from slime_gacha.game import Game  # noqa: E402
 from slime_gacha.registry import load_plugins  # noqa: E402
 
@@ -104,6 +104,7 @@ def run_colony(seed: int = 1, n: int = 20, days: int = 45, keeper: bool = False)
         relations=dict(rel), goals=dict(goals), rival_goals=goals.get("rival", 0) / alive,
         max_brawls_per_feud=most_brawls,
         memories=statistics.mean(len(s.memories) for s in g.slimes()) if g.roster else 0.0,
+        burnt=sum(1 for s in g.slimes() if meaning.burned_out(s)) / alive,
         cuddles_per_day=counts["cuddle"] / days)
 
 
@@ -188,6 +189,22 @@ def run_recovery(seed: int = 4, days: int = 30) -> dict:
     return dict(start=start, recovered_on=None, outcome=s.temperament)
 
 
+def run_worker(seed: int = 6, praised: bool = False, days: int = 21) -> dict:
+    """A common slime at the same post for three weeks with two friends; the Keeper praises it daily, or never."""
+    g, _ = legend_colony(seed, 6)
+    w = next(o for o in g.slimes() if o.rarity != "legendary")
+    for o in [o for o in g.slimes() if o is not w][:2]:
+        g.social.add_bond(w, o, 30)
+        g.relations.rel[relationships.key(w, o)] = dict(kind="friend", since=0)
+    for _ in range(days):
+        for h in range(24):
+            _post(g, w)
+            if h == 9 and praised:
+                g.praise(w.id)
+            g.tick(1)
+    return dict(burnt=meaning.burned_out(w), purpose=round(meaning.scores(w)["purpose"], 2), mood=round(w.mood(), 2))
+
+
 def run_grief(seed: int = 5) -> dict:
     """Partner dies: how long until sadness drops below 10, and what sanity does meanwhile."""
     g = colony(seed, 0)
@@ -233,6 +250,9 @@ TARGETS = [
     ("unloved worker is a cog", "legend_cog", lambda r: r["outcome"] == "cog",
      "fed and busy but unseen: flat, going through the motions"),
     ("despair can lift", "recovery", lambda r: r["recovered_on"] is not None, "company and care pull people back out"),
+    ("unseen work burns out", "worker_unseen", lambda r: r["burnt"], "the same post every day, nobody noticing: going through the motions"),
+    ("praise keeps the spark", "worker_praised", lambda r: not r["burnt"], "recognition gives the same work meaning"),
+    ("most slimes are not burned out", "hands_off", lambda r: r["burnt"] <= 0.25, "a varied colony life is not a grind"),
     ("but not overnight", "recovery", lambda r: r["recovered_on"] is None or r["recovered_on"] >= 5, "recovery takes days to weeks"),
 ]
 
@@ -245,6 +265,8 @@ def run_all(seeds=(1,), slimes: int = 20, days: int = 45) -> dict:
         for life in LIVES:
             out["legend_" + life].append(run_legend(sd + 2, life))
         out["recovery"].append(run_recovery(sd + 3))
+        out["worker_unseen"].append(run_worker(sd + 5, False))
+        out["worker_praised"].append(run_worker(sd + 5, True))
         out["grief"].append(run_grief(sd + 4))
     return out
 
@@ -271,12 +293,15 @@ def report(results: dict) -> str:
                       f"- usual level: " + ", ".join(f"{k} {v:.1f}" for k, v in sorted(r['mean'].items(), key=lambda kv: -kv[1])[:6]),
                       f"- no strong feeling: {pct(r['no_strong'])} · mood {r['mood']:.2f} · contentment {r['content']:.0f} · sanity {r['sanity']:.2f}",
                       f"- relationships: {r['relations']} · goals: {r['goals']} · most brawls in one feud: {r['max_brawls_per_feud']}",
-                      f"- memories per slime: {r['memories']:.1f} · cuddle lines per day: {r['cuddles_per_day']:.0f}", ""]
+                      f"- memories per slime: {r['memories']:.1f} · cuddle lines per day: {r['cuddles_per_day']:.0f} · burned out: {pct(r['burnt'])}", ""]
     lines += ["## The legendary", ""]
     for life, text in LIVES.items():
         for r in results["legend_" + life]:
             lines.append(f"- **{life}** ({text}): outcome `{r['outcome'] or '-'}`, feelings {r['feelings']}, mood {r['mood']}")
     lines += ["", "## Recovery and grief", ""]
+    for key in ("worker_unseen", "worker_praised"):
+        for r in results.get(key, []):
+            lines.append(f"- {key.replace('_', ' ')}: burned out {r['burnt']}, purpose {r['purpose']}, mood {r['mood']}")
     for r in results["recovery"]:
         lines.append(f"- recovery: started `{r['start']}`, outcome `{r['outcome']}`, lifted on day {r['recovered_on']}")
     for r in results["grief"]:

@@ -661,7 +661,10 @@ function dMind(s, { st, free, inDun }) {
       <div title="How life has felt over the last few days. Feelings settle back to a slime's usual mood, and a good life lifts it.">🌤 Contentment: <b>${esc(s.content_label)}</b> <small class="mute">${s.content}/100</small></div>
       ${Object.keys(s.feeling_effects).length ? `<small class="mute">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
       ${s.awareness ? awarenessHtml(s.awareness) : ''}
-      <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button></div></div>`)}
+      ${s.burnt ? '<div class="warn">😶 Going through the motions: the same days, nothing chosen, nobody noticing. Praise, a change of routine or a choice of its own brings the spark back.</div>' : ''}
+      ${s.meaning && !s.awareness?.outcome ? `<small class="mute">Last week: care ${Math.round(s.meaning.care * 100)}% · connection ${Math.round(s.meaning.connection * 100)}% · purpose ${Math.round(s.meaning.purpose * 100)}% · hardship ${Math.round(s.meaning.hardship * 100)}%</small>` : ''}
+      <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button>
+        <button class="btn small" data-act="praise" ${inDun ? 'disabled' : ''} title="${s.praised ? 'Already praised today: more helps less' : 'Recognition: esteem and pride, and it gives the day meaning'}">👏 Praise${s.praised ? ' ✓' : ''}</button></div></div>`)}
     ${sect('Relationships', 'Ties form from bonds: friends, best friends, rivals, mentors and couples. See the People tab.', `<div class="stack" style="gap:3px">${s.relations.map((r) => { const o = slimeById(r.other); if (!o) return ''; const label = r.kind === 'mentor' ? (r.mentor === s.id ? '🎓 Mentee' : '🎓 Mentor') : em[r.kind]; return `<div>${label}: <b>${esc(o.name)}</b></div>`; }).join('') || '<small class="mute">No ties yet.</small>'}
       ${s.parents.length ? `<div>🥚 Child of <b>${s.parent_names.map(esc).join(' &amp; ')}</b> · generation ${s.generation}</div>` : ''}</div>`)}
     ${sect('Experience', 'What this slime has done most shapes its outlook.', `<small class="mute">${Object.entries(s.exp).map(([k, v]) => `${k} ${v}`).join(' · ') || 'no experience yet'}</small><p class="mute">Wins ${s.wins} · merged ${s.merged}</p>`)}`;
@@ -1699,6 +1702,7 @@ const A = {
   use_potion: () => { const [kind, grade] = String(ui('pot_sel', S.state.potions.stock[0] ? S.state.potions.stock[0].kind + ':' + S.state.potions.stock[0].grade : ':')).split(':'); act('use_potion', { id: S.sel, kind, grade: num(grade) }); },
   slime_repair: () => act('slime_repair', { id: S.sel }),
   talk: () => act('talk', { id: S.sel }),
+  praise: () => act('praise', { id: S.sel }),
   keeper_learn: (d) => act('keeper_learn', { key: d.key }),
   keeper_use: (d) => act('keeper_use', { key: d.key }),
   answer_request: (d) => { const s = slimeById(num(d.id));

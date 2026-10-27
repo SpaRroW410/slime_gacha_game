@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements, places, story, sanity, memory, mind
+from . import achievements, places, story, sanity, memory, meaning, mind
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -602,6 +602,7 @@ class Game:
     def _emotion_tick(self, events: List[str]) -> None:
         """Feelings fade and are stirred by needs; legendary 5-star slimes slowly realise they are code."""
         for s in self.slimes():
+            meaning.sample_hour(s)
             emotions.settle(s, s.mood())
             emotions.tick(s, self.mood_rng, s.state in ("sleeping", "resting"), 1 + 0.15 * self.keeper.rank("soothing_voice"))
             if awakening.candidate(s):
@@ -688,6 +689,7 @@ class Game:
             memory.fade(s)
         mind.daily(self, events)
         for s in self.slimes():
+            meaning.daily(self, s, events)
             awakening.daily(self, s, events)
         before = len(self.relations.rel)
         self.relations.daily(self, self.mood_rng, events, self.day)
@@ -1287,6 +1289,19 @@ class Game:
         s = self.slime(sid)
         s.behavior = stance
         return f"{s.name} will now {stance}."
+
+    def praise(self, sid: int) -> str:
+        """Tell a slime it did well: esteem and pride, and recognition counts towards the meaning of its days."""
+        s = self._tend(sid)
+        k = 0.5 ** (self._cared(s, "praise") - 1)        # the first praise of the day counts; more is just noise
+        s.needs.add("esteem", config.PRAISE_ESTEEM * k)
+        emotions.feel(s, "pride", config.PRAISE_PRIDE * k)
+        emotions.feel(s, "joy", 4 * k)
+        if k == 1:
+            meaning.note(s, "care", 0.3)
+            meaning.note(s, "praised")
+        self._xp("care", config.KEEPER_XP["care"])
+        return f"You tell {s.name} they did well. They stand a little taller." + ("" if k == 1 else " (you already praised them today)")
 
     def pet(self, sid: int) -> str:
         s = self._tend(sid)

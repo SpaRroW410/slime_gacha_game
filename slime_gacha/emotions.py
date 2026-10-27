@@ -79,7 +79,7 @@ CONTENT_RATE = 0.01          # share of the gap to the current mood closed per h
 CONTENT_GOOD, CONTENT_BAD = 45.0, 30.0     # an ordinary, looked-after life sits in the mid-50s (food and sleep cycle)
 CONTENT_LIFT = dict(joy=0.5, calm=0.4)          # baseline per point of contentment above CONTENT_GOOD
 CONTENT_SINK = dict(sadness=0.5, anxiety=0.3)   # ... and per point below CONTENT_BAD
-FLAT, COG_CAP = ("joy", "pride", "wonder"), 30.0   # awakening: a cog's bright feelings stay muted (config.COG_FEELING_CAP)
+FLAT, COG_CAP, BURNOUT_CAP = ("joy", "pride", "wonder"), 30.0, 40.0   # awakening: a cog's bright feelings stay muted (config.COG_FEELING_CAP)
 DRIFT_CEIL = 60.0            # needs alone never push a feeling past this; only events do (and those fade back)
 RISE_RATE = 0.5              # a feeling below its baseline climbs back at this share of its decay rate
 
@@ -148,6 +148,8 @@ def feel(slime, key: str, amount: float) -> None:
         g *= TRAIT_GAIN.get(t, {}).get(key, 1.0)
     amount *= g if amount > 0 else 1.0
     top = COG_CAP if key in FLAT and getattr(slime, "temperament", "") == "cog" else 100.0   # a cog feels little
+    if key in ("joy", "pride") and (getattr(slime, "life", None) or {}).get("burnt"):
+        top = min(top, BURNOUT_CAP)                                              # ... and a burned-out slime not much more
     slime.emotions[key] = max(0.0, min(max(top, slime.emotions.get(key, 0.0) if amount < 0 else 0.0),
                                        slime.emotions.get(key, 0.0) + amount))
     if amount > 0 and key in OPPOSITE:

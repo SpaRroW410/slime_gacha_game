@@ -73,78 +73,8 @@ def outcome(slime) -> str:
     return LEGACY.get(slime.temperament, slime.temperament)
 
 
-# ---- the life record --------------------------------------------------------------------------------------------
-def fresh_life() -> dict:
-    return dict(days=[], acc=_fresh_acc(None), last_check=-99, despair_days=0, cog_days=0, post_streak=0, said={})
-
-
-def _fresh_acc(s) -> dict:
-    return dict(care=0.0, chose=0, hurt=0.0, hours=0, belong=0.0, acts=[],
-                xp0=(s.total_xp if s else 0), wins0=(s.wins if s else 0), level0=(s.level if s else 1))
-
-
-def life(s) -> dict:
-    """The slime's record, created on first use (only 5-star legendaries keep one)."""
-    if not getattr(s, "life", None):
-        s.life = fresh_life()
-        s.life["acc"] = _fresh_acc(s)
-    return s.life
-
-
-def note(s, what: str, amount: float = 1.0) -> None:
-    """Record something that happened today: 'care' (the Keeper's attention), 'chose' (it acted on its own goal or had a
-    request granted) or 'hurt' (sanity lost). Only slimes that keep a record are affected."""
-    if not candidate(s):
-        return
-    acc = life(s)["acc"]
-    acc[what] = acc.get(what, 0) + amount
-
-
-def sample_hour(s) -> None:
-    """Hourly: what it is doing and how much it belongs."""
-    acc = life(s)["acc"]
-    acc["hours"] += 1
-    acc["belong"] += s.needs.get("belonging")
-    act = s.in_dungeon or s.state
-    if act not in ("sleeping", "resting") and act not in acc["acts"]:
-        acc["acts"].append(act)
-
-
-def close_day(g, s) -> dict:
-    """End of the slime's day: turn the day's notes into one record entry (care, connection, purpose, hardship)."""
-    lf = life(s)
-    acc = lf["acc"]
-    ties = sum(1 for r in g.relations.of(s.id) if r["kind"] in ("friend", "best_friend", "couple", "mentor"))
-    belong = acc["belong"] / acc["hours"] if acc["hours"] else s.needs.get("belonging")
-    connection = 0.6 * min(1.0, ties / 3.0) + 0.4 * belong / 100.0
-    acts = acc["acts"]
-    if s.job:                                                     # foraging between shifts is part of the same routine
-        acts = [a for a in acts if a != "hunting"]
-    lf["post_streak"] = lf["post_streak"] + 1 if s.job and set(acts) <= {"working"} else 0
-    purpose = (0.3 * min(1.0, len(acts) / 2.0) + 0.25 * (s.total_xp > acc["xp0"])
-               + 0.2 * (s.wins > acc["wins0"] or s.level > acc["level0"]) + 0.25 * min(1.0, acc["chose"]))
-    if lf["post_streak"] >= config.COG_POST_DAYS:                 # the same post day after day, nothing else
-        purpose *= 0.5
-    hardship = min(1.0, acc["hurt"] / (config.LIFE_HURT_SCALE * config.SANITY_MAX[s.rarity]))
-    entry = dict(day=g.day, care=round(min(1.0, acc["care"]), 3), connection=round(connection, 3),
-                 purpose=round(min(1.0, purpose), 3), hardship=round(hardship, 3))
-    lf["days"] = (lf["days"] + [entry])[-config.LIFE_DAYS:]
-    lf["acc"] = _fresh_acc(s)
-    return entry
-
-
-def scores(s) -> Dict[str, float]:
-    """Averages over the record; the Keeper's care can make up at most KEEPER_CARE_SHARE of connection and purpose."""
-    days = life(s)["days"]
-    if not days:
-        return dict(care=0.0, connection=0.5, purpose=0.5, hardship=0.0, eff_connection=0.5, eff_purpose=0.5)
-    avg = {k: sum(d[k] for d in days) / len(days) for k in ("care", "connection", "purpose")}
-    recent = days[-config.LIFE_HARD_DAYS:]
-    avg["hardship"] = sum(d["hardship"] for d in recent) / len(recent)
-    share = config.KEEPER_CARE_SHARE
-    avg["eff_connection"] = max(avg["connection"], share * avg["care"])
-    avg["eff_purpose"] = max(avg["purpose"], share * avg["care"])
-    return avg
+# ---- the life record lives in meaning.py (every slime keeps one); awakening reads it -----------------------------------
+from .meaning import close_day, fresh_life, life, note, sample_hour, scores  # noqa: E402,F401  (kept here for callers)
 
 
 def assess(s) -> str:
@@ -208,7 +138,6 @@ def tick(slime, rng: random.Random, friends: int, journal: List[str], day: int =
     """One hour of growing awareness. At stage 3 the slime takes it the way its life so far points."""
     if not candidate(slime):
         return
-    sample_hour(slime)
     before = stage(slime)
     slime.awareness = min(THRESHOLDS[-1] + 40, slime.awareness + config.AWARENESS_PER_HOUR)
     after = stage(slime)
@@ -232,11 +161,9 @@ def tick(slime, rng: random.Random, friends: int, journal: List[str], day: int =
 
 
 def daily(g, s, journal: List[str]) -> None:
-    """Once a day: close the record; awakened slimes review their outcome every few days, and despair or cog deepen."""
-    if not candidate(s):
-        return
-    close_day(g, s)
-    if stage(s) < 3:
+    """Once a day (after meaning.daily closed the record): awakened slimes review their outcome every few days, and despair or
+    cog deepen."""
+    if not candidate(s) or stage(s) < 3:
         return
     lf = life(s)
     if g.day - lf["last_check"] >= config.LIFE_REVIEW_DAYS:
