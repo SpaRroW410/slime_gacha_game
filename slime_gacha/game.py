@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements, places, story, sanity, memory, meaning, mind, grief, coping, voice
+from . import achievements, places, story, sanity, memory, meaning, mind, grief, coping, voice, routine
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -556,6 +556,7 @@ class Game:
             self._stamina_tick()
             self._emotion_tick(events)
             coping.hourly(self, events)
+            routine.hourly(self, events)
             self._sanity_tick()
             if self.tick_count % 24 == config.RELATIONS_HOUR:
                 self._relations_day(events)

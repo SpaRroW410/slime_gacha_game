@@ -87,13 +87,15 @@ def close_day(g, s) -> dict:
     ties = sum(1 for r in g.relations.of(s.id) if r["kind"] in ("friend", "best_friend", "couple", "mentor"))
     belong = acc["belong"] / acc["hours"] if acc["hours"] else s.needs.get("belonging")
     connection = 0.6 * min(1.0, ties / 3.0) + 0.4 * belong / 100.0
-    acts = acc["acts"]
+    acts = [a for a in acc["acts"] if a != "idle"]               # sitting about (or collapsing after work) is not an activity
     if s.job:                                                     # foraging between shifts is part of the same routine
         acts = [a for a in acts if a != "hunting"]
-    lf["post_streak"] = lf["post_streak"] + 1 if s.job and set(acts) <= {"working"} else 0
-    achieved = s.wins > acc["wins0"] or s.level > acc["level0"] or acc.get("praised", 0) > 0     # recognition counts
+    praised = acc.get("praised", 0) > 0
+    grind = s.job and set(acts) <= {"working"} and not praised     # recognised work is not an unseen grind
+    lf["post_streak"] = lf["post_streak"] + 1 if grind else 0
+    achieved = s.wins > acc["wins0"] or s.level > acc["level0"] or praised     # recognition counts as an achievement ...
     purpose = (0.3 * min(1.0, len(acts) / 2.0) + 0.25 * (s.total_xp > acc["xp0"])
-               + 0.2 * achieved + 0.25 * min(1.0, acc["chose"]))
+               + 0.2 * achieved + 0.25 * min(1.0, acc["chose"]) + config.PRAISE_PURPOSE * praised)   # ... and a little more
     if lf["post_streak"] >= config.COG_POST_DAYS:                 # the same post day after day, nothing else
         purpose *= 0.5
     hardship = min(1.0, acc["hurt"] / (config.LIFE_HURT_SCALE * config.SANITY_MAX[s.rarity]))

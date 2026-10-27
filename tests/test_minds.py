@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import collections
 import random
 
-from slime_gacha import awakening, config, coping, emotions, grief, meaning, memory, sanity, voice
+from slime_gacha import awakening, config, coping, emotions, grief, meaning, memory, routine, sanity, voice
 from slime_gacha.ai import Conflict
 from slime_gacha.game import Game
 
@@ -306,7 +306,7 @@ class TestLifeRecord(unittest.TestCase):
         s = legend(g)
         for o in (make(g), make(g)):
             g.relations.rel[frozenset((s.id, o.id))] = dict(kind="friend", since=0)
-        for state in ("idle", "hunting"):
+        for state in ("studying", "hunting"):                           # two real activities (sitting idle is not one)
             s.state = state
             awakening.sample_hour(s)
         s.total_xp += 50
@@ -803,9 +803,66 @@ class TestVoice(unittest.TestCase):
         self.assertTrue(any(l in g.talk(a.id) for l in voice.DAY_LINES["burnt"]))
 
 
+class TestRoutine(unittest.TestCase):
+    def test_hungry_slimes_eat_together_and_grow_closer(self):
+        g = colony()
+        a, b, c = make(g), make(g), make(g)
+        for x in (a, b):
+            x.needs.set("food", 40)
+        c.needs.set("food", 95)                                           # not hungry: not at the table
+        events = []
+        routine.meal(g, events, dinner=True)
+        self.assertGreater(a.needs.get("food"), 40)
+        self.assertGreater(g.social.bond(a, b), 0)
+        self.assertEqual(g.social.bond(a, c), 0)
+
+    def test_evenings_are_for_hobbies(self):
+        g = colony()
+        a, b, c = make(g, traits=["chatty"]), make(g, traits=["chatty"]), make(g, traits=["timid"])
+        events = []
+        routine.evening(g, events)
+        self.assertGreater(g.social.bond(a, b), 0)                        # a shared hobby brings them closer
+        self.assertEqual(g.social.bond(a, c), 0)
+        self.assertIn("gossip at the pond", events[0])
+        self.assertIn("hobby", a.life["acc"]["acts"])
+        self.assertGreater(a.life["acc"]["chose"], 0)
+
+    def test_too_tired_or_away_means_no_hobby(self):
+        g = colony()
+        a, b = make(g, traits=["lazy"]), make(g, traits=["lazy"])
+        a.needs.set("energy", 10)
+        b.in_dungeon = "main"
+        events = []
+        routine.evening(g, events)
+        self.assertEqual(events, [])
+
+    def test_hobby_follows_what_it_does_most(self):
+        g = colony()
+        a = make(g, traits=["grumpy"])
+        self.assertEqual(routine.hobby(a)[0], "tinkering")
+        a.exp["scout"] = 50
+        self.assertEqual(routine.hobby(a)[0], "stargazing")
+
+    def test_idle_time_is_not_variety_and_praise_breaks_the_grind(self):
+        g = colony()
+        s = make(g)
+        s.job = "chef"
+        for state in ("working", "idle"):
+            s.state = state
+            meaning.sample_hour(s)
+        meaning.close_day(g, s)
+        self.assertEqual(s.life["post_streak"], 1)                       # work and sitting about: still the grind
+        s.state = "working"
+        meaning.sample_hour(s)
+        meaning.note(s, "praised")
+        e = meaning.close_day(g, s)
+        self.assertEqual(s.life["post_streak"], 0)
+        self.assertGreaterEqual(e["purpose"], 0.5)
+
+
 class TestBehaviourTargets(unittest.TestCase):
     """A small run of tools/minds_sim.py: the colony and legendary scenarios must meet the behaviour targets."""
-    PENDING = set()                       # targets whose task is still to do
+    PENDING = {"friends look after each other"}   # too rare to count in this small colony; the full harness checks it
 
     @classmethod
     def setUpClass(cls):

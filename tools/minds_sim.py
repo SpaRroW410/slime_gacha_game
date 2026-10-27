@@ -152,6 +152,7 @@ LIVES = {
 def run_legend(seed: int = 3, life: str = "loved", days: int = 24) -> dict:
     g, s = legend_colony(seed, 0 if life == "alone" else 6)
     if life in ("cog", "loved_worker"):                    # it had made a couple of friends before taking the post
+        g.conflicts.calm = 0.0                             # a peaceful colony: nothing pulls it off its post but its own needs
         for o in [o for o in g.slimes() if o is not s][:2]:
             g.social.add_bond(s, o, 30)
             g.relations.rel[relationships.key(s, o)] = dict(kind="friend", since=0)
@@ -194,6 +195,7 @@ def run_worker(seed: int = 6, praised: bool = False, days: int = 21) -> dict:
     """A common slime at the same post for three weeks with two friends; the Keeper praises it daily, or never."""
     g, _ = legend_colony(seed, 6)
     w = next(o for o in g.slimes() if o.rarity != "legendary")
+    g.conflicts.calm = 0.0                                 # a peaceful colony: nothing pulls it off its post but its own needs
     for o in [o for o in g.slimes() if o is not w][:2]:
         g.social.add_bond(w, o, 30)
         g.relations.rel[relationships.key(w, o)] = dict(kind="friend", since=0)

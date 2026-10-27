@@ -661,6 +661,7 @@ function dMind(s, { st, free, inDun }) {
       <div title="How life has felt over the last few days. Feelings settle back to a slime's usual mood, and a good life lifts it.">🌤 Contentment: <b>${esc(s.content_label)}</b> <small class="mute">${s.content}/100</small></div>
       ${Object.keys(s.feeling_effects).length ? `<small class="mute">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
       ${s.awareness ? awarenessHtml(s.awareness) : ''}
+      <small class="mute">In the evenings it ${esc(s.hobby)}.</small>
       <small class="mute" title="How this slime handles a bad feeling (from its personality). Venting and dwelling make things worse.">When upset it ${esc(s.coping)}${s.coping_healthy ? '' : ' (it does not help)'}.</small>
       ${(s.grief || []).length ? `<div>🕯 Grieving ${s.grief.map((x) => `<b>${esc(x.name)}</b> <small class="mute">(${x.days} day${x.days === 1 ? '' : 's'} ago)</small>`).join(', ')}</div>` : ''}
       ${s.burnt ? '<div class="warn">😶 Going through the motions: the same days, nothing chosen, nobody noticing. Praise, a change of routine or a choice of its own brings the spark back.</div>' : ''}

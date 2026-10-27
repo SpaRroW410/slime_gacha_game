@@ -79,7 +79,7 @@ Findings not yet re-verified against the current code; check each before fixing 
 - [x] **60. Grief that lasts and comes in waves (T6)** — tied to the "lost" memory, 1-3 weeks, reminders, the Memorial gathering.  *Done when:* met (grief.py: about 17 days alone, 7-8 with a friend and daily talks; anniversaries and places bring it back; gatherings at the Memorial Pond).
 - [x] **61. Coping styles (T8)** and **friends comfort each other (T9)** — visible actions when a bad feeling passes 50; cuddle lines as a daily summary.  *Done when:* met (coping.py: nine styles by personality, friends cheer each other up, moods spread in parties away, cuddles summed up daily - at most 1 line a day, was up to 85).
 - [x] **62. An inner voice that remembers (T10)** — talk lines from memories, goals and causes for every slime (legendaries already never repeat within a week).  *Done when:* met (voice.py: grief, the strongest memory, the goal, burnout or a good stretch, then a feeling; no line twice in a week for any slime).
-- [ ] **63. Daily rhythm and hobbies (T11)** — day parts, shared meals, hobbies by trait.  *Done when:* met.
+- [x] **63. Daily rhythm and hobbies (T11)** — day parts, shared meals, hobbies by trait.  *Done when:* met (routine.py: meals together at 8, 13 and 19, evening hobbies at 20; idle time is not variety; praise breaks the grind).
 - [ ] **64. Relationship texture (T12), appraisal (T13), rituals (T14)** — bonds fade without time together, jealousy, apologies, per-trait reactions, hatch days.  *Done when:* met.
 - [ ] **65. Why it feels this way (T16)** — top causes per feeling, a colony mood summary (the legendary card already shows its outcome and record).  *Done when:* met.
 
