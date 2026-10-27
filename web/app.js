@@ -837,6 +837,7 @@ function dungeonsAll() {
         <button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left || !rescueIds.length ? 'disabled' : ''}>🛟 Send rescue (${rescueIds.length})</button></div>`).join('')}</div>` : '';
   const scouting = `<div class="panel stack"><h2>🔭 Scouting ${info('Scouts learn specific floors (any run of floors up to the limit, not only multiples of 5). They must reach 100% of every floor they were sent to within the hour budget; floors they finish stay known even if they run out of time. Leave the budget empty to use the safe budget from the estimate. One slime is enough; more only helps if they are good scouts.')}</h2>
       <p class="mute">Send <b>one to ${st.party_size}</b> slimes (no party needed) to learn floors (1 to ${d.scout_max_floors} at a time). Scouts must reach <b>100% of every targeted floor</b> within the budget, or they are stranded until rescued. The floor above the first one scouted must be <b>scouted already or cleared in the Descent</b> (by anyone in the colony), so even a level-1 slime can go on over known floors.</p>
+      ${partyPickRow('scout_ids', st.party_size)}
       ${chips('scout_ids', scoutIds)}
       <div class="row"><label class="f">Floors <input type="number" min="1" max="${d.max_floor}" value="${sfirst}" data-ui="sfirst" style="width:64px"> to <input type="number" min="1" max="${d.max_floor}" value="${slast}" data-ui="slast" style="width:64px"></label>
         <button class="btn small" data-act="scout_plan" ${scoutIds.length ? '' : 'disabled'}>📏 Estimate</button></div>
@@ -911,10 +912,22 @@ function dungeons() {
     : here ? `<div class="panel stack" style="margin-top:12px"><h4>Inside now</h4>${insideList(awayItems().filter((a) => (a.kind === 'expedition' || a.kind === 'stranded') && here.some((h) => a.label.includes(h))))}</div>` : '';
   return subnav('dungeons') + body + strip;
 }
+/* "Send a party": one button per party that has free members; a tap adds (or removes) all of them, up to `cap`. */
+function partyPickRow(key, cap) {
+  const cur = (S.ui[key] || []).map(num);
+  const rows = S.state.parties.map((p) => { const free = pickable(key, p.members); return { p, free, on: free.length && free.every((id) => cur.includes(id)) }; })
+    .filter((r) => r.free.length);
+  return rows.length ? `<div class="row"><small class="mute">Send a party:</small>${rows.map(({ p, free, on }) => `<button class="btn small ${on ? 'primary' : ''}" data-act="pick_party" data-k="${key}" data-pid="${p.id}" data-cap="${cap}" title="${esc(free.map((id) => slimeById(id)?.name).join(', '))}">${on ? '✔ ' : ''}👥 ${esc(p.name)} (${free.length})</button>`).join('')}</div>` : '';
+}
+/* Which of these slimes can be picked for this kind of trip right now. */
+function pickable(key, ids) {
+  return ids.filter((id) => { const s = S.state.slimes.find((x) => x.id === id);
+    return s && (key === 'adv_ids' ? !s.busy : s.state === 'idle' && !s.in_dungeon && !s.grounded && s.hp > 0 && !s.refuse_dungeon); });
+}
 function slimePickRow(a) {
   const st = S.state;
   const sel = new Set((ui('adv_ids', []) || []).map(num));
-  return { sel, html: `<div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>` };
+  return { sel, html: `${partyPickRow('adv_ids', a.max_party)}<div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>` };
 }
 function placesView() {
   const st = S.state, a = st.gear.adventure;
@@ -1308,13 +1321,13 @@ function relicCard(it, holderId = null) {
 }
 function riftAll() {
   const st = S.state, a = st.gear.adventure;
-  const sel = new Set((ui('adv_ids', []) || []).map(num));
+  const pick = slimePickRow(a), sel = pick.sel;
   const equipped = st.slimes.flatMap((s) => Object.values(s.items).map((it) => ({ it, s })));
   const rates = Object.entries(a.rates).map(([k, v]) => `${k} ${v}%`).join(' · ');
   return `<div class="grid cols2">
   <div class="panel stack"><h2>🧭 The Wayfarer's Rift <small class="mute">(relics)</small></h2>
     <p class="mute">An adventure dungeon for <b>relics</b>. Any <b>1–${a.max_party}</b> slimes may go; monsters are <b>one level above</b> the party average (a smaller party meets fewer). Nobody dies, but a knocked-out slime loses morale and its relics are battered. Every win may drop a relic — odds are far harsher than the gacha: ${rates}. A <b>lure</b> (${a.lure_cost} 🟣 per run) multiplies the rare odds.</p>
-    <div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>
+    ${pick.html}
     <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" data-rerender="1" style="width:70px"></label>
       <button class="btn small ${ui('adv_lure', false) ? 'primary' : ''}" data-act="adv_lure">${ui('adv_lure', false) ? '✔ ' : ''}Lure (🟣)</button>
       <button class="btn primary" data-act="adventure" ${sel.size ? '' : 'disabled'}>🧭 Rift (${sel.size}/${a.max_party})</button></div>
@@ -1732,7 +1745,11 @@ const A = {
     const r = await backend.call('scout_plan', { ids, first, last });
     if (r.ok) { S.plan = { ...r.result, first, last }; render(); } else toast(r.error, true); },
   pick_walker: (d) => { const k = d.k, id = num(d.id), cur = (S.ui[k] || []).map(num); S.ui[k] = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id].slice(0, k === 'rescue_ids' ? 999 : S.state.party_size); render(); },
-  pick_party: (d) => { const k = d.k, p = partyById(num(d.pid)); const ok = (p?.members || []).filter((id) => { const s = S.state.slimes.find((x) => x.id === id); return s && s.state === 'idle' && !s.in_dungeon && !s.grounded && s.hp > 0; }); const cur = (S.ui[k] || []).map(num); S.ui[k] = ok.every((id) => cur.includes(id)) ? cur.filter((id) => !ok.includes(id)) : [...new Set([...cur, ...ok])]; render(); },
+  pick_party: (d) => { const k = d.k, p = partyById(num(d.pid)); const ok = pickable(k, p?.members || []); const cur = (S.ui[k] || []).map(num);
+    let next = ok.every((id) => cur.includes(id)) ? cur.filter((id) => !ok.includes(id)) : [...new Set([...cur, ...ok])];
+    const cap = num(d.cap, 0);
+    if (cap && next.length > cap) { toast(`Only ${cap} can go: the first ${cap} picked are kept.`, true); next = next.slice(0, cap); }
+    S.ui[k] = next; render(); },
   use_safe: (d) => { S.ui.shours = num(d.h); render(); },
   gift: (d) => { const pid = num(d.pid), k = d.k; const args = { pid, kind: k };
     if (k === 'potion') Object.assign(args, { id: num(S.ui['gift_s_' + pid]), potion: S.ui.gift_k, grade: num(S.ui.gift_g, 1) });
