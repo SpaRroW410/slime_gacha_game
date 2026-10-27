@@ -878,7 +878,8 @@ def _council(g, a):
     rows = [dict(id=r["slime"].id, name=r["slime"].name, verdict=r["verdict"], score=r["score"],
                  avg_compat=r["avg_compat"], close=r["close"], reasons=r["reasons"]) for r in c["rows"]]
     merges = [dict(target=m["target"].id, target_name=m["target"].name, donor=m["donor"].id,
-                   donor_name=m["donor"].name, xp=m["xp"], compat=m["compat"], grief=m["grief"], net=m["net"])
+                   donor_name=m["donor"].name, xp=m["xp"], compat=m["compat"], grief=m["grief"], net=m["net"],
+                   relief=g.unwelcome(m["donor"]))
               for m in c["merges"]]
     return [], dict(rows=rows, merges=merges, stress=round(g.sacrifice_stress, 2))
 

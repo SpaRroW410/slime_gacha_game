@@ -1535,20 +1535,25 @@ function council() {
   const quarrels = `<div class="panel stack"><h3>Quarrels</h3>${shadow}${st.conflicts.length ? st.conflicts.map((q) => `<div class="row between panel flat"><span>${esc(slimeById(q.a)?.name)} vs ${esc(slimeById(q.b)?.name)}<br><small class="mute">${esc(q.reason)} · severity ${q.severity}</small></span>
         ${q.away.length ? `<small class="mute">${esc(q.away.join(' & '))} away — out of your hands</small>` : `<span class="row"><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="talk" ${q.retry ? `disabled title="Not ready to talk yet: try again in ${q.retry}h (a snack works now)"` : ''}>${q.retry ? `Talk in ${q.retry}h` : 'Talk'}</button><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="snack" ${st.wallet.food >= 2 ? '' : 'disabled'}>Snack (2🍖)</button></span>`}</div>`).join('') : '<p class="mute">The colony is peaceful.</p>'}</div>
     </div>`;
-  return `<div class="stack" style="margin-bottom:12px">${quarrels.replace('<h3>Quarrels</h3>', `<h3>⚔️ Quarrels to mediate ${st.conflicts.length ? chip(String(st.conflicts.length), 'bad') : ''}</h3>`)}</div>
-  <div class="grid cols2">
-    <div class="panel stack"><h2>⚖️ Who to keep, who to sacrifice?</h2>
-      <p class="mute">Merging consumes the donor to feed the target. It lowers everyone's morale, and <b>sacrifices compound</b>: stress now <b>${st.stress}</b> (each recent merge makes the next cost +${Math.round(st.max_stress_amp * 100)}% more and lowers the whole colony's morale target; it fades by 1 per day).</p>
+  const verdicts = [['KEEP', '🛡 Keep', 'worth keeping: strong, liked or close to someone'], ['FLEX', '🔄 Flexible', 'could go either way'],
+    ['SACRIFICE?', '🔥 Merge', 'the best candidates to merge away']];
+  const table = (rows) => `<table><thead><tr><th>Slime</th><th>Score</th><th>Compat</th><th>Why</th></tr></thead><tbody>${rows.map((r) => `<tr><td><a href="#" data-act="sel" data-id="${r.id}">${esc(r.name)}</a></td><td>${r.score}</td><td>${r.avg_compat >= 0 ? '+' : ''}${r.avg_compat}</td><td class="mute">${esc(r.reasons.join(', ') || '-')}</td></tr>`).join('')}</tbody></table>`;
+  const groups = c && c.rows.length ? verdicts.map(([v, title, hint]) => {
+    const rows = c.rows.filter((r) => r.verdict === v);
+    const key = 'council_' + v.replace('?', '');
+    return `<details class="panel flat" data-keep="${key}" ${ui(key, false) ? 'open' : ''}><summary><b class="verdict-${v}">${title}</b> ${chip(String(rows.length), v === 'KEEP' ? 'ok' : v === 'FLEX' ? 'warn' : 'bad')} <small class="mute">${hint}</small></summary>
+      ${rows.length ? table(rows) : '<p class="mute">Nobody here.</p>'}</details>`;
+  }).join('') : '<p class="mute">No slimes yet.</p>';
+  return `<div class="stack" style="margin-bottom:12px">${quarrels.replace('<h3>Quarrels</h3>', `<h3>⚔️ Quarrels to mediate ${st.conflicts.length ? chip(String(st.conflicts.length), 'bad') : ''}</h3>`)}
+    <div class="panel stack"><h3>⚖️ Best merge suggestions</h3>
+      <p class="mute">Merging consumes the donor to feed the target. It lowers everyone's morale (not for a troublemaker), and <b>sacrifices compound</b>: stress now <b>${st.stress}</b> (each recent merge makes the next cost +${Math.round(st.max_stress_amp * 100)}% more and lowers the whole colony's morale target; it fades by 1 per day).</p>
       ${bar(Math.min(st.stress, 5), 5, 'morale', 'Sacrifice stress', st.stress)}
-      ${c && c.rows.length ? `<table><thead><tr><th>Verdict</th><th>Slime</th><th>Score</th><th>Compat</th><th>Why</th></tr></thead><tbody>${c.rows.map((r) => `<tr><td class="verdict-${r.verdict}">${r.verdict}</td><td><a href="#" data-act="sel" data-id="${r.id}">${esc(r.name)}</a></td><td>${r.score}</td><td>${r.avg_compat >= 0 ? '+' : ''}${r.avg_compat}</td><td class="mute">${esc(r.reasons.join(', ') || '-')}</td></tr>`).join('')}</tbody></table>` : '<p class="mute">No slimes yet.</p>'}
-    </div>
-    <div class="stack">
-      <div class="panel stack"><h3>Best merge suggestions</h3>
-        ${c && c.merges.length ? c.merges.map((m) => `<div class="row between panel flat"><span><b>${esc(m.donor_name)}</b> → <b>${esc(m.target_name)}</b><br><small class="mute">+${m.xp} XP · compat ${m.compat >= 0 ? '+' : ''}${m.compat} · colony morale cost ${m.grief}</small></span>
-          <button class="btn small danger" data-act="merge" data-t="${m.target}" data-d="${m.donor}" data-tn="${esc(m.target_name)}" data-dn="${esc(m.donor_name)}" data-xp="${m.xp}" data-g="${m.grief}">Merge</button></div>`).join('') : '<p class="mute">Not enough slimes.</p>'}</div>
-      <div class="panel stack"><h3>Compatibility</h3><div class="row">${sel('ca')} & ${sel('cb', 1)}<button class="btn" data-act="compat">Check</button></div>
-        ${comp ? `<p><b>${comp.total >= 0 ? '+' : ''}${comp.total}</b> (${comp.label}) — ${Object.entries(comp.parts).filter(([, v]) => v).map(([k, v]) => `${k} ${v >= 0 ? '+' : ''}${v}`).join(', ')}</p>` : ''}</div>
-    </div></div>`;
+      ${c && c.merges.length ? c.merges.map((m) => `<div class="row between panel flat"><span><b>${esc(m.donor_name)}</b> → <b>${esc(m.target_name)}</b><br><small class="mute">+${m.xp} XP · compat ${m.compat >= 0 ? '+' : ''}${m.compat} · ${m.relief ? 'a troublemaker: no morale cost' : `colony morale cost ${m.grief}`}</small></span>
+        <button class="btn small danger" data-act="merge" data-t="${m.target}" data-d="${m.donor}" data-tn="${esc(m.target_name)}" data-dn="${esc(m.donor_name)}" data-xp="${m.xp}" data-g="${m.grief}">Merge</button></div>`).join('') : '<p class="mute">Not enough slimes.</p>'}</div>
+    <div class="stack"><h3 style="margin:4px 0 0">Who to keep, who to merge?</h3>${groups}</div>
+    <div class="panel stack"><h3>Compatibility</h3><div class="row">${sel('ca')} & ${sel('cb', 1)}<button class="btn" data-act="compat">Check</button></div>
+      ${comp ? `<p><b>${comp.total >= 0 ? '+' : ''}${comp.total}</b> (${comp.label}) — ${Object.entries(comp.parts).filter(([, v]) => v).map(([k, v]) => `${k} ${v >= 0 ? '+' : ''}${v}`).join(', ')}</p>` : ''}</div>
+  </div>`;
 }
 
 /* ---------------------------------------------------------------- records */
