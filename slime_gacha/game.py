@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements, places, story, sanity, memory, meaning, mind, grief, coping
+from . import achievements, places, story, sanity, memory, meaning, mind, grief, coping, voice
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -618,7 +618,7 @@ class Game:
         """Ask a slime how it feels. Aware legendaries may say something unsettling."""
         s = self._tend(sid)
         line = awakening.thought(s, self.mood_rng, self.day) if awakening.stage(s) and self.mood_rng.random() < 0.6 else None
-        line = line or emotions.say(s, self.mood_rng)
+        line = line or voice.say(self, s, self.mood_rng)          # from its grief, memories, goal and days (voice.py)
         top = emotions.dominant(s, 1)
         feel = f" ({emotions.EMOTIONS[top[0][0]].emoji} {emotions.EMOTIONS[top[0][0]].name.lower()})" if top else ""
         n = self._cared(s, "talk")

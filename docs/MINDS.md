@@ -77,6 +77,8 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 - **Coping and comfort** (`coping.py`): a bad feeling at 50+ is acted on once a day in a style from personality (talk it
   out, help others, train, face it, sleep, comfort food, withdraw, snap at someone, or dwell); friends at home cheer up a
   friend who is down; fear and joy spread a little in parties away; cuddles go to friends and are summed up daily.
+- **Voice** (`voice.py`): a talk answers from its grief, its strongest memory of someone, its goal, burnout or a good
+  stretch, or its strongest feeling - never the same line twice in a week.
 - **Goals** (`mind.py`): a weighted pool - get stronger, master a style, see a friend, make a new one, court someone, teach
   a mentee, explore, make something, take it easy, be noticed - shaped by traits, outlook, needs and ties; a grudge is one
   candidate. Thanks outlast minor grudges when memory is full. Slimes who share the colony's days (idle, resting, at a post)
@@ -85,5 +87,5 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 
 ## Still to do
 
-Tasks 62-65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
+Tasks 63-65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
 voice, daily rhythm, relationship texture, appraisal, rituals, a "why it feels this way" view).

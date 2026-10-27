@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import collections
 import random
 
-from slime_gacha import awakening, config, coping, emotions, grief, meaning, memory, sanity
+from slime_gacha import awakening, config, coping, emotions, grief, meaning, memory, sanity, voice
 from slime_gacha.ai import Conflict
 from slime_gacha.game import Game
 
@@ -763,6 +763,44 @@ class TestCopingAndComfort(unittest.TestCase):
         out = []
         g._relations_day(out)
         self.assertTrue(any("cuddle(s) at home today" in e for e in out))
+
+
+class TestVoice(unittest.TestCase):
+    def test_it_talks_about_who_it_misses(self):
+        g = colony()
+        a = make(g)
+        a.grief = [dict(other=99, name="Bloop", depth=80.0, start=80.0, day=0, where="", gathered=False)]
+        lines = {voice.say(g, a, random.Random(i)) for i in range(6)}
+        self.assertTrue(any("Bloop" in l for l in lines))
+
+    def test_it_names_who_it_remembers(self):
+        g = colony()
+        a, b = make(g), make(g)
+        a.grief, a.goal = [], None
+        memory.remember(a, "brawl", b, g.day, 8.0)
+        line = voice.pick(a, voice.MEMORY_LINES["brawl"], random.Random(1), g.day, n=b.name)
+        self.assertIn(b.name, line)
+        self.assertTrue(any(c[2].get("n") == b.name for c in voice._candidates(g, a)))
+
+    def test_it_talks_about_what_it_wants(self):
+        g = colony()
+        a, b = make(g), make(g)
+        a.goal = dict(kind="court", target=b.id, day=0, text="")
+        self.assertTrue(any(c[2].get("n") == b.name and c[1] is voice.GOAL_LINES["court"] for c in voice._candidates(g, a)))
+
+    def test_never_the_same_line_twice_in_a_week(self):
+        g = colony()
+        a = make(g)
+        pool = voice.DAY_LINES["good"]
+        week = [voice.pick(a, pool, random.Random(i), 0) for i in range(len(pool))]
+        self.assertEqual(len(set(week)), len(pool))
+
+    def test_talk_uses_it(self):
+        g = colony()
+        a = make(g)
+        meaning.life(a)["burnt"] = True
+        a.grief, a.goal, a.memories, a.emotions = [], None, [], {}
+        self.assertTrue(any(l in g.talk(a.id) for l in voice.DAY_LINES["burnt"]))
 
 
 class TestBehaviourTargets(unittest.TestCase):

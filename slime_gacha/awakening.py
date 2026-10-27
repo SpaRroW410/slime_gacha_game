@@ -225,16 +225,8 @@ def wants_change(s) -> bool:
 # ---- voice ------------------------------------------------------------------------------------------------------
 def say(s, key, rng: random.Random, day: int = 0) -> str:
     """A line from LINES[key] it has not said in the last week (if every one has, the one said longest ago)."""
-    pool = LINES[key]
-    said = life(s)["said"] if candidate(s) else {}
-    fresh = [l for l in pool if day - said.get(l, -99) >= config.LINE_REPEAT_DAYS]
-    line = rng.choice(fresh) if fresh else min(pool, key=lambda l: said.get(l, -99))
-    if candidate(s):
-        said[line] = day
-        if len(said) > 40:
-            for k in sorted(said, key=said.get)[:10]:
-                del said[k]
-    return line
+    from . import voice
+    return voice.pick(s, LINES[key], rng, day)
 
 
 def thought(slime, rng: random.Random, day: int = 0) -> Optional[str]:
