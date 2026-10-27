@@ -294,8 +294,8 @@ def snapshot(g: Game) -> dict:
         modifiers={k: dict(name=m.name, emoji=m.emoji, desc=m.desc, boon=m.boon) for k, m in modifiers_mod.MODIFIERS.items()},
         jobs=_jobs_view(g),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
-        conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason,
-                        away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
+        conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason, retry=c.retry, cool=c.cool,
+                        brawls=c.brawls, away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
                    for c in g.conflicts.conflicts],
         graveyard=list(g.graveyard)[-50:], journal=list(g.journal)[-60:],
         dungeon=dict(

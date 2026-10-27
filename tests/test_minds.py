@@ -152,6 +152,48 @@ class TestFeudsCoolOff(unittest.TestCase):
         self.assertEqual(len(g.conflicts.conflicts), 1)
 
 
+class TestCareMakesFriendsNotRivals(unittest.TestCase):
+    def test_a_failed_talk_means_not_yet_and_costs_nothing(self):
+        g = colony()
+        a, b, c = feud(g, severity=2, age=0)
+        a.needs.set("belonging", 60)
+        bond = g.social.bond(a, b)
+        with mock.patch.object(g.conflicts, "mediate_chance", return_value=0.0):
+            msg = g.mediate(c.id, "talk")
+        self.assertIn("not ready", msg)
+        self.assertEqual((g.social.bond(a, b), a.needs.get("belonging")), (bond, 60))
+        self.assertEqual(c.retry, config.MEDIATE_RETRY_HOURS)
+        with self.assertRaises(Exception):                            # too soon to try again ...
+            g.mediate(c.id, "talk")
+        self.assertIn("make up", g.mediate(c.id, "snack"))            # ... but a snack works any time
+
+    def test_making_up_counts_towards_friendship_not_rivalry(self):
+        g = colony()
+        a, b, c = feud(g, severity=1, age=0)
+        g.relations.note_quarrel(a, b, 2)
+        g.mediate(c.id, "snack")
+        self.assertEqual(g.relations.quarrels.get(frozenset((a.id, b.id)), 0), 1)
+
+    def test_no_new_quarrel_right_after_making_up(self):
+        g = colony()
+        a, b, c = feud(g, severity=1, age=0)
+        x = make(g, "rogue")
+        g.mediate(c.id, "snack")
+        with mock.patch.object(config, "CONFLICT_BASE_CHANCE", 1.0):
+            g.conflicts.tick(g.slimes(), [])
+        self.assertFalse(any({a.id, b.id} & {q.a, q.b} for q in g.conflicts.conflicts))
+
+    def test_angry_slimes_snap_and_content_ones_let_go(self):
+        g = colony()
+        a, b = make(g), make(g)
+        ordinary = g.conflicts.temper(a, b)
+        a.emotions["anger"] = b.emotions["anger"] = 70
+        self.assertGreater(g.conflicts.temper(a, b), ordinary)
+        a.emotions.clear(), b.emotions.clear()
+        a.content = b.content = 90
+        self.assertLess(g.conflicts.temper(a, b), ordinary)
+
+
 class TestUsualMood(unittest.TestCase):
     def test_traits_set_a_baseline(self):
         g = colony()

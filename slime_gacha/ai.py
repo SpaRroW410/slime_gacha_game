@@ -14,13 +14,15 @@ from .resources import ResourceManager
 # ---- personality traits (add a row to add a trait) -----------------------------
 # decay: multiplier on a need's decay | conflict: added to conflict chance | mediate: bonus to talk success
 TRAITS: Dict[str, dict] = {
-    "gluttonous": dict(decay={"food": 1.5}, conflict=0.005, mediate=0.0),
+    # conflict: added to the hourly quarrel chance of every pair (base config.CONFLICT_BASE_CHANCE): a grumpy slime is ten
+    # times as quarrelsome as a plain one, not fifty; a kind one half as much.
+    "gluttonous": dict(decay={"food": 1.5}, conflict=0.001, mediate=0.0),
     "lazy":       dict(decay={"energy": 1.4}, conflict=0.0, mediate=0.0),
-    "brave":      dict(decay={}, conflict=0.005, mediate=0.05),
-    "grumpy":     dict(decay={"belonging": 1.3}, conflict=0.02, mediate=-0.15),
-    "kind":       dict(decay={}, conflict=-0.01, mediate=0.2),
-    "proud":      dict(decay={"esteem": 1.5}, conflict=0.01, mediate=-0.1),
-    "timid":      dict(decay={"safety": 1.0}, conflict=-0.005, mediate=0.05),
+    "brave":      dict(decay={}, conflict=0.001, mediate=0.05),
+    "grumpy":     dict(decay={"belonging": 1.3}, conflict=0.004, mediate=-0.15),
+    "kind":       dict(decay={}, conflict=-0.0002, mediate=0.2),
+    "proud":      dict(decay={"esteem": 1.5}, conflict=0.002, mediate=-0.1),
+    "timid":      dict(decay={"safety": 1.0}, conflict=-0.0001, mediate=0.05),
     "chatty":     dict(decay={"belonging": 1.6}, conflict=0.0, mediate=0.1),
 }
 
@@ -149,6 +151,7 @@ class ConflictEngine:
         self.conflicts: List[Conflict] = []
         self.friends: set = set()       # frozenset({id, id}) pairs that resolved a quarrel
         self.cold: Dict[frozenset, int] = {}   # pair -> hours left of a cold war (no quarrels, no growing closer)
+        self.settled: Dict[int, int] = {}      # slime id -> hours left of calm after making up (no new quarrels)
         self.memory_fn = None           # Game sets: callable(a, b) -> (chance factor, stated reason or None) from shared history
         self.compat_fn = None           # Game sets: callable(a, b) -> compatibility; shapes quarrel odds
         self.together_fn = None         # Game sets: callable(a, b) -> are they in the same place (both home, or the same group away)?
@@ -193,7 +196,16 @@ class ConflictEngine:
             p *= max(0.4, min(2.0, 1 - self.compat_fn(a, b) / 120.0))
         if self.memory_fn:                          # a history of grudges makes a fight likelier, shared thanks make it rarer
             p *= self.memory_fn(a, b)[0]
+        p *= self.temper(a, b)
         return max(0.0, p * self.calm)
+
+    @staticmethod
+    def temper(a, b) -> float:
+        """Angry slimes snap, content ones let things go: x0.4 for two calm, contented slimes up to x2.5 for two furious,
+        worn-down ones (1.0 for an ordinary pair)."""
+        anger = (a.emotions.get("anger", 0.0) + b.emotions.get("anger", 0.0)) / 100.0
+        content = (getattr(a, "content", 50.0) + getattr(b, "content", 50.0)) / 2.0
+        return max(0.4, min(2.5, 1.0 + anger + (50.0 - content) / 100.0))
 
     def reason(self, a, b) -> str:
         if self.memory_fn:
@@ -210,6 +222,10 @@ class ConflictEngine:
     # -- main tick ---------------------------------------------------------
     def tick(self, slimes: List, events: List[str]) -> None:
         by_id = {s.id: s for s in slimes}
+        for sid in list(self.settled):
+            self.settled[sid] -= 1
+            if self.settled[sid] <= 0 or sid not in by_id:
+                del self.settled[sid]
         for pair in list(self.cold):                       # cold wars thaw into plain civility
             self.cold[pair] -= 1
             if self.cold[pair] <= 0 or not pair <= set(by_id):
@@ -247,7 +263,7 @@ class ConflictEngine:
                     self._cold_war(c, by_id, events)
         # new conflicts
         awake = [s for s in slimes if s.state not in ("sleeping", "resting") and s.alive]
-        busy = {i for c in self.conflicts for i in (c.a, c.b)}      # one quarrel at a time per slime
+        busy = {i for c in self.conflicts for i in (c.a, c.b)} | set(self.settled)   # one quarrel at a time; none just after making up
         self._open = {frozenset((c.a, c.b)) for c in self.conflicts}
         try:
             self._scan(awake, busy, events)
@@ -321,9 +337,9 @@ class ConflictEngine:
             for s in (a, b):
                 s.needs.add("belonging", 25)
                 s.grounded = self._other_brawl(s.id)
-        else:
-            for s in (a, b):
-                s.needs.add("belonging", -5)
+                self.settled[s.id] = config.MADE_UP_CALM_HOURS
+        else:                                       # "not ready yet": no harm done, but give them a few hours
+            c.retry = config.MEDIATE_RETRY_HOURS
 
     def _other_brawl(self, sid: int) -> bool:
         return any(c.severity >= config.CONFLICT_MAX_SEVERITY and sid in (c.a, c.b) for c in self.conflicts)
@@ -333,6 +349,7 @@ class ConflictEngine:
         self.conflicts = [c for c in self.conflicts if sid not in (c.a, c.b)]
         self.friends = {f for f in self.friends if sid not in f}
         self.cold = {k: v for k, v in self.cold.items() if sid not in k}
+        self.settled.pop(sid, None)
 
     def mediate_chance(self, a, b, method: str) -> float:
         if method == "snack":

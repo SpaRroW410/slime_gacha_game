@@ -61,8 +61,11 @@ class RelationshipEngine:
         self.quarrels = {k: v for k, v in self.quarrels.items() if sid not in k}
 
     def note_quarrel(self, a, b, n: int = 1) -> None:
+        """Count quarrels towards a rivalry; a quarrel that ends in making up takes one back (n=-1)."""
         k = key(a, b)
-        self.quarrels[k] = self.quarrels.get(k, 0) + n
+        self.quarrels[k] = max(0, self.quarrels.get(k, 0) + n)
+        if not self.quarrels[k]:
+            del self.quarrels[k]
 
     # ---- kin ------------------------------------------------------------------------------------------------------
     @staticmethod

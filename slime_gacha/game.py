@@ -1549,6 +1549,7 @@ class Game:
                 emotions.feel(s, "guilt", 8)
         elif kind == "resolved":
             if success:
+                self.relations.note_quarrel(a, b, -1)              # a quarrel that ends in making up counts towards friendship
                 memory.remember(a, "made_up", b, self.day, 3.0)
                 memory.remember(b, "made_up", a, self.day, 3.0)
                 self.social.add_bond(a, b, 10)
@@ -1558,10 +1559,6 @@ class Game:
                     emotions.feel(s, "joy", 12)
                     emotions.feel(s, "affection", 15)
                     emotions.soothe(s, "anger", 30)
-            else:
-                self.social.add_bond(a, b, -2)
-                for s in (a, b):
-                    emotions.feel(s, "anger", 10)
 
     def compat(self, a_id: int, b_id: int) -> dict:
         a, b = self.slime(a_id), self.slime(b_id)
@@ -1816,6 +1813,8 @@ class Game:
             self.wallet.spend("food", config.MEDIATE_SNACK_COST)
             ok = True
         elif method == "talk":
+            if c.retry > 0:
+                raise InvalidAction(f"{a.name} and {b.name} are not ready to talk yet: try again in {c.retry}h, or offer a snack.")
             ok = self.rng.random() < min(0.97, self.conflicts.mediate_chance(a, b, "talk") + 0.08 * self.keeper.rank("soothing_voice"))
         else:
             raise InvalidAction("Method must be 'talk' or 'snack'.")
@@ -1823,7 +1822,8 @@ class Game:
         if ok:
             self._xp("mediate", config.KEEPER_XP["mediate"])
             return f"{a.name} and {b.name} make up. They're friends now (fewer future quarrels)."
-        return f"{a.name} and {b.name} won't hear it. Try again or offer a snack."
+        return (f"{a.name} and {b.name} are not ready to make up yet. No harm done: try again in {config.MEDIATE_RETRY_HOURS}h, "
+                f"or offer a snack.")
 
     # ---- parties -----------------------------------------------------------------
     def create_party(self, name: str = "") -> Party:
@@ -3810,6 +3810,7 @@ class Game:
                     conflict_next=self.conflicts._next,
                     friends=[sorted(f) for f in self.conflicts.friends],
                     cold_wars=[[*sorted(k), v] for k, v in self.conflicts.cold.items()],
+                    settled={str(k): v for k, v in self.conflicts.settled.items()},
                     auto_care=self.needs.auto_care, rng_state=self.rng.getstate()[1:], mood_rng_state=self.mood_rng.getstate()[1:],
                     journal=self.journal[-50:])
 
@@ -3932,6 +3933,7 @@ class Game:
         g.conflicts._next = d.get("conflict_next", 1)
         g.conflicts.friends = {frozenset(f) for f in d.get("friends", [])}
         g.conflicts.cold = {frozenset(c[:2]): int(c[2]) for c in d.get("cold_wars", []) if c[0] in g.roster and c[1] in g.roster}
+        g.conflicts.settled = {int(k): int(v) for k, v in d.get("settled", {}).items() if int(k) in g.roster}
         g.needs.auto_care = d.get("auto_care", True)
         if d.get("rng_state"):
             st = d["rng_state"]
