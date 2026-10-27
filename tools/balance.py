@@ -2,7 +2,7 @@
 """Balance harness: how do classes, rarities, Pit depths and capstones compare? Seeded fights, no gear or potions.
 
     python3 tools/balance.py                       # markdown report to stdout
-    python3 tools/balance.py --trials 20 --out docs/BALANCE.md
+    python3 tools/balance.py --trials 20 --out /tmp/balance.md   # then update docs/ROADMAP.md § 7
     python3 tools/balance.py --check               # exit 1 if any class is far from the pack (regression guard)
 
 Numbers that look wrong are tuned in slime_gacha/config.py (stat growth in archetypes.py), then re-run.
@@ -96,7 +96,7 @@ def report(trials):
     out += ["", "## Reading the report", "",
             "- **Classes** stay within about 10 points of each other at every level: no class is a trap or a must-have in a mixed party.",
             "- **Pit depth 1-3** is a formality at level parity (about 2 rounds); only depth 4-5 near a stage cap (levels 10 and 30) bites.",
-            "- **Rarity** barely matters in the Pit at equal level; it matters in the Descent, where the playtest report (docs/PLAYTEST_F50.md) is the guide.",
+            "- **Rarity** barely matters in the Pit at equal level; it matters in the Descent, where the playtest report (docs/ROADMAP.md § 6) is the guide.",
             "- **Legendary 5-star** parties clear Pit waves in about one round even far above their level: the Pit stops being a test long before then.",
             "  The Descent, not the Pit, is where capstones are tuned; if the Pit should stay relevant late, scale `dungeon.grind_level` with depth."]
     return "\n".join(out) + "\n", tabs

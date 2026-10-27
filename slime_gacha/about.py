@@ -1,6 +1,6 @@
 """The About page: version, a summary of the game and its mechanics, and the remaining roadmap.
 
-The roadmap list mirrors the unchecked items of docs/TASKS.md (a test keeps the two in step)."""
+The roadmap list mirrors the open tasks in docs/ROADMAP.md § 2 (a test keeps the two in step)."""
 from typing import Dict, List
 
 from . import config
@@ -25,7 +25,8 @@ SECTIONS: List[Dict[str, object]] = [
         "elemental spells (fusable, and they change form as mastery grows).",
         "Total power (001-999 tag in the Colony) sums stats, skills, attributes, mastery, styles and proficiency, times mood and morale.",
         "Slimes have personalities, friendships, couples, mentors and rivals; they quarrel when they share a place, and brawls leave "
-        "them grounded until mediated. Legendary 5-star slimes may start to suspect they are code.",
+        "them grounded until mediated; most spats mend on their own. Legendary 5-star slimes come to realise they are code, and "
+        "take it as their life so far allows: settled, at peace, a cog in the machine, or in despair.",
     ]),
     dict(title="Parties and battles", icon="⚔", items=[
         "Parties of up to five (you choose the size). Synergy comes from how well the members get on.",
@@ -63,7 +64,7 @@ SECTIONS: List[Dict[str, object]] = [
     ]),
 ]
 
-# id, group, title, what it will do - keep in step with the unchecked items of docs/TASKS.md
+# id, group, title, what it will do - keep in step with the open tasks in docs/ROADMAP.md § 2
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
@@ -81,9 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-11",
-                 text="Eight new hybrid classes for the Bard, Druid, Paladin and Alchemist (each with a signature skill and a capstone), Bard and Druid now train archery, and avatars show evolution (cape, chevrons), hybrid weapon and proficiency stars. Slimes now have goals and make their own decisions (training on their own, visiting friends, refusing dungeons after a friend fell), ask you for things and build trust, and slowly change personality. Slimes also remember: who ate their snack, who healed them, who fell. Grudges make quarrels likelier and become the stated reason; thanks make them rarer (see Memories on the slime card). Also new: sanity — a mental reserve (bigger for rarer slimes) that caps the mood; talking and petting now help less when repeated the same day. Also: four new classes (Bard, Paladin, Alchemist, Druid), a Hatchery and timed upgrades, gear sets, achievements and titles, story chapters, animated battles with sound, "
-                      "an installable offline app, exact gacha odds, and a safer save (second-tab and import protection).")
+WHATS_NEW = dict(id="2026-10-28-minds",
+                 text="Slimes feel more like people. Spats mend on their own, apologies and friends make peace, and a feud ends in a cold war instead of endless brawls. Feelings settle back to each slime's usual mood, and under each one the Mind tab now says why. Slimes eat together, spend their evenings on hobbies, cope with bad feelings in their own way and cheer each other up. Grief lasts weeks and comes back on anniversaries; you can gather the colony at the Memorial Pond. Every slime keeps a week's record of its days and can burn out at a grind: try the new Praise. Ties fade when slimes are apart, partners can get jealous, and hatch days and feasts mark the year. Awakened 5-star legendaries are settled, at peace, a cog or in despair, and a slime may ask to leave (only with your yes). Also: send a whole party to Scouting, the Rift, the Quarry and Places.")
 
 
 def build() -> Dict[str, object]:

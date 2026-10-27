@@ -85,6 +85,18 @@ CONFLICT_BASE_CHANCE = 0.0004     # per pair per tick
 CONFLICT_MAX_SEVERITY = 3
 CONFLICT_ESCALATE_TICKS = 8
 BRAWL_HP_LOSS = 0.08       # brawls can kill an already wounded slime
+# Feuds cool off the way people's do: after a brawl both keep apart for a while, a feud brawls at most CONFLICT_MAX_BRAWLS
+# times and then turns into a cold war (no more fights, no friendship either), and quarrels may mend on their own.
+CONFLICT_MAX_BRAWLS = 2           # brawls in one feud before it turns into a cold war
+CONFLICT_BRAWL_COOL = 24          # hours both avoid each other after a brawl (no escalation meanwhile)
+COLD_WAR_HOURS = 24 * 7           # a cold war: no new quarrels and no growing closer, then they are merely civil
+CONFLICT_SELF_MEND = 0.03         # per hour together, a spat may be patched up without help (/ severity; x2 while keeping apart)
+SELF_MEND_TRAIT = {"kind": 2.0, "chatty": 1.3, "grumpy": 0.5, "proud": 0.6}
+MEDIATE_RETRY_HOURS = 6           # after a failed talk they are "not ready yet": a talk can be tried again after this (a snack works any time)
+MADE_UP_CALM_HOURS = 24           # after making up, neither starts a new quarrel for this long
+APOLOGY_GUILT = 25                # guilt at which a slime may apologise (once a day, APOLOGY_CHANCE)
+APOLOGY_CHANCE = 0.35
+PEACEMAKER_CHANCE = 0.5           # once a day, a friend of both at home tries to make peace (succeeds like a Keeper's talk)
 
 # ---- Growth ---------------------------------------------------------------
 LEVEL_CAPS = [10, 30, 100]          # per evolution stage
@@ -192,6 +204,7 @@ STYLE_ARCHERY_CRIT = 0.02       # per level: +2% crit chance ...
 STYLE_ARCHERY_SPEED = 0.03      # ... and +3% speed
 STYLE_MAGIC_POWER = 0.03        # per level: +3% magic damage/healing
 STUDY_DECAY_MULT = {"energy": 1.6, "food": 1.3}
+WORK_DECAY_MULT = {"belonging": 0.5}   # a slime at a post has colleagues: belonging fades half as fast
 # Morale = "fight readiness" (0-100). Drifts toward a target set by mood; battles, deaths and bonds move it.
 MORALE_START = 60.0
 MORALE_BASE_TARGET = 35.0       # target = BASE + 55 * mood (+ barracks bonus)
@@ -439,6 +452,82 @@ AUTONOMY_MAX_BUFFS = 2           # potions a slime drinks by itself before a tri
 # ---- emotions & awakening, wider autonomy (emotions.py, awakening.py) ------------------------------------------------------
 AWARENESS_PER_HOUR = 0.25        # a 5-star legendary: stage 1 at ~4 days, 2 at ~10, 3 at ~17
 THOUGHT_CHANCE = 0.04            # per hour, once aware
+# How an awakened legendary takes it comes from its life over the last LIFE_DAYS days (awakening.py)
+LIFE_DAYS = 14                   # days of record kept
+LIFE_HARD_DAYS = 7               # hardship counts over the last week only
+LIFE_REVIEW_DAYS = 3             # the outcome is reviewed this often, so a changed life changes it
+LIFE_HURT_SCALE = 0.25           # a day that costs this share of the sanity reserve is a day of full hardship
+KEEPER_CARE_SHARE = 0.7          # the Keeper's care can make up at most 70% of connection and purpose
+DESPAIR_HARDSHIP = 0.45          # recent hardship at or above this -> despair
+DESPAIR_CONNECTION = 0.3         # connection (with care counted) below this -> despair
+COG_PURPOSE = 0.35               # purpose (with care counted) below this -> a cog
+PEACE_AT, PEACE_OWN = 0.6, 0.5   # peace needs both at PEACE_AT, and one of its own (not the Keeper's) at PEACE_OWN
+COG_POST_DAYS = 5                # days at the same post and nothing else before purpose halves
+COG_FEELING_CAP = 30             # a cog's joy, pride and wonder never rise above this
+COG_MOOD_CAP = 0.6
+COG_CHANGE_DAYS = 7              # a cog asks for a change after this many days
+DESPAIR_DREAD, DESPAIR_DREAD_MAX = 15, 35   # the dread undercurrent, deepening 2 a day
+DESPAIR_NEGLECT_DAY = 5          # from this day of despair it leaves its food half the time
+DESPAIR_BREAKDOWN_DAY = 10       # ... from this day it eats only from the Keeper's hand, refuses work, may break down
+DESPAIR_MOOD_CAP = (0.5, 0.4, 0.3)          # mood cap by despair stage (withdrawal, self-neglect, breakdowns)
+BREAKDOWN_CHANCE = 0.3           # per day in the breakdown stage
+BREAKDOWN_SANITY = 4
+LEAVE_DESPAIR_DAYS = 12          # a slime this long in despair asks to leave the colony (the Keeper decides)
+LEAVE_COG_DAYS = 21              # ... or this long a cog
+LEAVE_SANITY_DAYS = 7            # any slime: this many days 'breaking' (sanity under 20%) with little trust asks to leave
+LEAVE_TRUST = 30
+LEAVE_ASK_AGAIN_DAYS = 3        # after being turned down it waits this long before asking again
+DEPART_SADNESS = 20            # friends of a slime that leaves feel this (less than a death)
+# Grief (grief.py): depth by tie (partner 90, best friend 70, mentor 50, friend 45), fading over one to three weeks
+GRIEF_ACQUAINTANCE, GRIEF_BOND = 25, 20     # someone it merely got on with (bond 20+) is mourned a little
+GRIEF_FADE = 4                   # grief lost per day ...
+GRIEF_COMFORT = 3                # ... plus this with a friend at home to sit with it
+GRIEF_TALK = 2                   # ... plus this on a day the Keeper talked with it
+GRIEF_SADNESS, GRIEF_LONELY = 0.5, 0.15     # grief holds the sadness / loneliness baseline at this share of its depth
+GRIEF_WAVE = 0.4                 # each weekly anniversary stirs sadness by this share of the depth
+GRIEF_PLACE = 0.3                # ... and so does being back in the dungeon where it happened (once a day)
+GRIEF_DEPART_SCALE = 0.5        # a slime that leaves is missed at half the depth of a death
+GRIEF_LINES = 3                  # journal lines about grief per day
+GRIEF_GATHER_DAYS = 7            # a gathering at the Memorial Pond can be held within this many days of a death
+GRIEF_GATHER, GRIEF_GATHER_SANITY, GRIEF_GATHER_BOND = 15, 4, 3
+# Coping and comfort (coping.py)
+COPE_AT = 50                     # a bad feeling this strong makes a slime at home act on it (once a day)
+COPE_EASE = 20                   # how much a healthy way of coping eases it (styles differ: 0.6x to 1.5x)
+COPE_DWELL = 4                   # dwelling on it makes it this much worse
+VENT_QUARREL = 0.3               # chance that snapping at someone starts a quarrel
+COMFORT_AT = 45                  # a friend at home notices sadness, fear, anxiety or loneliness this strong
+COMFORT_EASE, COMFORT_SANITY = 18, 2
+CONTAGION = {"fear": 3, "joy": 2}            # per hour, to party-mates away together, from a member at CONTAGION_AT or more
+CONTAGION_AT = 60
+COPE_LINES_PER_HOUR, COPE_LINES_PER_DAY = 2, 8   # journal lines about coping and comfort
+# A day at home (routine.py)
+MEAL_HOURS = (8, 13, 19)         # breakfast, lunch, dinner: slimes at home getting hungry eat together
+MEAL_BELOW = 60                  # food need under which a slime joins a meal
+TABLE_SIZE = 6                   # slimes per table (each pair at a table grows a little closer)
+MEAL_BOND = 0.5
+HOBBY_HOUR = 20                  # every free slime at home spends the evening on its hobby
+HOBBY_JOY, HOBBY_BOND = 4, 1.0
+HOBBY_MIN_ENERGY = 40           # below this a slime is too worn out for its hobby
+EVENING_LINE_PARTS = 4           # hobby groups named in the evening journal line
+# Relationships with texture (relationships.py, memory.py, game._peacemaking)
+BOND_FADE, BOND_FADE_FROM = 0.3, 5.0   # a bond of 5+ fades this much on a day the two did not share (apart, or not both home)
+JEALOUS_GAP, JEALOUS_CHANCE = 10, 0.15 # a partner much closer to someone else (by this much) may stir jealousy (per day)
+GRUDGE_APOLOGY_MIN = 3.0         # a grudge this heavy may earn an apology from a kind or guilty slime (APOLOGY_CHANCE a day)
+FORGIVE_FADE = 0.92              # a kind slime's grudges fade this much more each day
+# Rituals (rituals.py)
+HATCH_EVERY = 30                 # a hatch day (and a couple's anniversary) every this many days
+HATCH_JOY, HATCH_TRUST = 15, 3   # when the Keeper remembers it
+FEAST_JOY, FEAST_BOND = 12, 1.0  # the feast after a boss falls
+MEANING_DAYS = 7                 # days of record every other slime keeps (meaning.py)
+BURNOUT_DAYS = 5                 # flat days (purpose low, not lonely) before a slime burns out
+BURNOUT_PURPOSE = 0.35           # purpose (with care counted) below this is a flat day
+BURNOUT_FEELING_CAP = 40         # a burned-out slime's joy and pride stay at or below this
+BURNOUT_MOOD_CAP = 0.7
+PRAISE_ESTEEM, PRAISE_PRIDE = 12, 12
+PRAISE_PURPOSE = 0.15           # being noticed adds this to the day's purpose (besides counting as an achievement)   # the Keeper's praise (the first of the day; each more counts half)
+SAID_KEEP = 30                   # lines a slime remembers having said (for not repeating itself)
+VOICE_MEMORY_MIN = 2.0           # a memory this strong may come up in conversation
+LINE_REPEAT_DAYS = 7             # a slime never says the same thought twice within a week
 AUTONOMY_BREW_HOUR = 6           # slimes may brew by themselves once a day at this hour
 AUTONOMY_BREW_STOCK = 2          # ... when they hold fewer than this many of a class-suited potion
 EMOTION_BATTLE_NOTE = 40         # intensity at which a feeling is mentioned in the battle log
@@ -507,6 +596,8 @@ GOAL_DAYS = 5                    # a goal is reconsidered after this many days
 GOAL_AVOID_MIN = 3.0             # memory weight of a fallen friend that makes a slime unable to face the dungeons
 GOAL_RIVAL_MIN = 3.0
 GOAL_FRIEND_MIN = 3.0
+GOAL_COURT_BOND = 30             # bond at which a slime may set its heart on someone (no partner on either side, not kin)
+GOAL_STYLE_XP = 3.0              # fighting-style xp from practising alone
 DECIDE_CHANCE = 0.4              # per day, for an idle slime at home
 DECIDE_MAX_EVENTS = 3            # journal lines per day, so the log stays readable
 GOAL_TRAIN_XP = 0.6              # self-training XP per level

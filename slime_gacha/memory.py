@@ -20,6 +20,9 @@ KINDS: Dict[str, tuple] = {
     "abandoned": (-1, "{n} was nowhere to be found when they fell{note}"),
     "slight":    (-1, "{n} got something they wanted{note}"),
     "healed":    (+1, "{n} tended to them when they were hurt"),
+    "peace":     (+1, "{n} helped them make peace{note}"),
+    "comforted": (+1, "{n} sat with them while they grieved"),
+    "cheered":   (+1, "{n} cheered them up when they were down"),
     "made_up":   (+1, "{n} made peace with them after a quarrel"),
     "comrade":   (+1, "{n} fought beside them and won{note}"),
     "carried":   (+1, "{n} stayed close when they fell{note}"),
@@ -43,14 +46,16 @@ def remember(s, kind: str, other, day: int, weight: float = 3.0, note: str = "")
             return
     s.memories.append(dict(kind=kind, other=oid, name=name, day=day, weight=min(config.MEMORY_MAX_WEIGHT, weight), note=note))
     if len(s.memories) > config.MEMORY_CAP:               # forget the faintest
-        s.memories.remove(min(s.memories, key=lambda m: m["weight"]))
+        s.memories.remove(min(s.memories, key=lambda m: m["weight"] * (1.5 if KINDS[m["kind"]][0] > 0 else 1.0)))   # thanks outlast minor grudges
 
 
 def fade(s) -> None:
     """Daily: every memory loses weight; faint ones vanish. Strong grudges and gratitude last for weeks."""
     keep = []
+    forgiving = "kind" in s.traits
     for m in s.memories:
-        m["weight"] = round(m["weight"] * config.MEMORY_FADE, 3)
+        f = config.MEMORY_FADE * (config.FORGIVE_FADE if forgiving and KINDS[m["kind"]][0] < 0 else 1.0)   # the kind let go sooner
+        m["weight"] = round(m["weight"] * f, 3)
         if m["weight"] >= config.MEMORY_MIN_WEIGHT:
             keep.append(m)
     s.memories = keep

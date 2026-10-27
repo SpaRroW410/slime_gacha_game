@@ -67,6 +67,21 @@ TRAIT_GAIN = dict(
     chatty=dict(loneliness=1.5, joy=1.2), lazy=dict(joy=.9, anxiety=.8), gluttonous=dict(anger=1.2),
 )
 CAP = 0.35
+# Everyone has a usual mood. Feelings settle back to this baseline instead of to nothing: a chatty slime is a little cheerful
+# by default, a grumpy one a little cross. CONTENTMENT (0-100, slow: days) adds to it - a good life shows as everyday joy and
+# calm, a hard one as a low hum of sadness and worry.
+TRAIT_BASELINE = dict(
+    chatty=dict(joy=12), kind=dict(affection=10, calm=6), grumpy=dict(anger=10), timid=dict(anxiety=10, fear=4),
+    brave=dict(determination=10), proud=dict(pride=12), lazy=dict(calm=12), gluttonous=dict(joy=6),
+)
+CONTENT_START = 50.0
+CONTENT_RATE = 0.01          # share of the gap to the current mood closed per hour (about three days to settle)
+CONTENT_GOOD, CONTENT_BAD = 45.0, 30.0     # an ordinary, looked-after life sits in the mid-50s (food and sleep cycle)
+CONTENT_LIFT = dict(joy=0.5, calm=0.4)          # baseline per point of contentment above CONTENT_GOOD
+CONTENT_SINK = dict(sadness=0.5, anxiety=0.3)   # ... and per point below CONTENT_BAD
+FLAT, COG_CAP, BURNOUT_CAP = ("joy", "pride", "wonder"), 30.0, 40.0   # awakening: a cog's bright feelings stay muted (config.COG_FEELING_CAP)
+DRIFT_CEIL = 60.0            # needs alone never push a feeling past this; only events do (and those fade back)
+RISE_RATE = 0.5              # a feeling below its baseline climbs back at this share of its decay rate
 
 
 TRIGGERS = {          # what raises / lowers each feeling (shown in the in-game guide)
@@ -92,9 +107,9 @@ TRIGGERS = {          # what raises / lowers each feeling (shown in the in-game 
                   "Loneliness is quieted by it; it fades slowly (2 per hour)."),
     "guilt": ("Being the one a merge or chamber spared, a brawl, a rival's death.",
               "Pride dampens it; it fades by 2.5 per hour."),
-    "dread": ("A 5-star legendary realising it is only code (permanent undercurrent while in despair).",
-              "Wonder quiets it; kindness (petting, friends) slowly wears the undercurrent away."),
-    "wonder": ("Awakening with acceptance (permanent undercurrent), a legendary seeing the world's patterns.",
+    "dread": ("A 5-star legendary realising it is only code (an undercurrent that deepens day by day while in despair).",
+              "Wonder quiets it; the undercurrent lifts when its life improves (company, purpose, your care)."),
+    "wonder": ("An awakened legendary at peace or settled (undercurrent), a legendary seeing the world's patterns.",
                "Dread dampens it; it fades by 2 per hour above its undercurrent."),
 }
 
@@ -103,15 +118,90 @@ def level(slime, key: str) -> float:
     return slime.emotions.get(key, 0.0)
 
 
-def feel(slime, key: str, amount: float) -> None:
-    """Stir an emotion (scaled by the slime's traits); its opposite is quieted a little."""
+def baseline(slime) -> Dict[str, float]:
+    """The level each feeling settles back to: from traits, plus contentment (a good or hard life)."""
+    out: Dict[str, float] = {}
+    for t in slime.traits:
+        for k, v in TRAIT_BASELINE.get(t, {}).items():
+            out[k] = out.get(k, 0.0) + v
+    c = getattr(slime, "content", CONTENT_START)
+    for k, f in CONTENT_LIFT.items():
+        if c > CONTENT_GOOD:
+            out[k] = out.get(k, 0.0) + (c - CONTENT_GOOD) * f
+    for k, f in CONTENT_SINK.items():
+        if c < CONTENT_BAD:
+            out[k] = out.get(k, 0.0) + (CONTENT_BAD - c) * f
+    gw = grief_weight(slime)
+    if gw:                                                        # grief keeps sadness and loneliness up while it lasts
+        from . import config
+        out["sadness"] = out.get("sadness", 0.0) + config.GRIEF_SADNESS * gw
+        out["loneliness"] = out.get("loneliness", 0.0) + config.GRIEF_LONELY * gw
+    return out
+
+
+def grief_weight(slime) -> float:
+    """How much grief weighs on it (the deepest loss, plus a little of the others) - see grief.py."""
+    ds = sorted((x["depth"] for x in getattr(slime, "grief", None) or []), reverse=True)
+    return (ds[0] + 0.3 * sum(ds[1:])) if ds else 0.0
+
+
+def baseline_reasons(slime) -> Dict[str, str]:
+    """Why each feeling sits where it usually does: missing someone, a hard or good stretch of life, its nature."""
+    out: Dict[str, str] = {}
+    if getattr(slime, "grief", None):
+        name = max(slime.grief, key=lambda x: x["depth"])["name"]
+        out.update(sadness=f"misses {name}", loneliness=f"misses {name}")
+    c = getattr(slime, "content", CONTENT_START)
+    for k in CONTENT_LIFT:
+        if c > CONTENT_GOOD + 10:
+            out.setdefault(k, "a good stretch of life")
+    for k in CONTENT_SINK:
+        if c < CONTENT_BAD:
+            out.setdefault(k, "a hard stretch of life")
+    for t in slime.traits:
+        for k in TRAIT_BASELINE.get(t, {}):
+            out.setdefault(k, f"a {t} nature")
+    return out
+
+
+def content_label(slime) -> str:
+    c = getattr(slime, "content", CONTENT_START)
+    return "thriving" if c >= 70 else "content" if c >= 50 else "getting by" if c >= 35 else "struggling" if c >= 20 else "worn down"
+
+
+CAUSES_KEPT = 3
+
+
+def note_cause(slime, key: str, why: str, amount: float) -> None:
+    """Remember why a feeling rose (the strongest few reasons are kept while the feeling lasts)."""
+    causes = slime.causes.setdefault(key, {})
+    causes[why] = round(causes.get(why, 0.0) + amount, 1)
+    if len(causes) > CAUSES_KEPT:
+        del causes[min(causes, key=causes.get)]
+
+
+def causes(slime, key: str) -> List[str]:
+    """Why it feels this, strongest reason first."""
+    c = (getattr(slime, "causes", None) or {}).get(key, {})
+    return [w for w, _ in sorted(c.items(), key=lambda kv: -kv[1])]
+
+
+def feel(slime, key: str, amount: float, why: str = "") -> None:
+    """Stir an emotion (scaled by the slime's traits); its opposite is quieted a little. `why` names the cause (shown on
+    the slime card)."""
     if key not in EMOTIONS or amount == 0:
         return
+    if why and amount > 0 and hasattr(slime, "causes"):
+        note_cause(slime, key, why, amount)
     g = 1.0
     for t in slime.traits:
         g *= TRAIT_GAIN.get(t, {}).get(key, 1.0)
     amount *= g if amount > 0 else 1.0
-    slime.emotions[key] = max(0.0, min(100.0, slime.emotions.get(key, 0.0) + amount))
+    top = COG_CAP if key in FLAT and getattr(slime, "temperament", "") == "cog" else 100.0   # a cog feels little
+    if key in ("joy", "pride") and (getattr(slime, "life", None) or {}).get("burnt"):
+        top = min(top, BURNOUT_CAP)                                              # ... and a burned-out slime not much more
+    slime.emotions[key] = max(0.0, min(max(top, slime.emotions.get(key, 0.0) if amount < 0 else 0.0),
+                                       slime.emotions.get(key, 0.0) + amount))
     if amount > 0 and key in OPPOSITE:
         o = OPPOSITE[key]
         if o in slime.emotions:
@@ -129,35 +219,57 @@ def tick(slime, rng: random.Random, sleeping: bool = False, fade: float = 1.0) -
     n = slime.needs
     drift = []
     if n.get("food") < 30:
-        drift.append(("anger", 8))
+        drift.append(("anger", 8, "hungry"))
     if n.get("energy") < 30:
-        drift.append(("sadness", 4))
+        drift.append(("sadness", 4, "worn out"))
     if n.get("belonging") < 35:
-        drift.append(("loneliness", 4))
+        drift.append(("loneliness", 4, "nobody to be with"))
     elif n.get("belonging") > 75:
-        drift.append(("affection", 1))
+        drift.append(("affection", 1, "feels it belongs"))
     if n.get("esteem") > 75:
-        drift.append(("pride", 1))
+        drift.append(("pride", 1, "feels capable"))
     if n.get("safety") < 40:
-        drift.append(("fear", 9)), drift.append(("anxiety", 6))
+        drift.append(("fear", 9, "hurt")), drift.append(("anxiety", 6, "hurt"))
     if slime.morale < 25:
-        drift.append(("sadness", 4)), drift.append(("anger", 7))
+        drift.append(("sadness", 4, "low morale")), drift.append(("anger", 7, "low morale"))
     elif slime.morale > 65 and min(n.v.values()) > 55:
-        drift.append(("calm", 2)), drift.append(("joy", 1))
+        drift.append(("calm", 2, "a settled life")), drift.append(("joy", 1, "a settled life"))
     if rng.random() < 0.03:                                       # an ambient mood swing
-        drift.append((rng.choice(list(EMOTIONS)[:9]), 6))
-    for k, a in drift:
-        feel(slime, k, a)
+        drift.append((rng.choice(list(EMOTIONS)[:9]), 6, "a passing mood"))
+    for k, a, why in drift:
+        if slime.emotions.get(k, 0.0) < DRIFT_CEIL:               # needs keep a feeling simmering, not boiling
+            feel(slime, k, a, why)
     mult = 2.0 if sleeping else 1.0
     floor = getattr(slime, "emotion_floor", {})
-    for k in list(slime.emotions):
-        f = fade if EMOTIONS[k].kind == "bad" else 1.0
-        slime.emotions[k] = max(floor.get(k, 0.0), slime.emotions[k] - EMOTIONS[k].decay * mult * f)
-        if slime.emotions[k] < 1:
-            slime.emotions.pop(k)
+    base = baseline(slime)
+    reasons = baseline_reasons(slime)
+    for k in set(slime.emotions) | set(base):                     # every feeling drifts back to the slime's usual mood
+        rest = max(base.get(k, 0.0), floor.get(k, 0.0))
+        v = slime.emotions.get(k, 0.0)
+        if v > rest:
+            f = fade if EMOTIONS[k].kind == "bad" else 1.0
+            v = max(rest, v - EMOTIONS[k].decay * mult * f)
+        elif v < rest:
+            v = min(rest, v + EMOTIONS[k].decay * RISE_RATE)
+        if v < 1:
+            slime.emotions.pop(k, None)
+        else:
+            slime.emotions[k] = v
+        if v <= rest + 1 and hasattr(slime, "causes"):           # back to its usual self: only the usual reasons remain
+            why = reasons.get(k) if rest >= 1 else None
+            if why:
+                slime.causes[k] = {why: round(rest, 1)}
+            else:
+                slime.causes.pop(k, None)
     for k, f in floor.items():                                    # a permanent undercurrent (see awakening.py)
         if slime.emotions.get(k, 0.0) < f:
             slime.emotions[k] = float(f)
+
+
+def settle(slime, mood: float) -> None:
+    """Hourly: contentment follows the slime's mood (needs, capped by sanity) slowly, over days."""
+    c = getattr(slime, "content", CONTENT_START)
+    slime.content = max(0.0, min(100.0, c + (100.0 * mood - c) * CONTENT_RATE))
 
 
 def modifiers(slime) -> Tuple[Dict[str, float], Dict[str, float]]:

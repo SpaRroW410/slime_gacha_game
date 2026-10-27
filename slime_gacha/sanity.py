@@ -22,6 +22,9 @@ def hit(s, amount: float) -> float:
     """Wear sanity down by `amount` (reduced for rarer slimes). Returns what was lost."""
     lost = min(s.sanity, amount * config.SANITY_RESIST[s.rarity])
     s.sanity -= lost
+    if lost:                                              # the day's hardship goes into its record (meaning.py)
+        from . import meaning
+        meaning.note(s, "hurt", lost)
     return lost
 
 

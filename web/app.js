@@ -531,9 +531,19 @@ function colony() {
       <label class="f">Show <select data-sel="filter">${opt({ all: 'All', free: 'Not in a party', idle: 'Available', wounded: 'Wounded', away: 'Away', needy: 'Needs something' }, S.filter)}</select></label>
     </div></div>
   ${big ? `<div class="row" style="margin-bottom:8px"><input type="search" data-ui="roster_q" data-rerender="1" value="${esc(ui('roster_q', ''))}" placeholder="Find a slime (name, class, rarity)" style="max-width:300px"><small class="mute">Showing the top ${Math.min(TOP, list.length)} by ${esc(S.sort)}; the rest are in the list below.</small></div>` : ''}
+  ${moodPanel(st.colony_mood)}
   <div class="grid roster">${list.slice(0, big ? TOP : list.length).map(card).join('') || '<p class="mute">No slimes match.</p>'}</div>
   ${big && list.length > TOP ? `<details class="rosmore" data-keep="moreOpen" ${ui('moreOpen', false) ? 'open' : ''}><summary><b>${list.length - TOP} more slimes</b> <small class="mute">(compact list)</small></summary>
     <div class="slist">${list.slice(TOP).map(srow).join('')}</div></details>` : ''}`;
+}
+/* Colony mood: slimes by contentment, and who is struggling and why (tap a name to open its card). */
+function moodPanel(m) {
+  if (!m) return '';
+  const icon = { thriving: '🌞', content: '🌤', 'getting by': '⛅', struggling: '🌧', 'worn down': '⛈' };
+  const counts = Object.entries(m.labels).map(([k, n]) => `${icon[k] || ''} ${n} ${esc(k)}`).join(' · ');
+  const rows = m.struggling.map((r) => `<div class="row" style="gap:6px"><button class="btn small" data-act="sel" data-id="${r.id}">${esc(r.name)}</button><small class="mute">${r.why.map(esc).join(' · ')}</small></div>`).join('');
+  return `<details class="panel flat" data-keep="moodOpen" ${ui('moodOpen', m.struggling.length > 0) ? 'open' : ''} style="margin-bottom:10px"><summary><b>Colony mood</b> <small class="mute">${counts}</small></summary>
+    <div class="stack" style="margin-top:6px">${rows || '<small class="mute">Nobody is struggling right now.</small>'}${m.more ? `<small class="mute">and ${m.more} more</small>` : ''}</div></details>`;
 }
 function srow(s) {
   const a = awayOf(s.id);
@@ -657,10 +667,17 @@ function dFight(s, { st, free }) {
 
 function dMind(s, { st, free, inDun }) {
   const em = { couple: '💘 Partner', best_friend: '💞 Best friend', friend: '🤝 Friend', rival: '⚔️ Rival' };
-  return `${sect('Feelings', 'Passing feelings shift stats in battle. The Guide tab lists what raises and lowers each one.', `<div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value))).join('') : '<small class="mute">Calm and unremarkable.</small>'}
-      ${Object.keys(s.feeling_effects).length ? `<small class="mute">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
-      ${s.awareness ? `<div>🧩 <b>Awareness: ${esc(s.awareness.name)}</b> <small class="mute">${s.awareness.points}/100${s.awareness.temperament ? ' · ' + (s.awareness.temperament === 'accept' ? 'at peace' : 'in despair') : ''}</small></div>` : ''}
-      <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button></div></div>`)}
+  return `${sect('Feelings', 'Passing feelings shift stats in battle. The Guide tab lists what raises and lowers each one.', `<div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value)) + ((f.why || []).length ? `<small class="mute why">${f.why.map(esc).join(' · ')}</small>` : '')).join('') : '<small class="mute">Calm and unremarkable.</small>'}
+      <div title="How life has felt over the last few days. Feelings settle back to a slime's usual mood, and a good life lifts it.">🌤 Contentment: <b>${esc(s.content_label)}</b> <small class="mute">${s.content}/100</small></div>
+      ${Object.keys(s.feeling_effects).length ? `<small class="mute" style="display:block">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
+      ${s.awareness ? awarenessHtml(s.awareness) : ''}
+      <small class="mute" style="display:block">In the evenings it ${esc(s.hobby)}. ${s.hatch_in === 0 ? '🎂 <b>Today is its hatch day!</b> A word from you will be noticed.' : `Hatch day in ${s.hatch_in} day${s.hatch_in === 1 ? '' : 's'}.`}</small>
+      <small class="mute" style="display:block" title="How this slime handles a bad feeling (from its personality). Venting and dwelling make things worse.">When upset it ${esc(s.coping)}${s.coping_healthy ? '' : ' (it does not help)'}.</small>
+      ${(s.grief || []).length ? `<div>🕯 Grieving ${s.grief.map((x) => `<b>${esc(x.name)}</b> <small class="mute">(${x.days} day${x.days === 1 ? '' : 's'} ago)</small>`).join(', ')}</div>` : ''}
+      ${s.burnt ? '<div class="warn">😶 Going through the motions: the same days, nothing chosen, nobody noticing. Praise, a change of routine or a choice of its own brings the spark back.</div>' : ''}
+      ${s.meaning && !s.awareness?.outcome ? `<small class="mute">Last week: care ${Math.round(s.meaning.care * 100)}% · connection ${Math.round(s.meaning.connection * 100)}% · purpose ${Math.round(s.meaning.purpose * 100)}% · hardship ${Math.round(s.meaning.hardship * 100)}%</small>` : ''}
+      <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button>
+        <button class="btn small" data-act="praise" ${inDun ? 'disabled' : ''} title="${s.praised ? 'Already praised today: more helps less' : 'Recognition: esteem and pride, and it gives the day meaning'}">👏 Praise${s.praised ? ' ✓' : ''}</button></div></div>`)}
     ${sect('Relationships', 'Ties form from bonds: friends, best friends, rivals, mentors and couples. See the People tab.', `<div class="stack" style="gap:3px">${s.relations.map((r) => { const o = slimeById(r.other); if (!o) return ''; const label = r.kind === 'mentor' ? (r.mentor === s.id ? '🎓 Mentee' : '🎓 Mentor') : em[r.kind]; return `<div>${label}: <b>${esc(o.name)}</b></div>`; }).join('') || '<small class="mute">No ties yet.</small>'}
       ${s.parents.length ? `<div>🥚 Child of <b>${s.parent_names.map(esc).join(' &amp; ')}</b> · generation ${s.generation}</div>` : ''}</div>`)}
     ${sect('Experience', 'What this slime has done most shapes its outlook.', `<small class="mute">${Object.entries(s.exp).map(([k, v]) => `${k} ${v}`).join(' · ') || 'no experience yet'}</small><p class="mute">Wins ${s.wins} · merged ${s.merged}</p>`)}`;
@@ -836,6 +853,7 @@ function dungeonsAll() {
         <button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left || !rescueIds.length ? 'disabled' : ''}>🛟 Send rescue (${rescueIds.length})</button></div>`).join('')}</div>` : '';
   const scouting = `<div class="panel stack"><h2>🔭 Scouting ${info('Scouts learn specific floors (any run of floors up to the limit, not only multiples of 5). They must reach 100% of every floor they were sent to within the hour budget; floors they finish stay known even if they run out of time. Leave the budget empty to use the safe budget from the estimate. One slime is enough; more only helps if they are good scouts.')}</h2>
       <p class="mute">Send <b>one to ${st.party_size}</b> slimes (no party needed) to learn floors (1 to ${d.scout_max_floors} at a time). Scouts must reach <b>100% of every targeted floor</b> within the budget, or they are stranded until rescued. The floor above the first one scouted must be <b>scouted already or cleared in the Descent</b> (by anyone in the colony), so even a level-1 slime can go on over known floors.</p>
+      ${partyPickRow('scout_ids', st.party_size)}
       ${chips('scout_ids', scoutIds)}
       <div class="row"><label class="f">Floors <input type="number" min="1" max="${d.max_floor}" value="${sfirst}" data-ui="sfirst" style="width:64px"> to <input type="number" min="1" max="${d.max_floor}" value="${slast}" data-ui="slast" style="width:64px"></label>
         <button class="btn small" data-act="scout_plan" ${scoutIds.length ? '' : 'disabled'}>📏 Estimate</button></div>
@@ -910,10 +928,22 @@ function dungeons() {
     : here ? `<div class="panel stack" style="margin-top:12px"><h4>Inside now</h4>${insideList(awayItems().filter((a) => (a.kind === 'expedition' || a.kind === 'stranded') && here.some((h) => a.label.includes(h))))}</div>` : '';
   return subnav('dungeons') + body + strip;
 }
+/* "Send a party": one button per party that has free members; a tap adds (or removes) all of them, up to `cap`. */
+function partyPickRow(key, cap) {
+  const cur = (S.ui[key] || []).map(num);
+  const rows = S.state.parties.map((p) => { const free = pickable(key, p.members); return { p, free, on: free.length && free.every((id) => cur.includes(id)) }; })
+    .filter((r) => r.free.length);
+  return rows.length ? `<div class="row"><small class="mute">Send a party:</small>${rows.map(({ p, free, on }) => `<button class="btn small ${on ? 'primary' : ''}" data-act="pick_party" data-k="${key}" data-pid="${p.id}" data-cap="${cap}" title="${esc(free.map((id) => slimeById(id)?.name).join(', '))}">${on ? '✔ ' : ''}👥 ${esc(p.name)} (${free.length})</button>`).join('')}</div>` : '';
+}
+/* Which of these slimes can be picked for this kind of trip right now. */
+function pickable(key, ids) {
+  return ids.filter((id) => { const s = S.state.slimes.find((x) => x.id === id);
+    return s && (key === 'adv_ids' ? !s.busy : s.state === 'idle' && !s.in_dungeon && !s.grounded && s.hp > 0 && !s.refuse_dungeon); });
+}
 function slimePickRow(a) {
   const st = S.state;
   const sel = new Set((ui('adv_ids', []) || []).map(num));
-  return { sel, html: `<div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>` };
+  return { sel, html: `${partyPickRow('adv_ids', a.max_party)}<div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>` };
 }
 function placesView() {
   const st = S.state, a = st.gear.adventure;
@@ -1009,6 +1039,12 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, String(v)); } catch (e) 
 const BACKUP_DAYS = 3;
 function backupAge() { const t = Number(lsGet(LS_EXPORT)); return t ? (Date.now() - t) / 86400000 : null; }
 function backupDue() { const a = backupAge(); return (a === null || a >= BACKUP_DAYS) && Date.now() - Number(lsGet(LS_SNOOZE) || 0) > 86400000; }
+/* A 5-star legendary's awakening: how it takes being code (settled / at peace / a cog / in despair), why, and its life record. */
+function awarenessHtml(a) {
+  const stageNote = ['', ' · withdrawn', ' · stops eating on its own: feed it by hand', ' · breaking down'][a.despair_stage] || '';
+  const life = a.life ? `<small class="mute">Last two weeks: care ${Math.round(a.life.care * 100)}% · connection ${Math.round(a.life.connection * 100)}% · purpose ${Math.round(a.life.purpose * 100)}% · hardship ${Math.round(a.life.hardship * 100)}%</small>` : '';
+  return `<div>🧩 <b>Awareness: ${esc(a.name)}</b> <small class="mute">${a.points}/100</small>${a.outcome ? `<br><span class="${a.temperament === 'despair' ? 'bad' : a.temperament === 'cog' ? 'warn' : 'ok'}">Feels ${esc(a.outcome)}${esc(stageNote)}</span> <small class="mute">(${esc(a.why)})</small>` : ''}${life ? '<br>' + life : ''}</div>`;
+}
 function requestRow(s) {
   return `<div class="row between panel flat"><span>💬 <b>${esc(s.name)}</b> ${esc(s.request.text)}.</span><span class="row"><button class="btn small primary" data-act="answer_request" data-id="${s.id}" data-yes="1">Grant</button><button class="btn small" data-act="answer_request" data-id="${s.id}" data-yes="0">Decline</button></span></div>`;
 }
@@ -1301,13 +1337,13 @@ function relicCard(it, holderId = null) {
 }
 function riftAll() {
   const st = S.state, a = st.gear.adventure;
-  const sel = new Set((ui('adv_ids', []) || []).map(num));
+  const pick = slimePickRow(a), sel = pick.sel;
   const equipped = st.slimes.flatMap((s) => Object.values(s.items).map((it) => ({ it, s })));
   const rates = Object.entries(a.rates).map(([k, v]) => `${k} ${v}%`).join(' · ');
   return `<div class="grid cols2">
   <div class="panel stack"><h2>🧭 The Wayfarer's Rift <small class="mute">(relics)</small></h2>
     <p class="mute">An adventure dungeon for <b>relics</b>. Any <b>1–${a.max_party}</b> slimes may go; monsters are <b>one level above</b> the party average (a smaller party meets fewer). Nobody dies, but a knocked-out slime loses morale and its relics are battered. Every win may drop a relic — odds are far harsher than the gacha: ${rates}. A <b>lure</b> (${a.lure_cost} 🟣 per run) multiplies the rare odds.</p>
-    <div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>
+    ${pick.html}
     <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" data-rerender="1" style="width:70px"></label>
       <button class="btn small ${ui('adv_lure', false) ? 'primary' : ''}" data-act="adv_lure">${ui('adv_lure', false) ? '✔ ' : ''}Lure (🟣)</button>
       <button class="btn primary" data-act="adventure" ${sel.size ? '' : 'disabled'}>🧭 Rift (${sel.size}/${a.max_party})</button></div>
@@ -1495,7 +1531,7 @@ function council() {
   const sel = (key, idx = 0) => `<select data-ui="${key}">${st.slimes.map((s) => `<option value="${s.id}" ${s.id == ui(key, st.slimes[Math.min(idx, st.slimes.length - 1)]?.id) ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)})</option>`).join('')}</select>`;
   const comp = S.compat;
   const quarrels = `<div class="panel stack"><h3>Quarrels</h3>${st.conflicts.length ? st.conflicts.map((q) => `<div class="row between panel flat"><span>${esc(slimeById(q.a)?.name)} vs ${esc(slimeById(q.b)?.name)}<br><small class="mute">${esc(q.reason)} · severity ${q.severity}</small></span>
-        ${q.away.length ? `<small class="mute">${esc(q.away.join(' & '))} away — out of your hands</small>` : `<span class="row"><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="talk">Talk</button><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="snack" ${st.wallet.food >= 2 ? '' : 'disabled'}>Snack (2🍖)</button></span>`}</div>`).join('') : '<p class="mute">The colony is peaceful.</p>'}</div>
+        ${q.away.length ? `<small class="mute">${esc(q.away.join(' & '))} away — out of your hands</small>` : `<span class="row"><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="talk" ${q.retry ? `disabled title="Not ready to talk yet: try again in ${q.retry}h (a snack works now)"` : ''}>${q.retry ? `Talk in ${q.retry}h` : 'Talk'}</button><button class="btn small" data-act="mediate" data-cid="${q.id}" data-m="snack" ${st.wallet.food >= 2 ? '' : 'disabled'}>Snack (2🍖)</button></span>`}</div>`).join('') : '<p class="mute">The colony is peaceful.</p>'}</div>
     </div>`;
   return `<div class="stack" style="margin-bottom:12px">${quarrels.replace('<h3>Quarrels</h3>', `<h3>⚔️ Quarrels to mediate ${st.conflicts.length ? chip(String(st.conflicts.length), 'bad') : ''}</h3>`)}</div>
   <div class="grid cols2">
@@ -1517,7 +1553,8 @@ function council() {
 function records() {
   const st = S.state;
   const tale = `<div class="panel stack" style="margin-bottom:12px"><h2>📖 The Great Gloop <small class="mute">${st.story.filter((c) => c.done).length}/${st.story.length}</small></h2>${st.story.map((c) => c.done ? `<details><summary><b>${esc(c.title)}</b></summary><p>${esc(c.text)}</p></details>` : `<div class="mute">🔒 <b>${esc(c.title.replace(/^\d+\. /, '???  '))}</b> — ${esc(c.hint)}</div>`).join('')}</div>`;
-  return tale + `<div class="grid cols2"><div class="panel"><h2>🪦 Memorial Pond</h2>${st.graveyard.length ? st.graveyard.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0">${ghost(g)}<div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">hour ${g.tick}: ${esc(g.cause)}</small></div></div>`).join('') : '<p class="mute">Nobody has fallen yet.</p>'}</div>
+  return tale + `<div class="grid cols2"><div class="panel"><h2>🪦 Memorial Pond</h2>${st.graveyard.length ? st.graveyard.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0">${ghost(g)}<div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">hour ${g.tick}: ${esc(g.cause)}</small>${g.gather ? `<br><button class="btn small" data-act="memorial" data-gid="${g.id}" title="Everyone at home who is grieving gathers to remember: it eases their grief and brings them closer.">🕯 Gather at the pond</button>` : ''}</div></div>`).join('') : '<p class="mute">Nobody has fallen yet.</p>'}</div>
+    ${(st.departed || []).length ? `<div class="panel"><h2>👋 Left the colony</h2>${st.departed.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0"><div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">day ${g.day + 1}: you let them go</small></div></div>`).join('')}</div>` : ''}
     <div class="panel"><h2>📜 Journal</h2><div class="feed" style="max-height:60vh">${st.journal.slice().reverse().map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Quiet so far.</small>'}</div></div></div>`;
 }
 
@@ -1678,9 +1715,14 @@ const A = {
   use_potion: () => { const [kind, grade] = String(ui('pot_sel', S.state.potions.stock[0] ? S.state.potions.stock[0].kind + ':' + S.state.potions.stock[0].grade : ':')).split(':'); act('use_potion', { id: S.sel, kind, grade: num(grade) }); },
   slime_repair: () => act('slime_repair', { id: S.sel }),
   talk: () => act('talk', { id: S.sel }),
+  praise: () => act('praise', { id: S.sel }),
+  memorial: (d) => act('memorial', { gid: num(d.gid) }),
   keeper_learn: (d) => act('keeper_learn', { key: d.key }),
   keeper_use: (d) => act('keeper_use', { key: d.key }),
-  answer_request: (d) => act('answer_request', { id: num(d.id), accept: d.yes === '1' }),
+  answer_request: (d) => { const s = slimeById(num(d.id));
+    if (d.yes === '1' && s && s.request && s.request.kind === 'leave')
+      return confirmThen(`Let ${s.name} leave the colony for good?\n\nThey walk away with nothing; their gear stays. Their friends will miss them. This cannot be undone.`, () => act('answer_request', { id: s.id, accept: true }));
+    return act('answer_request', { id: num(d.id), accept: d.yes === '1' }); },
   craft_feather: () => act('craft_feather', { n: 1 }),
   keeper_respec: () => confirm('Forget all learned skills? It costs gel and the price rises each time.') && act('keeper_respec', {}),
   keeper_title: (d) => act('keeper_title', { key: d.key || '' }),
@@ -1721,7 +1763,11 @@ const A = {
     const r = await backend.call('scout_plan', { ids, first, last });
     if (r.ok) { S.plan = { ...r.result, first, last }; render(); } else toast(r.error, true); },
   pick_walker: (d) => { const k = d.k, id = num(d.id), cur = (S.ui[k] || []).map(num); S.ui[k] = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id].slice(0, k === 'rescue_ids' ? 999 : S.state.party_size); render(); },
-  pick_party: (d) => { const k = d.k, p = partyById(num(d.pid)); const ok = (p?.members || []).filter((id) => { const s = S.state.slimes.find((x) => x.id === id); return s && s.state === 'idle' && !s.in_dungeon && !s.grounded && s.hp > 0; }); const cur = (S.ui[k] || []).map(num); S.ui[k] = ok.every((id) => cur.includes(id)) ? cur.filter((id) => !ok.includes(id)) : [...new Set([...cur, ...ok])]; render(); },
+  pick_party: (d) => { const k = d.k, p = partyById(num(d.pid)); const ok = pickable(k, p?.members || []); const cur = (S.ui[k] || []).map(num);
+    let next = ok.every((id) => cur.includes(id)) ? cur.filter((id) => !ok.includes(id)) : [...new Set([...cur, ...ok])];
+    const cap = num(d.cap, 0);
+    if (cap && next.length > cap) { toast(`Only ${cap} can go: the first ${cap} picked are kept.`, true); next = next.slice(0, cap); }
+    S.ui[k] = next; render(); },
   use_safe: (d) => { S.ui.shours = num(d.h); render(); },
   gift: (d) => { const pid = num(d.pid), k = d.k; const args = { pid, kind: k };
     if (k === 'potion') Object.assign(args, { id: num(S.ui['gift_s_' + pid]), potion: S.ui.gift_k, grade: num(S.ui.gift_g, 1) });
@@ -1893,8 +1939,38 @@ async function syncLive(force = false) {
 }
 setInterval(() => syncLive(), 30000);
 
+/* If the game cannot start: try again, repair the offline copy (service worker and its cache - never the saved colony),
+   or run Python in safe mode (on the page itself). Offered on the error screen, and on the loading screen if it seems stuck. */
+function bootHelp() {
+  return `<div class="stack" style="margin-top:12px"><small class="mute">Your saved colony stays on this device whichever you choose.</small>
+    <div class="row" style="justify-content:center"><button class="btn primary" data-boot="retry">↻ Try again</button>
+    <button class="btn" data-boot="repair">🧹 Repair and reload</button>
+    <button class="btn" data-boot="safe">🛟 Safe mode</button></div></div>`;
+}
+async function repairOffline() {
+  try { for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) await r.unregister(); } catch (e) { /* none */ }
+  try { for (const k of await caches.keys()) if (k.startsWith('slimegacha-')) await caches.delete(k); } catch (e) { /* none */ }
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest && e.target.closest('[data-boot]');
+  if (!b) return;
+  const k = b.dataset.boot;
+  if (k === 'repair') { b.textContent = 'Repairing…'; await repairOffline(); location.replace(location.pathname); }
+  else if (k === 'safe') location.replace(location.pathname + '?noworker');
+  else location.reload();
+});
+
 (async function boot() {
-  const msg = (t) => { const el = document.getElementById('boot-msg'); if (el) el.textContent = t; };
+  let lastMsg = Date.now(), started = Date.now();
+  const msg = (t) => { lastMsg = Date.now(); const el = document.getElementById('boot-msg'); if (el) el.textContent = t; };
+  const stuck = setInterval(() => {                       // nothing new for a while: say so, and offer the way out
+    const el = document.getElementById('boot-msg');
+    if (!el) return clearInterval(stuck);
+    const quiet = Math.round((Date.now() - lastMsg) / 1000);
+    if (quiet >= 20 && !document.getElementById('boot-help')) {
+      el.insertAdjacentHTML('afterend', `<div id="boot-help"><p class="mute">Still working… (${Math.round((Date.now() - started) / 1000)} s). The first start downloads about 10 MB; if nothing moves, try one of these:</p>${bootHelp()}</div>`);
+    }
+  }, 2000);
   try {
     backend = await chooseBackend(msg);
     S.backendName = backend.name;
@@ -1905,9 +1981,12 @@ setInterval(() => syncLive(), 30000);
       try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
       if (r.ok) { S.state = r.state; pushLog(['Welcome back, Keeper.']); } else S.damaged = { error: r.error };
     }
+    clearInterval(stuck);
     render();
   } catch (e) {
+    clearInterval(stuck);
     document.getElementById('app').innerHTML = `<div class="welcome panel"><h2>Could not start the game</h2><p class="mute">${esc(e.message)}</p>
-      <p>Run <code>python3 serve.py</code> in the project folder and open the printed address, or use the static build (see README).</p></div>`;
+      ${bootHelp()}
+      <p class="mute">Playing from your own computer? Run <code>python3 serve.py</code> in the project folder and open the printed address.</p></div>`;
   }
 })();

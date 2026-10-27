@@ -11,7 +11,7 @@ Game save dict which the browser keeps in localStorage. Domain errors (GameError
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -45,6 +45,10 @@ def slime_view(g: Game, s) -> dict:
         morale=round(s.morale), morale_label=SocialEngine.morale_label(s.morale),
         goal=(s.goal or {}).get("text", ""), request=s.request, trust=round(s.trust), memories=memory_mod.recent(s), sanity=round(s.sanity), sanity_max=config.SANITY_MAX[s.rarity], sanity_label=sanity_mod.label(s), mood_cap=round(sanity_mod.mood_cap(s), 2),
         talked=bool(s.cared.get("day") == g.day and s.cared.get("talk")),
+        praised=bool(s.cared.get("day") == g.day and s.cared.get("praise")),
+        grief=[dict(name=x["name"], depth=round(x["depth"]), days=g.day - x["day"]) for x in s.grief],
+        hobby=routine_mod.hobby(s)[1], hatch_in=rituals_mod.next_hatch_in(g, s), coping=coping_mod.STYLE_TEXT[coping_mod.style(s)], coping_healthy=coping_mod.style(s) not in ("vent", "dwell"), burnt=meaning_mod.burned_out(s),
+        meaning=({k: round(v, 2) for k, v in meaning_mod.scores(s).items()} if s.life and s.life.get("days") else None),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
         abilities=[dict(key=k, name=get_ability(k).name, element=get_ability(k).element,
                         kind=get_ability(k).kind) for k in s.known_abilities()],
@@ -54,12 +58,17 @@ def slime_view(g: Game, s) -> dict:
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         mastery_paused=(elements.stars_to_resume(s) if elements.mastery_paused(s) else None),
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
+        content=round(s.content), content_label=emotions.content_label(s),
         feelings=[dict(key=k, name=emotions.EMOTIONS[k].name, emoji=emotions.EMOTIONS[k].emoji,
-                       value=round(v), kind=emotions.EMOTIONS[k].kind) for k, v in
+                       value=round(v), kind=emotions.EMOTIONS[k].kind, why=emotions.causes(s, k)) for k, v in
                   sorted(s.emotions.items(), key=lambda kv: -kv[1]) if v >= 3],
         feeling_effects={k: round(100 * (m - 1)) for k, m in emotions.modifiers(s)[0].items() if abs(m - 1) >= 0.01},
         awareness=(dict(stage=awakening.stage(s), name=awakening.STAGE_NAME[awakening.stage(s)],
-                        points=round(s.awareness, 1), temperament=s.temperament) if awakening.candidate(s) else None),
+                        points=round(s.awareness, 1), temperament=awakening.outcome(s),
+                        outcome=awakening.OUTCOME_NAME.get(awakening.outcome(s), ""),
+                        why=(awakening.why(s) if awakening.outcome(s) else ""), despair_stage=awakening.despair_stage(s),
+                        life={k: round(v, 2) for k, v in awakening.scores(s).items()} if s.life and s.life.get("days") else None)
+                   if awakening.candidate(s) else None),
         relations=[dict(other=r["other"], kind=r["kind"], since=r["since"], mentor=r.get("mentor"))
                    for r in g.relations.of(s.id)],
         parents=list(s.parents), parent_names=list(s.parent_names), generation=s.generation,
@@ -234,6 +243,36 @@ def _jobs_view(g: Game) -> dict:
     )
 
 
+def colony_mood(g: Game) -> dict:
+    """How the colony feels at a glance: slimes by contentment, and who is struggling and why (worst first)."""
+    from collections import Counter
+    labels = Counter(emotions.content_label(s) for s in g.slimes())
+    rows = []
+    for s in g.slimes():
+        why, weight = [], 0.0
+        o = awakening.outcome(s) if awakening.candidate(s) else ""
+        if o in ("despair", "cog"):
+            why.append(awakening.OUTCOME_NAME[o]); weight += 3
+        if meaning_mod.burned_out(s):
+            why.append("going through the motions"); weight += 2
+        if s.grief:
+            why.append(f"grieving {max(s.grief, key=lambda x: x['depth'])['name']}"); weight += 2
+        if sanity_mod.frac(s) < 0.4:
+            why.append(f"sanity {sanity_mod.label(s)}"); weight += 2
+        bad = [(k, v) for k, v in s.emotions.items() if emotions.EMOTIONS[k].kind == "bad" and v >= 45]
+        if bad:
+            k, v = max(bad, key=lambda kv: kv[1])
+            c = emotions.causes(s, k)
+            why.append(f"{emotions.EMOTIONS[k].name.lower()}{' (' + c[0] + ')' if c else ''}"); weight += v / 50
+        if s.content < 35:
+            why.append(emotions.content_label(s)); weight += 1
+        if why:
+            rows.append((weight, dict(id=s.id, name=s.name, why=why)))
+    order = ("thriving", "content", "getting by", "struggling", "worn down")
+    return dict(labels={k: labels[k] for k in order if labels[k]}, struggling=[r for _, r in sorted(rows, key=lambda x: -x[0])][:8],
+                more=max(0, len(rows) - 8))
+
+
 def snapshot(g: Game) -> dict:
     slimes = [slime_view(g, s) for s in g.slimes()]
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
@@ -245,6 +284,7 @@ def snapshot(g: Game) -> dict:
                for p in g.parties.parties.values()]
     run = g.battle_run()
     return dict(
+        colony_mood=colony_mood(g),
         away=away_view(g),
         vice=(lambda v: dict(id=v.id, name=v.name) if v else None)(g.vice_slime()), vice_min_stars=config.VICE_MIN_STARS,
         vice_challenge=(lambda c: dict(id=c["challenger"], name=g.roster[c["challenger"]].name)
@@ -293,10 +333,10 @@ def snapshot(g: Game) -> dict:
         modifiers={k: dict(name=m.name, emoji=m.emoji, desc=m.desc, boon=m.boon) for k, m in modifiers_mod.MODIFIERS.items()},
         jobs=_jobs_view(g),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
-        conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason,
-                        away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
+        conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason, retry=c.retry, cool=c.cool,
+                        brawls=c.brawls, away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
                    for c in g.conflicts.conflicts],
-        graveyard=list(g.graveyard)[-50:], journal=list(g.journal)[-60:],
+        graveyard=[dict(e, gather=g.can_gather(e)) for e in list(g.graveyard)[-50:]], departed=list(g.departed)[-50:], journal=list(g.journal)[-60:],
         dungeon=dict(
             best_floor=g.best_floor, boss_every=config.MAIN_BOSS_EVERY, floors=g.intel_report(),
             max_floor=dungeon.MAX_FLOOR, cleared=g.descent_cleared,
@@ -486,6 +526,16 @@ def _wake_all(g, a):
 @command("pet")
 def _pet(g, a):
     return _msg(g.pet(_i(a, "id")))
+
+
+@command("praise")
+def _praise(g, a):
+    return _msg(g.praise(_i(a, "id")))
+
+
+@command("memorial")
+def _memorial(g, a):
+    return g.memorial(_i(a, "gid")), {}
 
 
 @command("stance")
