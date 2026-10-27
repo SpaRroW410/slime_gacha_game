@@ -363,6 +363,7 @@ class PlacesTest(unittest.TestCase):
         g.pull(3, "white_gel")
         for s in g.slimes():
             s.level = 20
+            s.hp = s.max_hp
         before = g.wallet.get("food")
         r = g.explore("test_cave", [s.id for s in g.slimes()], 2)
         self.assertTrue(r.runs)

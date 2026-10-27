@@ -129,6 +129,11 @@ As of 27 October 2026:
 - [x] **68. No waiting after a fight led by hand** — Descent floors and wave simulations fought by hand leave the party ready at once.  *Done when:* met (`Game._by_hand`; switching to auto halfway brings the wait back; the Pit's daily session budget is unchanged).
 - [x] **69. Trainer rules** — a trainer must fight in the post's discipline (or have a natural knack for it) and only speeds up pupils whose own proficiency is lower.  *Done when:* met (`jobs.teaching_prof`, `trainer_bonus(pupil)`; the appointment list shows why a slime cannot hold the post).
 - [x] **70. Call back from anywhere** — resting, foraging, hunting, studying and posted slimes show what they are doing and get a Call back button on cards, rows and in the Parties tab.  *Done when:* met.
+- [x] **71. Pit and Rift sessions look after their party** — a Pit session in the web game (hours paid afterwards) killed a party of exhaustion because only HP and stamina were rested; now the session eats, sleeps and stops before anyone is exhausted.  *Done when:* met (`Game._field_hours`, `_field_meals`, `_needs_camp`, `_field_unfit`; the colony's tick leaves a session party's needs alone; reproduced and fixed with auto-care off in timed and turn mode).
+- [x] **72. No taking command in the Pit** — the Pit is a farm and always fights automatically.  *Done when:* met.
+- [x] **73. Trainers sharpen too** — each lesson that helps a pupil gives the trainer +0.15 proficiency.  *Done when:* met (`jobs.lesson`).
+- [x] **74. Send several groups at once** — the Rift, Quarry and places share one sender: collapsible Parties and Individual slimes (search, class filter), many groups in one go, each its own expedition.  *Done when:* met (`send_groups`; at most 12 groups; a group that cannot go stays home).
+- [x] **75. Calling slimes back for a trip** — busy slimes (resting, foraging, post, hunt, drill, asleep) can be picked and are called away at a cost (-6 morale, +12 anger); under 10% energy hidden, refusers greyed; expeditions now enforce refusals.  *Done when:* met (`Game.pull_in`, `recall` on Rift, Quarry, places, Pit and Descent entry).
 
 ### After floor 50 (art and sound)
 
@@ -397,6 +402,8 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Descent: 1-5 parties per floor by its place in the segment, a Strike force picker, one extra party by a mage's call (task 67)
 - [x] No waiting after a Descent floor or wave simulation fought by hand (68)
 - [x] Trainers: class and pupil rules (69); Call back everywhere a slime is away (70)
+- [x] Pit and Rift sessions look after their party's needs, fixing deaths by exhaustion (71); no taking command in the Pit (72)
+- [x] Trainers sharpen with every lesson (73); send several groups at once (74); call busy slimes away for a trip at a cost (75)
 
 ### M24 — Troublemakers and the Keeper's shadow (27 October 2026)
 - [x] A troublemaker: came to blows with more than 5% of the colony (rounded down, at least 2 slimes) in 30 days, or disliked by most; one feud or being snapped at is not enough

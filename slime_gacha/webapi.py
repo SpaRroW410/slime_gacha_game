@@ -39,7 +39,7 @@ def slime_view(g: Game, s) -> dict:
         job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji, foraging=(s.state == "hunting")) if s.job else None),
         job_levels={k: jobs_mod.level(s, k) for k in jobs_mod.JOBS},
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
-        behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins, fights=g.recent_fights(s),
+        behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins, fights=g.recent_fights(s), can_pull=g.can_pull_in(s),
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
         row=(s.row or battle_default_row(s)), row_set=s.row, ward=s.id in g.ward, refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
         mood=s.mood_label(), power=(tp := power_mod.total_power(s))["total"], power_tag=power_mod.display(tp["total"]), power_parts=tp["parts"], power_mult=tp["multiplier"],
@@ -384,7 +384,8 @@ def snapshot(g: Game) -> dict:
                   materials={m: g.wallet.get(m) for m in config.MATERIAL_OF.values()},
                   adventure=dict(max_party=config.ADV_MAX_PARTY, max_runs=config.ADV_MAX_RUNS,
                                  lure_cost=config.ADV_LURE_COST, rates=config.ITEM_RARITY_RATES,
-                                 armory=g.buildings.level("armory"))),
+                                 armory=g.buildings.level("armory"), refuse_energy=config.REFUSE_ENERGY,
+                                 pull_morale=config.PULLBACK_MORALE, pull_anger=config.PULLBACK_ANGER, max_groups=MAX_GROUPS)),
         zones=[dict(key=z.key, name=z.name, duration=z.duration, danger=z.danger, desc=z.description,
                     rewards=z.rewards, purple=z.purple_chance) for z in ZONES],
         disciplines=[dict(key=d.key, name=d.name, emoji=d.emoji, style=d.style, perk=d.perk,
@@ -741,7 +742,7 @@ def _fuse_ego(g, a):
 
 @command("adventure")
 def _adventure(g, a):
-    r = g.adventure([int(x) for x in a.get("ids", [])], _i(a, "runs", 1), bool(a.get("lure")))
+    r = g.adventure([int(x) for x in a.get("ids", [])], _i(a, "runs", 1), bool(a.get("lure")), bool(a.get("recall")))
     return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
 
 
@@ -777,14 +778,57 @@ def _destroy_slime(g, a):
 
 @command("quarry")
 def _quarry(g, a):
-    r = g.quarry([int(x) for x in a.get("ids", [])], _i(a, "runs", 1))
+    r = g.quarry([int(x) for x in a.get("ids", [])], _i(a, "runs", 1), bool(a.get("recall")))
     return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
 
 
 @command("explore")
 def _explore(g, a):
-    r = g.explore(str(a.get("place", "")), [int(x) for x in a.get("ids", [])], _i(a, "runs", 1))
+    r = g.explore(str(a.get("place", "")), [int(x) for x in a.get("ids", [])], _i(a, "runs", 1), bool(a.get("recall")))
     return r.summary + [f"Session over: {r.stop_reason}"], dict(battle=[_battle(x) for x in r.runs[-3:]])
+
+
+MAX_GROUPS = 12
+
+
+@command("send_groups")
+def _send_groups(g, a):
+    """Send several groups (parties, or slimes picked one by one) on the same kind of trip at once. Each group is its own
+    expedition and fights separately; a group that cannot go stays home and the others go on without it."""
+    kind = str(a.get("kind", "adventure"))
+    groups = [[int(x) for x in grp] for grp in a.get("groups", []) if grp]
+    runs, lure, recall = _i(a, "runs", 1), bool(a.get("lure")), bool(a.get("recall"))
+    if not groups:
+        raise InvalidAction("Pick at least one party or slime to send.")
+    if len(groups) > MAX_GROUPS:
+        raise InvalidAction(f"At most {MAX_GROUPS} groups can be sent at once.")
+    log: List[str] = []
+    battles: List[dict] = []
+    sent = failed = 0
+    first = None
+    for i, ids in enumerate(groups, 1):
+        names = ", ".join(g.roster[x].name for x in ids if x in g.roster) or "nobody"
+        try:
+            if kind == "adventure":
+                r = g.adventure(ids, runs, lure, recall)
+            elif kind == "quarry":
+                r = g.quarry(ids, runs, recall)
+            else:
+                r = g.explore(kind, ids, runs, recall)
+        except GameError as e:
+            failed += 1
+            first = first or e
+            log.append(f"✋ Group {i} ({names}) stays home: {e}")
+            continue
+        sent += 1
+        log.append(f"▶ Group {i}: {names}")
+        log.extend(r.summary)
+        log.append(f"   Session over: {r.stop_reason}")
+        battles.extend(_battle(x) for x in r.runs[-2:])
+    if not sent:
+        raise first
+    log.insert(0, f"Sent {sent} group(s)" + (f"; {failed} stayed home." if failed else "."))
+    return log, dict(battle=battles, sent=sent, failed=failed)
 
 
 @command("keeper_learn")
@@ -888,7 +932,7 @@ def _council(g, a):
 @command("enter_dungeon")
 def _enter(g, a):
     start = a.get("start")
-    return _msg(g.enter_dungeon(_i(a, "pid"), int(start) if start not in (None, "") else None))
+    return _msg(g.enter_dungeon(_i(a, "pid"), int(start) if start not in (None, "") else None, bool(a.get("recall"))))
 
 
 @command("retreat")
@@ -1110,7 +1154,7 @@ def _scout(g, a):
 
 @command("grind")
 def _grind(g, a):
-    return _flow_result(g, "pit", g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)), manual=_manual(a), lure=bool(a.get("lure"))))
+    return _flow_result(g, "pit", g.grind(_i(a, "pid"), _i(a, "depth", 3), min(60, _i(a, "runs", 1)), lure=bool(a.get("lure")), recall=bool(a.get("recall"))))
 
 
 @command("wave")
@@ -1119,7 +1163,7 @@ def _skirmish(g, a):
     return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a), a.get("lo") and _i(a, "lo"), a.get("hi") and _i(a, "hi"), _i(a, "waves", 1)))
 
 
-SESSION_TITLES = dict(grind="The Gloop Pit", adventure="The Wayfarer's Rift", quarry="The Starfall Quarry", explore="An expedition", skirmish="Wave simulation",
+SESSION_TITLES = dict(send_groups="Expeditions", grind="The Gloop Pit", adventure="The Wayfarer's Rift", quarry="The Starfall Quarry", explore="An expedition", skirmish="Wave simulation",
                       wave="Wave simulation", delve_next="The Hollow Descent", spar="Sparring match", spar_parties="Party sparring")
 
 

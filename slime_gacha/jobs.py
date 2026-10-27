@@ -347,6 +347,14 @@ def trainer_bonus(game, discipline: str, pupil=None) -> float:
     return 1 + b * game.buildings.job_mult("training_grounds")
 
 
+def lesson(game, discipline: str, pupil) -> None:
+    """A lesson was given in `discipline`: if the trainer's teaching helped this pupil, the trainer sharpens a little too."""
+    if trainer_bonus(game, discipline, pupil) <= 1.0:
+        return
+    t = holder(game, TRAINERS[discipline])
+    attributes.practise(t, discipline, config.TRAINER_LESSON_GAIN, config.TRAINER_LESSON_OTHER)
+
+
 def _teach(game, trainer, events: List[str]) -> bool:
     return True                                                     # the lessons themselves are the trainer_bonus on gains
 

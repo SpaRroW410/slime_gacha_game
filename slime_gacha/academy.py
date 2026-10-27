@@ -74,6 +74,7 @@ class AcademySystem:
         self.library = library
         self.buildings = buildings
         self.trainer_mult = lambda discipline, pupil=None: 1.0   # Game sets: the appointed trainer's bonus for this pupil (jobs.trainer_bonus)
+        self.lesson_hook = lambda discipline, pupil: None        # Game sets: a lesson was given (the trainer sharpens too: jobs.lesson)
 
     # -- shared ----------------------------------------------------------------
     def _begin(self, slime, kind: str, ticks: int, cost: Dict[str, int], **args) -> None:
@@ -233,6 +234,7 @@ class AcademySystem:
         d = sparring.DISCIPLINES.get(s.task["discipline"])
         tier = s.task.get("tier", 1)
         gain = self.drill_gain(s, d.key, tier) * s.task.get("wound", 1.0)
+        self.lesson_hook(d.key, s)
         which = attributes.practise(s, d.key, gain, 0.5)
         sparring.gain_style_xp(s, d.key, config.DRILL_STYLE_XP * config.DRILL_TIERS[tier - 1][5] * self.buildings.style_mult() * self.trainer_mult(d.key, s),
                                self.buildings.style_cap())

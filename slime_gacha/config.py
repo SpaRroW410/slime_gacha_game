@@ -258,6 +258,7 @@ REST_ENERGY = [26, 34, 42, 52, 64]      # energy per hour in the Rest Area by le
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
 # Library / mastery
 TASK_MIN_ENERGY = 25
+PULLBACK_MORALE, PULLBACK_ANGER = 6, 12   # calling a slime back from a post, foraging, a hunt, a drill or the Rest Area for a trip: nobody likes it
 WAKE_MORALE, WAKE_ANGER = 6, 10       # waking a sleeping slime (to train, hunt, or on request) costs mood ...
 REFUSE_ENERGY = 10                  # a slime below this energy refuses any post or expedition (and is skipped by 'wake everyone')
 REFUSE_HP = {"job": 0.25, "dungeon": 0.40}   # ... one hurt below this share of its HP refuses (a post / an expedition)
@@ -276,6 +277,7 @@ SMITH_ITEMS, SMITH_MEND_SHARE = 3, 0.15    # items mended per round (+1 per 2 le
 FORAGE_MIN_HP, FORAGE_MIN_ENERGY, FORAGE_MIN_FOOD = 0.7, 50, 35   # an idle slime sets out only when this rested and fed
 FORAGE_SAFETY = 1.5            # ... and only in a zone whose danger is at most power / this
 TRAINER_BONUS, TRAINER_BONUS_PER_LEVEL = 0.15, 0.03   # a trainer's proficiency / style gain bonus (+ per level above 1)
+TRAINER_LESSON_GAIN, TRAINER_LESSON_OTHER = 0.15, 0.05  # a trainer's own proficiency gain per lesson given (teaching sharpens the teacher a little)
 CRAFT_SHIFTS, CRAFT_COST_SHARE = 4, 0.6       # a blacksmith forges every 4 shifts, at this share of the shop price
 CRAFT_RELIC_COST = {"scrap": 6, "white_gel": 15}
 PANTRY_PER_LEVEL, HUNGRY_BELOW = 12, 50       # servings the pantry holds per Kitchen level; food need below which a slime counts as hungry
@@ -390,6 +392,7 @@ ADV_MONSTER_LEVEL = 1            # monsters are this many levels above the party
 ADV_FOE_RATIO = 0.75             # foes per slime (a small party meets proportionally fewer)
 ADV_TICKS = 2
 SESSION_MAX_HOURS = 24            # no farming session (Pit, Rift, Quarry) lasts longer than one game day, camping included
+FIELD_REST_ENERGY = 80            # a session party that has to sleep (anyone under AUTO_SLEEP_BELOW energy) rests until everyone has this much
 ADV_MAX_RUNS = SESSION_MAX_HOURS // ADV_TICKS     # = 12 runs of 2 hours
 GRIND_MAX_RUNS = SESSION_MAX_HOURS // GRIND_TICKS
 ADV_DROP_PER_FOE = 0.45          # chance per defeated foe to drop a relic

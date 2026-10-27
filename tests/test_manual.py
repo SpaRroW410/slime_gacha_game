@@ -98,12 +98,13 @@ class TestManualBattle(unittest.TestCase):
         d = g.delves.get(pid)
         self.assertTrue(d is None or d["floor"] in (1, 2))
 
-    def test_pit_session_continues_across_runs_and_can_flip_to_auto(self):
+    def test_the_pit_cannot_be_commanded_by_hand(self):
         g, pid = manual_game(9, strong=False)
-        self.assertIsNone(g.grind(pid, 1, 3, manual=True))
-        play_by_hand_one(g)
-        res = g.battle_set_manual(False)
-        self.assertEqual(len(res.runs), 3)
+        res = g.grind(pid, 1, 3, manual=True)             # asked for command: the Pit ignores it and fights on its own
+        self.assertIsNotNone(res)
+        self.assertGreaterEqual(len(res.runs), 1)
+        self.assertIsNone(g.flow)
+        self.assertIsNone(g.battle_run())
         self.assertIsNone(g.flow)
         for s in members(g, pid):
             self.assertEqual(s.in_dungeon, "")
@@ -129,8 +130,8 @@ class TestManualBattle(unittest.TestCase):
     def test_an_open_battle_is_not_saved_and_the_party_is_freed_on_load(self):
         from slime_gacha.game import Game
         g, pid = manual_game(13, strong=False)
-        g.grind(pid, 1, 2, manual=True)
-        self.assertTrue(all(s.in_dungeon == "grind" for s in members(g, pid)))
+        g.battle(pid, 1, manual=True)
+        self.assertTrue(all(s.in_dungeon == "wave" for s in members(g, pid)))
         g2 = Game.from_dict(g.to_dict())
         self.assertIsNone(g2.flow)
         self.assertTrue(all(s.in_dungeon == "" for s in g2.party_members(pid)))
@@ -273,7 +274,8 @@ class TestGiftsPotionsGear(unittest.TestCase):
         g, pid = self._g()
         with self.assertRaises(InvalidAction):
             g.commander_gift(pid, "morale")
-        g.grind(pid, 1, 1, manual=True)
+        for s in members(g, pid):
+            s.in_dungeon = "grind"                           # away in the Pit
         with self.assertRaises(InvalidAction):
             g.commander_gift(pid, "morale")
 

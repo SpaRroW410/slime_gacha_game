@@ -410,6 +410,7 @@ class TestWiderAutonomy(unittest.TestCase):
         g = mk()
         for s in g.slimes():
             s.level, s.stage = 30, 2
+            s.hp = s.max_hp                                   # (a higher level means more HP to fill: an expedition refuses the hurt)
         for i in range(12):
             g.vault[10 + i] = items.Item(10 + i, "iron_sword")
         g.conflicts.tick = lambda *a, **k: None

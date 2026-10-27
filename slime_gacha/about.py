@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-27-strike-forces",
-                 text="The Hollow Descent now takes more parties at once: the first floor of each segment fits one party, the second two, the third three, the fourth four and the boss floor five, and a mage's call adds one more beyond that. Choose who joins in the new Strike force list on each party's card and fight them together. A floor you fight by hand costs no waiting afterwards. Trainers must fight in the style they teach (a swordsman cannot teach magic) and only help pupils who know less than they do. Slimes that are resting, foraging or on a post now show it on their cards and in the Parties tab, each with a Call back button.")
+WHATS_NEW = dict(id="2026-10-27-trips",
+                 text="The Hollow Descent takes 1-5 parties at once by floor (a mage's call adds one more): choose them in the Strike force list, and a floor you fight by hand costs no waiting. The Rift, the Quarry and the other places share one sender with collapsible Parties and Individual slimes lists (search, class filter): tick several parties and send them all at once, each fighting separately. Slimes busy at home (resting, foraging, on a post) can be called away for a trip, at a cost in morale and temper; those under 10% energy are not listed and refusers are greyed out. Pit and Rift sessions now eat and sleep for their party, so nobody dies of exhaustion mid-session. The Pit no longer offers taking command. Trainers must fight in the style they teach, only help pupils who know less, and sharpen a little with every lesson. Slimes away from home show it and have Call back buttons.")
 
 
 def build() -> Dict[str, object]:
