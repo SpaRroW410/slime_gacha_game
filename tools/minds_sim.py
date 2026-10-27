@@ -66,6 +66,7 @@ def run_colony(seed: int = 1, n: int = 20, days: int = 45, keeper: bool = False)
     g = colony(seed, n)
     counts = collections.Counter()
     strong = collections.Counter()           # slime-hours a feeling is at 30 or more
+    level = collections.Counter()            # sum of each feeling's level over slime-hours (mean = level / hours)
     top = collections.Counter()              # slime-hours a feeling is the strongest
     most_brawls = 0                          # the most brawls any one feud reached
     hours = calm_hours = 0
@@ -86,6 +87,7 @@ def run_colony(seed: int = 1, n: int = 20, days: int = 45, keeper: bool = False)
             else:
                 calm_hours += 1
             for k, v in s.emotions.items():
+                level[k] += v
                 if v >= 30:
                     strong[k] += 1
         if g.tick_count % 24 == 0:
@@ -95,7 +97,8 @@ def run_colony(seed: int = 1, n: int = 20, days: int = 45, keeper: bool = False)
     alive = len(g.roster) or 1
     return dict(
         events=dict(counts), alive=len(g.roster), dead=len(g.graveyard),
-        strong={k: v / hours for k, v in strong.items()}, top={k: v / hours for k, v in top.items()},
+        strong={k: v / hours for k, v in strong.items()}, mean={k: v / hours for k, v in level.items()},
+        content=statistics.mean(s.content for s in g.slimes()) if g.roster else 0.0, top={k: v / hours for k, v in top.items()},
         no_strong=calm_hours / hours, mood=statistics.mean(moods) if moods else 0.0,
         sanity=statistics.mean(sanity.frac(s) for s in g.slimes()) if g.roster else 0.0,
         relations=dict(rel), goals=dict(goals), rival_goals=goals.get("rival", 0) / alive,
@@ -216,8 +219,9 @@ TARGETS = [
      "anger at 30+ for at most a fifth of the time, even with nobody stepping in"),
     ("sadness is an episode", "hands_off", lambda r: r["strong"].get("sadness", 0) <= 0.20,
      "sadness at 30+ for at most a fifth of the time"),
-    ("good days happen", "attentive", lambda r: r["strong"].get("joy", 0) + r["strong"].get("calm", 0) + r["strong"].get("affection", 0) >= 0.10,
-     "a cared-for colony feels joy, calm or affection at 30+ at least a tenth of the time"),
+    ("good days happen", "attentive", lambda r: r["mean"].get("joy", 0) + r["mean"].get("calm", 0) + r["mean"].get("affection", 0) >= 10,
+     "in a cared-for colony joy, calm and affection add up to 10+ on an ordinary hour"),
+    ("everyday joy", "attentive", lambda r: r["mean"].get("joy", 0) >= 3, "people who are looked after are mildly cheerful most of the time"),
     ("care builds bonds", "attentive", lambda r: r["relations"].get("rival", 0) <= r["relations"].get("friend", 0) + r["relations"].get("best_friend", 0),
      "an attentive Keeper's colony has more friends than rivals"),
     ("ordinary goals", "hands_off", lambda r: r["rival_goals"] <= 0.40, "most slimes want something other than revenge"),
@@ -261,7 +265,8 @@ def report(results: dict) -> str:
             lines += [f"## Colony, {key.replace('_', '-')} (seed {i + 1})", "",
                       f"- events: {r['events']}",
                       f"- feeling at 30+: " + ", ".join(f"{k} {pct(v)}" for k, v in sorted(r['strong'].items(), key=lambda kv: -kv[1])),
-                      f"- no strong feeling: {pct(r['no_strong'])} · mood {r['mood']:.2f} · sanity {r['sanity']:.2f}",
+                      f"- usual level: " + ", ".join(f"{k} {v:.1f}" for k, v in sorted(r['mean'].items(), key=lambda kv: -kv[1])[:6]),
+                      f"- no strong feeling: {pct(r['no_strong'])} · mood {r['mood']:.2f} · contentment {r['content']:.0f} · sanity {r['sanity']:.2f}",
                       f"- relationships: {r['relations']} · goals: {r['goals']} · most brawls in one feud: {r['max_brawls_per_feud']}",
                       f"- memories per slime: {r['memories']:.1f} · cuddle lines per day: {r['cuddles_per_day']:.0f}", ""]
     lines += ["## The legendary", ""]

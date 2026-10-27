@@ -67,6 +67,20 @@ TRAIT_GAIN = dict(
     chatty=dict(loneliness=1.5, joy=1.2), lazy=dict(joy=.9, anxiety=.8), gluttonous=dict(anger=1.2),
 )
 CAP = 0.35
+# Everyone has a usual mood. Feelings settle back to this baseline instead of to nothing: a chatty slime is a little cheerful
+# by default, a grumpy one a little cross. CONTENTMENT (0-100, slow: days) adds to it - a good life shows as everyday joy and
+# calm, a hard one as a low hum of sadness and worry.
+TRAIT_BASELINE = dict(
+    chatty=dict(joy=12), kind=dict(affection=10, calm=6), grumpy=dict(anger=10), timid=dict(anxiety=10, fear=4),
+    brave=dict(determination=10), proud=dict(pride=12), lazy=dict(calm=12), gluttonous=dict(joy=6),
+)
+CONTENT_START = 50.0
+CONTENT_RATE = 0.01          # share of the gap to the current mood closed per hour (about three days to settle)
+CONTENT_GOOD, CONTENT_BAD = 45.0, 30.0     # an ordinary, looked-after life sits in the mid-50s (food and sleep cycle)
+CONTENT_LIFT = dict(joy=0.5, calm=0.4)          # baseline per point of contentment above CONTENT_GOOD
+CONTENT_SINK = dict(sadness=0.5, anxiety=0.3)   # ... and per point below CONTENT_BAD
+DRIFT_CEIL = 60.0            # needs alone never push a feeling past this; only events do (and those fade back)
+RISE_RATE = 0.5              # a feeling below its baseline climbs back at this share of its decay rate
 
 
 TRIGGERS = {          # what raises / lowers each feeling (shown in the in-game guide)
@@ -101,6 +115,27 @@ TRIGGERS = {          # what raises / lowers each feeling (shown in the in-game 
 
 def level(slime, key: str) -> float:
     return slime.emotions.get(key, 0.0)
+
+
+def baseline(slime) -> Dict[str, float]:
+    """The level each feeling settles back to: from traits, plus contentment (a good or hard life)."""
+    out: Dict[str, float] = {}
+    for t in slime.traits:
+        for k, v in TRAIT_BASELINE.get(t, {}).items():
+            out[k] = out.get(k, 0.0) + v
+    c = getattr(slime, "content", CONTENT_START)
+    for k, f in CONTENT_LIFT.items():
+        if c > CONTENT_GOOD:
+            out[k] = out.get(k, 0.0) + (c - CONTENT_GOOD) * f
+    for k, f in CONTENT_SINK.items():
+        if c < CONTENT_BAD:
+            out[k] = out.get(k, 0.0) + (CONTENT_BAD - c) * f
+    return out
+
+
+def content_label(slime) -> str:
+    c = getattr(slime, "content", CONTENT_START)
+    return "thriving" if c >= 70 else "content" if c >= 50 else "getting by" if c >= 35 else "struggling" if c >= 20 else "worn down"
 
 
 def feel(slime, key: str, amount: float) -> None:
@@ -147,17 +182,32 @@ def tick(slime, rng: random.Random, sleeping: bool = False, fade: float = 1.0) -
     if rng.random() < 0.03:                                       # an ambient mood swing
         drift.append((rng.choice(list(EMOTIONS)[:9]), 6))
     for k, a in drift:
-        feel(slime, k, a)
+        if slime.emotions.get(k, 0.0) < DRIFT_CEIL:               # needs keep a feeling simmering, not boiling
+            feel(slime, k, a)
     mult = 2.0 if sleeping else 1.0
     floor = getattr(slime, "emotion_floor", {})
-    for k in list(slime.emotions):
-        f = fade if EMOTIONS[k].kind == "bad" else 1.0
-        slime.emotions[k] = max(floor.get(k, 0.0), slime.emotions[k] - EMOTIONS[k].decay * mult * f)
-        if slime.emotions[k] < 1:
-            slime.emotions.pop(k)
+    base = baseline(slime)
+    for k in set(slime.emotions) | set(base):                     # every feeling drifts back to the slime's usual mood
+        rest = max(base.get(k, 0.0), floor.get(k, 0.0))
+        v = slime.emotions.get(k, 0.0)
+        if v > rest:
+            f = fade if EMOTIONS[k].kind == "bad" else 1.0
+            v = max(rest, v - EMOTIONS[k].decay * mult * f)
+        elif v < rest:
+            v = min(rest, v + EMOTIONS[k].decay * RISE_RATE)
+        if v < 1:
+            slime.emotions.pop(k, None)
+        else:
+            slime.emotions[k] = v
     for k, f in floor.items():                                    # a permanent undercurrent (see awakening.py)
         if slime.emotions.get(k, 0.0) < f:
             slime.emotions[k] = float(f)
+
+
+def settle(slime, mood: float) -> None:
+    """Hourly: contentment follows the slime's mood (needs, capped by sanity) slowly, over days."""
+    c = getattr(slime, "content", CONTENT_START)
+    slime.content = max(0.0, min(100.0, c + (100.0 * mood - c) * CONTENT_RATE))
 
 
 def modifiers(slime) -> Tuple[Dict[str, float], Dict[str, float]]:

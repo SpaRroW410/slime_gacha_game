@@ -658,6 +658,7 @@ function dFight(s, { st, free }) {
 function dMind(s, { st, free, inDun }) {
   const em = { couple: '💘 Partner', best_friend: '💞 Best friend', friend: '🤝 Friend', rival: '⚔️ Rival' };
   return `${sect('Feelings', 'Passing feelings shift stats in battle. The Guide tab lists what raises and lowers each one.', `<div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value))).join('') : '<small class="mute">Calm and unremarkable.</small>'}
+      <div title="How life has felt over the last few days. Feelings settle back to a slime's usual mood, and a good life lifts it.">🌤 <b>${esc(s.content_label)}</b> <small class="mute">contentment ${s.content}/100</small></div>
       ${Object.keys(s.feeling_effects).length ? `<small class="mute">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
       ${s.awareness ? `<div>🧩 <b>Awareness: ${esc(s.awareness.name)}</b> <small class="mute">${s.awareness.points}/100${s.awareness.temperament ? ' · ' + (s.awareness.temperament === 'accept' ? 'at peace' : 'in despair') : ''}</small></div>` : ''}
       <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button></div></div>`)}

@@ -54,6 +54,7 @@ def slime_view(g: Game, s) -> dict:
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         mastery_paused=(elements.stars_to_resume(s) if elements.mastery_paused(s) else None),
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
+        content=round(s.content), content_label=emotions.content_label(s),
         feelings=[dict(key=k, name=emotions.EMOTIONS[k].name, emoji=emotions.EMOTIONS[k].emoji,
                        value=round(v), kind=emotions.EMOTIONS[k].kind) for k, v in
                   sorted(s.emotions.items(), key=lambda kv: -kv[1]) if v >= 3],

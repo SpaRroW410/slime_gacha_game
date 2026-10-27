@@ -152,5 +152,71 @@ class TestFeudsCoolOff(unittest.TestCase):
         self.assertEqual(len(g.conflicts.conflicts), 1)
 
 
+class TestUsualMood(unittest.TestCase):
+    def test_traits_set_a_baseline(self):
+        g = colony()
+        s = make(g, traits=["chatty", "grumpy"])
+        base = emotions.baseline(s)
+        self.assertGreater(base["joy"], 0)
+        self.assertGreater(base["anger"], 0)
+        self.assertTrue(all(v < 5 for v in emotions.baseline(make(g)).values()))   # no traits, a new life: only a faint mood
+
+    def test_feelings_settle_back_to_the_baseline_not_to_nothing(self):
+        g = colony()
+        s = make(g, traits=["grumpy"])
+        s.emotions["anger"] = 90
+        for _ in range(48):
+            emotions.tick(s, g.mood_rng)
+        self.assertAlmostEqual(s.emotions["anger"], emotions.TRAIT_BASELINE["grumpy"]["anger"], delta=0.01)
+
+    def test_a_soothed_feeling_climbs_back_slowly(self):
+        g = colony()
+        s = make(g, traits=["lazy"])
+        s.needs.v.update({k: 100.0 for k in s.needs.v})
+        s.emotions.pop("calm", None)
+        emotions.tick(s, g.mood_rng)
+        self.assertGreater(s.emotions.get("calm", 0), 0)
+        self.assertLess(s.emotions.get("calm", 0), emotions.TRAIT_BASELINE["lazy"]["calm"])
+
+    def test_contentment_follows_mood_over_days(self):
+        g = colony()
+        s = make(g)
+        for _ in range(12):
+            emotions.settle(s, 1.0)
+        self.assertLess(s.content, 65)                                  # half a day of bliss is not a good life
+        for _ in range(24 * 6):
+            emotions.settle(s, 1.0)
+        self.assertGreater(s.content, 85)
+        self.assertGreater(emotions.baseline(s)["joy"], 15)             # a good life shows as everyday joy
+        for _ in range(24 * 10):
+            emotions.settle(s, 0.1)
+        self.assertGreater(emotions.baseline(s)["sadness"], 5)          # a hard one as a low hum of sadness
+        self.assertIn(emotions.content_label(s), ("struggling", "worn down"))
+
+    def test_needs_keep_a_feeling_simmering_but_not_boiling(self):
+        g = colony()
+        s = make(g)
+        s.needs.set("food", 0)
+        for _ in range(48):
+            emotions.tick(s, g.mood_rng)
+        self.assertLessEqual(s.emotions["anger"], emotions.DRIFT_CEIL + 8)
+        self.assertGreater(s.emotions["anger"], 30)
+
+    def test_a_reload_feels_exactly_the_same(self):
+        import json
+        g = colony(11, 8)
+        g.tick(30)
+        h = Game.from_dict(json.loads(json.dumps(g.to_dict())))
+        g.tick(48)
+        h.tick(48)
+        self.assertEqual([s.emotions for s in g.slimes()], [h.roster[s.id].emotions for s in g.slimes()])
+
+    def test_contentment_is_saved(self):
+        g = colony()
+        s = make(g)
+        s.content = 72.5
+        self.assertEqual(Game.from_dict(g.to_dict()).roster[s.id].content, 72.5)
+
+
 if __name__ == "__main__":
     unittest.main()

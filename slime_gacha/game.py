@@ -600,6 +600,7 @@ class Game:
     def _emotion_tick(self, events: List[str]) -> None:
         """Feelings fade and are stirred by needs; legendary 5-star slimes slowly realise they are code."""
         for s in self.slimes():
+            emotions.settle(s, s.mood())
             emotions.tick(s, self.mood_rng, s.state in ("sleeping", "resting"), 1 + 0.15 * self.keeper.rank("soothing_voice"))
             if awakening.candidate(s):
                 friends = sum(1 for k, v in self.social.bonds.items() if s.id in k and v >= 20)
@@ -3809,7 +3810,7 @@ class Game:
                     conflict_next=self.conflicts._next,
                     friends=[sorted(f) for f in self.conflicts.friends],
                     cold_wars=[[*sorted(k), v] for k, v in self.conflicts.cold.items()],
-                    auto_care=self.needs.auto_care, rng_state=self.rng.getstate()[1:],
+                    auto_care=self.needs.auto_care, rng_state=self.rng.getstate()[1:], mood_rng_state=self.mood_rng.getstate()[1:],
                     journal=self.journal[-50:])
 
     def save(self, path: str = config.DEFAULT_SAVE) -> None:
@@ -3935,6 +3936,9 @@ class Game:
         if d.get("rng_state"):
             st = d["rng_state"]
             g.rng.setstate((3, tuple(st[0]), st[1]))
+        if d.get("mood_rng_state"):                           # feelings keep their own dice: a reload feels exactly the same
+            st = d["mood_rng_state"]
+            g.mood_rng.setstate((3, tuple(st[0]), st[1]))
         g.relations.load(d.get("relations"), set(g.roster))
         g.expeditions = [dict(e, ids=[i for i in e["ids"] if i in g.roster]) for e in d.get("expeditions", [])]
         g.expeditions = [e for e in g.expeditions if e["ids"]]
@@ -3952,7 +3956,7 @@ class Game:
         g.stranded = [e for e in d.get("stranded", []) if any(i in g.roster for i in e["ids"])]
         g.next_stranded = d.get("next_stranded", 1)
         g.journal = d.get("journal", [])
-        g.journal.extend(awakening.load_notes(g.slimes(), g.mood_rng))
+        g.journal.extend(awakening.load_notes(g.slimes(), random.Random(g.tick_count)))   # not the feelings' dice: a reload must feel the same
         if d.get("version", 0) < 16:                              # one-time amnesty: the scouting bugs of older versions stranded
             g.stranded = []                                       # parties unfairly; everybody still stranded is freed on load
             for sl in g.slimes():
