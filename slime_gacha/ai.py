@@ -43,6 +43,7 @@ class NeedsEngine:
         self.auto_care = True
         self.meal_hook = None            # Game sets: callable(slime) -> bool, a hungry slime eats a cooked dish from the pantry
         self.rest_hook = None            # Game sets: callable(slime) -> bool, sends a wounded slime to the Rest Area
+        self.skip_meal = None            # Game sets: callable(slime, events) -> bool, a slime in deep despair leaves its food
 
     def tick(self, slimes: List, events: List[str]) -> None:
         slimes = [s for s in slimes if s.alive]
@@ -66,6 +67,8 @@ class NeedsEngine:
                 r *= config.HUNT_DECAY_MULT.get(need, 1.0)
             elif s.state == "studying":
                 r *= config.STUDY_DECAY_MULT.get(need, 1.0)
+            elif s.state == "working":                  # colleagues and customers: work is not lonely
+                r *= config.WORK_DECAY_MULT.get(need, 1.0)
             if s.state in ("sleeping", "resting"):
                 r = 0.0 if need == "energy" else r * 0.4
             n.add(need, -r)
@@ -94,6 +97,8 @@ class NeedsEngine:
 
     def _autonomy(self, s, idle, events) -> None:
         n = s.needs
+        if n.get("food") < config.AUTO_EAT_BELOW and self.skip_meal and self.skip_meal(s, events):
+            return
         if s.state in ("working", "hunting") and n.get("food") < config.AUTO_EAT_BELOW:
             if self.meal_hook and self.meal_hook(s):
                 events.append(f"🍽 {s.name} eats a cooked meal.")

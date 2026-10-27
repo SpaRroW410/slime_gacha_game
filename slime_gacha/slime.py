@@ -6,7 +6,7 @@ from . import config
 from .abilities import get_ability
 from .archetypes import STAT_KEYS, Archetype, get_archetype
 from .equipment import gear_bonus
-from . import attributes, potions, sanity
+from . import attributes, awakening, potions, sanity
 from .items import Item, item_bonus
 from .specialization import SPECS, apply_shifts
 
@@ -100,7 +100,9 @@ class Slime:
         self.emotion_floor: Dict[str, float] = {} # permanent undercurrents (see awakening.py)
         self.content = 50.0                       # contentment 0-100: how life has felt over the last days (emotions.settle)
         self.awareness = 0.0                      # 5-star legendaries realise they are code (see awakening.py)
-        self.temperament = ""                     # how an awakened slime took it: accept | despair
+        self.temperament = ""                     # how an awakened slime takes it: settled | peace | cog | despair
+        self.life = None                          # its daily record (care, connection, purpose, hardship), see awakening.py
+        self.low_days = 0                         # consecutive days with sanity 'breaking' (mind.py: may ask to leave)
         self.parents: List[int] = []              # lineage: ids of the two parents (budding)
         self.parent_names: List[str] = []
         self.generation = 0
@@ -185,7 +187,7 @@ class Slime:
 
     def mood(self) -> float:
         """How the needs feel, capped by sanity: a worn-down slime cannot be fed or petted into happiness."""
-        return min(self.needs_mood(), sanity.mood_cap(self))
+        return min(self.needs_mood(), sanity.mood_cap(self), awakening.mood_cap(self))
 
     def mood_label(self) -> str:
         m = self.mood()
@@ -249,7 +251,7 @@ class Slime:
                     merged=self.merged, grounded=self.grounded, brawls=self.brawls, row=self.row, style_xp=self.style_xp, morale=self.morale, sanity=round(self.sanity, 2), cared=self.cared, memories=self.memories, goal=self.goal, request=self.request, trust=round(self.trust, 1), drift=self.drift,
                     gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, buffs=self.buffs, parents=self.parents, parent_names=self.parent_names,
                     generation=self.generation, emotions=self.emotions,
-                    emotion_floor=self.emotion_floor, content=self.content, awareness=self.awareness, temperament=self.temperament,
+                    emotion_floor=self.emotion_floor, content=self.content, awareness=self.awareness, temperament=self.temperament, life=self.life, low_days=self.low_days,
                     proficiency=self.proficiency, weapon_memory=self.weapon_memory, in_dungeon=self.in_dungeon, progress=self.progress, exp=self.exp, spec=self.spec, spec_disc=self.spec_disc,
                     attuned=self.attuned, mastery_xp=self.mastery_xp, spells=self.spells,
                     task=self.task, class_prof=round(self.class_prof, 2), prof_idle=self.prof_idle, pure_earned=self.pure_earned, color=self.color, star_peak=self.star_peak, job=self.job, job_xp=dict(self.job_xp), job_clock=self.job_clock,
@@ -260,7 +262,7 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "brawls", "row", "style_xp", "morale", "sanity", "cared", "memories", "goal", "request", "trust", "drift", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "content", "awareness", "temperament", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
+                  "merged", "grounded", "brawls", "row", "style_xp", "morale", "sanity", "cared", "memories", "goal", "request", "trust", "drift", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "content", "awareness", "temperament", "life", "low_days", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
             if k in d:
                 setattr(s, k, d[k])
         s.items = {k: Item.from_dict(v) for k, v in (d.get("items") or {}).items()}

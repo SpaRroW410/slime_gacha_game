@@ -83,6 +83,8 @@ class Game:
         self.needs.meal_hook = lambda s: jobs.eat_from_pantry(self, s)
         self.social = SocialEngine(self.conflicts, self.buildings)
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
+        self.needs.skip_meal = self._skips_meal                   # deep despair: it stops feeding itself
+        self.departed: List[dict] = []                            # slimes the Keeper let leave the colony
         self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
         self.conflicts.memory_fn = memory.for_pair
         self.conflicts.hook = self._social_hook
@@ -605,18 +607,19 @@ class Game:
             if awakening.candidate(s):
                 friends = sum(1 for k, v in self.social.bonds.items() if s.id in k and v >= 20)
                 friends += sum(1 for f in self.conflicts.friends if s.id in f)
-                awakening.tick(s, self.mood_rng, friends, events)
+                awakening.tick(s, self.mood_rng, friends, events, self.day)
 
     def talk(self, sid: int) -> str:
         """Ask a slime how it feels. Aware legendaries may say something unsettling."""
         s = self._tend(sid)
-        line = awakening.thought(s, self.mood_rng) if awakening.stage(s) and self.mood_rng.random() < 0.6 else None
+        line = awakening.thought(s, self.mood_rng, self.day) if awakening.stage(s) and self.mood_rng.random() < 0.6 else None
         line = line or emotions.say(s, self.mood_rng)
         top = emotions.dominant(s, 1)
         feel = f" ({emotions.EMOTIONS[top[0][0]].emoji} {emotions.EMOTIONS[top[0][0]].name.lower()})" if top else ""
         n = self._cared(s, "talk")
         emotions.feel(s, "affection", 3 if n == 1 else 0)
         if n == 1:                                       # the first talk of the day really helps; more is just chatter
+            awakening.note(s, "care", 0.5)
             sanity.heal(s, config.SANITY_TALK)
             for e in ("sadness", "anxiety", "loneliness"):
                 emotions.soothe(s, e, 10)
@@ -684,6 +687,8 @@ class Game:
         for s in self.slimes():
             memory.fade(s)
         mind.daily(self, events)
+        for s in self.slimes():
+            awakening.daily(self, s, events)
         before = len(self.relations.rel)
         self.relations.daily(self, self.mood_rng, events, self.day)
         if len(self.relations.rel) > before:
@@ -1190,6 +1195,9 @@ class Game:
             return "is too hurt and refuses"
         if s.mood() < config.REFUSE_MOOD - config.TRUST_REFUSE_SHIFT * (s.trust - 50) / 50:
             return "is in too bleak a mood and refuses"
+        dst = awakening.despair_stage(s)
+        if dst and (kind == "dungeon" or dst >= 3):
+            return f"is in despair and refuses: \"{awakening.LINES['despair'][s.id % len(awakening.LINES['despair'])]}\""
         if kind == "dungeon" and s.goal and s.goal["kind"] == "avoid_dungeons" and s.trust < 80:
             return f"refuses: {s.goal['text']}"
         if s.emotions.get("anger", 0) >= config.REFUSE_ANGER:
@@ -1283,6 +1291,8 @@ class Game:
     def pet(self, sid: int) -> str:
         s = self._tend(sid)
         k = 0.5 ** (self._cared(s, "pet") - 1)           # each pet the same day counts half as much as the last
+        if k == 1:
+            awakening.note(s, "care", 0.4)
         s.needs.add("belonging", 15 * k)
         s.needs.add("esteem", 5 * k)
         gh = (1 + 0.5 * self.keeper.rank("gentle_hands")) * k
@@ -2314,6 +2324,40 @@ class Game:
             raise InvalidAction(f"Unknown rarity '{rarity}'.")
         n = ascension.merge_stones(self.wallet, rarity)
         return f"💎 {n * config.STONE_MERGE} {rarity} stones fuse into {n} {ascension.next_rarity(rarity)}."
+
+    def _skips_meal(self, s: Slime, events: List[str]) -> bool:
+        """Deep despair: the slime leaves its food (the Keeper can still feed it by hand). Warns once a day."""
+        if not awakening.skips_meal(s, self.mood_rng):
+            return False
+        if s.life.get("warned") != self.day:
+            s.life["warned"] = self.day
+            events.append(f"⚠ {s.name} leaves their food untouched (food {int(s.needs.get('food'))}). Feed them by hand.")
+        return True
+
+    def depart(self, s: Slime, reason: str) -> List[str]:
+        """The Keeper lets a slime leave the colony for good: its gear comes home, its friends miss it (no sacrifice stress)."""
+        friends = [self.roster[r["other"]] for r in self.relations.of(s.id)
+                   if r["other"] in self.roster and r["kind"] in ("friend", "best_friend", "couple", "mentor")]
+        self._return_gear(s)
+        if self.vice == s.id:
+            self.vice = None
+        del self.roster[s.id]
+        self.ward = [i for i in self.ward if i != s.id]
+        self.conflicts.forget(s.id)
+        self.parties.remove(s.id)
+        self.relations.forget(s.id)
+        self.social.forget(s.id)
+        for o in friends:
+            emotions.feel(o, "sadness", config.DEPART_SADNESS)
+            emotions.feel(o, "loneliness", config.DEPART_SADNESS / 2)
+            memory.remember(o, "lost", s, self.day, 2.0, "(left the colony)")
+        self.departed.append(dict(id=s.id, name=s.name, archetype=s.archetype, rarity=s.rarity, stars=s.stars, level=s.level,
+                                  day=self.day, reason=reason))
+        out = [f"👋 {s.name} leaves the colony and walks out past the Last Gacha Well. They do not look back."]
+        if friends:
+            out.append(f"   {', '.join(o.name for o in friends)} will miss them.")
+        self.journal.extend(out)
+        return out
 
     def _consume_slime(self, s: Slime, stress: float) -> None:
         """Remove a slime sacrificed by the player: gear comes home, the colony mourns, stress rises."""
@@ -3803,7 +3847,7 @@ class Game:
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
-                    parties=self.parties.to_dict(), graveyard=self.graveyard,
+                    parties=self.parties.to_dict(), graveyard=self.graveyard, departed=self.departed[-50:],
                     wallet=self.wallet.to_dict(), gacha=self.gacha.to_dict(),
                     slimes=[s.to_dict() for s in self.slimes()],
                     conflicts=[c.to_dict() for c in self.conflicts.conflicts],
@@ -3924,6 +3968,7 @@ class Game:
             g.roster[s.id] = s
         g.parties.load(d.get("parties", {}), set(g.roster))
         g.graveyard = d.get("graveyard", [])
+        g.departed = list(d.get("departed", []))
         g.conflicts.conflicts = [Conflict(**c) for c in d.get("conflicts", [])
                                  if c["a"] in g.roster and c["b"] in g.roster]
         g.delves = {int(k): v for k, v in d.get("delves", {}).items()

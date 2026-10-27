@@ -658,9 +658,9 @@ function dFight(s, { st, free }) {
 function dMind(s, { st, free, inDun }) {
   const em = { couple: '💘 Partner', best_friend: '💞 Best friend', friend: '🤝 Friend', rival: '⚔️ Rival' };
   return `${sect('Feelings', 'Passing feelings shift stats in battle. The Guide tab lists what raises and lowers each one.', `<div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value))).join('') : '<small class="mute">Calm and unremarkable.</small>'}
-      <div title="How life has felt over the last few days. Feelings settle back to a slime's usual mood, and a good life lifts it.">🌤 <b>${esc(s.content_label)}</b> <small class="mute">contentment ${s.content}/100</small></div>
+      <div title="How life has felt over the last few days. Feelings settle back to a slime's usual mood, and a good life lifts it.">🌤 Contentment: <b>${esc(s.content_label)}</b> <small class="mute">${s.content}/100</small></div>
       ${Object.keys(s.feeling_effects).length ? `<small class="mute">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
-      ${s.awareness ? `<div>🧩 <b>Awareness: ${esc(s.awareness.name)}</b> <small class="mute">${s.awareness.points}/100${s.awareness.temperament ? ' · ' + (s.awareness.temperament === 'accept' ? 'at peace' : 'in despair') : ''}</small></div>` : ''}
+      ${s.awareness ? awarenessHtml(s.awareness) : ''}
       <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button></div></div>`)}
     ${sect('Relationships', 'Ties form from bonds: friends, best friends, rivals, mentors and couples. See the People tab.', `<div class="stack" style="gap:3px">${s.relations.map((r) => { const o = slimeById(r.other); if (!o) return ''; const label = r.kind === 'mentor' ? (r.mentor === s.id ? '🎓 Mentee' : '🎓 Mentor') : em[r.kind]; return `<div>${label}: <b>${esc(o.name)}</b></div>`; }).join('') || '<small class="mute">No ties yet.</small>'}
       ${s.parents.length ? `<div>🥚 Child of <b>${s.parent_names.map(esc).join(' &amp; ')}</b> · generation ${s.generation}</div>` : ''}</div>`)}
@@ -1010,6 +1010,12 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, String(v)); } catch (e) 
 const BACKUP_DAYS = 3;
 function backupAge() { const t = Number(lsGet(LS_EXPORT)); return t ? (Date.now() - t) / 86400000 : null; }
 function backupDue() { const a = backupAge(); return (a === null || a >= BACKUP_DAYS) && Date.now() - Number(lsGet(LS_SNOOZE) || 0) > 86400000; }
+/* A 5-star legendary's awakening: how it takes being code (settled / at peace / a cog / in despair), why, and its life record. */
+function awarenessHtml(a) {
+  const stageNote = ['', ' · withdrawn', ' · stops eating on its own: feed it by hand', ' · breaking down'][a.despair_stage] || '';
+  const life = a.life ? `<small class="mute">Last two weeks: care ${Math.round(a.life.care * 100)}% · connection ${Math.round(a.life.connection * 100)}% · purpose ${Math.round(a.life.purpose * 100)}% · hardship ${Math.round(a.life.hardship * 100)}%</small>` : '';
+  return `<div>🧩 <b>Awareness: ${esc(a.name)}</b> <small class="mute">${a.points}/100</small>${a.outcome ? `<br><span class="${a.temperament === 'despair' ? 'bad' : a.temperament === 'cog' ? 'warn' : 'ok'}">Feels ${esc(a.outcome)}${esc(stageNote)}</span> <small class="mute">(${esc(a.why)})</small>` : ''}${life ? '<br>' + life : ''}</div>`;
+}
 function requestRow(s) {
   return `<div class="row between panel flat"><span>💬 <b>${esc(s.name)}</b> ${esc(s.request.text)}.</span><span class="row"><button class="btn small primary" data-act="answer_request" data-id="${s.id}" data-yes="1">Grant</button><button class="btn small" data-act="answer_request" data-id="${s.id}" data-yes="0">Decline</button></span></div>`;
 }
@@ -1519,6 +1525,7 @@ function records() {
   const st = S.state;
   const tale = `<div class="panel stack" style="margin-bottom:12px"><h2>📖 The Great Gloop <small class="mute">${st.story.filter((c) => c.done).length}/${st.story.length}</small></h2>${st.story.map((c) => c.done ? `<details><summary><b>${esc(c.title)}</b></summary><p>${esc(c.text)}</p></details>` : `<div class="mute">🔒 <b>${esc(c.title.replace(/^\d+\. /, '???  '))}</b> — ${esc(c.hint)}</div>`).join('')}</div>`;
   return tale + `<div class="grid cols2"><div class="panel"><h2>🪦 Memorial Pond</h2>${st.graveyard.length ? st.graveyard.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0">${ghost(g)}<div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">hour ${g.tick}: ${esc(g.cause)}</small></div></div>`).join('') : '<p class="mute">Nobody has fallen yet.</p>'}</div>
+    ${(st.departed || []).length ? `<div class="panel"><h2>👋 Left the colony</h2>${st.departed.slice().reverse().map((g) => `<div class="row panel flat" style="margin:6px 0"><div><b>${esc(g.name)}</b> the ${esc(g.archetype)} <small class="mute">${esc(g.rarity)} ${'★'.repeat(g.stars)} · Lv${g.level}</small><br><small class="mute">day ${g.day + 1}: you let them go</small></div></div>`).join('')}</div>` : ''}
     <div class="panel"><h2>📜 Journal</h2><div class="feed" style="max-height:60vh">${st.journal.slice().reverse().map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Quiet so far.</small>'}</div></div></div>`;
 }
 
@@ -1681,7 +1688,10 @@ const A = {
   talk: () => act('talk', { id: S.sel }),
   keeper_learn: (d) => act('keeper_learn', { key: d.key }),
   keeper_use: (d) => act('keeper_use', { key: d.key }),
-  answer_request: (d) => act('answer_request', { id: num(d.id), accept: d.yes === '1' }),
+  answer_request: (d) => { const s = slimeById(num(d.id));
+    if (d.yes === '1' && s && s.request && s.request.kind === 'leave')
+      return confirmThen(`Let ${s.name} leave the colony for good?\n\nThey walk away with nothing; their gear stays. Their friends will miss them. This cannot be undone.`, () => act('answer_request', { id: s.id, accept: true }));
+    return act('answer_request', { id: num(d.id), accept: d.yes === '1' }); },
   craft_feather: () => act('craft_feather', { n: 1 }),
   keeper_respec: () => confirm('Forget all learned skills? It costs gel and the price rises each time.') && act('keeper_respec', {}),
   keeper_title: (d) => act('keeper_title', { key: d.key || '' }),

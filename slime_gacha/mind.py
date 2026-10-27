@@ -12,7 +12,7 @@
 import random
 from typing import List
 
-from . import config, jobs, memory, sanity
+from . import awakening, config, jobs, memory, sanity
 from .errors import InvalidAction
 from .growth import add_xp
 
@@ -78,10 +78,32 @@ def decide(g, s, events: List[str]) -> bool:
         events.append(f"🫧 {s.name} {goal['text']} and keeps to themself (+3 sanity).")
     else:
         return False
+    awakening.note(s, "chose")                                                   # it decided for itself
     return True
 
 
 # ---- requests ----------------------------------------------------------------------------------------------------
+LEAVE_TEXT = {"despair": "asks to leave the colony: \"I can't stay here any more. Please let me go.\"",
+              "cog": "asks to leave the colony: \"There has to be more than this somewhere.\"",
+              "low": "asks to leave the colony: \"I'm breaking here, and I don't trust it will change.\""}
+
+
+def urgent_request(g, s):
+    """A request that does not wait for the daily chance: to leave the colony (long despair, a long stretch as a cog, or days
+    of breaking sanity without trust), or a cog asking for a change of routine."""
+    asked = any(m["kind"] == "ignored" and "asked to leave" in (m.get("note") or "") and g.day - m["day"] < config.LEAVE_ASK_AGAIN_DAYS
+                for m in s.memories)                                         # turned down: it waits a few days before asking again
+    if awakening.wants_to_leave(s) and not asked:
+        why = "despair" if awakening.outcome(s) == "despair" else "cog"
+        return dict(kind="leave", target=0, day=g.day, why=why, text=LEAVE_TEXT[why])
+    if s.low_days >= config.LEAVE_SANITY_DAYS and s.trust < config.LEAVE_TRUST and not asked:
+        return dict(kind="leave", target=0, day=g.day, why="low", text=LEAVE_TEXT["low"])
+    if awakening.wants_change(s) and s.job:
+        return dict(kind="change", target=0, day=g.day,
+                    text="asks to be taken off their post: \"I'd like to choose what I do for a while.\"")
+    return None
+
+
 def make_request(g, s):
     """A request this slime would make to the Keeper right now, or None."""
     party = g.parties.party_of(s.id)
@@ -112,13 +134,26 @@ def answer(g, sid: int, accept: bool) -> str:
         raise InvalidAction(f"{s.name} has no request.")
     s.request = None
     if not accept:
-        s.trust = max(0.0, s.trust - (config.TRUST_DENY_REST if r["kind"] == "rest" else config.TRUST_DENY))
-        if r["kind"] == "rest":
+        s.trust = max(0.0, s.trust - (config.TRUST_DENY_REST if r["kind"] in ("rest", "leave") else config.TRUST_DENY))
+        if r["kind"] in ("rest", "leave"):
             sanity.hit(s, 3)
+        if r["kind"] == "leave":
+            memory.remember(s, "ignored", None, g.day, 3.0, " (asked to leave)")
+            return f"{s.name} stays, because you asked. They will remember it. (trust {int(s.trust)})"
         memory.remember(s, "ignored", None, g.day, 2.0, f" ({r['text'].split(':')[0].replace('asks', 'asked')})")
         return f"You turned {s.name} down. They will remember it. (trust {int(s.trust)})"
     k = r["kind"]
-    if k == "rest":
+    if k == "leave":
+        return " ".join(g.depart(s, r.get("why", "")))
+    awakening.note(s, "care", 0.3)                                              # being listened to
+    awakening.note(s, "chose")
+    if k == "change":
+        msg = jobs.stop(g, s) if s.job else f"{s.name} is free to choose."
+        if getattr(s, "life", None):
+            s.life["post_streak"] = 0
+            s.life["cog_days"] = 0
+        msg += " They will choose what to do for a while."
+    elif k == "rest":
         sanity.heal(s, 12)
         s.needs.add("energy", 25)
         msg = f"{s.name} takes a rest day (+12 sanity)."
@@ -164,7 +199,12 @@ def daily(g, events: List[str]) -> None:
         if s.request and g.day - s.request["day"] >= config.REQUEST_DAYS:
             s.request = None
             s.trust = max(0.0, s.trust - 1)                           # unanswered: a little hurt
-        if s.request is None and _rng(g, s, 2).random() < config.REQUEST_CHANCE:
+        s.low_days = s.low_days + 1 if sanity.frac(s) < 0.2 else 0
+        urgent = urgent_request(g, s) if s.request is None or s.request["kind"] not in ("leave", "change") else None
+        if urgent and (s.request is None or urgent["kind"] == "leave"):
+            s.request = urgent
+            events.append(f"💬 {s.name} {urgent['text']}.")
+        elif s.request is None and _rng(g, s, 2).random() < config.REQUEST_CHANCE:
             r = make_request(g, s)
             if r:
                 s.request = r

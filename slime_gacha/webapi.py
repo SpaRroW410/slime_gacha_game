@@ -60,7 +60,11 @@ def slime_view(g: Game, s) -> dict:
                   sorted(s.emotions.items(), key=lambda kv: -kv[1]) if v >= 3],
         feeling_effects={k: round(100 * (m - 1)) for k, m in emotions.modifiers(s)[0].items() if abs(m - 1) >= 0.01},
         awareness=(dict(stage=awakening.stage(s), name=awakening.STAGE_NAME[awakening.stage(s)],
-                        points=round(s.awareness, 1), temperament=s.temperament) if awakening.candidate(s) else None),
+                        points=round(s.awareness, 1), temperament=awakening.outcome(s),
+                        outcome=awakening.OUTCOME_NAME.get(awakening.outcome(s), ""),
+                        why=(awakening.why(s) if awakening.outcome(s) else ""), despair_stage=awakening.despair_stage(s),
+                        life={k: round(v, 2) for k, v in awakening.scores(s).items()} if s.life and s.life.get("days") else None)
+                   if awakening.candidate(s) else None),
         relations=[dict(other=r["other"], kind=r["kind"], since=r["since"], mentor=r.get("mentor"))
                    for r in g.relations.of(s.id)],
         parents=list(s.parents), parent_names=list(s.parent_names), generation=s.generation,
@@ -297,7 +301,7 @@ def snapshot(g: Game) -> dict:
         conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason, retry=c.retry, cool=c.cool,
                         brawls=c.brawls, away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
                    for c in g.conflicts.conflicts],
-        graveyard=list(g.graveyard)[-50:], journal=list(g.journal)[-60:],
+        graveyard=list(g.graveyard)[-50:], departed=list(g.departed)[-50:], journal=list(g.journal)[-60:],
         dungeon=dict(
             best_floor=g.best_floor, boss_every=config.MAIN_BOSS_EVERY, floors=g.intel_report(),
             max_floor=dungeon.MAX_FLOOR, cleared=g.descent_cleared,

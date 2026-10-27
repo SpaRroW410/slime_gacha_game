@@ -149,6 +149,10 @@ LIVES = {
 
 def run_legend(seed: int = 3, life: str = "loved", days: int = 24) -> dict:
     g, s = legend_colony(seed, 0 if life == "alone" else 6)
+    if life in ("cog", "loved_worker"):                    # it had made a couple of friends before taking the post
+        for o in [o for o in g.slimes() if o is not s][:2]:
+            g.social.add_bond(s, o, 30)
+            g.relations.rel[relationships.key(s, o)] = dict(kind="friend", since=0)
     for _ in range(days):
         for h in range(24):
             if life in ("cog", "loved_worker"):
@@ -167,13 +171,11 @@ def run_legend(seed: int = 3, life: str = "loved", days: int = 24) -> dict:
 
 
 def run_recovery(seed: int = 4, days: int = 30) -> dict:
-    """A legendary that awoke alone and in despair; then the Keeper cares for it (and it gets company) every day."""
+    """A legendary that has spent two weeks alone and in despair; then the Keeper cares for it every day and it has company."""
     g, s = legend_colony(seed, 6)
     s.awareness = awakening.THRESHOLDS[-1] - 0.1
     s.needs.set("belonging", 5)
-    s.life = awakening.fresh_life() if hasattr(awakening, "fresh_life") else getattr(s, "life", None)
-    if hasattr(awakening, "seed_record"):
-        awakening.seed_record(s, care=0.0, connection=0.0, purpose=0.0, hardship=1.0)
+    awakening.life(s)["days"] = [dict(day=0, care=0.0, connection=0.1, purpose=0.1, hardship=0.2)] * 14
     g.tick(1)
     start = s.temperament
     for d in range(days):
@@ -228,9 +230,10 @@ TARGETS = [
     ("loved legendary is fine", "legend_loved", lambda r: r["outcome"] in ("settled", "peace"),
      "a loved slime absorbs the truth about its world and carries on"),
     ("lonely legendary despairs", "legend_alone", lambda r: r["outcome"] == "despair", "isolation is what breaks people"),
-    ("unloved worker is a cog", "legend_cog", lambda r: r["outcome"] in ("cog", "despair"),
+    ("unloved worker is a cog", "legend_cog", lambda r: r["outcome"] == "cog",
      "fed and busy but unseen: flat, going through the motions"),
     ("despair can lift", "recovery", lambda r: r["recovered_on"] is not None, "company and care pull people back out"),
+    ("but not overnight", "recovery", lambda r: r["recovered_on"] is None or r["recovered_on"] >= 5, "recovery takes days to weeks"),
 ]
 
 

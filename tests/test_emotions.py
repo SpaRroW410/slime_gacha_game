@@ -243,17 +243,25 @@ class TestAwakening(unittest.TestCase):
         text = " ".join(awakening.LINES[2]).lower()
         self.assertIn("function", text)
         self.assertIn("seed", text)
-        self.assertTrue(any("typed" in l or "code" in l for l in awakening.LINES["despair"] + awakening.LINES["accept"]))
+        self.assertTrue(any("typed" in l or "code" in l for l in awakening.LINES["despair"] + awakening.LINES["peace"]))
 
-    def test_loved_slime_accepts_it(self):
+    @staticmethod
+    def lived(s, days=7, **kw):
+        """Give the slime a record of `days` days with these averages (care, connection, purpose, hardship)."""
+        row = dict(care=0.0, connection=0.0, purpose=0.0, hardship=0.0)
+        row.update(kw)
+        awakening.life(s)["days"] = [dict(row, day=d) for d in range(days)]
+
+    def test_a_loved_slime_with_a_life_of_its_own_finds_peace(self):
         g = mk()
         s = self.legend(g)
+        self.lived(s, care=0.9, connection=0.8, purpose=0.7)
         s.awareness = 99.9
         j = []
         awakening.tick(s, random.Random(1), 3, j)
-        self.assertEqual(s.temperament, "accept")
-        self.assertGreater(s.emotions["wonder"], 40)
-        self.assertEqual(s.emotion_floor["wonder"], 20)
+        self.assertEqual(s.temperament, "peace")
+        self.assertGreater(s.emotions["wonder"], 30)
+        self.assertEqual(s.emotion_floor["wonder"], 15)
 
     def test_lonely_slime_despairs(self):
         g = mk()
@@ -266,23 +274,22 @@ class TestAwakening(unittest.TestCase):
         self.assertGreater(s.emotions["dread"], 40)
         self.assertLess(emotions.modifiers(s)[0]["atk"], 1)
 
-    def test_dread_is_a_permanent_undercurrent_until_kindness_wins(self):
+    def test_dread_is_a_permanent_undercurrent_until_life_improves(self):
         g = mk()
         s = self.legend(g)
+        s.needs.set("belonging", 5)
         s.awareness = 99.9
         awakening.tick(s, random.Random(1), 0, [])
-        s.needs.set("belonging", 5)
-        s.temperament = "despair"
-        s.emotion_floor = {"dread": 15.0}
+        self.assertEqual(s.temperament, "despair")
         for _ in range(60):
             emotions.tick(s, random.Random(2))
         self.assertGreaterEqual(s.emotions["dread"], 15)
-        s.needs.set("belonging", 100)
-        s.emotions["affection"] = 60
+        self.lived(s, care=0.8, connection=0.6, purpose=0.5)              # weeks of company and attention
         j = []
-        awakening.tick(s, random.Random(3), 2, j)
-        self.assertEqual(s.temperament, "accept")
+        awakening._apply(s, awakening.assess(s), j, random.Random(3), 9)
+        self.assertIn(s.temperament, ("settled", "peace"))
         self.assertNotIn("dread", s.emotion_floor)
+        self.assertTrue(j)
 
     def test_petting_eases_despair(self):
         g = mk()

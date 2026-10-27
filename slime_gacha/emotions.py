@@ -79,6 +79,7 @@ CONTENT_RATE = 0.01          # share of the gap to the current mood closed per h
 CONTENT_GOOD, CONTENT_BAD = 45.0, 30.0     # an ordinary, looked-after life sits in the mid-50s (food and sleep cycle)
 CONTENT_LIFT = dict(joy=0.5, calm=0.4)          # baseline per point of contentment above CONTENT_GOOD
 CONTENT_SINK = dict(sadness=0.5, anxiety=0.3)   # ... and per point below CONTENT_BAD
+FLAT, COG_CAP = ("joy", "pride", "wonder"), 30.0   # awakening: a cog's bright feelings stay muted (config.COG_FEELING_CAP)
 DRIFT_CEIL = 60.0            # needs alone never push a feeling past this; only events do (and those fade back)
 RISE_RATE = 0.5              # a feeling below its baseline climbs back at this share of its decay rate
 
@@ -106,9 +107,9 @@ TRIGGERS = {          # what raises / lowers each feeling (shown in the in-game 
                   "Loneliness is quieted by it; it fades slowly (2 per hour)."),
     "guilt": ("Being the one a merge or chamber spared, a brawl, a rival's death.",
               "Pride dampens it; it fades by 2.5 per hour."),
-    "dread": ("A 5-star legendary realising it is only code (permanent undercurrent while in despair).",
-              "Wonder quiets it; kindness (petting, friends) slowly wears the undercurrent away."),
-    "wonder": ("Awakening with acceptance (permanent undercurrent), a legendary seeing the world's patterns.",
+    "dread": ("A 5-star legendary realising it is only code (an undercurrent that deepens day by day while in despair).",
+              "Wonder quiets it; the undercurrent lifts when its life improves (company, purpose, your care)."),
+    "wonder": ("An awakened legendary at peace or settled (undercurrent), a legendary seeing the world's patterns.",
                "Dread dampens it; it fades by 2 per hour above its undercurrent."),
 }
 
@@ -146,7 +147,9 @@ def feel(slime, key: str, amount: float) -> None:
     for t in slime.traits:
         g *= TRAIT_GAIN.get(t, {}).get(key, 1.0)
     amount *= g if amount > 0 else 1.0
-    slime.emotions[key] = max(0.0, min(100.0, slime.emotions.get(key, 0.0) + amount))
+    top = COG_CAP if key in FLAT and getattr(slime, "temperament", "") == "cog" else 100.0   # a cog feels little
+    slime.emotions[key] = max(0.0, min(max(top, slime.emotions.get(key, 0.0) if amount < 0 else 0.0),
+                                       slime.emotions.get(key, 0.0) + amount))
     if amount > 0 and key in OPPOSITE:
         o = OPPOSITE[key]
         if o in slime.emotions:

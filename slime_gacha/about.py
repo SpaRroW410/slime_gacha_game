@@ -25,7 +25,8 @@ SECTIONS: List[Dict[str, object]] = [
         "elemental spells (fusable, and they change form as mastery grows).",
         "Total power (001-999 tag in the Colony) sums stats, skills, attributes, mastery, styles and proficiency, times mood and morale.",
         "Slimes have personalities, friendships, couples, mentors and rivals; they quarrel when they share a place, and brawls leave "
-        "them grounded until mediated. Legendary 5-star slimes may start to suspect they are code.",
+        "them grounded until mediated; most spats mend on their own. Legendary 5-star slimes come to realise they are code, and "
+        "take it as their life so far allows: settled, at peace, a cog in the machine, or in despair.",
     ]),
     dict(title="Parties and battles", icon="⚔", items=[
         "Parties of up to five (you choose the size). Synergy comes from how well the members get on.",
