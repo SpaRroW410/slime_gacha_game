@@ -105,8 +105,8 @@ def cope(g, s, rng: random.Random, events: List[str]) -> bool:
         if target:
             g.social.add_bond(s, target, -2)
             emotions.feel(target, "anger", 8, f"snapped at by {s.name}")
-            if rng.random() < config.VENT_QUARREL and not g.conflicts.has_between(s.id, target.id):
-                g.conflicts.start(s, target, f"{s.name} snapping at them for no reason")
+            if rng.random() < config.VENT_QUARREL * g.wary(s) and not g.conflicts.has_between(s.id, target.id):   # the Keeper's shadow holds it back
+                g.conflicts.start(s, target, f"{s.name} snapping at them for no reason", starter=s.id)
             events.append(f"💢 {s.name} is feeling {name} and snaps at {target.name}.")
         else:
             events.append(f"💢 {s.name} is feeling {name} and kicks a pebble across the yard.")

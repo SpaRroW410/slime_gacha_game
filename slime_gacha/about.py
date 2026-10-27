@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-28-minds",
-                 text="Slimes feel more like people. Spats mend on their own, apologies and friends make peace, and a feud ends in a cold war instead of endless brawls. Feelings settle back to each slime's usual mood, and under each one the Mind tab now says why. Slimes eat together, spend their evenings on hobbies, cope with bad feelings in their own way and cheer each other up. Grief lasts weeks and comes back on anniversaries; you can gather the colony at the Memorial Pond. Every slime keeps a week's record of its days and can burn out at a grind: try the new Praise. Ties fade when slimes are apart, partners can get jealous, and hatch days and feasts mark the year. Awakened 5-star legendaries are settled, at peace, a cog or in despair, and a slime may ask to leave (only with your yes). Also: send a whole party to Scouting, the Rift, the Quarry and Places.")
+WHATS_NEW = dict(id="2026-10-27-troublemakers",
+                 text="Troublemakers, judged fairly: a slime is one when it has come to blows with more than 5% of the colony this month (at least 2 different slimes), not because a single feud ran its course or because it was snapped at. Merging or destroying one costs no morale and no sacrifice stress; only its partner and best friend grieve, at half depth, and those it fought with breathe easier. After a removal the Keeper's shadow falls: quarrels are rarer for a week, and slimes with fights of their own wonder if they are next. A slime you talked with or made peace for holds back a little for 3 days. A liked slime is now grieved whether it is merged or destroyed.")
 
 
 def build() -> Dict[str, object]:

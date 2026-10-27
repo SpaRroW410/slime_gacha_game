@@ -236,6 +236,34 @@ def run_grief(seed: int = 5, supported: bool = False) -> dict:
     return dict(sadness_at=track, grief_days=round(track.get("over_at", 24 * 40) / 24, 1))
 
 
+def run_shadow(seed: int = 7, n: int = 40, settle_days: int = 20, days: int = 7, replays: int = 12) -> dict:
+    """The colony lives a few weeks, then its worst fighter is destroyed. Copies of that moment play the next week, with and
+    without the Keeper's shadow (each pair of copies on the same dice, `replays` times): how many quarrels start in each, in
+    the first three days and over the week? (Fear puts fights off; the grudges behind them wait, so the week evens out.)"""
+    g = colony(seed, n)
+    g.tick(settle_days * 24)
+    t = max((s for s in g.slimes() if not s.busy and s.id != g.vice), key=lambda s: (g.recent_fights(s), -s.id))
+    others = [o.id for o in g.slimes() if o is not t]
+    t.fights = {i: g.day for i in others[:g.fight_limit() + 1]}     # sure to count as a troublemaker
+    counts = collections.Counter()
+    saved = g.to_dict()
+    for replay in range(replays):
+        for shadow in (False, True):
+            h = Game.from_dict(saved)
+            h.rng.seed(seed * 100 + replay)
+            h.mood_rng.seed(seed * 100 + replay)
+            h.destroy_slime(t.id)
+            if not shadow:
+                h.shadow_tick = None
+            arm, first = "shadow" if shadow else "control", h.conflicts._next
+            h.tick(3 * 24)
+            counts[arm + "_early"] += h.conflicts._next - first                # quarrels started, snapping included
+            h.tick((days - 3) * 24)
+            counts[arm] += h.conflicts._next - first
+    return dict(counts, early_ratio=counts["shadow_early"] / max(1, counts["control_early"]),
+                ratio=counts["shadow"] / max(1, counts["control"]))
+
+
 # ---- targets ------------------------------------------------------------------------------------------------------
 TARGETS = [
     # (name, scenario key, function(result) -> bool, what a person would do)
@@ -266,6 +294,8 @@ TARGETS = [
      "friends notice when someone is down and cheer them up"),
     ("bad feelings are acted on", "hands_off", lambda r: r["events"].get("coped", 0) >= 3,
      "people do something with a bad feeling: talk, help, train, sleep, snap"),
+    ("a removal calms the colony", "shadow", lambda r: r["early_ratio"] <= 0.85,
+     "after the Keeper removes a troublemaker, the others think twice before picking a fight for a few days"),
     ("but not overnight", "recovery", lambda r: r["recovered_on"] is None or r["recovered_on"] >= 5, "recovery takes days to weeks"),
 ]
 
@@ -282,6 +312,7 @@ def run_all(seeds=(1,), slimes: int = 20, days: int = 45) -> dict:
         out["worker_praised"].append(run_worker(sd + 5, True))
         out["grief"].append(run_grief(sd + 4))
         out["grief_supported"].append(run_grief(sd + 4, supported=True))
+        out["shadow"].append(run_shadow(sd + 6))
     return out
 
 
@@ -321,6 +352,10 @@ def report(results: dict) -> str:
     for key in ("grief", "grief_supported"):
         for r in results.get(key, []):
             lines.append(f"- {key.replace('_', ' ')}: sadness {r['sadness_at']} (hours after) - over after {r['grief_days']} days")
+    for r in results.get("shadow", []):
+        lines.append(f"- after a troublemaker is removed, quarrels with the Keeper's shadow vs without: first 3 days "
+                     f"{r['shadow_early']} vs {r['control_early']} (x{r['early_ratio']:.2f}), the week {r['shadow']} vs {r['control']} "
+                     f"(x{r['ratio']:.2f})")
     lines += ["", "## Targets", "", "| Target | Passed | What a person would do |", "|---|---|---|"]
     for name, share, why in check(results):
         lines.append(f"| {name} | {pct(share)} | {why} |")

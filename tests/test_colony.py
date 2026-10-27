@@ -530,7 +530,7 @@ class TestRelief(unittest.TestCase):
         a, b, c, d, e = g.slimes()
         for s in (a, b, c, d, e):
             s.morale = 70.0
-        d.grounded = True                                       # brawling
+        d.fights = {b.id: g.day, c.id: g.day}                   # came to blows with 2 of a colony of 5
         morale = {s.id: s.morale for s in (a, b, c, e)}
         stress = g.sacrifice_stress
         log = g.merge(a.id, d.id)
@@ -542,9 +542,9 @@ class TestRelief(unittest.TestCase):
         from tests.test_time import mk as mkgame
         g = mkgame(seed=43, n=5)
         a, b, c, d, e = g.slimes()
-        d.brawls = config.NUISANCE_BRAWLS
+        d.fights = {a.id: g.day, b.id: g.day}
         self.assertTrue(g.unwelcome(d))
-        d.brawls = 0
+        d.fights, d.brawls, d.grounded = {}, 9, True             # an old record or one brawl now is not enough
         d.level = 1                                              # weak, but liked well enough
         self.assertFalse(g.unwelcome(d))
 

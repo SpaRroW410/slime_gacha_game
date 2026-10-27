@@ -5,6 +5,7 @@ the tie: a partner most, then a best friend, a mentor or mentee, a friend, and a
 Grief holds a slime's sadness and loneliness up (emotions.baseline) and fades over one to three weeks:
   - faster with company: a friend at home sits with it (and is remembered for it), and the Keeper's daily talk helps;
   - in waves: it comes back on each weekly anniversary, and when the slime walks into the dungeon where the loss happened;
+  - a troublemaker the Keeper merges or destroys is grieved only by its partner and best friend, at half depth;
   - a gathering at the Memorial Pond (the Keeper's call, within a week of a death) eases everyone grieving that slime and
     brings the mourners closer.
 """
@@ -22,10 +23,11 @@ def depth_for(g, o, lost) -> float:
     return float(config.GRIEF_ACQUAINTANCE) if g.social.bond(o, lost) >= config.GRIEF_BOND else 0.0
 
 
-def start(g, lost, where: str = "", scale: float = 1.0) -> None:
-    """Everyone close to `lost` begins to grieve it. Call before the ties are forgotten."""
+def start(g, lost, where: str = "", scale: float = 1.0, kinds=None) -> None:
+    """Everyone close to `lost` begins to grieve it (only those tied to it as one of `kinds`, if given: a troublemaker is
+    mourned by its partner and best friend alone). Call before the ties are forgotten."""
     for o in g.slimes():
-        if o.id == lost.id:
+        if o.id == lost.id or (kinds and g.relations.kind(o, lost) not in kinds):
             continue
         d = depth_for(g, o, lost) * scale
         if d > 0:

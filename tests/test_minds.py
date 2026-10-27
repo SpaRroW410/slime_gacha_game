@@ -998,6 +998,160 @@ class TestWhyItFeelsThisWay(unittest.TestCase):
         self.assertEqual(Game.from_dict(g.to_dict()).roster[a.id].causes, a.causes)
 
 
+class TestTroublemakers(unittest.TestCase):
+    """A troublemaker (fought with more than 5% of the colony lately) goes at no cost but its partner's and best friend's
+    half grief; those it fought with breathe easier, and the Keeper's shadow keeps the colony calmer for a week."""
+
+    def tie(self, g, a, b, kind):
+        g.relations.rel[frozenset((a.id, b.id))] = dict(kind=kind, since=0)
+
+    def test_the_limit_is_5_percent_of_the_colony_rounded_down_but_never_under_one(self):
+        g = colony()
+        for size, limit in ((5, 1), (39, 1), (40, 2), (60, 3), (100, 5)):
+            while len(g.roster) < size:
+                make(g)
+            self.assertEqual(g.fight_limit(), limit, size)
+
+    def test_one_feud_run_to_a_cold_war_is_not_enough(self):
+        g = colony()
+        a, b, c = feud(g)
+        with NO_MEND:
+            for _ in range(24 * 6):
+                g.conflicts.tick(g.slimes(), [])
+        self.assertIn(frozenset((a.id, b.id)), g.conflicts.cold)
+        self.assertEqual((a.fights, b.fights), ({b.id: g.day}, {a.id: g.day}))   # two brawls with one slime count once
+        self.assertLessEqual(g.recent_fights(a), g.fight_limit())
+
+    def test_a_slime_only_snapped_at_is_not_blamed(self):
+        g = colony()
+        a, b = make(g, traits=("grumpy",)), make(g, "mage")
+        c = g.conflicts.start(a, b, "snapping", starter=a.id)
+        c.severity, c.age = config.CONFLICT_MAX_SEVERITY, config.CONFLICT_ESCALATE_TICKS - 1
+        with NO_MEND:
+            g.conflicts.tick(g.slimes(), [])
+        self.assertEqual(c.brawls, 1)
+        self.assertEqual((a.fights, b.fights), ({b.id: g.day}, {}))
+
+    def test_coping_by_snapping_names_the_starter(self):
+        g = colony()
+        a, b = make(g, traits=("grumpy",)), make(g, "mage")
+        a.emotions["anger"] = 90
+        with mock.patch.object(config, "VENT_QUARREL", 1.0):
+            coping.cope(g, a, random.Random(1), [])
+        self.assertEqual(g.conflicts.open_between(a.id, b.id).starter, a.id)
+
+    def test_old_fights_are_forgiven(self):
+        g = colony()
+        a, b, c = make(g), make(g), make(g)
+        a.fights = {b.id: g.day, c.id: g.day}
+        self.assertEqual(g.recent_fights(a), 2)
+        g.tick_count += config.DAY_TICKS * config.NUISANCE_DAYS
+        self.assertEqual(g.recent_fights(a), 0)
+
+    def removal(self, how):
+        g = colony()
+        t, partner, best, friend, foe, other = (make(g) for _ in range(6))
+        t.fights = {foe.id: g.day, other.id: g.day}                      # 2 of a colony of 6: a troublemaker
+        self.tie(g, t, partner, "couple")
+        self.tie(g, t, best, "best_friend")
+        self.tie(g, t, friend, "friend")
+        for s in g.slimes():
+            s.morale = 70.0
+        foe.emotions["anger"], foe.content = 50.0, 40.0
+        memory.remember(foe, "brawl", t, g.day, 4.0)
+        stress = g.sacrifice_stress
+        self.assertTrue(g.unwelcome(t))
+        log = g.merge(other.id, t.id) if how == "merge" else g.destroy_slime(t.id)
+        return g, log, stress, partner, best, friend, foe, other
+
+    def test_removing_a_troublemaker_costs_nothing_but_its_partners_and_best_friends_half_grief(self):
+        for how in ("merge", "destroy"):
+            with self.subTest(how=how):
+                g, log, stress, partner, best, friend, foe, other = self.removal(how)
+                self.assertTrue(any("relieved" in l for l in log), log)
+                self.assertEqual(g.sacrifice_stress, stress)
+                for s in (partner, best, friend, foe):
+                    self.assertEqual(s.morale, 70.0, s.name)
+                self.assertEqual(partner.grief[0]["depth"], grief.DEPTH["couple"] * config.NUISANCE_GRIEF)
+                self.assertEqual(best.grief[0]["depth"], grief.DEPTH["best_friend"] * config.NUISANCE_GRIEF)
+                self.assertEqual(friend.grief, [])
+
+    def test_those_it_fought_with_breathe_easier(self):
+        g, log, stress, partner, best, friend, foe, other = self.removal("destroy")
+        self.assertLess(foe.emotions["anger"], 50.0)
+        self.assertGreater(foe.content, 40.0)
+        self.assertEqual(next(m for m in foe.memories if m["kind"] == "brawl")["weight"], 4.0 * config.RELIEF_GRUDGE_FADE)
+        self.assertTrue(any(foe.name in l and "easier" in l for l in log), log)
+
+    def test_a_liked_slime_is_grieved_whether_merged_or_destroyed(self):
+        for how in ("merge", "destroy"):
+            with self.subTest(how=how):
+                g = colony()
+                lost, friend, target = make(g), make(g), make(g)
+                self.tie(g, lost, friend, "friend")
+                g.social.bonds[frozenset((lost.id, friend.id))] = 40
+                self.assertFalse(g.unwelcome(lost))
+                g.merge(target.id, lost.id) if how == "merge" else g.destroy_slime(lost.id)
+                self.assertEqual(friend.grief[0]["depth"], grief.DEPTH["friend"])
+                self.assertGreater(g.sacrifice_stress, 0)
+
+    def test_the_keepers_shadow_calms_the_colony_for_a_week(self):
+        g = colony()
+        x, y = make(g), make(g, "mage")
+        with mock.patch.object(config, "CONFLICT_BASE_CHANCE", 0.01):
+            before = g.conflicts.chance(x, y)
+            g.shadow_tick = g.tick_count
+            self.assertAlmostEqual(g.conflicts.chance(x, y), before * config.SHADOW_FACTOR)
+            g.tick_count += config.SHADOW_HOURS // 2
+            self.assertAlmostEqual(g.wary(x), 1 - (1 - config.SHADOW_FACTOR) / 2)
+            g.tick_count += config.SHADOW_HOURS // 2
+            self.assertAlmostEqual(g.conflicts.chance(x, y), before)
+
+    def test_slimes_with_fights_of_their_own_hold_back_more_by_temperament(self):
+        g = colony()
+        plain, brave, grumpy, timid = make(g), make(g, traits=("brave",)), make(g, traits=("grumpy",)), make(g, traits=("timid",))
+        for s in (plain, brave, grumpy, timid):
+            s.fights = {999: g.day}
+        g.shadow_tick = g.tick_count
+        self.assertAlmostEqual(g.wary(plain), config.SHADOW_FEAR_FACTOR)
+        self.assertAlmostEqual(g.wary(timid), config.SHADOW_FLOOR)
+        self.assertGreater(g.wary(grumpy), g.wary(plain))
+        self.assertGreater(g.wary(brave), g.wary(grumpy))
+        self.assertLess(g.wary(brave), config.SHADOW_FACTOR)
+
+    def test_a_second_removal_within_the_week_makes_fighters_anxious(self):
+        g = colony()
+        fighter = make(g)
+        fighter.fights = {999: g.day}
+        t1, t2 = make(g), make(g)
+        for t in (t1, t2):
+            t.fights = {990: g.day, 991: g.day, 992: g.day}
+        g.destroy_slime(t1.id)
+        self.assertGreater(fighter.emotions.get("fear", 0), 0)
+        self.assertEqual(fighter.emotions.get("anxiety", 0), 0)
+        g.destroy_slime(t2.id)
+        self.assertGreater(fighter.emotions.get("anxiety", 0), 0)
+
+    def test_respect_after_a_talk_lasts_three_days(self):
+        g = colony()
+        s = make(g)
+        g.talk(s.id)
+        self.assertAlmostEqual(g.wary(s), config.RESPECT_FACTOR)
+        g.tick_count += config.DAY_TICKS * config.RESPECT_DAYS
+        self.assertAlmostEqual(g.wary(s), 1.0)
+
+    def test_fights_starters_and_the_shadow_survive_a_reload(self):
+        g = colony()
+        a, b = make(g), make(g, "mage")
+        a.fights = {b.id: g.day}
+        g.conflicts.start(a, b, "snapping", starter=a.id)
+        g.shadow_tick = g.tick_count
+        h = Game.from_dict(g.to_dict())
+        self.assertEqual(h.roster[a.id].fights, {b.id: g.day})
+        self.assertEqual(h.conflicts.conflicts[0].starter, a.id)
+        self.assertEqual(h.shadow_tick, g.shadow_tick)
+
+
 class TestBehaviourTargets(unittest.TestCase):
     """A small run of tools/minds_sim.py: the colony and legendary scenarios must meet the behaviour targets."""
     PENDING = {"friends look after each other"}   # too rare to count in this small colony; the full harness checks it

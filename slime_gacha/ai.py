@@ -3,6 +3,7 @@
 Hierarchy (lowest first): energy -> food -> safety -> belonging -> esteem.
 While a lower tier is unmet, higher tiers are suppressed (they neither decay nor affect mood).
 """
+import math
 import random
 from dataclasses import dataclass
 from typing import Dict, List
@@ -146,10 +147,11 @@ class Conflict:
     brawls: int = 0                 # brawls this feud has had (CONFLICT_MAX_BRAWLS, then a cold war)
     cool: int = 0                   # hours left keeping apart after a brawl (no escalation)
     retry: int = 0                  # hours before a Keeper's talk can be tried again after a failed one
+    starter: int = 0                # the slime that picked the fight (0: it grew between them, both share the blame)
 
     def to_dict(self):
         return dict(id=self.id, a=self.a, b=self.b, severity=self.severity, age=self.age,
-                    reason=self.reason, brawls=self.brawls, cool=self.cool, retry=self.retry)
+                    reason=self.reason, brawls=self.brawls, cool=self.cool, retry=self.retry, starter=self.starter)
 
 
 class ConflictEngine:
@@ -164,6 +166,8 @@ class ConflictEngine:
         self.together_fn = None         # Game sets: callable(a, b) -> are they in the same place (both home, or the same group away)?
         self.hook = None                # Game sets: callable(kind, a, b[, success]) for bonds / morale
         self.calm = 1.0                 # Keeper skill (Peacemaker): multiplies the quarrel chance
+        self.wary_fn = None             # Game sets: callable(slime) -> factor on its quarrels (the Keeper's shadow, respect)
+        self._wary: Dict[int, float] = {}   # wary_fn for every slime, worked out once per tick
         self._next = 1
         self._idx, self._idx_key = set(), None
         self._open = None               # set of open pairs, only while tick() scans for new quarrels
@@ -204,7 +208,13 @@ class ConflictEngine:
         if self.memory_fn:                          # a history of grudges makes a fight likelier, shared thanks make it rarer
             p *= self.memory_fn(a, b)[0]
         p *= self.temper(a, b)
+        if self.wary_fn:                            # either may hold back: the pair's odds take the mean of both
+            p *= math.sqrt(self.wary(a) * self.wary(b))
         return max(0.0, p * self.calm)
+
+    def wary(self, s) -> float:
+        w = self._wary.get(s.id)
+        return w if w is not None else self.wary_fn(s)
 
     @staticmethod
     def temper(a, b) -> float:
@@ -270,12 +280,13 @@ class ConflictEngine:
                     self._cold_war(c, by_id, events)
         # new conflicts
         awake = [s for s in slimes if s.state not in ("sleeping", "resting") and s.alive]
+        self._wary = {s.id: self.wary_fn(s) for s in awake} if self.wary_fn else {}
         busy = {i for c in self.conflicts for i in (c.a, c.b)} | set(self.settled)   # one quarrel at a time; none just after making up
         self._open = {frozenset((c.a, c.b)) for c in self.conflicts}
         try:
             self._scan(awake, busy, events)
         finally:
-            self._open = None
+            self._open, self._wary = None, {}
 
     def _scan(self, awake, busy, events) -> None:
         for i, a in enumerate(awake):
@@ -305,9 +316,9 @@ class ConflictEngine:
             p /= self.memory_fn(a, b)[0]
         return p
 
-    def start(self, a, b, reason: str) -> Conflict:
-        """Start a quarrel now (e.g. one slime snapping at another), unless either is already in one."""
-        c = Conflict(self._next, a.id, b.id, 1, 0, reason)
+    def start(self, a, b, reason: str, starter: int = 0) -> Conflict:
+        """Start a quarrel now (e.g. one slime snapping at another: `starter` is its id, and only it carries the blame)."""
+        c = Conflict(self._next, a.id, b.id, 1, 0, reason, starter=starter)
         self._next += 1
         self.conflicts.append(c)
         if self.hook:
