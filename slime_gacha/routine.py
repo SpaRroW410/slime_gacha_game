@@ -1,4 +1,4 @@
-"""Routine: the shape of a slime's day at home (docs: Guide > Slimes > A day at home, docs/MINDS.md).
+"""Routine: the shape of a slime's day at home (docs: Guide > Slimes > A day at home, docs/ROADMAP.md § 5).
 
 People's days have a rhythm, and much of their social life happens inside it: meals are eaten together, evenings belong to
 hobbies and the people who share them.

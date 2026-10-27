@@ -1,4 +1,4 @@
-"""Appraisal: the same event means different things to different slimes (docs/MINDS.md).
+"""Appraisal: the same event means different things to different slimes (docs/ROADMAP.md § 5).
 
 Every slime in a fight feels the usual things (game._after_battle: joy and pride after a win, sadness, anger and fear after a
 defeat). On top of that, its personality decides what the event MEANS to it: a lost fight shames a proud slime, frightens a

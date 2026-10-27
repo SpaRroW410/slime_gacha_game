@@ -1,4 +1,4 @@
-"""The About page: version, summary, sections and a roadmap that matches docs/TASKS.md."""
+"""The About page: version, summary, sections and a roadmap that matches the open tasks in docs/ROADMAP.md."""
 import os
 import re
 import sys
@@ -28,7 +28,7 @@ class TestAbout(unittest.TestCase):
             self.assertTrue(sec["title"] and sec["items"])
 
     def test_the_roadmap_matches_the_unchecked_tasks(self):
-        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "TASKS.md")
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "ROADMAP.md")
         if not os.path.exists(path):
             self.skipTest("docs not shipped")
         with open(path, encoding="utf-8") as f:

@@ -1,4 +1,4 @@
-"""Grief: losing someone lasts (docs: Guide > Slimes > Grief, docs/MINDS.md).
+"""Grief: losing someone lasts (docs: Guide > Slimes > Grief, docs/ROADMAP.md § 5).
 
 When a slime dies (or is sacrificed, or leaves the colony), everyone who was close to it starts grieving. How deep depends on
 the tie: a partner most, then a best friend, a mentor or mentee, a friend, and a little for someone it merely got on with.

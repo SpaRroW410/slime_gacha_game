@@ -11,7 +11,7 @@ Scenarios:
   legendary  a 5-star legendary in four lives: loved at home, a cog at a work post, alone, and working while loved.
   recovery   a legendary that awoke in despair, then cared for every day.
   grief      a slime whose partner dies, hour by hour.
-The targets in TARGETS describe how people behave in the same situations (see docs/MINDS.md); tests/test_minds.py runs a
+The targets in TARGETS describe how people behave in the same situations (see docs/ROADMAP.md § 5); tests/test_minds.py runs a
 small version of them.
 """
 import argparse

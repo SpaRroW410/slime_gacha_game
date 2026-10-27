@@ -1,4 +1,4 @@
-"""Coping and comfort: what a slime does with a bad feeling, and how friends look after each other (docs/MINDS.md).
+"""Coping and comfort: what a slime does with a bad feeling, and how friends look after each other (docs/ROADMAP.md § 5).
 
 People handle a bad feeling in their own way. When sadness, anger, fear, anxiety, loneliness or guilt passes
 config.COPE_AT and a slime is at home and free, it acts on it (once a day) in the style its personality gives it:

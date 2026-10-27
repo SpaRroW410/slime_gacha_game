@@ -1,4 +1,4 @@
-"""Voice: what a slime says when the Keeper talks with it (docs/MINDS.md).
+"""Voice: what a slime says when the Keeper talks with it (docs/ROADMAP.md § 5).
 
 People talk about their actual lives: who they miss, who still owes them an apology, what they want, how the days feel.
 A slime's answer comes, in order of how much it weighs on it, from:

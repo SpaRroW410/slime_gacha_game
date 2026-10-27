@@ -1,4 +1,4 @@
-"""Meaning: what a slime's days add up to (docs: Guide > Slimes > Meaning, docs/MINDS.md).
+"""Meaning: what a slime's days add up to (docs: Guide > Slimes > Meaning, docs/ROADMAP.md § 5).
 
 Every slime keeps a short daily record - the last config.MEANING_DAYS days (config.LIFE_DAYS for a 5-star legendary, whose
 awakening reads it, see awakening.py) - of four things:

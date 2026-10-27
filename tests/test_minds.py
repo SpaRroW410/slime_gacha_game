@@ -1,4 +1,4 @@
-"""Slime minds: feuds that cool off, feelings with a baseline, legendaries that read their whole life (docs/MINDS.md)."""
+"""Slime minds: feuds that cool off, feelings with a baseline, legendaries that read their whole life (docs/ROADMAP.md § 5)."""
 import os
 import sys
 import unittest

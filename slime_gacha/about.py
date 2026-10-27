@@ -1,6 +1,6 @@
 """The About page: version, a summary of the game and its mechanics, and the remaining roadmap.
 
-The roadmap list mirrors the unchecked items of docs/TASKS.md (a test keeps the two in step)."""
+The roadmap list mirrors the open tasks in docs/ROADMAP.md § 2 (a test keeps the two in step)."""
 from typing import Dict, List
 
 from . import config
@@ -64,7 +64,7 @@ SECTIONS: List[Dict[str, object]] = [
     ]),
 ]
 
-# id, group, title, what it will do - keep in step with the unchecked items of docs/TASKS.md
+# id, group, title, what it will do - keep in step with the open tasks in docs/ROADMAP.md § 2
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),

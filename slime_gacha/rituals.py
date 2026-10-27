@@ -1,4 +1,4 @@
-"""Rituals: the days that give a colony's year its shape (docs: Guide > Slimes > Hatch days and feasts, docs/MINDS.md).
+"""Rituals: the days that give a colony's year its shape (docs: Guide > Slimes > Hatch days and feasts, docs/ROADMAP.md § 5).
 
   HATCH DAY    every config.HATCH_EVERY days after a slime was pulled (or born). The first time the Keeper talks with it, pets
                or praises it that day, it notices it was remembered: joy, trust, and the care counts double. Forgetting costs

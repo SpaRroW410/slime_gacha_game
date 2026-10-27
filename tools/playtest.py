@@ -4,7 +4,7 @@ that take to reach? Simulates seeded fights (no gear, no relics, no potions: the
 markdown report.
 
     python3 tools/playtest.py                 # default report to stdout
-    python3 tools/playtest.py --rarity rare --trials 30 --out docs/PLAYTEST_F50.md
+    python3 tools/playtest.py --rarity rare --trials 30 --out /tmp/playtest.md   # then update docs/ROADMAP.md § 6
     python3 tools/playtest.py --smoothness    # regression check: fails if some floors wall their neighbours
 """
 import argparse
