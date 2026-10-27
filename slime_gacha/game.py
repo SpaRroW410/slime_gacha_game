@@ -651,7 +651,35 @@ class Game:
             elif nm > 0.65 and s.state == "idle":
                 sanity.heal(s, config.SANITY_REST["calm"])
 
+    def _peacemaking(self, events: List[str]) -> None:
+        """Once a day, quarrels can end without the Keeper: a slime with a guilty conscience apologises, or a friend of both
+        talks them round (as well as the Keeper would)."""
+        for c in list(self.conflicts.conflicts):
+            a, b = self.roster.get(c.a), self.roster.get(c.b)
+            if not a or not b or not self._together(a, b):
+                continue
+            sorry = max((a, b), key=lambda s: emotions.level(s, "guilt"))
+            if emotions.level(sorry, "guilt") >= config.APOLOGY_GUILT and self.mood_rng.random() < config.APOLOGY_CHANCE:
+                other = b if sorry is a else a
+                self.conflicts.resolve(c, self.roster, True)
+                emotions.soothe(sorry, "guilt", 20)
+                events.append(f"🙏 {sorry.name} apologises to {other.name}, and they make up.")
+                continue
+            busy = {i for x in self.conflicts.conflicts for i in (x.a, x.b)}
+            friends = [f for f in self.slimes() if f.id not in (a.id, b.id) and f.id not in busy and not f.busy
+                       and f.state == "idle" and min(self.social.bond(f, a), self.social.bond(f, b)) >= config.FRIEND_BOND]
+            if not friends or self.mood_rng.random() >= config.PEACEMAKER_CHANCE:
+                continue
+            f = max(friends, key=lambda x: self.social.bond(x, a) + self.social.bond(x, b))
+            if self.mood_rng.random() < self.conflicts.mediate_chance(a, b, "talk"):
+                self.conflicts.resolve(c, self.roster, True)
+                for s in (a, b):
+                    memory.remember(s, "peace", f, self.day, 3.0)
+                emotions.feel(f, "pride", 10)
+                events.append(f"🤝 {f.name} helps {a.name} and {b.name} make peace.")
+
     def _relations_day(self, events: List[str]) -> None:
+        self._peacemaking(events)
         for s in self.slimes():
             memory.fade(s)
         mind.daily(self, events)
@@ -3780,6 +3808,7 @@ class Game:
                     conflicts=[c.to_dict() for c in self.conflicts.conflicts],
                     conflict_next=self.conflicts._next,
                     friends=[sorted(f) for f in self.conflicts.friends],
+                    cold_wars=[[*sorted(k), v] for k, v in self.conflicts.cold.items()],
                     auto_care=self.needs.auto_care, rng_state=self.rng.getstate()[1:],
                     journal=self.journal[-50:])
 
@@ -3901,6 +3930,7 @@ class Game:
                           if b[0] in g.roster and b[1] in g.roster}
         g.conflicts._next = d.get("conflict_next", 1)
         g.conflicts.friends = {frozenset(f) for f in d.get("friends", [])}
+        g.conflicts.cold = {frozenset(c[:2]): int(c[2]) for c in d.get("cold_wars", []) if c[0] in g.roster and c[1] in g.roster}
         g.needs.auto_care = d.get("auto_care", True)
         if d.get("rng_state"):
             st = d["rng_state"]

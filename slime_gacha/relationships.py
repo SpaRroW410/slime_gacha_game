@@ -108,8 +108,11 @@ class RelationshipEngine:
         match = 1 + 0.25 * game.keeper.rank("matchmaker")
         # 1. companionship: idle slimes who like each other grow closer
         idle = [s for s in slimes.values() if s.state == "idle" and not s.busy]
+        cold = game.conflicts.cold
         for i, a in enumerate(idle):
             for b in idle[i + 1:]:
+                if key(a, b) in cold:                     # a cold war: they keep out of each other's way
+                    continue
                 c = social.compat(a, b)
                 if c >= 10:
                     social.add_bond(a, b, (1.5 + (1.0 if c >= 35 else 0.0)) * match)

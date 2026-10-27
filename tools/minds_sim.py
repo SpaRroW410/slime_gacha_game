@@ -27,7 +27,6 @@ from slime_gacha import awakening, emotions, jobs, relationships, sanity  # noqa
 from slime_gacha.game import Game  # noqa: E402
 from slime_gacha.registry import load_plugins  # noqa: E402
 
-BRAWL = re.compile(r"💥 (.+?) and (.+?) brawl")
 EVENTS = collections.OrderedDict([
     ("quarrel", r"Conflict #"), ("brawl", r"💥"), ("made_up", r"make up|patch things up|apologi|helps .+ make peace"),
     ("cold_war", r"stop speaking"), ("friends", r"have become friends"), ("best_friends", r"are best friends"),
@@ -68,7 +67,7 @@ def run_colony(seed: int = 1, n: int = 20, days: int = 45, keeper: bool = False)
     counts = collections.Counter()
     strong = collections.Counter()           # slime-hours a feeling is at 30 or more
     top = collections.Counter()              # slime-hours a feeling is the strongest
-    brawls = collections.Counter()           # per pair of names
+    most_brawls = 0                          # the most brawls any one feud reached
     hours = calm_hours = 0
     moods = []
     for _ in range(days * 24):
@@ -78,9 +77,7 @@ def run_colony(seed: int = 1, n: int = 20, days: int = 45, keeper: bool = False)
             for k, p in EVENTS.items():
                 if re.search(p, e):
                     counts[k] += 1
-            m = BRAWL.search(e)
-            if m:
-                brawls[frozenset(m.groups())] += 1
+        most_brawls = max([most_brawls] + [c.brawls for c in g.conflicts.conflicts])
         for s in g.slimes():
             hours += 1
             d = emotions.dominant(s, 1)
@@ -102,7 +99,7 @@ def run_colony(seed: int = 1, n: int = 20, days: int = 45, keeper: bool = False)
         no_strong=calm_hours / hours, mood=statistics.mean(moods) if moods else 0.0,
         sanity=statistics.mean(sanity.frac(s) for s in g.slimes()) if g.roster else 0.0,
         relations=dict(rel), goals=dict(goals), rival_goals=goals.get("rival", 0) / alive,
-        max_brawls_per_feud=max(brawls.values(), default=0),
+        max_brawls_per_feud=most_brawls,
         memories=statistics.mean(len(s.memories) for s in g.slimes()) if g.roster else 0.0,
         cuddles_per_day=counts["cuddle"] / days)
 

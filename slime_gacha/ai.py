@@ -134,10 +134,13 @@ class Conflict:
     severity: int = 1
     age: int = 0
     reason: str = ""
+    brawls: int = 0                 # brawls this feud has had (CONFLICT_MAX_BRAWLS, then a cold war)
+    cool: int = 0                   # hours left keeping apart after a brawl (no escalation)
+    retry: int = 0                  # hours before a Keeper's talk can be tried again after a failed one
 
     def to_dict(self):
         return dict(id=self.id, a=self.a, b=self.b, severity=self.severity, age=self.age,
-                    reason=self.reason)
+                    reason=self.reason, brawls=self.brawls, cool=self.cool, retry=self.retry)
 
 
 class ConflictEngine:
@@ -145,6 +148,7 @@ class ConflictEngine:
         self.rng = rng
         self.conflicts: List[Conflict] = []
         self.friends: set = set()       # frozenset({id, id}) pairs that resolved a quarrel
+        self.cold: Dict[frozenset, int] = {}   # pair -> hours left of a cold war (no quarrels, no growing closer)
         self.memory_fn = None           # Game sets: callable(a, b) -> (chance factor, stated reason or None) from shared history
         self.compat_fn = None           # Game sets: callable(a, b) -> compatibility; shapes quarrel odds
         self.together_fn = None         # Game sets: callable(a, b) -> are they in the same place (both home, or the same group away)?
@@ -180,7 +184,10 @@ class ConflictEngine:
                 p += 0.002
         if b.archetype in get_archetype(a.archetype).rivals or a.archetype in get_archetype(b.archetype).rivals:
             p += 0.004
-        if frozenset((a.id, b.id)) in self.friends:
+        pair = frozenset((a.id, b.id))
+        if pair in self.cold:                       # a cold war: they keep out of each other's way
+            return 0.0
+        if pair in self.friends:
             p *= 0.3
         if self.compat_fn:                          # incompatible slimes quarrel more, soulmates much less
             p *= max(0.4, min(2.0, 1 - self.compat_fn(a, b) / 120.0))
@@ -203,23 +210,41 @@ class ConflictEngine:
     # -- main tick ---------------------------------------------------------
     def tick(self, slimes: List, events: List[str]) -> None:
         by_id = {s.id: s for s in slimes}
-        # escalate existing
+        for pair in list(self.cold):                       # cold wars thaw into plain civility
+            self.cold[pair] -= 1
+            if self.cold[pair] <= 0 or not pair <= set(by_id):
+                del self.cold[pair]
+        # escalate existing (or let them cool off and mend)
         for c in list(self.conflicts):
             if c.a not in by_id or c.b not in by_id:       # a participant was merged away
                 self.conflicts.remove(c)
                 continue
-            if self.together_fn and not self.together_fn(by_id[c.a], by_id[c.b]):
+            a, b = by_id[c.a], by_id[c.b]
+            c.retry = max(0, c.retry - 1)
+            if c.cool > 0:                                 # keeping apart after a brawl: time does its work
+                c.cool -= 1
+            if self.together_fn and not self.together_fn(a, b):
                 continue                                   # one of them is away: the quarrel waits until they meet again
+            if self.rng.random() < self.mend_chance(a, b, c):
+                self.resolve(c, by_id, True)
+                events.append(f"🕊 {a.name} and {b.name} patch things up on their own.")
+                continue
+            if c.cool > 0:
+                continue
             c.age += 1
-            for sid in (c.a, c.b):
-                by_id[sid].needs.add("belonging", -2 * c.severity)
+            for s in (a, b):
+                s.needs.add("belonging", -2 * c.severity)
             if c.age % config.CONFLICT_ESCALATE_TICKS == 0:
                 if c.severity < config.CONFLICT_MAX_SEVERITY:
                     c.severity += 1
-                    events.append(f"The quarrel between {by_id[c.a].name} and {by_id[c.b].name} "
+                    events.append(f"The quarrel between {a.name} and {b.name} "
                                   f"is getting worse (severity {c.severity}).")
-                else:
+                elif c.brawls < config.CONFLICT_MAX_BRAWLS:
                     self._brawl(c, by_id, events)
+                    c.brawls += 1
+                    c.cool = config.CONFLICT_BRAWL_COOL
+                else:
+                    self._cold_war(c, by_id, events)
         # new conflicts
         awake = [s for s in slimes if s.state not in ("sleeping", "resting") and s.alive]
         busy = {i for c in self.conflicts for i in (c.a, c.b)}      # one quarrel at a time per slime
@@ -245,6 +270,28 @@ class ConflictEngine:
                     events.append(f"⚡ Conflict #{c.id}: {a.name} and {b.name} are fighting over {c.reason}!")
                     if self.hook:
                         self.hook("quarrel", a, b)
+
+    def mend_chance(self, a, b, c) -> float:
+        """Hourly chance that two slimes patch up a quarrel by themselves: kind slimes and old thanks help, grumpy and proud
+        ones hold out, and time apart after a brawl makes it likelier."""
+        p = config.CONFLICT_SELF_MEND * (2.0 if c.cool > 0 else 1.0) / c.severity
+        for s in (a, b):
+            for t in s.traits:
+                p *= config.SELF_MEND_TRAIT.get(t, 1.0)
+        if self.memory_fn:                          # shared history: grudges make it harder, gratitude easier
+            p /= self.memory_fn(a, b)[0]
+        return p
+
+    def _cold_war(self, c, by_id, events) -> None:
+        """A feud that has brawled enough burns out: no more fights, but no friendship for a while either."""
+        a, b = by_id[c.a], by_id[c.b]
+        self.conflicts.remove(c)
+        self.cold[frozenset((a.id, b.id))] = config.COLD_WAR_HOURS
+        for s in (a, b):
+            s.grounded = self._other_brawl(s.id)
+        events.append(f"🧊 {a.name} and {b.name} stop speaking to each other. No more fights, but no friendship either.")
+        if self.hook:
+            self.hook("cold_war", a, b)
 
     def _brawl(self, c, by_id, events) -> None:
         for sid in (c.a, c.b):
@@ -285,6 +332,7 @@ class ConflictEngine:
         """Remove a slime (e.g. merged away) from all conflicts and friendships."""
         self.conflicts = [c for c in self.conflicts if sid not in (c.a, c.b)]
         self.friends = {f for f in self.friends if sid not in f}
+        self.cold = {k: v for k, v in self.cold.items() if sid not in k}
 
     def mediate_chance(self, a, b, method: str) -> float:
         if method == "snack":

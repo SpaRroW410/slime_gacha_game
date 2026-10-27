@@ -85,6 +85,16 @@ CONFLICT_BASE_CHANCE = 0.0004     # per pair per tick
 CONFLICT_MAX_SEVERITY = 3
 CONFLICT_ESCALATE_TICKS = 8
 BRAWL_HP_LOSS = 0.08       # brawls can kill an already wounded slime
+# Feuds cool off the way people's do: after a brawl both keep apart for a while, a feud brawls at most CONFLICT_MAX_BRAWLS
+# times and then turns into a cold war (no more fights, no friendship either), and quarrels may mend on their own.
+CONFLICT_MAX_BRAWLS = 2           # brawls in one feud before it turns into a cold war
+CONFLICT_BRAWL_COOL = 24          # hours both avoid each other after a brawl (no escalation meanwhile)
+COLD_WAR_HOURS = 24 * 7           # a cold war: no new quarrels and no growing closer, then they are merely civil
+CONFLICT_SELF_MEND = 0.03         # per hour together, a spat may be patched up without help (/ severity; x2 while keeping apart)
+SELF_MEND_TRAIT = {"kind": 2.0, "chatty": 1.3, "grumpy": 0.5, "proud": 0.6}
+APOLOGY_GUILT = 25                # guilt at which a slime may apologise (once a day, APOLOGY_CHANCE)
+APOLOGY_CHANCE = 0.35
+PEACEMAKER_CHANCE = 0.5           # once a day, a friend of both at home tries to make peace (succeeds like a Keeper's talk)
 
 # ---- Growth ---------------------------------------------------------------
 LEVEL_CAPS = [10, 30, 100]          # per evolution stage
