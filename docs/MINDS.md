@@ -29,7 +29,7 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 | good days happen | attentive Keeper | joy, calm and affection add up to 10+ on an ordinary hour |
 | everyday joy | attentive Keeper | people who are looked after are mildly cheerful most of the time |
 | care builds bonds | attentive Keeper | more friends than rivals |
-| ordinary goals | hands-off colony | most slimes want something other than revenge (open: task 57) |
+| ordinary goals | hands-off colony | most slimes want something other than revenge (open: task 58) |
 | loved legendary is fine | legendary, loved | it absorbs the truth and carries on (settled or at peace) |
 | lonely legendary despairs | legendary, alone | isolation is what breaks people |
 | unloved worker is a cog | legendary, at a post, unseen | flat, going through the motions |
@@ -64,5 +64,5 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 
 ## Still to do
 
-Tasks 53-64 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
+Tasks 58-65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
 voice, daily rhythm, relationship texture, appraisal, rituals, a "why it feels this way" view).

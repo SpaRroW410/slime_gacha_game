@@ -73,15 +73,15 @@ Findings not yet re-verified against the current code; check each before fixing 
 - [x] **54. Feuds cool off (T1)** — self-mending, apologies, friends make peace, time apart after a brawl, at most two brawls then a cold war.  *Done when:* met (68 brawls in 45 days hands-off, was 1,054).
 - [x] **55. Feelings return to a baseline (T2)** — trait baselines, contentment over days, needs simmer but never boil; the feelings' dice are saved.  *Done when:* met (everyday joy about 9, was 0).
 - [x] **56. Care makes friends, not rivals (T4)** — a failed talk means not yet, making up counts towards friendship, calmer trait odds.  *Done when:* met.
-- [x] **57a. Legendary outcomes (T3)** — 14-day record, settled / peace / cog / despair, 70% Keeper share, deepening despair, leaving with permission.  *Done when:* met.
-- [ ] **57. Goals people actually have (T7)** — a weighted pool (master a style, befriend, court, protect a mentee, explore, craft, rest, praise); grudges one candidate among many.  *Done when:* the "ordinary goals" target passes.
-- [ ] **58. Meaning for every slime (T5)** — the record's purpose for all slimes, a Praise action, burnout for non-legendaries.  *Done when:* any slime can feel like a cog, and praise lifts it.
-- [ ] **59. Grief that lasts and comes in waves (T6)** — tied to the "lost" memory, 1-3 weeks, reminders, the Memorial gathering.  *Done when:* grief lasts 7-21 days in the harness (now about 1).
-- [ ] **60. Coping styles (T8)** and **friends comfort each other (T9)** — visible actions when a bad feeling passes 50; cuddle lines as a daily summary.  *Done when:* both show in the journal and cuddle lines drop below 3 a day.
-- [ ] **61. An inner voice that remembers (T10)** — talk lines from memories, goals and causes for every slime (legendaries already never repeat within a week).  *Done when:* met.
-- [ ] **62. Daily rhythm and hobbies (T11)** — day parts, shared meals, hobbies by trait.  *Done when:* met.
-- [ ] **63. Relationship texture (T12), appraisal (T13), rituals (T14)** — bonds fade without time together, jealousy, apologies, per-trait reactions, hatch days.  *Done when:* met.
-- [ ] **64. Why it feels this way (T16)** — top causes per feeling, a colony mood summary (the legendary card already shows its outcome and record).  *Done when:* met.
+- [x] **57. Legendary outcomes (T3)** — 14-day record, settled / peace / cog / despair, 70% Keeper share, deepening despair, leaving with permission.  *Done when:* met.
+- [ ] **58. Goals people actually have (T7)** — a weighted pool (master a style, befriend, court, protect a mentee, explore, craft, rest, praise); grudges one candidate among many.  *Done when:* the "ordinary goals" target passes.
+- [ ] **59. Meaning for every slime (T5)** — the record's purpose for all slimes, a Praise action, burnout for non-legendaries.  *Done when:* any slime can feel like a cog, and praise lifts it.
+- [ ] **60. Grief that lasts and comes in waves (T6)** — tied to the "lost" memory, 1-3 weeks, reminders, the Memorial gathering.  *Done when:* grief lasts 7-21 days in the harness (now about 1).
+- [ ] **61. Coping styles (T8)** and **friends comfort each other (T9)** — visible actions when a bad feeling passes 50; cuddle lines as a daily summary.  *Done when:* both show in the journal and cuddle lines drop below 3 a day.
+- [ ] **62. An inner voice that remembers (T10)** — talk lines from memories, goals and causes for every slime (legendaries already never repeat within a week).  *Done when:* met.
+- [ ] **63. Daily rhythm and hobbies (T11)** — day parts, shared meals, hobbies by trait.  *Done when:* met.
+- [ ] **64. Relationship texture (T12), appraisal (T13), rituals (T14)** — bonds fade without time together, jealousy, apologies, per-trait reactions, hatch days.  *Done when:* met.
+- [ ] **65. Why it feels this way (T16)** — top causes per feeling, a colony mood summary (the legendary card already shows its outcome and record).  *Done when:* met.
 
 ## After floor 50 (art and sound)
 - [x] **17. Animated battle arena** — replace `ARENA.render`.  *Done when:* units animate and statuses show without touching rules.

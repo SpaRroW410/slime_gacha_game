@@ -78,13 +78,28 @@ ROADMAP: List[Dict[str, object]] = [
          text="Whether real money buys gacha currency decides how much moves to a server."),
     dict(id=52, group="Mobile", title="Beta and launch", status="planned",
          text="Device testing, long sessions, crash reporting, release."),
+    dict(id=58, group="Slime minds", title="Goals people actually have", status="planned",
+         text="Everyday goals from traits, outlook and needs (master a style, befriend, court, protect a mentee, explore, craft, rest, praise); grudges are one goal among many."),
+    dict(id=59, group="Slime minds", title="Meaning for every slime", status="planned",
+         text="Purpose for all slimes, a Praise action, and burnout (the cog feeling) for non-legendaries."),
+    dict(id=60, group="Slime minds", title="Grief that lasts", status="planned",
+         text="Grief that lasts one to three weeks and comes back with reminders; a gathering at the Memorial Pond."),
+    dict(id=61, group="Slime minds", title="Coping and comfort", status="planned",
+         text="Each slime copes in its own way, and friends comfort each other when they are down."),
+    dict(id=62, group="Slime minds", title="An inner voice that remembers", status="planned",
+         text="What a slime says comes from its memories, goals and the reasons for its feelings."),
+    dict(id=63, group="Slime minds", title="Daily rhythm and hobbies", status="planned",
+         text="Mornings, shared meals, evenings and hobbies by personality."),
+    dict(id=64, group="Slime minds", title="Relationships, reactions and rituals", status="planned",
+         text="Bonds that fade without time together, jealousy, apologies, per-personality reactions, hatch days."),
+    dict(id=65, group="Slime minds", title="Why it feels this way", status="planned",
+         text="The top causes of each feeling, and a colony mood summary."),
 ]
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-11",
-                 text="Eight new hybrid classes for the Bard, Druid, Paladin and Alchemist (each with a signature skill and a capstone), Bard and Druid now train archery, and avatars show evolution (cape, chevrons), hybrid weapon and proficiency stars. Slimes now have goals and make their own decisions (training on their own, visiting friends, refusing dungeons after a friend fell), ask you for things and build trust, and slowly change personality. Slimes also remember: who ate their snack, who healed them, who fell. Grudges make quarrels likelier and become the stated reason; thanks make them rarer (see Memories on the slime card). Also new: sanity — a mental reserve (bigger for rarer slimes) that caps the mood; talking and petting now help less when repeated the same day. Also: four new classes (Bard, Paladin, Alchemist, Druid), a Hatchery and timed upgrades, gear sets, achievements and titles, story chapters, animated battles with sound, "
-                      "an installable offline app, exact gacha odds, and a safer save (second-tab and import protection).")
+WHATS_NEW = dict(id="2026-10-27-minds",
+                 text="Slimes feel more like people. Most spats now mend on their own, a guilty slime may apologise and a friend of both may make peace; a feud brawls at most twice, then they stop speaking for a week. Feelings settle back to each slime's usual mood, and contentment shows how life has felt for days. A failed talk now just means \"not ready yet\". Awakened 5-star legendaries take being code the way their last two weeks allow: settled, at peace, a cog in the machine, or in despair. Despair deepens (they may stop feeding themselves: feed them by hand), and a slime may ask to leave the colony: it only goes if you agree. See Guide > Awakening.")
 
 
 def build() -> Dict[str, object]:
