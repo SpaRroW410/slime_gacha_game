@@ -509,6 +509,15 @@ HOBBY_HOUR = 20                  # every free slime at home spends the evening o
 HOBBY_JOY, HOBBY_BOND = 4, 1.0
 HOBBY_MIN_ENERGY = 40           # below this a slime is too worn out for its hobby
 EVENING_LINE_PARTS = 4           # hobby groups named in the evening journal line
+# Relationships with texture (relationships.py, memory.py, game._peacemaking)
+BOND_FADE, BOND_FADE_FROM = 0.3, 5.0   # a bond of 5+ fades this much on a day the two did not share (apart, or not both home)
+JEALOUS_GAP, JEALOUS_CHANCE = 10, 0.15 # a partner much closer to someone else (by this much) may stir jealousy (per day)
+GRUDGE_APOLOGY_MIN = 3.0         # a grudge this heavy may earn an apology from a kind or guilty slime (APOLOGY_CHANCE a day)
+FORGIVE_FADE = 0.92              # a kind slime's grudges fade this much more each day
+# Rituals (rituals.py)
+HATCH_EVERY = 30                 # a hatch day (and a couple's anniversary) every this many days
+HATCH_JOY, HATCH_TRUST = 15, 3   # when the Keeper remembers it
+FEAST_JOY, FEAST_BOND = 12, 1.0  # the feast after a boss falls
 MEANING_DAYS = 7                 # days of record every other slime keeps (meaning.py)
 BURNOUT_DAYS = 5                 # flat days (purpose low, not lonely) before a slime burns out
 BURNOUT_PURPOSE = 0.35           # purpose (with care counted) below this is a flat day

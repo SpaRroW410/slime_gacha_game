@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import collections
 import random
 
-from slime_gacha import awakening, config, coping, emotions, grief, meaning, memory, routine, sanity, voice
+from slime_gacha import appraisal, awakening, config, coping, emotions, grief, meaning, memory, rituals, routine, sanity, voice
 from slime_gacha.ai import Conflict
 from slime_gacha.game import Game
 
@@ -858,6 +858,100 @@ class TestRoutine(unittest.TestCase):
         e = meaning.close_day(g, s)
         self.assertEqual(s.life["post_streak"], 0)
         self.assertGreaterEqual(e["purpose"], 0.5)
+
+
+class TestTextureReactionsRituals(unittest.TestCase):
+    def test_the_same_defeat_means_different_things(self):
+        g = colony()
+        proud, timid, brave = make(g, traits=["proud"]), make(g, traits=["timid"]), make(g, traits=["brave"])
+        for s in (proud, timid, brave):
+            appraisal.react(s, "defeat")
+        self.assertGreater(proud.emotions.get("guilt", 0), 0)
+        self.assertGreater(timid.emotions.get("fear", 0), 0)
+        self.assertGreater(brave.emotions.get("determination", 0), 0)
+        self.assertNotIn("fear", brave.emotions)
+
+    def test_a_first_victory_lands_harder(self):
+        g = colony()
+        a, b = make(g), make(g)
+        appraisal.react(a, "victory", first=True)
+        appraisal.react(b, "victory", first=False)
+        self.assertGreater(a.emotions.get("pride", 0), b.emotions.get("pride", 0))
+
+    def test_ties_fade_apart_and_hold_at_home(self):
+        g = colony()
+        a, b, c, d = make(g), make(g), make(g), make(g)
+        g.social.add_bond(a, b, 30)
+        g.social.add_bond(c, d, 30)
+        c.in_dungeon = "grind"                                           # c is away, d at home
+        with mock.patch.object(g.social, "compat", return_value=0):
+            g.relations.daily(g, g.mood_rng, [], g.day)
+        self.assertEqual(g.social.bond(a, b), 30)
+        self.assertLess(g.social.bond(c, d), 30)
+
+    def test_jealousy(self):
+        g = colony()
+        a, p, x = make(g), make(g), make(g)
+        g.relations.rel[frozenset((a.id, p.id))] = dict(kind="couple", since=0)
+        g.social.add_bond(a, p, 30)
+        g.social.add_bond(p, x, 60)
+        events = []
+        with mock.patch.object(config, "JEALOUS_CHANCE", 1.0):
+            g.relations._jealousy(g, {s.id: s for s in g.slimes()}, events, g.mood_rng)
+        self.assertGreater(memory.opinion(a, x)["grudge"], 0)
+        self.assertTrue(any("jealous" in e for e in events))
+
+    def test_a_kind_slime_apologises_for_an_old_grudge(self):
+        g = colony()
+        a, b = make(g, traits=["kind"]), make(g)
+        memory.remember(b, "brawl", a, g.day, 6.0)
+        events = []
+        with mock.patch.object(config, "APOLOGY_CHANCE", 1.0):
+            g._apologies(events)
+        self.assertLess(memory.opinion(b, a)["grudge"], 6.0)
+        self.assertTrue(any("apologises" in e for e in events))
+
+    def test_the_kind_forgive_sooner(self):
+        g = colony()
+        kind, plain, x = make(g, traits=["kind"]), make(g), make(g)
+        for s in (kind, plain):
+            memory.remember(s, "brawl", x, 0, 6.0)
+        for _ in range(5):
+            memory.fade(kind), memory.fade(plain)
+        self.assertLess(memory.opinion(kind, x)["grudge"], memory.opinion(plain, x)["grudge"])
+
+    def test_hatch_day_is_noticed_when_remembered(self):
+        g = colony()
+        s = make(g)
+        s.born = g.day - config.HATCH_EVERY
+        self.assertTrue(rituals.is_hatch_day(g, s))
+        self.assertEqual(rituals.next_hatch_in(g, s), 0)
+        trust = s.trust
+        self.assertIn("hatch day", g.pet(s.id))
+        self.assertGreater(s.trust, trust)
+        self.assertNotIn("hatch day", g.talk(s.id))                     # noticed once
+        events = []
+        rituals.daily(g, events)
+        self.assertTrue(any("Hatch day today" in e for e in events))
+
+    def test_pulled_slimes_know_their_hatch_day(self):
+        g = colony()
+        g.tick_count = 24 * 4
+        s = g.pull(1, "white_gel")[0]
+        self.assertEqual(s.born, 4)
+        self.assertEqual(rituals.next_hatch_in(g, s), config.HATCH_EVERY)
+        self.assertEqual(Game.from_dict(g.to_dict()).roster[s.id].born, 4)
+
+    def test_a_feast_after_a_boss(self):
+        g = colony()
+        a, b = make(g), make(g)
+        g.feast = "the fall of the boss of floor 5"
+        events = []
+        routine.meal(g, events, dinner=True)
+        self.assertTrue(any("feast" in e for e in events))
+        self.assertGreater(g.social.bond(a, b), 0)
+        self.assertEqual(g.feast, "")
+        self.assertEqual(Game.from_dict(g.to_dict()).feast, "")
 
 
 class TestBehaviourTargets(unittest.TestCase):

@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements, places, story, sanity, memory, meaning, mind, grief, coping, voice, routine
+from . import achievements, places, story, sanity, memory, meaning, mind, grief, coping, voice, routine, rituals, appraisal
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -88,6 +88,7 @@ class Game:
         self.coping_today = 0                                     # journal lines about coping today (coping.py)
         self.departed: List[dict] = []                            # slimes the Keeper let leave the colony
         self.memorials: set = set()                               # graveyard ids the colony has gathered for
+        self.feast = ""                                           # a boss fell: the next dinner is a feast for it (rituals.py)
         self.conflicts.compat_fn = lambda a, b: self.social.compat(a, b)
         self.conflicts.memory_fn = memory.for_pair
         self.conflicts.hook = self._social_hook
@@ -276,6 +277,7 @@ class Game:
                 self.wallet.add(pay, int(spent * back))
         self.gacha.favor = False
         for s in new:
+            s.born = self.day                                     # its hatch day (rituals.py)
             self.roster[s.id] = s
         self._xp("pull", config.KEEPER_XP["pull"] * len(new))
         self.journal.extend(story.check(self))
@@ -630,7 +632,7 @@ class Game:
             for e in ("sadness", "anxiety", "loneliness"):
                 emotions.soothe(s, e, 10)
         note = "" if n == 1 else " (you already talked today: it helps less)"
-        return f'{s.name}{feel}: "{line}"{note}'
+        return f'{s.name}{feel}: "{line}"{note}' + rituals.remembered(self, s)
 
     def _fight_sanity(self, s: Slime, kind: str) -> None:
         """Quarrels and brawls wear sanity down, but an unresolved feud brawls again and again: it costs at most once a day."""
@@ -688,6 +690,28 @@ class Game:
                 emotions.feel(f, "pride", 10)
                 events.append(f"🤝 {f.name} helps {a.name} and {b.name} make peace.")
 
+    def _apologies(self, events: List[str]) -> None:
+        """Once a day, a kind or guilty slime may apologise to someone who still holds a heavy grudge against it."""
+        lines = 0
+        open_pairs = {frozenset((c.a, c.b)) for c in self.conflicts.conflicts}
+        for s in self.slimes():
+            if not ("kind" in s.traits or emotions.level(s, "guilt") >= config.APOLOGY_GUILT) or s.busy:
+                continue
+            hurt = [(memory.opinion(o, s)["grudge"], o) for o in self.slimes() if o.id != s.id and not o.busy
+                    and frozenset((s.id, o.id)) not in open_pairs]
+            weight, o = max(hurt, key=lambda x: x[0], default=(0.0, None))
+            if not o or weight < config.GRUDGE_APOLOGY_MIN or self.mood_rng.random() >= config.APOLOGY_CHANCE:
+                continue
+            for m in o.memories:
+                if m["other"] == s.id and memory.KINDS[m["kind"]][0] < 0:
+                    m["weight"] = round(m["weight"] / 2, 3)
+            memory.remember(o, "made_up", s, self.day, 2.0)
+            emotions.soothe(s, "guilt", 15)
+            self.social.add_bond(s, o, 4)
+            if lines < 2:
+                events.append(f"🙏 {s.name} apologises to {o.name} for what happened between them. {o.name} takes it well.")
+                lines += 1
+
     def _relations_day(self, events: List[str]) -> None:
         self.coping_today = 0
         cud = self.needs.cuddles
@@ -697,6 +721,8 @@ class Game:
             self.needs.cuddles = {}
         self._peacemaking(events)
         grief.daily(self, events)
+        rituals.daily(self, events)
+        self._apologies(events)
         for s in self.slimes():
             memory.fade(s)
         mind.daily(self, events)
@@ -764,6 +790,7 @@ class Game:
         kid.hp = kid.max_hp
         emotions.feel(kid, "wonder", 30)
         emotions.feel(kid, "joy", 30)
+        kid.born = self.day
         self.roster[kid.id] = kid
         r["last_bud"] = self.day
         for p in (a, b):
@@ -1314,7 +1341,8 @@ class Game:
             meaning.note(s, "care", 0.3)
             meaning.note(s, "praised")
         self._xp("care", config.KEEPER_XP["care"])
-        return f"You tell {s.name} they did well. They stand a little taller." + ("" if k == 1 else " (you already praised them today)")
+        return (f"You tell {s.name} they did well. They stand a little taller." + ("" if k == 1 else " (you already praised them today)")
+                + rituals.remembered(self, s))
 
     def pet(self, sid: int) -> str:
         s = self._tend(sid)
@@ -1330,7 +1358,7 @@ class Game:
         emotions.soothe(s, "anger", 6 * gh)
         awakening.comfort(s)
         self._xp("care", config.KEEPER_XP["care"])
-        return f"You pet {s.name}. Blorp! (mood: {s.mood_label()})"
+        return f"You pet {s.name}. Blorp! (mood: {s.mood_label()})" + rituals.remembered(self, s)
 
     # ---- hunting -----------------------------------------------------------------
     def hunt(self, sid: int, zone: str, group: int = 0) -> str:
@@ -2155,6 +2183,7 @@ class Game:
                 emotions.feel(s, "pride", (10 + (15 if boss else 0)) * scale + 2)
                 emotions.soothe(s, "fear", 10)
                 emotions.soothe(s, "anxiety", 8)
+                appraisal.react(s, "victory", first=s.wins <= 1)
                 if boss and awakening.candidate(s):
                     s.awareness += 3.0
         elif report.winner == "foes":
@@ -2164,10 +2193,12 @@ class Game:
                 emotions.feel(s, "anger", 12 * scale + 2)
                 emotions.feel(s, "fear", 12 * scale + 2)
                 emotions.feel(s, "determination", 10)
+                appraisal.react(s, "defeat")
         for s in alive:
             if lost and s not in lost:
                 emotions.feel(s, "sadness", 8 * len(lost))
                 emotions.feel(s, "determination", 8)
+                appraisal.react(s, "ally_fell")
         if report.victory:
             for s in alive:
                 self.social.shift_morale(s, scale * (config.MORALE_WIN + (config.MORALE_BOSS_WIN if boss else 0)))
@@ -3353,6 +3384,7 @@ class Game:
                 events.append("👑 THE PARCHED KING FALLS! The Dry Tide shudders and begins to recede - the Mother Gloop "
                               "stirs. You have cleared the Hollow Descent.")
             if boss:
+                self.feast = f"the fall of the boss of floor {floor}"           # tonight's dinner is a feast (rituals.py)
                 events.append(f"🔓 The boss of floor {floor} is down. This is a checkpoint: the party may climb out "
                               f"or push on to floor {floor + 1}.")
                 if floor not in self.bounties:
@@ -3898,7 +3930,7 @@ class Game:
                     sacrifice_stress=round(self.sacrifice_stress, 3),
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
-                    parties=self.parties.to_dict(), graveyard=self.graveyard, departed=self.departed[-50:], memorials=sorted(self.memorials)[-50:],
+                    parties=self.parties.to_dict(), graveyard=self.graveyard, departed=self.departed[-50:], memorials=sorted(self.memorials)[-50:], feast=self.feast,
                     wallet=self.wallet.to_dict(), gacha=self.gacha.to_dict(),
                     slimes=[s.to_dict() for s in self.slimes()],
                     conflicts=[c.to_dict() for c in self.conflicts.conflicts],
@@ -4021,6 +4053,7 @@ class Game:
         g.graveyard = d.get("graveyard", [])
         g.departed = list(d.get("departed", []))
         g.memorials = set(d.get("memorials", []))
+        g.feast = d.get("feast", "")
         g.conflicts.conflicts = [Conflict(**c) for c in d.get("conflicts", [])
                                  if c["a"] in g.roster and c["b"] in g.roster]
         g.delves = {int(k): v for k, v in d.get("delves", {}).items()

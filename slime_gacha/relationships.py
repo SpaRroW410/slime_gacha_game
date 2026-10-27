@@ -60,6 +60,27 @@ class RelationshipEngine:
         self.rel = {k: v for k, v in self.rel.items() if sid not in k}
         self.quarrels = {k: v for k, v in self.quarrels.items() if sid not in k}
 
+    def _jealousy(self, game, slimes, journal, rng) -> None:
+        """A partner much closer to someone else may stir jealousy (and a small grudge against that someone)."""
+        from . import emotions, memory
+        social, lines = game.social, 0
+        for k, r in self.rel.items():
+            if r["kind"] != "couple":
+                continue
+            for me_id, p_id in (tuple(k), tuple(k)[::-1]):
+                me, p = slimes.get(me_id), slimes.get(p_id)
+                if not me or not p:
+                    continue
+                ours = social.bond(me, p)
+                rival = max((o for o in slimes.values() if o.id not in k), key=lambda o: social.bond(p, o), default=None)
+                if rival and social.bond(p, rival) > ours + config.JEALOUS_GAP and rng.random() < config.JEALOUS_CHANCE:
+                    emotions.feel(me, "anger", 8)
+                    emotions.feel(me, "sadness", 6)
+                    memory.remember(me, "slight", rival, game.day, 1.5, f"(so close to {p.name})")
+                    if lines < 2:
+                        journal.append(f"💚 {me.name} feels a little jealous: {p.name} spends so much time with {rival.name}.")
+                        lines += 1
+
     def note_quarrel(self, a, b, n: int = 1) -> None:
         """Count quarrels towards a rivalry; a quarrel that ends in making up takes one back (n=-1)."""
         k = key(a, b)
@@ -113,6 +134,14 @@ class RelationshipEngine:
         #    foraging walk) and like each other grow closer
         idle = [s for s in slimes.values() if s.state in ("idle", "resting", "sleeping", "working") and not s.in_dungeon]
         cold = game.conflicts.cold
+        home = {s.id for s in idle}
+        for k, v in list(social.bonds.items()):          # ties fade on days the two did not share (apart, on different trips)
+            if v < config.BOND_FADE_FROM or len(k) != 2:
+                continue
+            a, b = (slimes.get(i) for i in k)
+            if a and b and not (a.id in home and b.id in home) and not game._together(a, b):
+                social.add_bond(a, b, -config.BOND_FADE)
+        self._jealousy(game, slimes, journal, rng)
         for i, a in enumerate(idle):
             for b in idle[i + 1:]:
                 if key(a, b) in cold:                     # a cold war: they keep out of each other's way

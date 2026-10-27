@@ -82,6 +82,10 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 - **A day at home** (`routine.py`): meals together at 8, 13 and 19 (table-mates grow closer), an evening hobby at 20 from
   outlook or personality (time of its own: meaning; a shared hobby: closeness). Sitting idle is not an activity, and a
   praised day is not an unseen grind.
+- **Texture, reactions, rituals**: bonds fade on days not shared, partners can be jealous, kind or guilty slimes apologise
+  for old grudges and the kind forgive sooner (`relationships.py`, `memory.py`); a defeat shames the proud, frightens the
+  timid, spurs the brave (`appraisal.py`); hatch days every 30 days (noticed when the Keeper remembers), couple
+  anniversaries, and a feast at dinner after a boss falls (`rituals.py`).
 - **Goals** (`mind.py`): a weighted pool - get stronger, master a style, see a friend, make a new one, court someone, teach
   a mentee, explore, make something, take it easy, be noticed - shaped by traits, outlook, needs and ties; a grudge is one
   candidate. Thanks outlast minor grudges when memory is full. Slimes who share the colony's days (idle, resting, at a post)
@@ -90,5 +94,5 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 
 ## Still to do
 
-Tasks 64-65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
+Task 65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
 voice, daily rhythm, relationship texture, appraisal, rituals, a "why it feels this way" view).

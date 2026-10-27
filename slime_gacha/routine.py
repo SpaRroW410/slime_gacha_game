@@ -41,7 +41,10 @@ def _home(s) -> bool:
 
 
 def meal(g, events: List[str], dinner: bool) -> None:
-    """Slimes at home who are getting hungry eat together; table-mates grow closer."""
+    """Slimes at home who are getting hungry eat together; table-mates grow closer. After a boss falls, dinner is a feast."""
+    from . import rituals
+    if dinner and rituals.feast(g, events):
+        return
     diners = []
     for s in g.slimes():
         if not _home(s) or s.needs.get("food") >= config.MEAL_BELOW or (g.needs.skip_meal and g.needs.skip_meal(s, events)):

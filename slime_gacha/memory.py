@@ -52,8 +52,10 @@ def remember(s, kind: str, other, day: int, weight: float = 3.0, note: str = "")
 def fade(s) -> None:
     """Daily: every memory loses weight; faint ones vanish. Strong grudges and gratitude last for weeks."""
     keep = []
+    forgiving = "kind" in s.traits
     for m in s.memories:
-        m["weight"] = round(m["weight"] * config.MEMORY_FADE, 3)
+        f = config.MEMORY_FADE * (config.FORGIVE_FADE if forgiving and KINDS[m["kind"]][0] < 0 else 1.0)   # the kind let go sooner
+        m["weight"] = round(m["weight"] * f, 3)
         if m["weight"] >= config.MEMORY_MIN_WEIGHT:
             keep.append(m)
     s.memories = keep
