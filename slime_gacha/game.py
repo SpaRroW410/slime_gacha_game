@@ -93,6 +93,8 @@ class Game:
         self.conflicts.memory_fn = memory.for_pair
         self.conflicts.hook = self._social_hook
         self.conflicts.together_fn = self._together
+        self.conflicts.wary_fn = self.wary
+        self.shadow_tick: Optional[int] = None         # when the Keeper last removed a troublemaker (the Keeper's shadow)
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
         self.best_floor = 0                            # deepest floor ever cleared by anyone
         self.descent_cleared = False                   # the final boss (floor 50) has fallen
@@ -625,6 +627,7 @@ class Game:
         top = emotions.dominant(s, 1)
         feel = f" ({emotions.EMOTIONS[top[0][0]].emoji} {emotions.EMOTIONS[top[0][0]].name.lower()})" if top else ""
         n = self._cared(s, "talk")
+        s.cared["kday"] = self.day                       # the Keeper's attention: it holds back from quarrels for a few days
         emotions.feel(s, "affection", 3 if n == 1 else 0, "a talk with you")
         if n == 1:                                       # the first talk of the day really helps; more is just chatter
             awakening.note(s, "care", 0.5)
@@ -643,7 +646,7 @@ class Game:
     def _cared(self, s: Slime, kind: str) -> int:
         """Count talks / pets today for this slime (1 = the first): the Keeper's attention wears off when repeated."""
         if s.cared.get("day") != self.day:
-            s.cared = {"day": self.day, "talk": 0, "pet": 0, "fday": s.cared.get("fday", -1)}
+            s.cared = {"day": self.day, "talk": 0, "pet": 0, "fday": s.cared.get("fday", -1), "kday": s.cared.get("kday", -99)}
         s.cared[kind] = s.cared.get(kind, 0) + 1
         return s.cared[kind]
 
@@ -725,6 +728,7 @@ class Game:
         self._apologies(events)
         for s in self.slimes():
             memory.fade(s)
+            s.fights = {k: v for k, v in s.fights.items() if self.day - v < config.NUISANCE_DAYS}   # old fights are forgiven
         mind.daily(self, events)
         for s in self.slimes():
             meaning.daily(self, s, events)
@@ -734,21 +738,26 @@ class Game:
         if len(self.relations.rel) > before:
             self._xp("relation", config.KEEPER_XP["relation"] * (len(self.relations.rel) - before))
 
-    def _lose_ties(self, s: Slime, merged: bool = False) -> None:
-        """A slime is gone: partners and best friends take it hard, then the ties are forgotten."""
+    def _lose_ties(self, s: Slime, merged: bool = False, relief: bool = False) -> None:
+        """A slime is gone: partners and best friends take it hard, then the ties are forgotten. A troublemaker (`relief`) is
+        missed by its partner and best friend alone, at NUISANCE_GRIEF strength and with no change in morale."""
+        x = config.NUISANCE_GRIEF if relief else 1.0
         for r in self.relations.of(s.id):
             o = self.roster.get(r["other"])
             if not o or o.id == s.id:
                 continue
             k = r["kind"]
             if k == "couple":
-                sanity.hit(o, config.SANITY_HIT["partner_died"])
-                emotions.feel(o, "sadness", 55, f"lost {s.name}")
-                emotions.feel(o, "anger", 15, f"lost {s.name}")
-                emotions.feel(o, "loneliness", 25, f"lost {s.name}")
-                self.social.shift_morale(o, -15)
+                sanity.hit(o, config.SANITY_HIT["partner_died"] * x)
+                emotions.feel(o, "sadness", 55 * x, f"lost {s.name}")
+                emotions.feel(o, "anger", 15 * x, f"lost {s.name}")
+                emotions.feel(o, "loneliness", 25 * x, f"lost {s.name}")
+                if not relief:
+                    self.social.shift_morale(o, -15)
             elif k == "best_friend":
-                emotions.feel(o, "sadness", 30, f"lost {s.name}")
+                emotions.feel(o, "sadness", 30 * x, f"lost {s.name}")
+            elif relief:
+                continue
             elif k == "mentor":
                 emotions.feel(o, "sadness", 20, f"lost {s.name}")
                 emotions.feel(o, "determination", 15, f"lost {s.name}")
@@ -1599,6 +1608,9 @@ class Game:
             else:
                 memory.remember(a, "brawl", b, self.day, 4.0)
                 memory.remember(b, "brawl", a, self.day, 4.0)
+                for s, o in ((a, b), (b, a)):                    # a slime only snapped at does not carry the blame
+                    if not c or c.starter in (0, s.id):
+                        s.fights[o.id] = self.day
         if kind == "quarrel":
             self.social.add_bond(a, b, -3)
             for s in (a, b):
@@ -1756,10 +1768,20 @@ class Game:
     def evolve(self, sid: int) -> List[str]:
         return evolve(self.slime(sid), self.wallet)
 
+    def fight_limit(self) -> int:
+        """A slime that came to blows with more different slimes than this lately is a troublemaker: 5% of the colony
+        (rounded down), but never fewer than NUISANCE_MIN."""
+        return max(config.NUISANCE_MIN, int(len(self.roster) * config.NUISANCE_SHARE))
+
+    def recent_fights(self, d: Slime) -> int:
+        """Different slimes `d` came to blows with in the last NUISANCE_DAYS days (fights it was only dragged into excluded)."""
+        return sum(1 for v in d.fights.values() if self.day - v < config.NUISANCE_DAYS)
+
     def unwelcome(self, d: Slime) -> bool:
-        """Is this slime a nuisance the colony would be glad to see go: one that keeps brawling (or is brawling now) or one
-        disliked by most of the colony? Sacrificing such a slime upsets nobody. Being weak is no reason."""
-        if d.grounded or d.brawls >= config.NUISANCE_BRAWLS:
+        """Is this slime a troublemaker the colony would be glad to see go: one that came to blows with more of the colony
+        than fight_limit() lately, or one most of the colony dislikes? Sacrificing it costs no morale and no sacrifice stress,
+        and only its partner and best friend grieve. Being weak is no reason."""
+        if self.recent_fights(d) > self.fight_limit():
             return True
         others = [o for o in self.slimes() if o is not d]
         return bool(others) and sum(self.social.compat(d, o) for o in others) / len(others) < -10
@@ -1772,6 +1794,8 @@ class Game:
         amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
         relief = self.unwelcome(d)                             # a troublemaker's merge changes nobody's morale
         grief = 0 if relief else self.social.grief(d, self.slimes(), amp)
+        self._start_grief(d, relief)
+        eased = self._troublemaker_gone(d) if relief else []
         log = merge(t, d, compat)
         self._xp("merge", config.KEEPER_XP["merge"])
         self._return_gear(d)
@@ -1783,10 +1807,11 @@ class Game:
         del self.roster[d.id]
         self.conflicts.forget(d.id)
         self.parties.remove(d.id)
-        self._lose_ties(d)
+        self._lose_ties(d, relief=relief)
         self.social.forget(d.id)
         if relief:
-            log.append(f"   {d.name} was a constant nuisance: the colony is relieved. No change in morale.")
+            log.append(f"   {d.name} was a troublemaker: the colony is relieved. No change in morale.")
+            log.extend(eased)
             return log
         for o in self.slimes():                               # the colony mourns the sacrifice
             base = config.MERGE_MORALE_FRIENDS if o.id in friends else config.MERGE_MORALE_OTHERS
@@ -1886,6 +1911,8 @@ class Game:
             raise InvalidAction("Method must be 'talk' or 'snack'.")
         self.conflicts.resolve(c, self.roster, ok)
         if ok:
+            for s in (a, b):
+                s.cared["kday"] = self.day                   # the Keeper made peace for them: they hold back for a few days
             self._xp("mediate", config.KEEPER_XP["mediate"])
             return f"{a.name} and {b.name} make up. They're friends now (fewer future quarrels)."
         return (f"{a.name} and {b.name} are not ready to make up yet. No harm done: try again in {config.MEDIATE_RETRY_HOURS}h, "
@@ -2440,26 +2467,93 @@ class Game:
         self.journal.extend(out)
         return out
 
-    def _consume_slime(self, s: Slime, stress: float) -> None:
-        """Remove a slime sacrificed by the player: gear comes home, the colony mourns, stress rises."""
+    def _consume_slime(self, s: Slime, stress: float) -> List[str]:
+        """Remove a slime sacrificed by the player: gear comes home, the colony mourns, stress rises (a troublemaker: nobody
+        but its partner and best friend minds, see _troublemaker_gone). Returns lines for the log."""
         amp = 1 + config.SACRIFICE_STRESS_AMP * self.sacrifice_stress
         relief = self.unwelcome(s)                            # destroying a troublemaker upsets nobody
         friends = {i for f in self.conflicts.friends if s.id in f for i in f if i != s.id}
         friends |= {i for k, v in self.social.bonds.items() if s.id in k and v >= 20 for i in k if i != s.id}
-        grief.start(self, s, "")                             # a sacrifice is a loss like any other to those who loved it
+        self._start_grief(s, relief)
+        eased = self._troublemaker_gone(s) if relief else []
         self._return_gear(s)
         del self.roster[s.id]
         self.conflicts.forget(s.id)
         self.parties.remove(s.id)
-        self._lose_ties(s)
+        self._lose_ties(s, relief=relief)
         self.social.forget(s.id)
         if relief:
-            return
+            return ["   A troublemaker: the colony is relieved. No change in morale."] + eased
         for o in self.slimes():
             base = config.MERGE_MORALE_FRIENDS if o.id in friends else config.MERGE_MORALE_OTHERS
             self.social.shift_morale(o, base * amp)
             self._mourn_sacrifice(o, o.id in friends, False)
         self.sacrifice_stress += stress
+        return [f"   The colony mourns. Sacrifice stress is now {self.sacrifice_stress:.1f}."]
+
+    def _start_grief(self, s: Slime, relief: bool) -> None:
+        """A sacrifice is a loss like any other to those who loved it; a troublemaker is mourned by its partner and best
+        friend alone, at half depth."""
+        if relief:
+            grief.start(self, s, "", config.NUISANCE_GRIEF, kinds=("couple", "best_friend"))
+        else:
+            grief.start(self, s, "")
+
+    def _troublemaker_gone(self, s: Slime) -> List[str]:
+        """A troublemaker is removed: those it fought with breathe again (calmer, a little more content, their grudges against
+        it fading), and the Keeper's shadow falls on the colony: quarrels are rarer for a week, and slimes with fights of their
+        own on record are afraid they could be next (anxious too, if it happens again within the week).
+        Call before the slime is taken off the roster."""
+        foes = {c.b if c.a == s.id else c.a for c in self.conflicts.conflicts if s.id in (c.a, c.b)}
+        foes |= {i for k in self.conflicts.cold if s.id in k for i in k if i != s.id}
+        foes |= {i for i, v in s.fights.items() if self.day - v < config.NUISANCE_DAYS}
+        foes |= {o.id for o in self.slimes() if self.day - o.fights.get(s.id, -999) < config.NUISANCE_DAYS}
+        eased = [self.roster[i] for i in sorted(foes) if i in self.roster and i != s.id]
+        for o in eased:
+            emotions.soothe(o, "anger", config.RELIEF_ANGER)
+            emotions.feel(o, "calm", config.RELIEF_CALM, f"{s.name} is gone")
+            o.content = min(100.0, o.content + config.RELIEF_CONTENT)
+            for m in o.memories:
+                if m["other"] == s.id and memory.KINDS.get(m["kind"], (0,))[0] < 0:
+                    m["weight"] *= config.RELIEF_GRUDGE_FADE
+        again = self.shadow_tick is not None and self.tick_count - self.shadow_tick < config.SHADOW_HOURS
+        self.shadow_tick = self.tick_count
+        afraid = [o for o in self.slimes() if o.id != s.id and self.recent_fights(o)]
+        for o in afraid:
+            emotions.feel(o, "fear", config.SHADOW_FEAR, f"what happened to {s.name}")
+            if again:
+                emotions.feel(o, "anxiety", config.SHADOW_ANXIETY, "the Keeper removing troublemakers")
+        out = []
+        if eased:
+            out.append(f"   {', '.join(o.name for o in eased)} breathe{'s' if len(eased) == 1 else ''} easier.")
+        out.append("   🌑 The colony saw what happened. Quarrels will be rarer for a while"
+                   + (f"; {len(afraid)} slime(s) with fights of their own wonder if they are next." if afraid else "."))
+        self.journal.extend(x.strip() for x in out)
+        return out
+
+    def shadow_left(self) -> float:
+        """How much of the Keeper's shadow is left: 1 right after a troublemaker is removed, 0 a week later."""
+        if self.shadow_tick is None:
+            return 0.0
+        return max(0.0, 1.0 - (self.tick_count - self.shadow_tick) / config.SHADOW_HOURS)
+
+    def wary(self, s: Slime) -> float:
+        """The Keeper's hold on a slime's temper, as a factor on its quarrels: the shadow after a troublemaker is removed
+        (stronger for a slime with fights on record, by its traits) and respect after the Keeper talked with it or made peace
+        for it in the last RESPECT_DAYS days."""
+        f = 1.0
+        left = self.shadow_left()
+        if left > 0:
+            depth = 1.0 - config.SHADOW_FACTOR
+            if self.recent_fights(s):
+                scale = 1.0
+                for t in s.traits:
+                    scale *= config.SHADOW_FEAR_TRAIT.get(t, 1.0)
+                depth += (config.SHADOW_FACTOR - config.SHADOW_FEAR_FACTOR) * scale
+            f -= depth * left
+        if self.day - s.cared.get("kday", -99) < config.RESPECT_DAYS:
+            f *= config.RESPECT_FACTOR
+        return max(config.SHADOW_FLOOR, f)
 
     @staticmethod
     def _mourn_sacrifice(o: Slime, friend: bool, target: bool) -> None:
@@ -2485,13 +2579,10 @@ class Game:
             raise InvalidAction(f"{s.name} is the Vice Keeper and cannot be destroyed. Dismiss them first.")
         y = ascension.chamber_yield(s, self.buildings.level("chamber"))
         name, label = s.name, f"{config.RARITY_TAG[s.rarity]} {s.star_str()} Lv{s.level} {s.arch.name}"
-        relief = self.unwelcome(s)
-        self._consume_slime(s, config.CHAMBER_STRESS)
+        after = self._consume_slime(s, config.CHAMBER_STRESS)
         self.wallet.add_many(y)
         return [f"🔥 {name} ({label}) is destroyed in the chamber: " +
-                ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in y.items()) + ".",
-                ("   A constant nuisance: the colony is relieved. No change in morale." if relief
-                 else f"   The colony mourns. Sacrifice stress is now {self.sacrifice_stress:.1f}.")]
+                ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in y.items()) + "."] + after
 
     def _farm_loot(self, foes: int, log: List[str]) -> None:
         """Every farming dungeon (Pit, Rift, Quarry) also hands out a little of the other resources, rarely."""
@@ -2998,11 +3089,10 @@ class Game:
             self.vault[it.uid] = it
         it.ego = dict(name=s.name, level=s.level, archetype=s.archetype)
         it.durability = it.max_durability
-        self._consume_slime(s, config.EGO_MORALE_STRESS)
+        after = self._consume_slime(s, config.EGO_MORALE_STRESS)
         return [f"👁️ {s.name} (Lv{s.level} {s.arch.name}) pours their soul into {it.spec.emoji}{it.spec.name}.",
                 f"   {it.label()} awakens - stats x{it.power_mult():.1f}, mods doubled, unbreakable. "
-                f"Only a 5-star legendary slime can wield it.",
-                f"   The colony mourns. Sacrifice stress is now {self.sacrifice_stress:.1f}."]
+                f"Only a 5-star legendary slime can wield it."] + after
 
     def _wear_items(self, party) -> List[str]:
         """Every relic worn into a fight loses a point of durability and grows closer to its wielder."""
@@ -3927,7 +4017,7 @@ class Game:
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
                     expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
-                    sacrifice_stress=round(self.sacrifice_stress, 3),
+                    sacrifice_stress=round(self.sacrifice_stress, 3), shadow_tick=self.shadow_tick,
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
                     parties=self.parties.to_dict(), graveyard=self.graveyard, departed=self.departed[-50:], memorials=sorted(self.memorials)[-50:], feast=self.feast,
@@ -4015,6 +4105,7 @@ class Game:
         g.inventory.load(d.get("inventory"))
         g.pit_lost = [k for k in d.get("pit_lost", []) if k in equipment.GEAR]
         g.sacrifice_stress = d.get("sacrifice_stress", 0.0)
+        g.shadow_tick = d.get("shadow_tick")
         g.vault = {i["uid"]: items_mod.Item.from_dict(i) for i in d.get("vault", [])}
         g.next_item_id = d.get("next_item_id", 1)
         g.potions = {k: v for k, v in d.get("potions", {}).items() if v > 0 and k.split(":")[0] in potions.KINDS}

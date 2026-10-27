@@ -9,6 +9,7 @@ Every call returns the same envelope:
 Game save dict which the browser keeps in localStorage. Domain errors (GameError) become `ok: false`.
 """
 import json
+import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
@@ -38,7 +39,7 @@ def slime_view(g: Game, s) -> dict:
         job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji, foraging=(s.state == "hunting")) if s.job else None),
         job_levels={k: jobs_mod.level(s, k) for k in jobs_mod.JOBS},
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
-        behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins,
+        behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins, fights=g.recent_fights(s),
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),
         row=(s.row or battle_default_row(s)), row_set=s.row, ward=s.id in g.ward, refuse_job=g.refusal(s, "job"), refuse_dungeon=g.refusal(s, "dungeon"),
         mood=s.mood_label(), power=(tp := power_mod.total_power(s))["total"], power_tag=power_mod.display(tp["total"]), power_parts=tp["parts"], power_mult=tp["multiplier"],
@@ -333,6 +334,7 @@ def snapshot(g: Game) -> dict:
         modifiers={k: dict(name=m.name, emoji=m.emoji, desc=m.desc, boon=m.boon) for k, m in modifiers_mod.MODIFIERS.items()},
         jobs=_jobs_view(g),
         rest=dict(used=g.resting_count(), cap=g.buildings.rest_capacity()),
+        shadow=dict(left=round(g.shadow_left(), 2), hours=math.ceil(g.shadow_left() * config.SHADOW_HOURS), fight_limit=g.fight_limit()),
         conflicts=[dict(id=c.id, a=c.a, b=c.b, severity=c.severity, age=c.age, reason=c.reason, retry=c.retry, cool=c.cool,
                         brawls=c.brawls, away=[g.slime(i).name for i in (c.a, c.b) if g.slime(i).busy])
                    for c in g.conflicts.conflicts],
@@ -876,7 +878,8 @@ def _council(g, a):
     rows = [dict(id=r["slime"].id, name=r["slime"].name, verdict=r["verdict"], score=r["score"],
                  avg_compat=r["avg_compat"], close=r["close"], reasons=r["reasons"]) for r in c["rows"]]
     merges = [dict(target=m["target"].id, target_name=m["target"].name, donor=m["donor"].id,
-                   donor_name=m["donor"].name, xp=m["xp"], compat=m["compat"], grief=m["grief"], net=m["net"])
+                   donor_name=m["donor"].name, xp=m["xp"], compat=m["compat"], grief=m["grief"], net=m["net"],
+                   relief=g.unwelcome(m["donor"]))
               for m in c["merges"]]
     return [], dict(rows=rows, merges=merges, stress=round(g.sacrifice_stress, 2))
 

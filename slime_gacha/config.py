@@ -191,7 +191,25 @@ SPAR_MIN_HP = 0.4
 SPAR_BOND = 3
 WAVE_PROF, WAVE_BOND, WAVE_TICKS = 2.0, 1.0, 2
 WAVE_MAX_LEVEL, WAVE_MAX_WAVES, WAVE_XP_MULT = 50, 5, 1.0   # wave simulation: top monster level, most waves, XP vs the monsters' worth   # wave simulation: class proficiency per member (x(1+0.5 per tier above 1)), bond per pair, hours
-NUISANCE_BRAWLS = 2                # a slime that has brawled this often is a nuisance: merging or destroying it upsets nobody
+# A TROUBLEMAKER (merging or destroying it costs no morale and no sacrifice stress): a slime that came to blows with more
+# different slimes in the last NUISANCE_DAYS days than NUISANCE_SHARE of the colony (rounded down, never under NUISANCE_MIN),
+# or one most of the colony dislikes. A slime that was only snapped at does not count the fight against it.
+NUISANCE_SHARE = 0.05
+NUISANCE_MIN = 1                   # 5% of a small colony rounds down to 0: a single fight should not make a troublemaker
+NUISANCE_DAYS = 30                 # older fights are forgiven
+NUISANCE_GRIEF = 0.5               # a troublemaker's partner and best friend still grieve it, at this strength; nobody else does
+RELIEF_ANGER, RELIEF_CALM, RELIEF_CONTENT = 30, 15, 5   # those it fought with when it goes: anger eased, calm, contentment
+RELIEF_GRUDGE_FADE = 0.5           # ... and their grudges against it weigh this much
+# THE KEEPER'S SHADOW: after a troublemaker is removed the colony quarrels less for SHADOW_HOURS, fading back to normal.
+SHADOW_HOURS = 24 * 7
+SHADOW_FACTOR = 0.5                # quarrel chance for everyone right after a removal
+SHADOW_FEAR_FACTOR = 0.3           # ... for a slime with fights of its own on record ("I could be next")
+SHADOW_FEAR_TRAIT = {"timid": 1.5, "grumpy": 0.5, "proud": 0.5, "brave": 0.1}   # how much that fear holds it back
+SHADOW_FEAR = 15                   # fear felt by those with fights on record
+SHADOW_ANXIETY = 15                # a second removal within SHADOW_HOURS: they grow anxious too
+SHADOW_FLOOR = 0.3                 # the shadow never cuts the quarrel chance below this
+RESPECT_DAYS = 3                   # a slime the Keeper talked with, or made peace for, in the last few days ...
+RESPECT_FACTOR = 0.8               # ... starts quarrels this much as often
 ROW_BACK_MELEE = 0.75          # a melee fighter standing in the back row hits for this much
 ROW_BACK_GUARD = 0.80          # a unit in the back row takes this much of any damage that reaches it
 PARTY_TRAIN_BOND = 3.0         # every pair inside a party that trains together in the Party Arena grows this much closer

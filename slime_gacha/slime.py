@@ -137,7 +137,8 @@ class Slime:
         self.merged = 0
         self.grounded = False          # set by an unresolved brawl: refuses hunts
         self.row = ""                  # formation: "front" | "back" | "" (automatic: casters and archers stand at the back)
-        self.brawls = 0                # brawls this slime has been in (a habitual brawler is a nuisance)
+        self.brawls = 0                # brawls this slime has been in, ever (a stat)
+        self.fights: Dict[int, int] = {}   # slime id -> last day it came to blows with it, counting against it (Game.unwelcome)
 
     # ---- derived ---------------------------------------------------------
     @property
@@ -251,7 +252,7 @@ class Slime:
                     total_xp=self.total_xp, stage=self.stage, behavior=self.behavior,
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
-                    merged=self.merged, grounded=self.grounded, brawls=self.brawls, row=self.row, style_xp=self.style_xp, morale=self.morale, sanity=round(self.sanity, 2), cared=self.cared, memories=self.memories, goal=self.goal, request=self.request, trust=round(self.trust, 1), drift=self.drift,
+                    merged=self.merged, grounded=self.grounded, brawls=self.brawls, fights={str(k): v for k, v in self.fights.items()}, row=self.row, style_xp=self.style_xp, morale=self.morale, sanity=round(self.sanity, 2), cared=self.cared, memories=self.memories, goal=self.goal, request=self.request, trust=round(self.trust, 1), drift=self.drift,
                     gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, buffs=self.buffs, parents=self.parents, parent_names=self.parent_names,
                     generation=self.generation, emotions=self.emotions,
                     emotion_floor=self.emotion_floor, causes=self.causes, content=self.content, awareness=self.awareness, temperament=self.temperament, life=meaning.pack(self.life), low_days=self.low_days, grief=self.grief, born=self.born,
@@ -269,6 +270,7 @@ class Slime:
             if k in d:
                 setattr(s, k, d[k])
         s.life = meaning.unpack(s.life)
+        s.fights = {int(k): v for k, v in (d.get("fights") or {}).items()}
         s.items = {k: Item.from_dict(v) for k, v in (d.get("items") or {}).items()}
         s.needs = Needs(d.get("needs"))
         s.hunt = HuntAssignment(**d["hunt"]) if d.get("hunt") else None

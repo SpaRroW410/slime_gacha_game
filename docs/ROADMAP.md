@@ -18,10 +18,10 @@ Legend: `[x]` done · `[~]` in progress · `[ ]` to do.
 
 ## 1. Where things stand
 
-As of 28 October 2026:
-- **Version 1.001.** `main` is at the merge of PR #22 (22 October) and is what GitHub Pages serves. PR #23 (slime minds, party
-  pickers, the loading fix and this document) is open.
-- **Checks:** the unit tests pass (`python3 -m unittest discover -s tests`); 19 of 19 behaviour targets on 3 seeds
+As of 27 October 2026:
+- **Version 1.001.** `main` is at the merge of PR #23 (slime minds, party pickers, the loading fix and this document) and is
+  what GitHub Pages serves. The next pull request (troublemakers and the Keeper's shadow, task 66) is open.
+- **Checks:** the unit tests pass (`python3 -m unittest discover -s tests`); 20 of 20 behaviour targets on 3 seeds
   (`python3 tools/minds_sim.py --seeds 3 --check`); playtest smoothness 0.129 against a 0.22 limit; balance report unchanged.
 - **Next:** the real descent to floor 50 (task 1), then the mobile work (tasks 48-52).
 - **Keeping this file current:** tick tasks here when they ship (the About tab's roadmap must list exactly the open ones - a test
@@ -124,6 +124,7 @@ As of 28 October 2026:
 - [x] **63. Daily rhythm and hobbies (T11)** — day parts, shared meals, hobbies by trait.  *Done when:* met (routine.py: meals together at 8, 13 and 19, evening hobbies at 20; idle time is not variety; praise breaks the grind).
 - [x] **64. Relationship texture (T12), appraisal (T13), rituals (T14)** — bonds fade without time together, jealousy, apologies, per-trait reactions, hatch days.  *Done when:* met (relationships.py fading and jealousy, apologies for grudges, kind slimes forgive sooner, appraisal.py, rituals.py: hatch days, anniversaries, feasts).
 - [x] **65. Why it feels this way (T16)** — top causes per feeling, a colony mood summary (the legendary card already shows its outcome and record).  *Done when:* met (emotions.note_cause and causes(); reasons under each feeling; Colony mood panel).
+- [x] **66. Troublemakers and the Keeper's shadow** — the zero-cost rule for removing a troublemaker held up against the new minds: no grief beyond the partner's and best friend's half grief, a fair test (fought with more than 5% of the colony in 30 days, at least 2 slimes; snapped-at slimes not blamed), relief for its foes, fewer quarrels for a while after a removal (fear), and respect after the Keeper's talks.  *Done when:* met (zero morale and stress, half grief for partner and best friend only; quarrels x0.69-0.83 over the first 3 days after a removal, about half on day one).
 
 ### After floor 50 (art and sound)
 
@@ -388,6 +389,12 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] The static build never hangs at "Loading Python runtime": progress, a watchdog with safe mode, Repair, network-first offline copy
 - [x] One planning document (this file) with the full commit history (`tools/changelog.py`)
 
+### M24 — Troublemakers and the Keeper's shadow (27 October 2026)
+- [x] A troublemaker: came to blows with more than 5% of the colony (rounded down, at least 2 slimes) in 30 days, or disliked by most; one feud or being snapped at is not enough
+- [x] Removing one: no morale, no stress, no grief except its partner's and best friend's at half; its foes breathe easier
+- [x] Merging a liked slime starts grief just as destroying it does
+- [x] The Keeper's shadow: fewer quarrels for 7 days after a removal (fear, by temperament), anxiety if it happens twice in a week; respect for 3 days after a talk or mediation (task 66)
+
 ## 5. Slime minds
 
 How slimes feel, fight, bond and grieve, measured against how people behave in the same situations. The harness
@@ -408,6 +415,10 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
    (`config.KEEPER_CARE_SHARE`). Enough to settle a slime, not to give it peace on its own.
 4. Despair may go **darker than withdrawal**: self-neglect (it stops feeding itself; the Keeper must feed it by hand) and
    breakdowns, ending in a request to leave. Nothing beyond that.
+5. Removing a **troublemaker** stays free: no morale cost, no sacrifice stress, and only its partner and best friend grieve
+   it, at half depth. A troublemaker has come to blows with **more than 5% of the colony** (rounded down) in the last 30 days,
+   not a fixed number of brawls; "brawling right now" no longer counts. After a removal the colony quarrels **less for a
+   while**, out of fear of the Keeper; talks and mediation earn a little respect too.
 
 ### Targets
 
@@ -432,6 +443,7 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 | unseen work burns out | a common at one post, unseen | the same post every day, nobody noticing: going through the motions |
 | praise keeps the spark | the same, praised daily | recognition gives the same work meaning |
 | most slimes are not burned out | hands-off colony | a varied colony life is not a grind |
+| a removal calms the colony | 40 slimes, the worst fighter destroyed, 12 replays with and without the shadow | the others think twice before picking a fight for a few days (x0.85 or less over 3 days) |
 
 ### Before and after (seed 1, 20 slimes, 45 days)
 
@@ -483,6 +495,16 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
   candidate. Thanks outlast minor grudges when memory is full. Slimes who share the colony's days (idle, resting, at a post)
   grow closer.
 - **Leaving** (`mind.py`, `Game.depart`): only with the Keeper's yes; friends miss it, its gear stays, Records lists it.
+- **Troublemakers** (`Game.unwelcome`): each slime remembers whom it came to blows with in the last 30 days (`Slime.fights`;
+  a quarrel started by snapping counts only against the one who snapped). More different slimes than 5% of the colony
+  (rounded down, never fewer than 2), or being disliked by most, makes a troublemaker. Merging or destroying one costs no
+  morale or stress; its partner and best friend grieve at half depth, nobody else; those it fought with get calmer, a little
+  more content, and their grudges against it halve. A liked slime is grieved whether merged or destroyed.
+- **The Keeper's shadow** (`Game.wary`, `ConflictEngine.chance`): after a removal everyone's quarrel odds are halved, easing
+  back over 7 days; slimes with fights of their own feel fear and hold back to x0.3 (timid most, grumpy and proud less,
+  brave hardly), and a second removal within the week makes them anxious. A talk or a successful mediation makes a slime
+  start quarrels x0.8 as often for 3 days. Grudges are not erased, only put off: over the whole week the colony has about
+  10% fewer quarrels, over the first three days about 25% fewer.
 
 ### Still to do
 
@@ -696,7 +718,7 @@ Every commit since the first, oldest first, grouped by the pull request (or dire
 
 <!-- changelog:start -->
 
-153 commits, oldest first. Generated by `python3 tools/changelog.py` at `6432299`.
+157 commits, oldest first. Generated by `python3 tools/changelog.py` at `d165eba`.
 
 ### Straight to the main line (2026-10-10)
 
@@ -902,7 +924,7 @@ Every commit since the first, oldest first, grouped by the pull request (or dire
 - `1824d92` 2026-10-21 — Eight hybrids for the new classes (signature skills and capstones); avatars show evolution, hybrid weapon and mastery stars
 - `22969c0` 2026-10-21 — Keep scroll positions and the typing box across renders (top bar, tab bar, lists, dialogs)
 
-### Not merged yet: branch `claude/elegant-meitner-beippt`
+### Pull request #23 (merged 2026-10-27)
 
 - `90caa71` 2026-10-27 — Minds harness: colony, legendary, recovery and grief scenarios with behaviour targets (tools/minds_sim.py)
 - `be510b4` 2026-10-27 — Feuds cool off: spats mend on their own, apologies and friends make peace, time apart after a brawl, at most two brawls then a cold war
@@ -922,5 +944,12 @@ Every commit since the first, oldest first, grouped by the pull request (or dire
 - `66f4444` 2026-10-27 — Why it feels this way: feelings keep their reasons, shown under each one, and a Colony mood panel lists who is struggling and why
 - `dcc9da3` 2026-10-27 — Never hang at 'Loading Python runtime': download progress, a stall watchdog with safe-mode fallback, Repair, network-first offline copy
 - `6432299` 2026-10-27 — One planning document: ROADMAP.md absorbs TASKS, MINDS, PLAYTEST_F50 and BALANCE, with the full commit history (tools/changelog.py)
+- `43c6026` 2026-10-27 — Commit history in ROADMAP.md includes the merge commit itself
+
+### Not merged yet: branch `claude/elegant-meitner-beippt`
+
+- `81cf321` 2026-10-27 — Troublemakers judged fairly, removed at no cost, and the Keeper's shadow
+- `fdf8f2a` 2026-10-27 — Commit history in ROADMAP.md includes the troublemaker change
+- `d165eba` 2026-10-27 — Council: merge suggestions right after quarrels, then collapsible Keep / Flexible / Merge groups
 
 <!-- changelog:end -->
