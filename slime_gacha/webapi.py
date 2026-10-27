@@ -60,7 +60,7 @@ def slime_view(g: Game, s) -> dict:
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
         content=round(s.content), content_label=emotions.content_label(s),
         feelings=[dict(key=k, name=emotions.EMOTIONS[k].name, emoji=emotions.EMOTIONS[k].emoji,
-                       value=round(v), kind=emotions.EMOTIONS[k].kind) for k, v in
+                       value=round(v), kind=emotions.EMOTIONS[k].kind, why=emotions.causes(s, k)) for k, v in
                   sorted(s.emotions.items(), key=lambda kv: -kv[1]) if v >= 3],
         feeling_effects={k: round(100 * (m - 1)) for k, m in emotions.modifiers(s)[0].items() if abs(m - 1) >= 0.01},
         awareness=(dict(stage=awakening.stage(s), name=awakening.STAGE_NAME[awakening.stage(s)],
@@ -243,6 +243,36 @@ def _jobs_view(g: Game) -> dict:
     )
 
 
+def colony_mood(g: Game) -> dict:
+    """How the colony feels at a glance: slimes by contentment, and who is struggling and why (worst first)."""
+    from collections import Counter
+    labels = Counter(emotions.content_label(s) for s in g.slimes())
+    rows = []
+    for s in g.slimes():
+        why, weight = [], 0.0
+        o = awakening.outcome(s) if awakening.candidate(s) else ""
+        if o in ("despair", "cog"):
+            why.append(awakening.OUTCOME_NAME[o]); weight += 3
+        if meaning_mod.burned_out(s):
+            why.append("going through the motions"); weight += 2
+        if s.grief:
+            why.append(f"grieving {max(s.grief, key=lambda x: x['depth'])['name']}"); weight += 2
+        if sanity_mod.frac(s) < 0.4:
+            why.append(f"sanity {sanity_mod.label(s)}"); weight += 2
+        bad = [(k, v) for k, v in s.emotions.items() if emotions.EMOTIONS[k].kind == "bad" and v >= 45]
+        if bad:
+            k, v = max(bad, key=lambda kv: kv[1])
+            c = emotions.causes(s, k)
+            why.append(f"{emotions.EMOTIONS[k].name.lower()}{' (' + c[0] + ')' if c else ''}"); weight += v / 50
+        if s.content < 35:
+            why.append(emotions.content_label(s)); weight += 1
+        if why:
+            rows.append((weight, dict(id=s.id, name=s.name, why=why)))
+    order = ("thriving", "content", "getting by", "struggling", "worn down")
+    return dict(labels={k: labels[k] for k in order if labels[k]}, struggling=[r for _, r in sorted(rows, key=lambda x: -x[0])][:8],
+                more=max(0, len(rows) - 8))
+
+
 def snapshot(g: Game) -> dict:
     slimes = [slime_view(g, s) for s in g.slimes()]
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
@@ -254,6 +284,7 @@ def snapshot(g: Game) -> dict:
                for p in g.parties.parties.values()]
     run = g.battle_run()
     return dict(
+        colony_mood=colony_mood(g),
         away=away_view(g),
         vice=(lambda v: dict(id=v.id, name=v.name) if v else None)(g.vice_slime()), vice_min_stars=config.VICE_MIN_STARS,
         vice_challenge=(lambda c: dict(id=c["challenger"], name=g.roster[c["challenger"]].name)

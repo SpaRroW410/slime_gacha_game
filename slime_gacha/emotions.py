@@ -145,15 +145,54 @@ def grief_weight(slime) -> float:
     return (ds[0] + 0.3 * sum(ds[1:])) if ds else 0.0
 
 
+def baseline_reasons(slime) -> Dict[str, str]:
+    """Why each feeling sits where it usually does: missing someone, a hard or good stretch of life, its nature."""
+    out: Dict[str, str] = {}
+    if getattr(slime, "grief", None):
+        name = max(slime.grief, key=lambda x: x["depth"])["name"]
+        out.update(sadness=f"misses {name}", loneliness=f"misses {name}")
+    c = getattr(slime, "content", CONTENT_START)
+    for k in CONTENT_LIFT:
+        if c > CONTENT_GOOD + 10:
+            out.setdefault(k, "a good stretch of life")
+    for k in CONTENT_SINK:
+        if c < CONTENT_BAD:
+            out.setdefault(k, "a hard stretch of life")
+    for t in slime.traits:
+        for k in TRAIT_BASELINE.get(t, {}):
+            out.setdefault(k, f"a {t} nature")
+    return out
+
+
 def content_label(slime) -> str:
     c = getattr(slime, "content", CONTENT_START)
     return "thriving" if c >= 70 else "content" if c >= 50 else "getting by" if c >= 35 else "struggling" if c >= 20 else "worn down"
 
 
-def feel(slime, key: str, amount: float) -> None:
-    """Stir an emotion (scaled by the slime's traits); its opposite is quieted a little."""
+CAUSES_KEPT = 3
+
+
+def note_cause(slime, key: str, why: str, amount: float) -> None:
+    """Remember why a feeling rose (the strongest few reasons are kept while the feeling lasts)."""
+    causes = slime.causes.setdefault(key, {})
+    causes[why] = round(causes.get(why, 0.0) + amount, 1)
+    if len(causes) > CAUSES_KEPT:
+        del causes[min(causes, key=causes.get)]
+
+
+def causes(slime, key: str) -> List[str]:
+    """Why it feels this, strongest reason first."""
+    c = (getattr(slime, "causes", None) or {}).get(key, {})
+    return [w for w, _ in sorted(c.items(), key=lambda kv: -kv[1])]
+
+
+def feel(slime, key: str, amount: float, why: str = "") -> None:
+    """Stir an emotion (scaled by the slime's traits); its opposite is quieted a little. `why` names the cause (shown on
+    the slime card)."""
     if key not in EMOTIONS or amount == 0:
         return
+    if why and amount > 0 and hasattr(slime, "causes"):
+        note_cause(slime, key, why, amount)
     g = 1.0
     for t in slime.traits:
         g *= TRAIT_GAIN.get(t, {}).get(key, 1.0)
@@ -180,29 +219,30 @@ def tick(slime, rng: random.Random, sleeping: bool = False, fade: float = 1.0) -
     n = slime.needs
     drift = []
     if n.get("food") < 30:
-        drift.append(("anger", 8))
+        drift.append(("anger", 8, "hungry"))
     if n.get("energy") < 30:
-        drift.append(("sadness", 4))
+        drift.append(("sadness", 4, "worn out"))
     if n.get("belonging") < 35:
-        drift.append(("loneliness", 4))
+        drift.append(("loneliness", 4, "nobody to be with"))
     elif n.get("belonging") > 75:
-        drift.append(("affection", 1))
+        drift.append(("affection", 1, "feels it belongs"))
     if n.get("esteem") > 75:
-        drift.append(("pride", 1))
+        drift.append(("pride", 1, "feels capable"))
     if n.get("safety") < 40:
-        drift.append(("fear", 9)), drift.append(("anxiety", 6))
+        drift.append(("fear", 9, "hurt")), drift.append(("anxiety", 6, "hurt"))
     if slime.morale < 25:
-        drift.append(("sadness", 4)), drift.append(("anger", 7))
+        drift.append(("sadness", 4, "low morale")), drift.append(("anger", 7, "low morale"))
     elif slime.morale > 65 and min(n.v.values()) > 55:
-        drift.append(("calm", 2)), drift.append(("joy", 1))
+        drift.append(("calm", 2, "a settled life")), drift.append(("joy", 1, "a settled life"))
     if rng.random() < 0.03:                                       # an ambient mood swing
-        drift.append((rng.choice(list(EMOTIONS)[:9]), 6))
-    for k, a in drift:
+        drift.append((rng.choice(list(EMOTIONS)[:9]), 6, "a passing mood"))
+    for k, a, why in drift:
         if slime.emotions.get(k, 0.0) < DRIFT_CEIL:               # needs keep a feeling simmering, not boiling
-            feel(slime, k, a)
+            feel(slime, k, a, why)
     mult = 2.0 if sleeping else 1.0
     floor = getattr(slime, "emotion_floor", {})
     base = baseline(slime)
+    reasons = baseline_reasons(slime)
     for k in set(slime.emotions) | set(base):                     # every feeling drifts back to the slime's usual mood
         rest = max(base.get(k, 0.0), floor.get(k, 0.0))
         v = slime.emotions.get(k, 0.0)
@@ -215,6 +255,12 @@ def tick(slime, rng: random.Random, sleeping: bool = False, fade: float = 1.0) -
             slime.emotions.pop(k, None)
         else:
             slime.emotions[k] = v
+        if v <= rest + 1 and hasattr(slime, "causes"):           # back to its usual self: only the usual reasons remain
+            why = reasons.get(k) if rest >= 1 else None
+            if why:
+                slime.causes[k] = {why: round(rest, 1)}
+            else:
+                slime.causes.pop(k, None)
     for k, f in floor.items():                                    # a permanent undercurrent (see awakening.py)
         if slime.emotions.get(k, 0.0) < f:
             slime.emotions[k] = float(f)

@@ -78,14 +78,12 @@ ROADMAP: List[Dict[str, object]] = [
          text="Whether real money buys gacha currency decides how much moves to a server."),
     dict(id=52, group="Mobile", title="Beta and launch", status="planned",
          text="Device testing, long sessions, crash reporting, release."),
-    dict(id=65, group="Slime minds", title="Why it feels this way", status="planned",
-         text="The top causes of each feeling, and a colony mood summary."),
 ]
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-27-minds",
-                 text="Slimes feel more like people. Most spats now mend on their own, a guilty slime may apologise and a friend of both may make peace; a feud brawls at most twice, then they stop speaking for a week. Feelings settle back to each slime's usual mood, and contentment shows how life has felt for days. A failed talk now just means \"not ready yet\". Awakened 5-star legendaries take being code the way their last two weeks allow: settled, at peace, a cog in the machine, or in despair. Despair deepens (they may stop feeding themselves: feed them by hand), and a slime may ask to leave the colony: it only goes if you agree. See Guide > Awakening.")
+WHATS_NEW = dict(id="2026-10-28-minds",
+                 text="Slimes feel more like people. Spats mend on their own, apologies and friends make peace, and a feud ends in a cold war instead of endless brawls. Feelings settle back to each slime's usual mood, and under each one the Mind tab now says why. Slimes eat together, spend their evenings on hobbies, cope with bad feelings in their own way and cheer each other up. Grief lasts weeks and comes back on anniversaries; you can gather the colony at the Memorial Pond. Every slime keeps a week's record of its days and can burn out at a grind: try the new Praise. Ties fade when slimes are apart, partners can get jealous, and hatch days and feasts mark the year. Awakened 5-star legendaries are settled, at peace, a cog or in despair, and a slime may ask to leave (only with your yes). Also: send a whole party to Scouting, the Rift, the Quarry and Places.")
 
 
 def build() -> Dict[str, object]:

@@ -531,9 +531,19 @@ function colony() {
       <label class="f">Show <select data-sel="filter">${opt({ all: 'All', free: 'Not in a party', idle: 'Available', wounded: 'Wounded', away: 'Away', needy: 'Needs something' }, S.filter)}</select></label>
     </div></div>
   ${big ? `<div class="row" style="margin-bottom:8px"><input type="search" data-ui="roster_q" data-rerender="1" value="${esc(ui('roster_q', ''))}" placeholder="Find a slime (name, class, rarity)" style="max-width:300px"><small class="mute">Showing the top ${Math.min(TOP, list.length)} by ${esc(S.sort)}; the rest are in the list below.</small></div>` : ''}
+  ${moodPanel(st.colony_mood)}
   <div class="grid roster">${list.slice(0, big ? TOP : list.length).map(card).join('') || '<p class="mute">No slimes match.</p>'}</div>
   ${big && list.length > TOP ? `<details class="rosmore" data-keep="moreOpen" ${ui('moreOpen', false) ? 'open' : ''}><summary><b>${list.length - TOP} more slimes</b> <small class="mute">(compact list)</small></summary>
     <div class="slist">${list.slice(TOP).map(srow).join('')}</div></details>` : ''}`;
+}
+/* Colony mood: slimes by contentment, and who is struggling and why (tap a name to open its card). */
+function moodPanel(m) {
+  if (!m) return '';
+  const icon = { thriving: '🌞', content: '🌤', 'getting by': '⛅', struggling: '🌧', 'worn down': '⛈' };
+  const counts = Object.entries(m.labels).map(([k, n]) => `${icon[k] || ''} ${n} ${esc(k)}`).join(' · ');
+  const rows = m.struggling.map((r) => `<div class="row" style="gap:6px"><button class="btn small" data-act="sel" data-id="${r.id}">${esc(r.name)}</button><small class="mute">${r.why.map(esc).join(' · ')}</small></div>`).join('');
+  return `<details class="panel flat" data-keep="moodOpen" ${ui('moodOpen', m.struggling.length > 0) ? 'open' : ''} style="margin-bottom:10px"><summary><b>Colony mood</b> <small class="mute">${counts}</small></summary>
+    <div class="stack" style="margin-top:6px">${rows || '<small class="mute">Nobody is struggling right now.</small>'}${m.more ? `<small class="mute">and ${m.more} more</small>` : ''}</div></details>`;
 }
 function srow(s) {
   const a = awayOf(s.id);
@@ -657,12 +667,12 @@ function dFight(s, { st, free }) {
 
 function dMind(s, { st, free, inDun }) {
   const em = { couple: '💘 Partner', best_friend: '💞 Best friend', friend: '🤝 Friend', rival: '⚔️ Rival' };
-  return `${sect('Feelings', 'Passing feelings shift stats in battle. The Guide tab lists what raises and lowers each one.', `<div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value))).join('') : '<small class="mute">Calm and unremarkable.</small>'}
+  return `${sect('Feelings', 'Passing feelings shift stats in battle. The Guide tab lists what raises and lowers each one.', `<div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value)) + ((f.why || []).length ? `<small class="mute why">${f.why.map(esc).join(' · ')}</small>` : '')).join('') : '<small class="mute">Calm and unremarkable.</small>'}
       <div title="How life has felt over the last few days. Feelings settle back to a slime's usual mood, and a good life lifts it.">🌤 Contentment: <b>${esc(s.content_label)}</b> <small class="mute">${s.content}/100</small></div>
-      ${Object.keys(s.feeling_effects).length ? `<small class="mute">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
+      ${Object.keys(s.feeling_effects).length ? `<small class="mute" style="display:block">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
       ${s.awareness ? awarenessHtml(s.awareness) : ''}
-      <small class="mute">In the evenings it ${esc(s.hobby)}. ${s.hatch_in === 0 ? '🎂 <b>Today is its hatch day!</b> A word from you will be noticed.' : `Hatch day in ${s.hatch_in} day${s.hatch_in === 1 ? '' : 's'}.`}</small>
-      <small class="mute" title="How this slime handles a bad feeling (from its personality). Venting and dwelling make things worse.">When upset it ${esc(s.coping)}${s.coping_healthy ? '' : ' (it does not help)'}.</small>
+      <small class="mute" style="display:block">In the evenings it ${esc(s.hobby)}. ${s.hatch_in === 0 ? '🎂 <b>Today is its hatch day!</b> A word from you will be noticed.' : `Hatch day in ${s.hatch_in} day${s.hatch_in === 1 ? '' : 's'}.`}</small>
+      <small class="mute" style="display:block" title="How this slime handles a bad feeling (from its personality). Venting and dwelling make things worse.">When upset it ${esc(s.coping)}${s.coping_healthy ? '' : ' (it does not help)'}.</small>
       ${(s.grief || []).length ? `<div>🕯 Grieving ${s.grief.map((x) => `<b>${esc(x.name)}</b> <small class="mute">(${x.days} day${x.days === 1 ? '' : 's'} ago)</small>`).join(', ')}</div>` : ''}
       ${s.burnt ? '<div class="warn">😶 Going through the motions: the same days, nothing chosen, nobody noticing. Praise, a change of routine or a choice of its own brings the spark back.</div>' : ''}
       ${s.meaning && !s.awareness?.outcome ? `<small class="mute">Last week: care ${Math.round(s.meaning.care * 100)}% · connection ${Math.round(s.meaning.connection * 100)}% · purpose ${Math.round(s.meaning.purpose * 100)}% · hardship ${Math.round(s.meaning.hardship * 100)}%</small>` : ''}

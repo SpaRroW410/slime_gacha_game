@@ -62,12 +62,12 @@ def daily(g, events: List[str]) -> None:
                     lines += 1
                 continue
             if age > 0 and age % 7 == 0:                                       # a week ago today
-                emotions.feel(s, "sadness", config.GRIEF_WAVE * x["depth"])
+                emotions.feel(s, "sadness", config.GRIEF_WAVE * x["depth"], f"{x['name']}'s anniversary")
                 if lines < config.GRIEF_LINES:
                     events.append(f"🕯 {s.name} remembers {x['name']}: it was {age // 7} week{'s' if age > 7 else ''} ago today.")
                     lines += 1
             if x["where"] and s.in_dungeon == x["where"]:                     # back where it happened
-                emotions.feel(s, "sadness", config.GRIEF_PLACE * x["depth"])
+                emotions.feel(s, "sadness", config.GRIEF_PLACE * x["depth"], f"back where {x['name']} was lost")
                 emotions.feel(s, "fear", 5)
         if comforter and s.grief:
             memory.remember(s, "comforted", comforter, g.day, 2.0)

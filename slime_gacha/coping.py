@@ -104,7 +104,7 @@ def cope(g, s, rng: random.Random, events: List[str]) -> bool:
         target = rng.choice(others) if others else None
         if target:
             g.social.add_bond(s, target, -2)
-            emotions.feel(target, "anger", 8)
+            emotions.feel(target, "anger", 8, f"snapped at by {s.name}")
             if rng.random() < config.VENT_QUARREL and not g.conflicts.has_between(s.id, target.id):
                 g.conflicts.start(s, target, f"{s.name} snapping at them for no reason")
             events.append(f"💢 {s.name} is feeling {name} and snaps at {target.name}.")

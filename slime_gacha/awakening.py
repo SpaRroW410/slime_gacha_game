@@ -123,7 +123,7 @@ def _apply(s, new: str, journal: List[str], rng: random.Random, day: int) -> Non
             s.emotions[k] = min(s.emotions.get(k, 0.0), config.COG_FEELING_CAP)
     else:
         s.emotion_floor["dread"] = float(config.DESPAIR_DREAD)
-        emotions.feel(s, "dread", 50)
+        emotions.feel(s, "dread", 50, "knowing it is code")
         emotions.feel(s, "sadness", 30)
     lf = life(s)
     if new != "despair":

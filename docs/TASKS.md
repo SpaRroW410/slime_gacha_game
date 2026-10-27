@@ -81,7 +81,7 @@ Findings not yet re-verified against the current code; check each before fixing 
 - [x] **62. An inner voice that remembers (T10)** — talk lines from memories, goals and causes for every slime (legendaries already never repeat within a week).  *Done when:* met (voice.py: grief, the strongest memory, the goal, burnout or a good stretch, then a feeling; no line twice in a week for any slime).
 - [x] **63. Daily rhythm and hobbies (T11)** — day parts, shared meals, hobbies by trait.  *Done when:* met (routine.py: meals together at 8, 13 and 19, evening hobbies at 20; idle time is not variety; praise breaks the grind).
 - [x] **64. Relationship texture (T12), appraisal (T13), rituals (T14)** — bonds fade without time together, jealousy, apologies, per-trait reactions, hatch days.  *Done when:* met (relationships.py fading and jealousy, apologies for grudges, kind slimes forgive sooner, appraisal.py, rituals.py: hatch days, anniversaries, feasts).
-- [ ] **65. Why it feels this way (T16)** — top causes per feeling, a colony mood summary (the legendary card already shows its outcome and record).  *Done when:* met.
+- [x] **65. Why it feels this way (T16)** — top causes per feeling, a colony mood summary (the legendary card already shows its outcome and record).  *Done when:* met (emotions.note_cause and causes(); reasons under each feeling; Colony mood panel).
 
 ## After floor 50 (art and sound)
 - [x] **17. Animated battle arena** — replace `ARENA.render`.  *Done when:* units animate and statuses show without touching rules.

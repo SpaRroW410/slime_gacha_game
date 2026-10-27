@@ -625,7 +625,7 @@ class Game:
         top = emotions.dominant(s, 1)
         feel = f" ({emotions.EMOTIONS[top[0][0]].emoji} {emotions.EMOTIONS[top[0][0]].name.lower()})" if top else ""
         n = self._cared(s, "talk")
-        emotions.feel(s, "affection", 3 if n == 1 else 0)
+        emotions.feel(s, "affection", 3 if n == 1 else 0, "a talk with you")
         if n == 1:                                       # the first talk of the day really helps; more is just chatter
             awakening.note(s, "care", 0.5)
             sanity.heal(s, config.SANITY_TALK)
@@ -743,18 +743,18 @@ class Game:
             k = r["kind"]
             if k == "couple":
                 sanity.hit(o, config.SANITY_HIT["partner_died"])
-                emotions.feel(o, "sadness", 55)
-                emotions.feel(o, "anger", 15)
-                emotions.feel(o, "loneliness", 25)
+                emotions.feel(o, "sadness", 55, f"lost {s.name}")
+                emotions.feel(o, "anger", 15, f"lost {s.name}")
+                emotions.feel(o, "loneliness", 25, f"lost {s.name}")
                 self.social.shift_morale(o, -15)
             elif k == "best_friend":
-                emotions.feel(o, "sadness", 30)
+                emotions.feel(o, "sadness", 30, f"lost {s.name}")
             elif k == "mentor":
-                emotions.feel(o, "sadness", 20)
-                emotions.feel(o, "determination", 15)
+                emotions.feel(o, "sadness", 20, f"lost {s.name}")
+                emotions.feel(o, "determination", 15, f"lost {s.name}")
             elif k == "rival":
-                emotions.feel(o, "guilt", 12)
-                emotions.feel(o, "sadness", 10)
+                emotions.feel(o, "guilt", 12, f"lost {s.name}")
+                emotions.feel(o, "sadness", 10, f"lost {s.name}")
         self.relations.forget(s.id)
 
     def bud(self, a_id: int, b_id: int) -> List[str]:
@@ -872,11 +872,11 @@ class Game:
                 memory.remember(o, "lost", s, self.day, 4.0 if o.id in friends else 1.5, f"({s.death_cause or 'unknown causes'})")
                 sanity.hit(o, config.SANITY_HIT["friend_died" if o.id in friends else "slime_died"])
                 o.needs.add("belonging", -25 if o.id in friends else -8)
-                emotions.feel(o, "sadness", 35 if o.id in friends else 8)
+                emotions.feel(o, "sadness", 35 if o.id in friends else 8, f"{s.name} died")
                 if o.id in friends:
-                    emotions.feel(o, "anger", 15)
-                    emotions.feel(o, "guilt", 8)
-                emotions.feel(o, "fear", 6)
+                    emotions.feel(o, "anger", 15, f"{s.name} died")
+                    emotions.feel(o, "guilt", 8, f"{s.name} died")
+                emotions.feel(o, "fear", 6, f"{s.name} died")
                 if awakening.candidate(o):
                     o.awareness += 2.0
                 self.social.shift_morale(o, config.MORALE_FRIEND_DEATH if o.id in friends
@@ -1192,7 +1192,7 @@ class Game:
         s.needs.add("food", config.FOOD_NUTRITION)
         s.needs.add("belonging", 3)
         gh = 1 + 0.5 * self.keeper.rank("gentle_hands")
-        emotions.feel(s, "joy", 6 * gh)
+        emotions.feel(s, "joy", 6 * gh, "a meal from you")
         emotions.soothe(s, "anger", (10 if s.needs.get("food") < 60 else 0) * gh)
         self._xp("care", config.KEEPER_XP["care"])
         return f"{s.name} nibbles happily (food {int(s.needs.get('food'))})."
@@ -1335,8 +1335,8 @@ class Game:
         s = self._tend(sid)
         k = 0.5 ** (self._cared(s, "praise") - 1)        # the first praise of the day counts; more is just noise
         s.needs.add("esteem", config.PRAISE_ESTEEM * k)
-        emotions.feel(s, "pride", config.PRAISE_PRIDE * k)
-        emotions.feel(s, "joy", 4 * k)
+        emotions.feel(s, "pride", config.PRAISE_PRIDE * k, "your praise")
+        emotions.feel(s, "joy", 4 * k, "your praise")
         if k == 1:
             meaning.note(s, "care", 0.3)
             meaning.note(s, "praised")
@@ -1352,8 +1352,8 @@ class Game:
         s.needs.add("belonging", 15 * k)
         s.needs.add("esteem", 5 * k)
         gh = (1 + 0.5 * self.keeper.rank("gentle_hands")) * k
-        emotions.feel(s, "joy", 12 * gh)
-        emotions.feel(s, "affection", 8 * gh)
+        emotions.feel(s, "joy", 12 * gh, "your pat")
+        emotions.feel(s, "affection", 8 * gh, "your pat")
         emotions.soothe(s, "loneliness", 15 * gh)
         emotions.soothe(s, "anger", 6 * gh)
         awakening.comfort(s)
@@ -1604,15 +1604,15 @@ class Game:
             for s in (a, b):
                 self._fight_sanity(s, "quarrel")
                 self.social.shift_morale(s, -3)
-                emotions.feel(s, "anger", 18)
+                emotions.feel(s, "anger", 18, f"a quarrel with {(b if s is a else a).name}")
         elif kind == "brawl":
             self.social.add_bond(a, b, -10)
             for s in (a, b):
                 self._fight_sanity(s, "brawl")
                 self.social.shift_morale(s, -15)
-                emotions.feel(s, "anger", 40)
-                emotions.feel(s, "sadness", 10)
-                emotions.feel(s, "guilt", 8)
+                emotions.feel(s, "anger", 40, f"a brawl with {(b if s is a else a).name}")
+                emotions.feel(s, "sadness", 10, f"a brawl with {(b if s is a else a).name}")
+                emotions.feel(s, "guilt", 8, f"a brawl with {(b if s is a else a).name}")
         elif kind == "resolved":
             if success:
                 self.relations.note_quarrel(a, b, -1)              # a quarrel that ends in making up counts towards friendship
@@ -1621,9 +1621,9 @@ class Game:
                 self.social.add_bond(a, b, 10)
                 for s in (a, b):
                     self.social.shift_morale(s, 10)
-                    emotions.feel(s, "calm", 20)
-                    emotions.feel(s, "joy", 12)
-                    emotions.feel(s, "affection", 15)
+                    emotions.feel(s, "calm", 20, f"made up with {(b if s is a else a).name}")
+                    emotions.feel(s, "joy", 12, f"made up with {(b if s is a else a).name}")
+                    emotions.feel(s, "affection", 15, f"made up with {(b if s is a else a).name}")
                     emotions.soothe(s, "anger", 30)
 
     def compat(self, a_id: int, b_id: int) -> dict:
@@ -2179,8 +2179,8 @@ class Game:
             for s in alive:
                 mind.note(s, "win")
                 sanity.heal(s, config.SANITY_WIN * scale)
-                emotions.feel(s, "joy", 14 * scale + 4)
-                emotions.feel(s, "pride", (10 + (15 if boss else 0)) * scale + 2)
+                emotions.feel(s, "joy", 14 * scale + 4, "a won fight")
+                emotions.feel(s, "pride", (10 + (15 if boss else 0)) * scale + 2, "a won fight")
                 emotions.soothe(s, "fear", 10)
                 emotions.soothe(s, "anxiety", 8)
                 appraisal.react(s, "victory", first=s.wins <= 1)
@@ -2189,14 +2189,14 @@ class Game:
         elif report.winner == "foes":
             for s in alive:
                 sanity.hit(s, config.SANITY_HIT["battle_lost"] * scale)
-                emotions.feel(s, "sadness", 18 * scale + 4)
-                emotions.feel(s, "anger", 12 * scale + 2)
-                emotions.feel(s, "fear", 12 * scale + 2)
+                emotions.feel(s, "sadness", 18 * scale + 4, "a lost fight")
+                emotions.feel(s, "anger", 12 * scale + 2, "a lost fight")
+                emotions.feel(s, "fear", 12 * scale + 2, "a lost fight")
                 emotions.feel(s, "determination", 10)
                 appraisal.react(s, "defeat")
         for s in alive:
             if lost and s not in lost:
-                emotions.feel(s, "sadness", 8 * len(lost))
+                emotions.feel(s, "sadness", 8 * len(lost), "comrades fell")
                 emotions.feel(s, "determination", 8)
                 appraisal.react(s, "ally_fell")
         if report.victory:
@@ -2429,8 +2429,8 @@ class Game:
         self.relations.forget(s.id)
         self.social.forget(s.id)
         for o in friends:
-            emotions.feel(o, "sadness", config.DEPART_SADNESS)
-            emotions.feel(o, "loneliness", config.DEPART_SADNESS / 2)
+            emotions.feel(o, "sadness", config.DEPART_SADNESS, f"{s.name} left")
+            emotions.feel(o, "loneliness", config.DEPART_SADNESS / 2, f"{s.name} left")
             memory.remember(o, "lost", s, self.day, 2.0, "(left the colony)")
         self.departed.append(dict(id=s.id, name=s.name, archetype=s.archetype, rarity=s.rarity, stars=s.stars, level=s.level,
                                   day=self.day, reason=reason))
@@ -2466,14 +2466,14 @@ class Game:
         """Feelings after a merge / chamber / ego fusion: friends grieve and rage, the survivor feels guilty,
         everyone else wonders whether they are next."""
         if friend:
-            emotions.feel(o, "sadness", 30)
-            emotions.feel(o, "anger", 20)
+            emotions.feel(o, "sadness", 30, "a sacrifice in the colony")
+            emotions.feel(o, "anger", 20, "a sacrifice in the colony")
         if target:
-            emotions.feel(o, "guilt", 28)
-            emotions.feel(o, "sadness", 10)
+            emotions.feel(o, "guilt", 28, "a sacrifice in the colony")
+            emotions.feel(o, "sadness", 10, "a sacrifice in the colony")
         else:
-            emotions.feel(o, "fear", 8)
-            emotions.feel(o, "anxiety", 6)
+            emotions.feel(o, "fear", 8, "a sacrifice in the colony")
+            emotions.feel(o, "anxiety", 6, "a sacrifice in the colony")
 
     def chamber_preview(self, sid: int) -> Dict[str, int]:
         return ascension.chamber_yield(self.slime(sid), self.buildings.level("chamber"))

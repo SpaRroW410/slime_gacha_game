@@ -74,8 +74,8 @@ class RelationshipEngine:
                 ours = social.bond(me, p)
                 rival = max((o for o in slimes.values() if o.id not in k), key=lambda o: social.bond(p, o), default=None)
                 if rival and social.bond(p, rival) > ours + config.JEALOUS_GAP and rng.random() < config.JEALOUS_CHANCE:
-                    emotions.feel(me, "anger", 8)
-                    emotions.feel(me, "sadness", 6)
+                    emotions.feel(me, "anger", 8, f"jealous of {rival.name}")
+                    emotions.feel(me, "sadness", 6, f"jealous of {rival.name}")
                     memory.remember(me, "slight", rival, game.day, 1.5, f"(so close to {p.name})")
                     if lines < 2:
                         journal.append(f"💚 {me.name} feels a little jealous: {p.name} spends so much time with {rival.name}.")

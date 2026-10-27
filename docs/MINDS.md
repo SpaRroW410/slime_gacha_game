@@ -86,6 +86,8 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
   for old grudges and the kind forgive sooner (`relationships.py`, `memory.py`); a defeat shames the proud, frightens the
   timid, spurs the brave (`appraisal.py`); hatch days every 30 days (noticed when the Keeper remembers), couple
   anniversaries, and a feast at dinner after a boss falls (`rituals.py`).
+- **Why** (`emotions.note_cause`): feelings keep their strongest reasons, shown on the Mind tab; settled feelings show their
+  usual reason; the Colony tab lists who is struggling and why.
 - **Goals** (`mind.py`): a weighted pool - get stronger, master a style, see a friend, make a new one, court someone, teach
   a mentee, explore, make something, take it easy, be noticed - shaped by traits, outlook, needs and ties; a grudge is one
   candidate. Thanks outlast minor grudges when memory is full. Slimes who share the colony's days (idle, resting, at a post)
@@ -94,5 +96,5 @@ python3 tools/minds_sim.py --check         # exit 1 if a target fails
 
 ## Still to do
 
-Task 65 in `docs/TASKS.md` (meaning for every slime, grief, everyday goals, coping, comfort between friends, an inner
-voice, daily rhythm, relationship texture, appraisal, rituals, a "why it feels this way" view).
+Every task from the October 2026 plan (T1-T16, tasks 53-65 in `docs/TASKS.md`) is done. New ideas go in `docs/TASKS.md`;
+run `python3 tools/minds_sim.py --seeds 3 --check` after any change to feelings, relationships or needs.

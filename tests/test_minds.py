@@ -954,6 +954,50 @@ class TestTextureReactionsRituals(unittest.TestCase):
         self.assertEqual(Game.from_dict(g.to_dict()).feast, "")
 
 
+class TestWhyItFeelsThisWay(unittest.TestCase):
+    def test_causes_are_recorded_strongest_first(self):
+        g = colony()
+        a, b = make(g), make(g)
+        g._social_hook("brawl", a, b)
+        emotions.feel(a, "anger", 5, "hungry")
+        self.assertEqual(emotions.causes(a, "anger")[0], f"a brawl with {b.name}")
+        self.assertIn("hungry", emotions.causes(a, "anger"))
+
+    def test_settled_feelings_keep_their_usual_reason(self):
+        g = colony()
+        a = make(g, traits=["grumpy"])
+        emotions.feel(a, "anger", 50, "a lost fight")
+        for _ in range(24):
+            emotions.tick(a, g.mood_rng)
+        self.assertEqual(emotions.causes(a, "anger"), ["a grumpy nature"])
+
+    def test_grief_and_needs_name_their_reasons(self):
+        g = colony()
+        a = make(g)
+        a.grief = [dict(other=9, name="Bloop", depth=80.0, start=80.0, day=0, where="", gathered=False)]
+        a.needs.set("food", 5)
+        for _ in range(30):
+            emotions.tick(a, g.mood_rng)
+        self.assertIn("misses Bloop", emotions.causes(a, "sadness"))
+        self.assertIn("hungry", emotions.causes(a, "anger"))
+
+    def test_colony_mood_lists_who_struggles_and_why(self):
+        from slime_gacha.webapi import colony_mood
+        g = colony()
+        a, b = make(g), make(g)
+        a.grief = [dict(other=9, name="Bloop", depth=80.0, start=80.0, day=0, where="", gathered=False)]
+        m = colony_mood(g)
+        self.assertEqual([r["name"] for r in m["struggling"]], [a.name])
+        self.assertIn("grieving Bloop", m["struggling"][0]["why"])
+        self.assertEqual(sum(m["labels"].values()), 2)
+
+    def test_causes_are_saved(self):
+        g = colony()
+        a = make(g)
+        emotions.feel(a, "joy", 30, "your praise")
+        self.assertEqual(Game.from_dict(g.to_dict()).roster[a.id].causes, a.causes)
+
+
 class TestBehaviourTargets(unittest.TestCase):
     """A small run of tools/minds_sim.py: the colony and legendary scenarios must meet the behaviour targets."""
     PENDING = {"friends look after each other"}   # too rare to count in this small colony; the full harness checks it
