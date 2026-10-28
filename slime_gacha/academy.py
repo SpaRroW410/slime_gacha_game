@@ -73,7 +73,8 @@ class AcademySystem:
         self.rng = rng
         self.library = library
         self.buildings = buildings
-        self.trainer_mult = lambda discipline: 1.0       # Game sets: the appointed trainer's bonus (jobs.trainer_bonus)
+        self.trainer_mult = lambda discipline, pupil=None: 1.0   # Game sets: the appointed trainer's bonus for this pupil (jobs.trainer_bonus)
+        self.lesson_hook = lambda discipline, pupil: None        # Game sets: a lesson was given (the trainer sharpens too: jobs.lesson)
 
     # -- shared ----------------------------------------------------------------
     def _begin(self, slime, kind: str, ticks: int, cost: Dict[str, int], **args) -> None:
@@ -226,15 +227,16 @@ class AcademySystem:
         if own is None:
             return 0.0
         mult = config.DRILL_TIERS[tier - 1][4]
-        return round(config.PROF_DRILL * mult * self.buildings.style_mult() * self.trainer_mult(discipline) * max(0.1, 1 - own / 110.0), 2)
+        return round(config.PROF_DRILL * mult * self.buildings.style_mult() * self.trainer_mult(discipline, slime) * max(0.1, 1 - own / 110.0), 2)
 
     def _finish_drill(self, s, events: List[str]) -> None:
         from . import attributes, sparring
         d = sparring.DISCIPLINES.get(s.task["discipline"])
         tier = s.task.get("tier", 1)
         gain = self.drill_gain(s, d.key, tier) * s.task.get("wound", 1.0)
+        self.lesson_hook(d.key, s)
         which = attributes.practise(s, d.key, gain, 0.5)
-        sparring.gain_style_xp(s, d.key, config.DRILL_STYLE_XP * config.DRILL_TIERS[tier - 1][5] * self.buildings.style_mult() * self.trainer_mult(d.key),
+        sparring.gain_style_xp(s, d.key, config.DRILL_STYLE_XP * config.DRILL_TIERS[tier - 1][5] * self.buildings.style_mult() * self.trainer_mult(d.key, s),
                                self.buildings.style_cap())
         s.needs.add("energy", -8)
         s.needs.add("esteem", 4)

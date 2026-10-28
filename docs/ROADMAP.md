@@ -125,6 +125,15 @@ As of 27 October 2026:
 - [x] **64. Relationship texture (T12), appraisal (T13), rituals (T14)** — bonds fade without time together, jealousy, apologies, per-trait reactions, hatch days.  *Done when:* met (relationships.py fading and jealousy, apologies for grudges, kind slimes forgive sooner, appraisal.py, rituals.py: hatch days, anniversaries, feasts).
 - [x] **65. Why it feels this way (T16)** — top causes per feeling, a colony mood summary (the legendary card already shows its outcome and record).  *Done when:* met (emotions.note_cause and causes(); reasons under each feeling; Colony mood panel).
 - [x] **66. Troublemakers and the Keeper's shadow** — the zero-cost rule for removing a troublemaker held up against the new minds: no grief beyond the partner's and best friend's half grief, a fair test (fought with more than 5% of the colony in 30 days, at least 2 slimes; snapped-at slimes not blamed), relief for its foes, fewer quarrels for a while after a removal (fear), and respect after the Keeper's talks.  *Done when:* met (zero morale and stress, half grief for partner and best friend only; quarrels x0.69-0.83 over the first 3 days after a removal, about half on day one).
+- [x] **67. Descent strike forces** — a floor takes 1-5 parties by its place in the segment (1, 6, 11: one; 2, 7, 12: two; ... boss floors 5, 10, 15: five), chosen in a Strike force list on each party's Descent card; a mage's call adds one more beyond the limit.  *Done when:* met (`Game.force_cap` / `force_limit`, refused beyond them; the fight stays the turn-by-turn simulation).
+- [x] **68. No waiting after a fight led by hand** — Descent floors and wave simulations fought by hand leave the party ready at once.  *Done when:* met (`Game._by_hand`; switching to auto halfway brings the wait back; the Pit's daily session budget is unchanged).
+- [x] **69. Trainer rules** — a trainer must fight in the post's discipline (or have a natural knack for it) and only speeds up pupils whose own proficiency is lower.  *Done when:* met (`jobs.teaching_prof`, `trainer_bonus(pupil)`; the appointment list shows why a slime cannot hold the post).
+- [x] **70. Call back from anywhere** — resting, foraging, hunting, studying and posted slimes show what they are doing and get a Call back button on cards, rows and in the Parties tab.  *Done when:* met.
+- [x] **71. Pit and Rift sessions look after their party** — a Pit session in the web game (hours paid afterwards) killed a party of exhaustion because only HP and stamina were rested; now the session eats, sleeps and stops before anyone is exhausted.  *Done when:* met (`Game._field_hours`, `_field_meals`, `_needs_camp`, `_field_unfit`; the colony's tick leaves a session party's needs alone; reproduced and fixed with auto-care off in timed and turn mode).
+- [x] **72. No taking command in the Pit** — the Pit is a farm and always fights automatically.  *Done when:* met.
+- [x] **73. Trainers sharpen too** — each lesson that helps a pupil gives the trainer +0.15 proficiency.  *Done when:* met (`jobs.lesson`).
+- [x] **74. Send several groups at once** — the Rift, Quarry and places share one sender: collapsible Parties and Individual slimes (search, class filter), many groups in one go, each its own expedition.  *Done when:* met (`send_groups`; at most 12 groups; a group that cannot go stays home).
+- [x] **75. Calling slimes back for a trip** — busy slimes (resting, foraging, post, hunt, drill, asleep) can be picked and are called away at a cost (-6 morale, +12 anger); under 10% energy hidden, refusers greyed; expeditions now enforce refusals.  *Done when:* met (`Game.pull_in`, `recall` on Rift, Quarry, places, Pit and Descent entry).
 
 ### After floor 50 (art and sound)
 
@@ -388,6 +397,13 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Send a whole party to Scouting, the Rift, the Quarry and Places
 - [x] The static build never hangs at "Loading Python runtime": progress, a watchdog with safe mode, Repair, network-first offline copy
 - [x] One planning document (this file) with the full commit history (`tools/changelog.py`)
+
+### M25 — Strike forces and call-backs (27 October 2026)
+- [x] Descent: 1-5 parties per floor by its place in the segment, a Strike force picker, one extra party by a mage's call (task 67)
+- [x] No waiting after a Descent floor or wave simulation fought by hand (68)
+- [x] Trainers: class and pupil rules (69); Call back everywhere a slime is away (70)
+- [x] Pit and Rift sessions look after their party's needs, fixing deaths by exhaustion (71); no taking command in the Pit (72)
+- [x] Trainers sharpen with every lesson (73); send several groups at once (74); call busy slimes away for a trip at a cost (75)
 
 ### M24 — Troublemakers and the Keeper's shadow (27 October 2026)
 - [x] A troublemaker: came to blows with more than 5% of the colony (rounded down, at least 2 slimes) in 30 days, or disliked by most; one feud or being snapped at is not enough
@@ -718,7 +734,7 @@ Every commit since the first, oldest first, grouped by the pull request (or dire
 
 <!-- changelog:start -->
 
-157 commits, oldest first. Generated by `python3 tools/changelog.py` at `d165eba`.
+161 commits, oldest first. Generated by `python3 tools/changelog.py` at `65a3df2`.
 
 ### Straight to the main line (2026-10-10)
 
@@ -946,10 +962,17 @@ Every commit since the first, oldest first, grouped by the pull request (or dire
 - `6432299` 2026-10-27 — One planning document: ROADMAP.md absorbs TASKS, MINDS, PLAYTEST_F50 and BALANCE, with the full commit history (tools/changelog.py)
 - `43c6026` 2026-10-27 — Commit history in ROADMAP.md includes the merge commit itself
 
-### Not merged yet: branch `claude/elegant-meitner-beippt`
+### Pull request #24 (merged 2026-10-27)
 
 - `81cf321` 2026-10-27 — Troublemakers judged fairly, removed at no cost, and the Keeper's shadow
 - `fdf8f2a` 2026-10-27 — Commit history in ROADMAP.md includes the troublemaker change
 - `d165eba` 2026-10-27 — Council: merge suggestions right after quarrels, then collapsible Keep / Flexible / Merge groups
+- `4c74934` 2026-10-27 — Commit history in ROADMAP.md includes the Council layout change
+
+### Not merged yet: branch `claude/elegant-meitner-beippt`
+
+- `def4b75` 2026-10-27 — Descent strike forces, no waiting after a fight by hand, trainer rules, call back everywhere
+- `02b7354` 2026-10-27 — Commit history in ROADMAP.md includes the strike force change
+- `65a3df2` 2026-10-27 — Pit sessions look after their party, no taking command in the Pit, sending several groups, call busy slimes away
 
 <!-- changelog:end -->

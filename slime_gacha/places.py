@@ -74,4 +74,4 @@ def away_kinds() -> Tuple[str, ...]:
 
 def session_kinds() -> Tuple[str, ...]:
     """Flags of short sessions: a restored save without the session's record frees these slimes."""
-    return tuple(p.key for p in PLACES if p.kind in ("pit", "expedition")) + ("scout", "rescue")
+    return tuple(p.key for p in PLACES if p.kind in ("pit", "expedition")) + ("scout", "rescue", "wave")

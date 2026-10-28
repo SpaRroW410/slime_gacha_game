@@ -79,11 +79,13 @@ class Game:
         self.buildings = BuildingManager(self.wallet)
         self.library = Library(self.wallet, self.buildings)
         self.academy = AcademySystem(self.wallet, self.rng, self.library, self.buildings)
-        self.academy.trainer_mult = lambda discipline: jobs.trainer_bonus(self, discipline)
+        self.academy.trainer_mult = lambda discipline, pupil=None: jobs.trainer_bonus(self, discipline, pupil)
+        self.academy.lesson_hook = lambda discipline, pupil: jobs.lesson(self, discipline, pupil)
         self.needs.meal_hook = lambda s: jobs.eat_from_pantry(self, s)
         self.social = SocialEngine(self.conflicts, self.buildings)
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
         self.needs.skip_meal = self._skips_meal                   # deep despair: it stops feeding itself
+        self.needs.field_fn = self.field_session                  # a Pit / Rift / Quarry session looks after its party's needs itself
         self.needs.buddy_fn = lambda s, cands: max(cands, key=lambda o: self.social.bond(s, o))   # a lonely slime seeks a friend first
         self.coping_today = 0                                     # journal lines about coping today (coping.py)
         self.departed: List[dict] = []                            # slimes the Keeper let leave the colony
@@ -1295,6 +1297,32 @@ class Game:
             out.append("Nobody to wake.")
         return out
 
+    PULLABLE = ("sleeping", "working", "resting", "hunting", "studying")
+
+    def can_pull_in(self, s: Slime) -> bool:
+        """Is this slime at home but busy with something a trip could call it away from (asleep, at a post, foraging, hunting,
+        drilling, resting)? Nothing reaches a slime inside a dungeon."""
+        return not s.in_dungeon and s.state in self.PULLABLE and s.hp > 0
+
+    def pull_in(self, s: Slime) -> str:
+        """Call a slime away from what it is doing at home so it can go on a trip. A sleeper is woken (the usual cost if still
+        tired); a worker leaves the post (the shift is lost); a forager, hunter or student comes home with part of the haul;
+        a resting slime leaves its bed. All but the sleeper lose PULLBACK_MORALE and flare with PULLBACK_ANGER."""
+        was = s.state
+        if was == "sleeping":
+            return self._rouse(s)
+        if not self.can_pull_in(s):
+            raise InvalidAction(f"{s.name} is {s.in_dungeon and 'in a dungeon' or s.state}: nobody can call them back.")
+        if s.job:
+            msg = jobs.stop(self, s)
+        else:
+            msg = self.recall(s.id)
+        self.social.shift_morale(s, -config.PULLBACK_MORALE)
+        emotions.feel(s, "anger", config.PULLBACK_ANGER, "being called away from what it was doing")
+        what = {"working": "its post", "hunting": "foraging" if msg and "post" in msg else "the hunt", "resting": "its rest",
+                "studying": "its lesson"}.get(was, was)
+        return f"😠 {s.name} is called away from {what} and is not pleased (morale -{config.PULLBACK_MORALE})."
+
     def _rouse(self, s: Slime) -> str:
         """Wake a sleeper. A slime that has already slept past half its energy wakes for free; one still tired is
         not pleased (mood cost)."""
@@ -1454,13 +1482,14 @@ class Game:
 
     def _spar_reward(self, res: SparResult, s: Slime, d, won: Optional[bool], cap: int, dummy: bool = False) -> None:
         """Style XP, class proficiency and a little morale for one sparring slime."""
-        mult = self.buildings.style_mult() * jobs.trainer_bonus(self, d.key)        # an appointed trainer speeds it up
+        mult = self.buildings.style_mult() * jobs.trainer_bonus(self, d.key, s)     # an appointed trainer speeds it up (if it knows more)
         before = sparring.style_level(s, d.key)
         xp = sparring.style_xp_for(s, d.key, won, mult, dummy)
         if outlook.has(s, "spar"):
             xp *= config.OUTLOOK_DUELIST_STYLE
         outlook.bump(s, "spar")
-        tb = jobs.trainer_bonus(self, d.key)
+        tb = jobs.trainer_bonus(self, d.key, s)
+        jobs.lesson(self, d.key, s)                                              # the trainer sharpens a little too
         self.practise_discipline(s, d.key, config.PROF_SPAR_OWN * tb, config.PROF_SPAR_OTHER)
         after = sparring.gain_style_xp(s, d.key, xp, cap)
         self.social.shift_morale(s, 2 + (2 if won else 0))
@@ -1726,8 +1755,9 @@ class Game:
         for s in party:
             d = s.arch.discipline
             gain = self.academy.drill_gain(s, d, tier) * (config.WOUNDED_DRILL if s.hp < s.max_hp * config.WOUNDED_BELOW else 1.0)
+            jobs.lesson(self, d, s)
             attributes.practise(s, d, gain, 0.5)
-            sparring.gain_style_xp(s, d, config.DRILL_STYLE_XP * style * self.buildings.style_mult() * jobs.trainer_bonus(self, d),
+            sparring.gain_style_xp(s, d, config.DRILL_STYLE_XP * style * self.buildings.style_mult() * jobs.trainer_bonus(self, d, s),
                                    self.buildings.style_cap())
             s.needs.add("energy", -8)
             s.needs.add("esteem", 4)
@@ -2067,17 +2097,26 @@ class Game:
         self.journal.extend(events)
         return report
 
-    def _ready_party(self, pid: int) -> List[Slime]:
+    def _ready_party(self, pid: int, recall: bool = False) -> List[Slime]:
+        """The party's members, if all can go now. With `recall` those busy at home (asleep, at a post, foraging, resting ...)
+        are called away - at a cost in morale and temper - once everyone has been checked."""
         self._require_full(pid)
         party = self.party_members(pid)
         for s in party:
-            if s.state != "idle" or s.in_dungeon:
+            if s.in_dungeon or (s.state != "idle" and not (recall and self.can_pull_in(s))):
                 raise InvalidAction(f"{s.name} is {s.in_dungeon and 'inside a dungeon' or s.state}.")
             if s.grounded:
                 raise InvalidAction(f"{s.name} is grounded after a brawl.")
             if (why := self.refusal(s, "dungeon")):
                 raise InvalidAction(f"{s.name} {why}.")
+        self._pull_all(party)
         return party
+
+    def _pull_all(self, party) -> List[str]:
+        """Call away every member of a checked party that is still busy at home; returns the notes."""
+        out = [self.pull_in(s) for s in party if s.state != "idle"]
+        self.journal.extend(out)
+        return out
 
     def _battle_gen(self, party, enemies, intel: float = 1.0, allow_manual: bool = True, **opts):
         """One fight as a generator: party synergy (compatibility) and scouting intel applied. Under a manual flow it
@@ -2242,7 +2281,7 @@ class Game:
         events: List[str] = []
         self._after_battle(party, report)
         self._reap(events)
-        if hours:
+        if hours and not self._by_hand():                    # a fight you led yourself needs no waiting
             events.extend(self._spend(hours))
         report.log.extend(events)
         self.journal.extend(events)
@@ -3124,22 +3163,22 @@ class Game:
         return f"💥 {s.name}'s {it.label()} shatters! (" + ", ".join(f"{v} {k}" for k, v in y.items()) + ")"
 
     # ---- adventure dungeon: the Wayfarer's Rift --------------------------------------------------
-    def adventure(self, sids: List[int], runs: int = 5, lure: bool = False) -> GrindResult:
-        return self._expedition("adventure", sids, runs, lure)
+    def adventure(self, sids: List[int], runs: int = 5, lure: bool = False, recall: bool = False) -> GrindResult:
+        return self._expedition("adventure", sids, runs, lure, recall)
 
-    def quarry(self, sids: List[int], runs: int = 5) -> GrindResult:
+    def quarry(self, sids: List[int], runs: int = 5, recall: bool = False) -> GrindResult:
         """The Starfall Quarry: same rules as the Rift (1-5 slimes, monsters one level up, nobody dies) but the prize
         is ASCENSION STONES (and a little XP), not relics."""
-        return self._expedition("quarry", sids, runs, False)
+        return self._expedition("quarry", sids, runs, False, recall)
 
-    def explore(self, key: str, sids: List[int], runs: int = 5) -> GrindResult:
+    def explore(self, key: str, sids: List[int], runs: int = 5, recall: bool = False) -> GrindResult:
         """Send a party to any data-defined expedition place (places.py)."""
         p = places.PLACES.get(key) if key in places.PLACES else None
         if not p or p.kind != "expedition":
             raise InvalidAction(f"'{key}' is not a place you can explore.")
-        return self._expedition(key, sids, runs, False)
+        return self._expedition(key, sids, runs, False, recall)
 
-    def _expedition(self, kind: str, sids: List[int], runs: int, lure: bool) -> GrindResult:
+    def _expedition(self, kind: str, sids: List[int], runs: int, lure: bool, recall: bool = False) -> GrindResult:
         """A party of 1-5 slimes (any slimes, no formal party needed) fights waves one level ABOVE their average,
         hunting relics. Nobody dies (like the Pit): a knocked-out slime loses morale and its relics are damaged.
         Rarity odds are far harsher than the gacha's; a lure (1 purple gel per run) multiplies them."""
@@ -3150,11 +3189,15 @@ class Game:
             raise InvalidAction("Runs must be at least 1.")
         party = [self.slime(i) for i in sids]
         for s in party:
-            if s.state != "idle" or s.in_dungeon:
-                raise InvalidAction(f"{s.name} is {s.in_dungeon and 'inside a dungeon' or s.state}.")
+            if s.in_dungeon or (s.state != "idle" and not (recall and self.can_pull_in(s))):
+                raise InvalidAction(f"{s.name} is {s.in_dungeon and 'inside a dungeon' or s.state}"
+                                    + (" (call them back to send them)." if self.can_pull_in(s) else "."))
             if s.grounded:
                 raise InvalidAction(f"{s.name} is grounded after a brawl.")
+            if (why := self.refusal(s, "dungeon")):
+                raise InvalidAction(f"{s.name} {why}.")
         res = GrindResult()
+        res.summary.extend("   " + x for x in self._pull_all(party))
         pre: List[str] = []
         self._autonomy_prepare(party, pre)
         res.summary.extend("   " + x for x in pre)
@@ -3170,11 +3213,19 @@ class Game:
                 if not members:
                     res.stop_reason = "the whole party is gone"
                     break
-                if any(s.hp < s.max_hp * config.GRIND_MIN_HP or s.stamina_frac < config.STAMINA_CAMP_AT for s in members):
+                self._field_meals(members)
+                if self._needs_camp(members):
                     hours = self._camp(members, max(0, config.SESSION_MAX_HOURS - used - config.ADV_TICKS))
                     used += hours
                     res.summary.append(f"   (camped {hours}h)")
                     members = [s for s in party if s.id in self.roster]
+                    if not members:
+                        res.stop_reason = "the whole party is gone"
+                        break
+                    self._field_meals(members)
+                if (why := self._field_unfit(members)):
+                    res.stop_reason = why
+                    break
                 if used + config.ADV_TICKS > config.SESSION_MAX_HOURS:
                     res.stop_reason = f"the day's session is over ({config.SESSION_MAX_HOURS}h, camping included)"
                     break
@@ -3231,6 +3282,7 @@ class Game:
                             events.append(f"🎁 Found {it.label()}"
                                           + (" - " + ", ".join(it.mod_text(m) for m in it.mods) if it.mods else "") + "!")
                 events.extend(self._spend(config.ADV_TICKS))
+                self._field_hours(members, config.ADV_TICKS, False, events)
                 used += config.ADV_TICKS
                 rep.log.extend(events)
                 res.runs.append(rep)
@@ -3287,12 +3339,12 @@ class Game:
         return [1] + [c + 1 for c in range(config.MAIN_BOSS_EVERY, low + 1, config.MAIN_BOSS_EVERY)
                       if c < dungeon.MAX_FLOOR]
 
-    def enter_dungeon(self, pid: int, start: Optional[int] = None) -> str:
+    def enter_dungeon(self, pid: int, start: Optional[int] = None, recall: bool = False) -> str:
         """Enter the Hollow Descent at `start` (default: as deep as every member's progress allows).
         Inside, you may only leave at a checkpoint (after a boss floor)."""
         if pid in self.delves:
             raise InvalidAction("That party is already inside the dungeon.")
-        party = self._ready_party(pid)
+        party = self._ready_party(pid, recall)
         options = self.entry_options(pid)
         start = options[-1] if start is None else int(start)
         if start not in options:
@@ -3412,6 +3464,21 @@ class Game:
         return [q for q, e in self.delves.items() if q != pid and e["floor"] == d["floor"]
                 and not (self.timed and e.get("ready_tick", 0) > self.tick_count) and self._members_in("main", q)]
 
+    def force_cap(self, floor: int) -> int:
+        """How many parties can fight a floor of the Descent together: the floor's place in its segment (the first floor of
+        a segment, 1, 6, 11 ..., is a narrow passage for one party; the second, 2, 7, 12 ..., fits two; and so on up to the
+        boss floors 5, 10, 15 ... that take a whole segment's worth)."""
+        return (floor - 1) % config.MAIN_BOSS_EVERY + 1
+
+    def force_limit(self, floor: int, pids: Sequence[int]) -> int:
+        """The force_cap of the floor, plus one more party when a mage's call (call_reinforcements) brought one of them."""
+        called = any(self.delves.get(q, {}).get("called") == floor for q in pids)
+        return self.force_cap(floor) + (1 if called else 0)
+
+    def _by_hand(self) -> bool:
+        """Is the fight in progress being commanded by hand? Winning it through your own orders is its own effort: no waiting."""
+        return bool(self.flow and self.flow.get("manual"))
+
     def _delve_gen(self, pid: int, join: Sequence[int] = ()):
         d = self.delves.get(pid)
         if not d:
@@ -3425,6 +3492,11 @@ class Game:
                 raise InvalidAction(f"{self.parties.get(q).name} is not on floor {d['floor']} of the Descent, ready to fight.")
             self._delve_wait(self.delves[q])
             pids.append(q)
+        limit = self.force_limit(d["floor"], pids)
+        if len(pids) > limit:
+            hint = "" if limit > self.force_cap(d["floor"]) else " (a mage's call can bring one more)"
+            raise InvalidAction(f"Floor {d['floor']} is too narrow for {len(pids)} parties: only {limit} can fight here together"
+                                f" (the floors of a segment take 1, 2, 3, 4 and 5 parties in turn){hint}.")
         party = [s for q in pids for s in self._members_in("main", q)]
         for s in party:
             if s.state == "sleeping":
@@ -3447,6 +3519,7 @@ class Game:
         boss = dungeon.is_boss_floor(floor)
         report.log.insert(0, f"🕳 The Hollow Descent - floor {floor}{' (BOSS)' if boss else ''}: {info.title} "
                              f"[knowledge {k:.0f}%]" + (f" - {len(pids)} parties fight together" if len(pids) > 1 else ""))
+        by_hand = self._by_hand()
         self._after_battle(party, report, boss=boss)
         survivors = [s for s in party if s.hp > 0]
         events: List[str] = []
@@ -3490,7 +3563,9 @@ class Game:
             for q in pids:
                 self.delves.pop(q, None)
         self._reap(events)
-        spent = dungeon.clear_hours(floor, avg_level, k, len(party))
+        spent = 0 if by_hand else dungeon.clear_hours(floor, avg_level, k, len(party))
+        if by_hand and report.victory:
+            events.append("   ⏱ You led this fight yourself: no waiting, the party is ready for the next floor.")
         self._owed = 0.0
         events.extend(self._spend(spent))
         for q in pids:
@@ -3618,9 +3693,9 @@ class Game:
         pre: List[str] = []
         self._autonomy_prepare(party, pre)
         self._set_flag(party, "main")
-        self.delves[rid] = dict(floor=floor, start=floor, hours=0, camped=0)
+        self.delves[rid] = dict(floor=floor, start=floor, hours=0, camped=0, called=floor)
         return (f"📯 {mages[0].name} calls {self.parties.get(rid).name} to floor {floor} ({cost} purple gel). "
-                f"The two parties can now fight together.")
+                f"The two parties can now fight together, one party beyond what the floor normally takes.")
 
     def delve_camp(self, pid: int, hours: int = 4) -> List[str]:
         """Rest INSIDE the dungeon (sleep: ~8%/h healing, eats food). Ambushes can strike; intel reduces them."""
@@ -3840,12 +3915,13 @@ class Game:
                 f"{get_ability(spec.ability).name}. {spec.description}")
 
     # ---- grinding dungeon: The Gloop Pit (committed session of N runs) -----------------------------
-    def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True, manual: bool = False, lure: bool = False):
-        """Commit the party to a Pit session (see _grind_gen). With manual=True it pauses for orders in every
-        fight (returns None until the whole session ends); you can hand it back to the slimes at any time."""
-        return self._play(self._grind_gen(pid, depth, runs, lure), "pit", manual, pid)
+    def grind(self, pid: int, depth: int = 3, runs: int = 1, auto_rest: bool = True, manual: bool = False, lure: bool = False,
+              recall: bool = False):
+        """Commit the party to a Pit session (see _grind_gen). The Pit is a farm: its fights are always automatic (`manual`
+        is accepted for old callers and ignored)."""
+        return self._play(self._grind_gen(pid, depth, runs, lure, recall), "pit", False, pid)
 
-    def _grind_gen(self, pid: int, depth: int = 3, runs: int = 1, lure: bool = False):
+    def _grind_gen(self, pid: int, depth: int = 3, runs: int = 1, lure: bool = False, recall: bool = False):
         """Commit the party to `runs` Pit fights at `depth` (enemy level = party average + depth - 3).
         Once in, they only leave when all runs are done or the whole party is knocked out; they camp (sleep,
         eat) between runs when hurt. A slime that goes down is not dead: it loses morale (never XP) and DROPS ITS
@@ -3853,7 +3929,7 @@ class Game:
         until a later victory digs it up. (`auto_rest` is kept for compatibility: camping is always automatic.)"""
         if not 1 <= depth <= config.GRIND_DEPTHS:
             raise InvalidAction(f"Depth must be 1-{config.GRIND_DEPTHS}.")
-        party = self._ready_party(pid)
+        party = self._ready_party(pid, recall)
         if all(s.level >= s.level_cap for s in party):
             raise InvalidAction("Everyone is at their level cap - time to evolve!")
         res = GrindResult()
@@ -3873,7 +3949,8 @@ class Game:
                 if not members:
                     res.stop_reason = "the whole party is gone"
                     break
-                if any(s.hp < s.max_hp * config.GRIND_MIN_HP or s.stamina_frac < config.STAMINA_CAMP_AT for s in members):
+                self._field_meals(members)
+                if self._needs_camp(members):
                     hours = self._camp(members, max(0, config.SESSION_MAX_HOURS - used - config.GRIND_TICKS))
                     used += hours
                     res.summary.append(f"   (camped {hours}h)")
@@ -3881,6 +3958,10 @@ class Game:
                     if not members:
                         res.stop_reason = "the whole party is gone"
                         break
+                    self._field_meals(members)
+                if (why := self._field_unfit(members)):
+                    res.stop_reason = why
+                    break
                 if used + config.GRIND_TICKS > config.SESSION_MAX_HOURS:
                     res.stop_reason = f"the day's session is over ({config.SESSION_MAX_HOURS}h, camping included)"
                     break
@@ -3900,7 +3981,7 @@ class Game:
                 enemies = dungeon.grind_wave(avg, depth, self.parties.size, self.rng, theme)
                 want = config.pit_xp_per_run(sum(s.xp_needed(s.level) for s in members) / len(members),
                                              sum(config.RARITIES.index(s.rarity) for s in members) / len(members), depth)
-                rep = yield from self._battle_gen(members, enemies, permadeath=False, split_xp=False,
+                rep = yield from self._battle_gen(members, enemies, allow_manual=False, permadeath=False, split_xp=False,
                                                   xp_mult=want * (config.PIT_LURE_XP if lured else 1.0) / max(1.0, sum(e.xp for e in enemies)), terrain=theme.terrain)
                 rep.log.insert(0, f"🕳 The Gloop Pit - depth {depth} (enemy lvl ~{dungeon.grind_level(avg, depth)}) - "
                                   f"today: {theme.title}")
@@ -3932,6 +4013,7 @@ class Game:
                     self._farm_loot(len(enemies), events)
                     self._recover_pit_gear(members, events)
                 events.extend(self._spend(config.GRIND_TICKS))
+                self._field_hours(members, config.GRIND_TICKS, False, events)
                 used += config.GRIND_TICKS
                 rep.log.extend(events)
                 res.runs.append(rep)
@@ -3955,23 +4037,80 @@ class Game:
             self._release(party)
         return res
 
+    def field_session(self, s: Slime) -> bool:
+        """Is this slime away on a Pit, Rift, Quarry or other farming expedition? The session eats and sleeps for it (the
+        colony's own tick leaves its needs alone meanwhile, so the hours are never counted twice)."""
+        k = s.in_dungeon
+        if not k:
+            return False
+        if k in ("grind", "adventure", "quarry"):
+            return True
+        p = places.PLACES.get(k)
+        return bool(p and p.kind == "expedition")
+
+    def _field_hours(self, members, hours: int, asleep: bool = False, events: Optional[List[str]] = None) -> None:
+        """Pay `hours` of needs (awake, or asleep) for the party of a farming session, then bury anyone neglect killed."""
+        out = events if events is not None else []
+        for _ in range(int(hours)):
+            for s in members:
+                if s.id in self.roster and s.alive:
+                    self.needs.field_hour(s, asleep, out)
+        self._reap(out)
+
+    def _field_meals(self, members) -> None:
+        """Hungry members of a session eat: a cooked meal from the pantry first, else field rations from the stores."""
+        for s in members:
+            n = 0
+            while s.id in self.roster and s.needs.get("food") < config.AUTO_EAT_BELOW and n < 3:
+                n += 1
+                if self.needs.meal_hook and self.needs.meal_hook(s):
+                    continue
+                if self.wallet.get("food") < 1:
+                    break
+                self.wallet.spend("food", 1)
+                s.needs.add("food", config.FOOD_NUTRITION)
+
+    def _needs_camp(self, members) -> bool:
+        """Does a session party have to stop and rest: someone hurt, winded, or too tired to carry on?"""
+        return any(s.hp < s.max_hp * config.GRIND_MIN_HP or s.stamina_frac < config.STAMINA_CAMP_AT
+                   or s.needs.get("energy") < config.AUTO_SLEEP_BELOW for s in members)
+
+    def _field_unfit(self, members) -> str:
+        """Why a session cannot go on right now ('' = it can): someone is past exhaustion or out of food. Better to come home
+        than to die on the road."""
+        spent = [s.name for s in members if s.id in self.roster and s.needs.get("energy") < config.REFUSE_ENERGY]
+        if spent:
+            return f"{', '.join(spent[:3])} {'is' if len(spent) == 1 else 'are'} too exhausted to go on"
+        hungry = [s.name for s in members if s.id in self.roster and s.needs.get("food") <= 0]
+        if hungry:
+            return f"{', '.join(hungry[:3])} {'is' if len(hungry) == 1 else 'are'} out of food"
+        return ""
+
     def _camp_hour(self, members) -> List[str]:
         """One hour of rest in the field. Turn mode lets the colony live that hour; live mode applies the rest to
         the party directly (the colony only moves with the wall clock) and charges the hour to the session."""
+        field = [s for s in members if self.field_session(s)]
         if not self.timed:
-            return self.tick(1)
+            events = self.tick(1)
+            self._field_hours(field, 1, True, events)
+            return events
         for s in members:
             if s.id in self.roster:
                 s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR))
                 s.stamina_frac = min(1.0, s.stamina_frac + 0.1 * config.STAMINA_SLEEP_MULT)
-        return self._spend(1)
+        events = self._spend(1)
+        self._field_hours(field, 1, True, events)
+        return events
 
     def _camp(self, members, max_hours: int = 24) -> int:
-        """Inside a dungeon: sleep (no Rest Area) until everyone is >= 85% HP."""
+        """Inside a dungeon: sleep (no Rest Area) until everyone is >= 85% HP and caught their breath, and, if anyone was
+        worn out, until everyone has slept their energy back up."""
         hours = 0
+        tired = any(s.needs.get("energy") < config.AUTO_SLEEP_BELOW for s in members)
         while hours < max_hours:
             members = [s for s in members if s.id in self.roster]
-            if not members or all(s.hp >= s.max_hp * 0.85 and s.stamina_frac >= 0.7 for s in members):
+            if not members or all(s.hp >= s.max_hp * 0.85 and s.stamina_frac >= 0.7
+                                  and (not tired or s.needs.get("energy") >= config.FIELD_REST_ENERGY) for s in members):
                 break
             for s in members:
                 if s.state == "idle":

@@ -287,6 +287,7 @@ class TestAdventure(unittest.TestCase):
         g = mk(level=25)
         for s in g.slimes():
             s.stage = 1
+            s.hp = s.max_hp
         for _ in range(4):
             g.conflicts.tick = lambda *a, **k: None
             g.adventure([s.id for s in g.slimes()[:5]], 8)

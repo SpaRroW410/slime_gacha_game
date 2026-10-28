@@ -65,6 +65,22 @@ function stateLabel(s) {
   if (s.state === 'sleeping') return '😴 sleeping';
   return esc(s.state);
 }
+/* "Call back" for a slime that is resting, hunting, studying, foraging or at a post. Inside a dungeon it cannot be reached. */
+function callBtn(s, label = true) {
+  if (s.in_dungeon || DUNGEON_KINDS.includes(s.in_dungeon)) return '';
+  const t = label ? ' Call back' : '';
+  if (s.state === 'working' && s.job) return `<button class="btn small" data-act="stop_job" data-id="${s.id}" data-confirm="1" data-jn="${esc(s.job.name)}" title="Call ${esc(s.name)} off the ${esc(s.job.name)} post (the shift in progress is lost)">📞${t}</button>`;
+  if (['resting', 'hunting', 'studying'].includes(s.state)) return `<button class="btn small" data-act="do" data-c="recall" data-id="${s.id}" title="${s.state === 'hunting' && s.job ? 'Call back from foraging: it goes straight back to its post' : s.state === 'resting' ? 'Take it out of the rest area' : 'Call it home'}">📞${t}</button>`;
+  return '';
+}
+/* What an away slime is doing, in a few words (foraging, on a post, resting, hunting, drilling). */
+function doing(s) {
+  if (s.state === 'hunting') return s.job ? '🧺 foraging' : '🏞 hunting';
+  if (s.state === 'working') return `👷 on post${s.job ? ': ' + esc(s.job.name) : ''}`;
+  if (s.state === 'studying') return '📚 studying';
+  if (s.state === 'resting' || s.state === 'sleeping') return stateLabel(s);
+  return '';
+}
 function avatar(s, cls = '') {
   const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
@@ -547,22 +563,22 @@ function moodPanel(m) {
 }
 function srow(s) {
   const a = awayOf(s.id);
-  const tag = s.in_dungeon ? `🕳 ${esc(s.in_dungeon)}` : s.state !== 'idle' ? stateLabel(s) : '';
+  const tag = s.in_dungeon ? `🕳 ${esc(s.in_dungeon)}` : s.state !== 'idle' ? (doing(s) || stateLabel(s)) : '';
   return `<div class="srow ${S.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">${figure(s, 'sm')}
     <span class="sname">${s.is_vice ? '🎖 ' : ''}${esc(s.name)}</span><span class="smeta">${esc(s.class_name)} · ${s.stars}★ ${esc(s.rarity)} · Lv${s.level}</span>
     <span class="shp">${bar(s.hp, s.max_hp, 'hp')}</span>
-    <span class="stag">${a ? `⏳ ${etaHtml(a)}` : tag}${s.party ? ` 👥 ${esc(partyById(s.party)?.name || '')}` : ''}${s.hp < s.max_hp * 0.4 ? ' 🩹' : ''}${s.dominant && !s.busy ? ' ❗' : ''}</span></div>`;
+    <span class="stag">${a ? `⏳ ${etaHtml(a)}` : tag}${s.party ? ` 👥 ${esc(partyById(s.party)?.name || '')}` : ''}${s.hp < s.max_hp * 0.4 ? ' 🩹' : ''}${s.dominant && !s.busy ? ' ❗' : ''}</span>${callBtn(s, false)}</div>`;
 }
 function card(s) {
   const b = [];
   if (s.in_dungeon) b.push(badge('🕳 ' + s.in_dungeon, 'bad'));
-  else if (s.state !== 'idle') b.push(badge(s.state, s.state === 'hunting' ? 'info' : ''));
+  else if (s.state !== 'idle') b.push(badge(doing(s) || s.state, s.state === 'hunting' ? 'info' : ''));
   if (s.is_vice) b.push(badge('🎖 Vice Keeper', 'ok'));
   { const a = awayOf(s.id); if (a) b.push(badge(`⏳ ${etaHtml(a)}`, 'warn')); }
   if (s.party) b.push(badge('👥 ' + esc(partyById(s.party)?.name || s.party)));
   if (s.hp < s.max_hp * 0.4) b.push(badge('wounded', 'warn'));
   if (s.grounded) b.push(badge('grounded', 'bad'));
-  if (s.job) b.push(badge(`${s.job.emoji} ${esc(s.job.name)}`, 'ok'));
+  if (s.job && s.state !== 'working') b.push(badge(`${s.job.emoji} ${esc(s.job.name)}`, 'ok'));
   if (s.dominant && !s.busy) b.push(badge(WISH[s.dominant], 'warn'));
   if (s.feelings.length && s.feelings[0].value >= 40) b.push(badge(`${s.feelings[0].emoji} ${esc(s.feelings[0].name)}`, s.feelings[0].kind === 'bad' ? 'warn' : 'ok'));
   if (s.morale_label === 'broken') b.push(badge('broken morale', 'bad'));
@@ -573,7 +589,7 @@ function card(s) {
     <div class="nm">${esc(s.name)}</div><div class="sub">${esc(s.title)} · Lv${s.level}</div>
     <div>${stars(s.stars)}</div>
     ${bar(s.hp, s.max_hp, 'hp')}
-    <div class="badges">${b.join('')}</div></div>`;
+    <div class="badges">${b.join('')}</div>${callBtn(s) ? `<div style="margin-top:4px">${callBtn(s)}</div>` : ''}</div>`;
 }
 
 function drawer(s) {
@@ -738,8 +754,9 @@ function gacha() {
 function mini(id, removeBtn = false) {
   const s = slimeById(id);
   if (!s) return '';
-  return `<div class="mini" data-act="sel" data-id="${s.id}">${avatar(s, 'sm')}<span>${esc(s.name)}</span>${bar(s.hp, s.max_hp, 'hp')}
-    <button class="btn small" data-act="toggle_row" data-id="${s.id}" title="${s.row === 'back' ? 'Back row (tap to move to the front)' : 'Front row (tap to move to the back)'}">${s.row === 'back' ? '⬅ back' : '▶ front'}</button>
+  const d = doing(s);
+  return `<div class="mini" data-act="sel" data-id="${s.id}">${avatar(s, 'sm')}<span>${esc(s.name)}</span>${d ? `<small class="mute">${d}</small>` : ''}${bar(s.hp, s.max_hp, 'hp')}
+    ${callBtn(s, false)}<button class="btn small" data-act="toggle_row" data-id="${s.id}" title="${s.row === 'back' ? 'Back row (tap to move to the front)' : 'Front row (tap to move to the back)'}">${s.row === 'back' ? '⬅ back' : '▶ front'}</button>
     ${removeBtn ? `<button class="btn small" data-act="party_remove" data-id="${s.id}" title="Remove from party">✕</button>` : ''}</div>`;
 }
 function parties() {
@@ -771,18 +788,23 @@ function parties() {
 }
 
 /* ---------------------------------------------------------------- dungeons */
+/* Members of a party that are busy at home (resting, foraging, on a post ...): they can be called back for a trip, at a cost. */
+const busyMembers = (pid) => (partyById(pid)?.members || []).map(slimeById).filter((m) => m && m.busy && !m.in_dungeon);
+const pullNote = (list) => `${list.length} member(s) are busy at home (${list.slice(0, 5).map((x) => x.name).join(', ')}).\n\nCalling them away costs each −${S.state.gear.adventure.pull_morale} morale and makes them angry (a sleeper is simply woken).\n\n`;
 function partyOptions(key, fullOnly = true, includeDelve = false, exclude = null) {
   const st = S.state;
   const home = (p) => p.members.every((id) => { const m = slimeById(id); return m && !m.busy; });
   const parties = st.parties.filter((p) => p.id != exclude);
   const refuser = (p) => p.members.map(slimeById).find((m) => m && m.refuse_dungeon);
-  const why = (p) => (!includeDelve && p.in_delve ? 'in the Descent' : !includeDelve && !home(p) ? 'away' : fullOnly && !p.full ? `${p.members.length}/${st.party_size} members` : refuser(p) && fullOnly ? `${refuser(p).name} ${refuser(p).refuse_dungeon.replace(/^is /, '')}` : '');
+  const busyHome = (p) => p.members.map(slimeById).filter((m) => m && m.busy);
+  const pullable = (p) => busyHome(p).every((m) => m.can_pull);
+  const why = (p) => (!includeDelve && p.in_delve ? 'in the Descent' : !includeDelve && !home(p) && !pullable(p) ? 'away' : fullOnly && !p.full ? `${p.members.length}/${st.party_size} members` : refuser(p) && fullOnly ? `${refuser(p).name} ${refuser(p).refuse_dungeon.replace(/^is /, '')}` : '');
   const okList = parties.filter((p) => !why(p));
   let cur = ui(key, okList[0]?.id);
   if (!okList.some((p) => p.id == cur)) cur = okList[0]?.id;
   S.ui[key] = cur;
   if (!parties.length) return '<small class="mute">No parties yet: make one in the Parties tab.</small>';
-  return `<select data-ui="${key}" data-rerender="1">${parties.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''} ${why(p) ? 'disabled' : ''}>${esc(p.name)} (${p.members.length}/${st.party_size})${why(p) ? ' — ' + why(p) : ''}</option>`).join('')}</select>${okList.length ? '' : `<small class="mute"> No party is ready (needs a ${fullOnly ? 'full party ' : ''}at home).</small>`}`;
+  return `<select data-ui="${key}" data-rerender="1">${parties.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''} ${why(p) ? 'disabled' : ''}>${esc(p.name)} (${p.members.length}/${st.party_size})${why(p) ? ' — ' + why(p) : !includeDelve && !home(p) ? ` — 📞 ${busyHome(p).length} busy at home (called back)` : ''}</option>`).join('')}</select>${okList.length ? '' : `<small class="mute"> No party is ready (needs a ${fullOnly ? 'full party ' : ''}at home).</small>`}`;
 }
 function stopPanel(pid, v) {
   const st = S.state, s = v.stop;
@@ -801,6 +823,30 @@ function reinforcePanel(pid, v) {
   return `<div class="row"><small class="mute">📯 ${esc(mage?.name)} can call a party to floor ${v.floor}:</small>
     ${home.length ? `<select data-ui="${key}">${home.map((p) => `<option value="${p.id}" ${p.id == cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
     <button class="btn small" data-act="call_reinforcements" data-pid="${pid}" ${st.wallet.purple_gel >= v.call_cost ? '' : 'disabled'}>Call · ${v.call_cost} 🟣</button>` : '<small class="mute">no party is free</small>'}</div>`;
+}
+/* The strike force: the parties on the same floor that fight it together. A floor takes 1-5 parties by its place in the segment
+   (1, 6, 11 one; 2, 7, 12 two; ... 5, 10, 15 five), plus one more when a mage's call brought a party. */
+function forceState(pid, v) {
+  const dl = S.state.dungeon.delves;
+  const power = (p) => p.members.reduce((a, id) => a + (slimeById(id)?.power || 0), 0);
+  const cands = v.joinable.map(partyById).filter(Boolean).sort((a, b) => power(b) - power(a));
+  const limitFor = (ids) => v.force_cap + (v.called || ids.some((q) => dl[q]?.called) ? 1 : 0);
+  let sel = S.ui['force_' + pid];
+  if (!Array.isArray(sel)) { sel = []; for (const p of cands) if (2 + sel.length <= limitFor([...sel, p.id])) sel.push(p.id); }
+  sel = sel.filter((id) => v.joinable.includes(id));
+  while (sel.length && 1 + sel.length > limitFor(sel)) sel.pop();
+  S.ui['force_' + pid] = sel;
+  return { cands, sel, power, limit: limitFor(sel), canAdd: (q) => 2 + sel.length <= limitFor([...sel, q]) };
+}
+function forceBox(pid, v) {
+  const f = forceState(pid, v), total = 1 + f.sel.length;
+  const key = 'forceOpen_' + pid;
+  const mine = partyById(+pid);
+  return `<details class="panel flat" data-keep="${key}" ${ui(key, true) ? 'open' : ''}><summary><b>⚔ Strike force</b> ${chip(`${total}/${f.limit} part${f.limit === 1 ? 'y' : 'ies'}`, total >= f.limit ? 'warn' : 'ok')}
+      <small class="mute">floor ${v.floor} takes ${v.force_cap} part${v.force_cap === 1 ? 'y' : 'ies'}${v.called ? ' + the one a mage called' : ''}</small></summary>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><span class="chip ok">✔ ${esc(mine?.name || '')} · ⚡ ${mine ? Math.round(f.power(mine)) : 0}</span>
+      ${f.cands.map((p) => { const on = f.sel.includes(p.id); return `<button class="btn small ${on ? 'primary' : ''}" data-act="force_toggle" data-pid="${pid}" data-q="${p.id}" ${on || f.canAdd(p.id) ? '' : 'disabled title="The floor has no room for another party"'}>${on ? '✔' : '＋'} ${esc(p.name)} · ⚡ ${Math.round(f.power(p))}</button>`; }).join('') || '<small class="mute">No other party is on this floor yet.</small>'}</div>
+    <small class="mute">Together they fight as one force: ⚡ ${Math.round(f.power(mine || { members: [] }) + f.sel.reduce((a, q) => a + f.power(partyById(q) || { members: [] }), 0))} combined power. The fight is the usual turn-by-turn battle, so more power wins more often.</small></details>`;
 }
 function dungeonsAll() {
   const st = S.state, d = st.dungeon;
@@ -824,8 +870,9 @@ function dungeonsAll() {
       <p class="mute">${v.hours}h inside · this floor ${v.knowledge.toFixed(0)}% known · clearing it takes ~${v.next_hours} game hour${v.next_hours === 1 ? '' : 's'}${S.state.clock.mode === 'live' ? ` (~${Math.max(1, Math.round(v.next_hours / S.state.clock.dungeon_rate * 60))} real min)` : ''}</p>
       ${v.ready_in > 0 ? `<div class="chip bad">⏱ busy — ${S.state.clock.mode === 'live' ? `back in ~${Math.max(1, Math.round(v.ready_in / (S.state.clock.rate_now || 1) * 60))} real min` : `${v.ready_in}h to go (press +1h / +4h)`}</div>` : ''}
       <div class="row">${v.members.map((id) => mini(id)).join('')}</div>
+      ${v.joinable.length || v.force_cap > 1 ? forceBox(pid, v) : `<small class="mute">Floor ${v.floor} is a narrow passage: one party at a time${v.callers.length ? ' (a mage can still call one more)' : ''}.</small>`}
       <div class="row" style="margin-top:6px"><button class="btn primary" data-act="delve_next" data-pid="${pid}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight floor ${v.floor}</button>${cmdToggle()}
-        ${v.joinable.map((q) => `<button class="btn primary" data-act="delve_next" data-pid="${pid}" data-join="${q}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight together with ${esc(partyById(q)?.name)}</button>`).join('')}
+        ${forceState(pid, v).sel.length ? `<button class="btn primary" data-act="delve_next" data-pid="${pid}" data-join="${forceState(pid, v).sel.join(',')}" ${v.ready_in > 0 ? 'disabled' : ''}>⚔ Fight together (${1 + forceState(pid, v).sel.length} parties)</button>` : ''}
         <input type="number" min="1" max="24" value="${camp}" data-ui="camp_h" style="width:70px"><button class="btn" data-act="delve_camp" data-pid="${pid}" ${v.ready_in > 0 || v.camp_left <= 0 ? 'disabled' : ''}>⛺ Camp (h)</button>
         <button class="btn ${v.can_leave ? 'primary' : ''}" data-act="leave_dungeon" data-pid="${pid}" ${v.can_leave ? '' : 'disabled'} title="${v.can_leave ? 'Climb out' : 'Only possible at a checkpoint'}">🚪 Leave</button></div>
       ${v.can_leave ? '' : `<div class="row"><small class="mute">No free way out until the boss of floor ${v.boss_floor} falls.</small>
@@ -868,7 +915,7 @@ function dungeonsAll() {
         <label class="f">Depth <input type="range" min="1" max="${d.grind_depths}" value="${depth}" data-ui="depth" data-rerender="1"> <b>${depth}</b></label>
         <label class="f">Runs <input type="number" min="1" max="${d.session.grind_runs}" value="${runs}" data-ui="runs" data-rerender="1" style="width:70px"></label>
         <button class="btn small ${ui('pit_lure', false) ? 'primary' : ''}" data-act="pit_lure" title="Richer prey: x${d.pit.lure_xp} XP and x${d.pit.lure_gear} gear drops">${ui('pit_lure', false) ? '✔ ' : ''}Lure (${d.pit.lure_cost} 🟣/run)</button>
-        <button class="btn primary" data-act="grind">Commit</button>${cmdToggle()}</div>
+        <button class="btn primary" data-act="grind">Commit</button></div>
       ${sessionNote(runs, d.session.grind_ticks, d.session.grind_runs)}
       <small class="mute">Depth 3 = enemies at your party's average level; 1 is easier, 5 is harder and pays more XP. A <b>lure</b> (${d.pit.lure_cost} 🟣 per run) draws richer prey: <b>×${d.pit.lure_xp} XP</b> and <b>×${d.pit.lure_gear} chance of gear</b>; it stops when the purple gel runs out.</small></div>`;
   const wave = `<div class="panel stack"><h2>🧪 Wave simulation ${info('A training drill, not a real fight: a full party at home fights waves of monsters whose level lies between the minimum and maximum you set (1-50), and nobody can die. Each wave takes 2 hours. The XP is fixed by the monsters and their level (deeper monsters pay more, no luck or rarity involved, split between the members); there is no loot. It also trains battle (class) proficiency and builds teamwork. If the party loses a wave the simulation stops. You can take command of every turn, like any other fight.')}</h2>
@@ -941,27 +988,86 @@ function pickable(key, ids) {
   return ids.filter((id) => { const s = S.state.slimes.find((x) => x.id === id);
     return s && (key === 'adv_ids' ? !s.busy : s.state === 'idle' && !s.in_dungeon && !s.grounded && s.hp > 0 && !s.refuse_dungeon); });
 }
-function slimePickRow(a) {
-  const st = S.state;
-  const sel = new Set((ui('adv_ids', []) || []).map(num));
-  return { sel, html: `${partyPickRow('adv_ids', a.max_party)}<div class="row">${st.slimes.filter((s) => !s.busy).map((s) => `<button class="btn small ${sel.has(s.id) ? 'primary' : ''}" data-act="adv_toggle" data-id="${s.id}">${sel.has(s.id) ? '✔ ' : ''}${esc(s.name)} · Lv${s.level}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>` };
+/* ---- sending groups on a trip (Rift, Quarry, other places) ---------------------------------------------------------
+   Parties are chosen as whole groups (each goes as its own expedition and fights separately); slimes picked one by one are
+   grouped in fives. Slimes with under REFUSE_ENERGY energy are not listed at all; those that refuse are listed greyed out; those
+   busy at home (resting, foraging, on a post ...) can be picked and are called back, at a cost in morale and temper. */
+function sendInfo(s) {
+  const a = S.state.gear.adventure;
+  if (s.in_dungeon || s.hp <= 0 || s.needs.energy < a.refuse_energy) return { kind: 'hide' };
+  if (s.grounded) return { kind: 'grey', why: 'grounded after a brawl' };
+  if (s.refuse_dungeon) return { kind: 'grey', why: s.refuse_dungeon.replace(/^is /, '') };
+  if (s.state !== 'idle') return s.can_pull ? { kind: 'away', why: doing(s) } : { kind: 'hide' };
+  return { kind: 'ok' };
+}
+function sendPlan() {
+  const st = S.state, cap = st.gear.adventure.max_party;
+  const chunk = (ids) => { const out = []; for (let i = 0; i < ids.length; i += cap) out.push(ids.slice(i, i + cap)); return out; };
+  const usable = (id) => { const s = slimeById(id); return !!s && ['ok', 'away'].includes(sendInfo(s).kind); };
+  const taken = new Set(), groups = [], labels = [];
+  for (const pid of (ui('send_parties', []) || [])) {
+    const p = partyById(num(pid));
+    if (!p) continue;
+    const ids = p.members.filter((id) => usable(id) && !taken.has(id));
+    ids.forEach((id) => taken.add(id));
+    chunk(ids).forEach((c) => { groups.push(c); labels.push(p.name); });
+  }
+  const solo = (ui('adv_ids', []) || []).map(num).filter((id) => usable(id) && !taken.has(id));
+  chunk(solo).forEach((c) => { groups.push(c); labels.push('Slimes'); });
+  const all = groups.flat().map(slimeById);
+  return { groups, labels, n: all.length, away: all.filter((x) => x.state !== 'idle') };
+}
+function sendPicker() {
+  const st = S.state, a = st.gear.adventure, plan = sendPlan();
+  const selP = new Set((ui('send_parties', []) || []).map(num)), selS = new Set((ui('adv_ids', []) || []).map(num));
+  const prow = st.parties.map((p) => {
+    const info = p.members.map(slimeById).filter(Boolean).map((m) => [m, sendInfo(m)]);
+    const go = info.filter(([, i]) => i.kind === 'ok' || i.kind === 'away').length;
+    const away = info.filter(([, i]) => i.kind === 'away').length, grey = info.filter(([, i]) => i.kind === 'grey');
+    const hidden = info.filter(([, i]) => i.kind === 'hide').length;
+    if (!info.length || hidden === info.length) return '';
+    const on = selP.has(p.id);
+    const note = [away ? `📞 ${away} busy at home` : '', grey.length ? `${grey.length} refusing` : '', hidden ? `${hidden} out of reach` : ''].filter(Boolean).join(' · ');
+    const tip = grey.map(([m, i]) => `${m.name} ${i.why}`).join('; ');
+    return `<button class="btn small ${on ? 'primary' : ''}" data-act="send_party" data-pid="${p.id}" ${go ? '' : 'disabled'} title="${esc(tip)}">${on ? '✔ ' : ''}👥 ${esc(p.name)} · ${go}/${info.length} can go${note ? ' · ' + esc(note) : ''}</button>`;
+  }).filter(Boolean);
+  const q = (ui('send_q', '') || '').toLowerCase().trim(), cls = ui('send_cls', '');
+  const everyone = st.slimes.filter((x) => sendInfo(x).kind !== 'hide');
+  const shown = everyone.filter((x) => (!cls || x.class_name === cls) && (!q || `${x.name} ${x.class_name} ${x.rarity}`.toLowerCase().includes(q)));
+  const LIMIT = 60;
+  const chip1 = (x) => { const i = sendInfo(x), on = selS.has(x.id);
+    return `<button class="btn small ${on ? 'primary' : ''}" data-act="adv_toggle" data-id="${x.id}" ${i.kind === 'grey' ? `disabled title="${esc(x.name + ' ' + i.why)}"` : ''}>${on ? '✔ ' : ''}${esc(x.name)} · Lv${x.level}${i.kind === 'away' ? ' · 📞 ' + i.why : ''}${i.kind === 'grey' ? ' · 🚫 ' + esc(i.why) : ''}</button>`; };
+  const html = `<details class="panel flat" data-keep="send_parties_open" ${ui('send_parties_open', true) ? 'open' : ''}><summary><b>👥 Parties</b> ${chip(String(prow.length), 'info')} <small class="mute">${selP.size ? selP.size + ' ticked: each goes as its own group' : 'tick several to send them all at once; each fights separately'}</small></summary>
+      <div class="row" style="gap:6px;flex-wrap:wrap">${prow.join('') || '<small class="mute">No party is within reach.</small>'}</div></details>
+    <details class="panel flat" data-keep="send_slimes_open" ${ui('send_slimes_open', false) ? 'open' : ''}><summary><b>🧍 Individual slimes</b> ${chip(String(everyone.length), 'info')} <small class="mute">${selS.size ? selS.size + ' picked (sent in groups of ' + a.max_party + ')' : 'pick any slimes, in fives'}</small></summary>
+      <div class="row" style="margin-bottom:6px"><input type="search" data-ui="send_q" data-rerender="1" value="${esc(ui('send_q', ''))}" placeholder="Find a slime (name, class, rarity)" style="max-width:260px">
+        <select data-ui="send_cls" data-rerender="1"><option value="">All classes</option>${[...new Set(everyone.map((x) => x.class_name))].sort().map((c) => `<option value="${esc(c)}" ${cls === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        ${selS.size ? '<button class="btn small" data-act="send_clear">Clear picks</button>' : ''}</div>
+      <div class="row" style="gap:6px;flex-wrap:wrap">${shown.slice(0, LIMIT).map(chip1).join('') || '<small class="mute">Nobody matches.</small>'}</div>
+      ${shown.length > LIMIT ? `<small class="mute">Showing ${LIMIT} of ${shown.length}: search or pick a class to narrow the list.</small>` : ''}
+      <small class="mute">Slimes with under ${a.refuse_energy}% energy are not listed; refusing ones are greyed out with the reason.</small></details>`;
+  return { plan, html };
+}
+function sendButton(kind, label, title) {
+  const plan = sendPlan(), a = S.state.gear.adventure;
+  return `<button class="btn primary" data-act="send_groups" data-kind="${kind}" data-title="${esc(title)}" ${plan.groups.length ? '' : 'disabled'}>${label} · ${plan.groups.length} group${plan.groups.length === 1 ? '' : 's'} (${plan.n} slime${plan.n === 1 ? '' : 's'})</button>${plan.away.length ? `<small class="mute">📞 ${plan.away.length} busy at home will be called back: −${a.pull_morale} morale each and they are angry about it.</small>` : ''}`;
 }
 function placesView() {
   const st = S.state, a = st.gear.adventure;
-  const pick = slimePickRow(a);
-  return `<div class="grid cols2">${st.places.map((p) => `<div class="panel stack"><h2>${p.emoji} ${esc(p.name)}</h2><p class="mute">${esc(p.blurb)} Any <b>1–${a.max_party}</b> slimes may go; monsters are one level above the party; nobody dies. Finds: ${Object.keys(p.loot).map((k) => esc(k.replace('_', ' '))).join(', ')}.</p>
-    ${pick.html}
-    <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" data-rerender="1" style="width:70px"></label>
-      <button class="btn primary" data-act="explore" data-place="${p.key}" ${pick.sel.size ? '' : 'disabled'}>${p.emoji} Explore (${pick.sel.size}/${a.max_party})</button></div></div>`).join('')}</div>`;
+  const pick = sendPicker();
+  return `<div class="panel stack"><h2>🗺 Send a trip</h2><p class="mute">Any <b>1–${a.max_party}</b> slimes make a group; monsters are one level above the group; nobody dies. Tick several parties and send them all at once: each fights separately.</p>${pick.html}
+      <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" data-rerender="1" style="width:70px"></label></div></div>
+    <div class="grid cols2" style="margin-top:12px">${st.places.map((p) => `<div class="panel stack"><h2>${p.emoji} ${esc(p.name)}</h2><p class="mute">${esc(p.blurb)} Finds: ${Object.keys(p.loot).map((k) => esc(k.replace('_', ' '))).join(', ')}.</p>
+    <div class="row">${sendButton(p.key, p.emoji + ' Explore', p.name)}</div></div>`).join('')}</div>`;
 }
 function quarryView() {
   const st = S.state, a = st.gear.adventure;
-  const pick = slimePickRow(a);
+  const pick = sendPicker();
   return `<div class="grid cols2"><div class="panel stack"><h2>💎 The Starfall Quarry <small class="mute">(ascension stones)</small></h2>
     <p class="mute">Same rules as the Rift: any <b>1–${a.max_party}</b> slimes may go, monsters are <b>one level above</b> the party average, nobody dies (a knocked-out slime loses morale and its relics are battered). The prize is <b>ascension stones</b> (and a little XP) instead of relics. There is no lure here.</p>
     ${pick.html}
     <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" data-rerender="1" style="width:70px"></label>
-      <button class="btn primary" data-act="quarry" ${pick.sel.size ? '' : 'disabled'}>💎 Quarry (${pick.sel.size}/${a.max_party})</button></div>
+      ${sendButton('quarry', '💎 Quarry', 'The Starfall Quarry')}</div>
     ${sessionNote(ui('adv_runs', 5), st.dungeon.session.adv_ticks, a.max_runs)}</div>
   <div class="panel stack"><h2>💎 Ascension stones</h2>
     <div class="row">${Object.entries(st.ascension.stones).map(([r, n]) => `<span class="chip ${r}">${RES['stone_' + r][0]} ${n}${n >= st.ascension.merge && r !== 'legendary' ? ` <button class="btn small" data-act="merge_stones" data-r="${r}">merge ${st.ascension.merge} → 1</button>` : ''}</span>`).join('')}</div>
@@ -1001,6 +1107,7 @@ function holdWhy(s, j) {
   if (s.grounded) return 'grounded';
   if (s.stars < j.min_stars) return `needs ${j.min_stars}★`;
   if (j.classes.length && !j.classes.includes(s.archetype)) return 'wrong class';
+  if (j.discipline && s.discipline !== j.discipline && s.spec?.disc !== j.discipline && !j.talents.includes(s.archetype)) return `not a ${j.discipline} fighter`;
   if (s.refuse_job) return s.refuse_job.replace(/^is /, '');
   if (s.needs.energy < 25) return 'too tired';
   return '';
@@ -1338,7 +1445,7 @@ function relicCard(it, holderId = null) {
 }
 function riftAll() {
   const st = S.state, a = st.gear.adventure;
-  const pick = slimePickRow(a), sel = pick.sel;
+  const pick = sendPicker();
   const equipped = st.slimes.flatMap((s) => Object.values(s.items).map((it) => ({ it, s })));
   const rates = Object.entries(a.rates).map(([k, v]) => `${k} ${v}%`).join(' · ');
   return `<div class="grid cols2">
@@ -1347,7 +1454,7 @@ function riftAll() {
     ${pick.html}
     <div class="row"><label class="f">Runs <input type="number" min="1" max="${a.max_runs}" value="${ui('adv_runs', 5)}" data-ui="adv_runs" data-rerender="1" style="width:70px"></label>
       <button class="btn small ${ui('adv_lure', false) ? 'primary' : ''}" data-act="adv_lure">${ui('adv_lure', false) ? '✔ ' : ''}Lure (🟣)</button>
-      <button class="btn primary" data-act="adventure" ${sel.size ? '' : 'disabled'}>🧭 Rift (${sel.size}/${a.max_party})</button></div>
+      ${sendButton('adventure', '🧭 Rift', "The Wayfarer's Rift")}</div>
     ${sessionNote(ui('adv_runs', 5), st.dungeon.session.adv_ticks, a.max_runs)}
     <h4>Materials</h4><div class="row">${Object.entries(a.materials || st.gear.materials).map(([k, v]) => chip(`${RES[k][0]} ${RES[k][1]}: ${v}`)).join('')}</div>
     <small class="mute">Salvaging relics gives materials of their tier; the higher the level and stars, the more — and a better tier. Levelling needs materials of the relic's own tier. Star ascension (level 10) also needs Armory level ≥ the current star count; raising rarity needs ★5 Lv10 and Armory level 5.</small></div>
@@ -1716,31 +1823,16 @@ const A = {
   slime_star: () => act('slime_star', { id: S.sel }),
   merge_stones: (d) => act('merge_stones', { rarity: d.r }),
   destroy_slime: (d) => confirmThen(`Destroy ${d.n} in the Destruction Chamber?\n\nYou receive ${d.y}. ${d.n} is gone forever and the colony will mourn (sacrifice stress).`, () => act('destroy_slime', { id: num(d.id) }).then(() => { S.sel = null; render(); })),
-  explore: (d) => { const ids = (ui('adv_ids', []) || []).map(num); act('explore', { place: d.place, ids, runs: num(ui('adv_runs', 5), 5) }, { title: 'An expedition', slow: true }).then(() => { S.ui.adv_ids = []; render(); }); },
-  quarry: () => { const ids = (ui('adv_ids', []) || []).map(num); act('quarry', { ids, runs: num(ui('adv_runs', 5), 5) }, { title: 'The Starfall Quarry', slow: true }).then(() => { S.ui.adv_ids = []; render(); }); },
-  brew: () => act('brew', { id: num(ui('brewer', S.state.slimes.find((x) => !x.busy)?.id)), kind: ui('brew_kind', 'stamina'), grade: num(ui('brew_grade', 1), 1) }, { slow: true }),
-  use_potion: () => { const [kind, grade] = String(ui('pot_sel', S.state.potions.stock[0] ? S.state.potions.stock[0].kind + ':' + S.state.potions.stock[0].grade : ':')).split(':'); act('use_potion', { id: S.sel, kind, grade: num(grade) }); },
-  slime_repair: () => act('slime_repair', { id: S.sel }),
-  talk: () => act('talk', { id: S.sel }),
-  praise: () => act('praise', { id: S.sel }),
-  memorial: (d) => act('memorial', { gid: num(d.gid) }),
-  keeper_learn: (d) => act('keeper_learn', { key: d.key }),
-  keeper_use: (d) => act('keeper_use', { key: d.key }),
-  answer_request: (d) => { const s = slimeById(num(d.id));
-    if (d.yes === '1' && s && s.request && s.request.kind === 'leave')
-      return confirmThen(`Let ${s.name} leave the colony for good?\n\nThey walk away with nothing; their gear stays. Their friends will miss them. This cannot be undone.`, () => act('answer_request', { id: s.id, accept: true }));
-    return act('answer_request', { id: num(d.id), accept: d.yes === '1' }); },
-  craft_feather: () => act('craft_feather', { n: 1 }),
-  keeper_respec: () => confirm('Forget all learned skills? It costs gel and the price rises each time.') && act('keeper_respec', {}),
-  keeper_title: (d) => act('keeper_title', { key: d.key || '' }),
-  bud: (d) => confirmThen('Have a child? It costs ' + cost(S.state.family.bud_cost) + '.', () => act('bud', { a: num(d.a), b: num(d.b) })),
-  autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
-  merge_gel: (d) => act('merge_gel', { n: d.n === 'max' ? Math.floor(S.state.wallet.white_gel / S.state.rates.gel_merge) : num(d.n) }),
-  pit_lure: () => { S.ui.pit_lure = !ui('pit_lure', false); render(); },
-  adv_lure: () => { S.ui.adv_lure = !ui('adv_lure', false); render(); },
-  adv_toggle: (d) => { const ids = new Set((ui('adv_ids', []) || []).map(num)); const id = num(d.id); ids.has(id) ? ids.delete(id) : ids.add(id); S.ui.adv_ids = [...ids].slice(0, S.state.gear.adventure.max_party); render(); },
-  adventure: () => { const ids = (ui('adv_ids', []) || []).map(num); const runs = num(ui('adv_runs', 5), 5);
-    act('adventure', { ids, runs, lure: !!ui('adv_lure', false) }, { title: "The Wayfarer's Rift", slow: true }).then(() => { S.ui.adv_ids = []; render(); }); },
+  send_groups: (d) => {
+    const plan = sendPlan(), a = S.state.gear.adventure;
+    if (!plan.groups.length) return toast('Pick a party or a slime first.', true);
+    const go = (recall) => act('send_groups', { kind: d.kind, groups: plan.groups, runs: num(ui('adv_runs', 5), 5), lure: d.kind === 'adventure' && !!ui('adv_lure', false), recall },
+      { title: d.title || 'Expeditions', slow: true }).then(() => { S.ui.adv_ids = []; S.ui.send_parties = []; render(); });
+    if (plan.away.length) return confirmThen(`${plan.away.length} slime(s) are busy at home (${plan.away.slice(0, 6).map((x) => x.name).join(', ')}${plan.away.length > 6 ? '…' : ''}).\n\nCalling them away from their post, foraging, hunt or rest costs each −${a.pull_morale} morale and makes them angry (a sleeper is simply woken). Send them anyway?`, () => go(true));
+    return go(false); },
+  send_party: (d) => { const id = num(d.pid), cur = (ui('send_parties', []) || []).map(num); S.ui.send_parties = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]; render(); },
+  send_clear: () => { S.ui.adv_ids = []; render(); },
+  adv_toggle: (d) => { const ids = new Set((ui('adv_ids', []) || []).map(num)); const id = num(d.id); ids.has(id) ? ids.delete(id) : ids.add(id); S.ui.adv_ids = [...ids].slice(0, S.state.gear.adventure.max_party * S.state.gear.adventure.max_groups); render(); },
   item_equip: (d) => act('equip_item', { id: num(ui('ie_' + d.uid, S.state.slimes[0]?.id)), uid: num(d.uid) }),
   item_unequip: (d) => act('unequip_item', { id: num(d.id), slot: d.slot }),
   item_cmd: (d) => d.ask ? confirmThen(d.ask, () => act(d.c, { uid: num(d.uid) })) : act(d.c, { uid: num(d.uid) }),
@@ -1762,7 +1854,8 @@ const A = {
   party_disband: (d) => confirmThen('Disband this party?', () => act('party_disband', { pid: num(d.pid) })),
   enter_dungeon: () => { const pid = num(ui('dpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     const p = partyById(pid); const start = num(ui('dstart'), p.entry[p.entry.length - 1]);
-    confirmThen(`Enter the Hollow Descent at floor ${start}?\n\nYou can only leave after a boss floor (every 5). Deaths are permanent.`, () => act('enter_dungeon', { pid, start: p.entry.includes(start) ? start : p.entry[p.entry.length - 1] })); },
+    const busy = busyMembers(pid);
+    confirmThen(`${busy.length ? pullNote(busy) : ''}Enter the Hollow Descent at floor ${start}?\n\nYou can only leave after a boss floor (every 5). Deaths are permanent.`, () => act('enter_dungeon', { pid, start: p.entry.includes(start) ? start : p.entry[p.entry.length - 1], recall: busy.length > 0 })); },
   retreat: (d) => confirmThen(`Break off and flee?\n\nIt costs ${d.cost} purple gel and morale, drains the party's stamina, and the flight can be ambushed (${d.amb}% chance of a hit that may be fatal). Cleared floors stay cleared, but you re-enter from a checkpoint.`, () => act('retreat', { pid: num(d.pid) })),
   leave_dungeon: (d) => act('leave_dungeon', { pid: num(d.pid) }),
   scout_plan: async () => { const ids = (S.ui.scout_ids || []).map(num); const first = num(ui('sfirst', 1), 1), last = num(ui('slast', first), first);
@@ -1793,6 +1886,7 @@ const A = {
   reset_plan: (d) => { const key = d.key; for (let i = 0; i < 8; i++) delete S.ui[`plan_${key}_s${i}`]; for (let i = 0; i < 3; i++) { delete S.ui[`plan_${key}_rc${i}`]; } act('set_plan', { key, slots: Array(8).fill('work'), rules: [] }); },
   toggle_row: (d) => { const s = slimeById(num(d.id)); if (s) act('set_row', { id: s.id, row: s.row === 'back' ? 'front' : 'back' }); },
   away_toggle: () => { S.awayOpen = !S.awayOpen; render(); },
+  force_toggle: (d) => { const k = 'force_' + d.pid, q = num(d.q), sel = Array.isArray(S.ui[k]) ? S.ui[k] : []; S.ui[k] = sel.includes(q) ? sel.filter((x) => x !== q) : [...sel, q]; render(); },
   serve_hungry: () => act('serve_hungry'),
   wake_all: () => confirmThen('Wake everybody asleep in town?\n\nSlimes under 10% energy are left to sleep. Those under 50% energy wake grumpy (a mood cost).', () => act('wake_all')),
   stop_job: (d) => d.confirm ? confirmThen(`Dismiss this slime from the ${d.jn} post?\n\nThe shift in progress is not finished: no work is done for it (nothing is cooked, forged or brewed, no herbs are found).`, () => act('stop_job', { id: num(d.id) })) : act('stop_job', { id: num(d.id) }),
@@ -1805,7 +1899,7 @@ const A = {
   appoint_vice: () => { const id = num(S.ui.vice_pick); if (id) confirmThen('Appoint this slime as Vice Keeper?\n\nIt can mediate, feed and tend slimes in its own group even inside a dungeon, and settles quarrels by itself. It cannot merge or destroy, and cannot itself be merged or destroyed while in office.', () => act('appoint_vice', { id })); },
   dismiss_vice: () => act('dismiss_vice', {}),
   toggle_manual: () => { S.ui.manual = !manualOn(); render(); },
-  delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn(), join: d.join ? [num(d.join)] : [] }, { title: 'The Hollow Descent' }),
+  delve_next: (d) => act('delve_next', { pid: num(d.pid), manual: manualOn(), join: d.join ? String(d.join).split(',').map(num) : [] }, { title: 'The Hollow Descent' }),
   stop_rest: (d) => act('delve_stop_rest', { pid: num(d.pid) }),
   stop_buy: (d) => act('delve_stop_buy', { pid: num(d.pid), item: d.item }),
   rescue: (d) => { const ids = (S.ui.rescue_ids || []).map(num); if (!ids.length) return toast('Pick at least one rescuer.', true);
@@ -1830,7 +1924,8 @@ const A = {
   specialize: (d) => confirmThen(`Specialize ${d.n} as a ${d.spec}? This is permanent and costs ${d.cost}.`, () => act('specialize', { id: num(d.id), discipline: d.disc })),
   grind: () => { const pid = num(ui('gpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); const depth = num(ui('depth', 3), 3), runs = num(ui('runs', 5), 5);
     if (!pid) return toast('You need a full party.', true);
-    confirmThen(`Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose morale and drop their gear (no XP is lost).`, () => act('grind', { pid, depth, runs, manual: manualOn(), lure: !!ui('pit_lure', false) }, { slow: !manualOn(), title: 'The Gloop Pit' })); },
+    const busy = busyMembers(pid);
+    confirmThen(`${busy.length ? pullNote(busy) : ''}Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose morale and drop their gear (no XP is lost).`, () => act('grind', { pid, depth, runs, recall: busyMembers(pid).length > 0, lure: !!ui('pit_lure', false) }, { slow: true, title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
     act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn() }, { title: 'Wave simulation' }); },

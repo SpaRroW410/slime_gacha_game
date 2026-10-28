@@ -47,16 +47,36 @@ class NeedsEngine:
         self.skip_meal = None            # Game sets: callable(slime, events) -> bool, a slime in deep despair leaves its food
         self.buddy_fn = None             # Game sets: callable(slime, candidates) -> the one it cuddles up to (a friend first)
         self.cuddles: Dict[str, int] = {}   # name -> cuddles today (summarised once a day instead of a line each)
+        self.field_fn = None             # Game sets: callable(slime) -> is a farming session looking after its needs (see field_hour)?
 
     def tick(self, slimes: List, events: List[str]) -> None:
         slimes = [s for s in slimes if s.alive]
         idle = [s for s in slimes if s.state == "idle"]
         for s in slimes:
+            if self.field_fn and self.field_fn(s):           # a Pit / Rift / Quarry session eats and sleeps for its party
+                self._safety(s)
+                continue
             self._decay(s)
             self._starve(s, events)
             if self.auto_care:
                 self._autonomy(s, idle, events)
             self._safety(s)
+
+    def field_hour(self, s, asleep: bool, events: List[str]) -> None:
+        """One hour of a slime's needs while a farming session looks after its party: the usual decay (sleep restores energy
+        and slows the rest) and the harm of neglect. The session's own rests and meals keep it from coming to that."""
+        n = s.needs
+        active = n.active()
+        for need, rate in config.NEED_DECAY.items():
+            if need not in active:
+                continue
+            r = rate * trait_mult(s, need)
+            if asleep:
+                r = 0.0 if need == "energy" else r * 0.4
+            n.add(need, -r)
+        if asleep:
+            n.add("energy", config.SLEEP_ENERGY_GAIN)
+        self._starve(s, events)
 
     # -- internals ---------------------------------------------------------
     def _decay(self, s) -> None:

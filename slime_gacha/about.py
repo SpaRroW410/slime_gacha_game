@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-27-troublemakers",
-                 text="Troublemakers, judged fairly: a slime is one when it has come to blows with more than 5% of the colony this month (at least 2 different slimes), not because a single feud ran its course or because it was snapped at. Merging or destroying one costs no morale and no sacrifice stress; only its partner and best friend grieve, at half depth, and those it fought with breathe easier. After a removal the Keeper's shadow falls: quarrels are rarer for a week, and slimes with fights of their own wonder if they are next. A slime you talked with or made peace for holds back a little for 3 days. A liked slime is now grieved whether it is merged or destroyed.")
+WHATS_NEW = dict(id="2026-10-27-trips",
+                 text="The Hollow Descent takes 1-5 parties at once by floor (a mage's call adds one more): choose them in the Strike force list, and a floor you fight by hand costs no waiting. The Rift, the Quarry and the other places share one sender with collapsible Parties and Individual slimes lists (search, class filter): tick several parties and send them all at once, each fighting separately. Slimes busy at home (resting, foraging, on a post) can be called away for a trip, at a cost in morale and temper; those under 10% energy are not listed and refusers are greyed out. Pit and Rift sessions now eat and sleep for their party, so nobody dies of exhaustion mid-session. The Pit no longer offers taking command. Trainers must fight in the style they teach, only help pupils who know less, and sharpen a little with every lesson. Slimes away from home show it and have Call back buttons.")
 
 
 def build() -> Dict[str, object]:
