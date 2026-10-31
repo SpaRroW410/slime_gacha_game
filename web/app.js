@@ -1450,7 +1450,7 @@ function relicCard(it, holderId = null) {
     <div class="row">${slimeSel}
       ${it.level_cost ? act_('level_item', '⬆ Level', it.level_cost) : ''}${it.star_cost ? act_('ascend_star', '🌟 Ascend ★', it.star_cost) : ''}${it.rarity_cost ? act_('ascend_rarity', '💎 Raise rarity', it.rarity_cost) : ''}
       ${it.repair_cost ? act_('repair_item', '🛠 Repair', { white_gel: it.repair_cost }) : ''}
-      ${it.salvage ? `<button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${it.uid}" data-ask="Break this relic down for ${cost(it.salvage)}?" ${free ? '' : 'disabled'}>♻ Salvage → ${cost(it.salvage)}</button>` : ''}
+      ${it.salvage ? `<button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${it.uid}" data-ask="Break this relic down for ${cost(it.salvage)}?" ${free ? '' : 'disabled'}>🔨 Break down → ${cost(it.salvage)}</button>` : ''}
       ${holderId ? `<button class="btn small" data-act="item_unequip" data-id="${holderId}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Remove</button>` : ''}
       ${!it.ego && it.rarity === 'legendary' && it.stars === 5 ? `<button class="btn small danger" data-act="item_fuse" data-uid="${it.uid}">👁 Fuse ego…</button>` : ''}</div></div>`;
 }
@@ -1594,20 +1594,20 @@ function relicGearSection() {
   const inv = Object.entries(st.gear.inventory).filter(([, n]) => n > 0);
   const defs = Object.fromEntries(st.gear.all.map((x) => [x.key, x]));
   return `<div class="grid cols2" style="margin-top:12px">
-    <div class="panel stack"><h2>🗡️ Relics: merge &amp; destroy</h2>
-      <p class="mute">Only relics in the vault (not worn). <b>Merge</b>: the donor is consumed; the target gains levels, is fully mended and may inherit a mod. Both must be the same slot. <b>Destroy</b> breaks one into materials.</p>
+    <div class="panel stack"><h2>🗡️ Relics: merge &amp; break down</h2>
+      <p class="mute">Only relics in the vault (not worn). <b>Merge</b>: the donor is consumed; the target gains levels, is fully mended and may inherit a mod. Both must be the same slot. <b>Break down</b> turns one into crafting materials (it cannot be undone).</p>
       ${vault.length ? `<div class="row"><label class="f">Target ${sel('rt', 0)}</label><label class="f">Donor ${sel('rd', 1)}</label></div>
         ${t && d && t.slot !== d.slot ? '<small class="mute">Choose two relics of the same slot.</small>' : ''}
         <button class="btn danger" data-act="merge_relic" ${okR ? '' : 'disabled'}>🫧 Merge relics</button>
-        <h4>Destroy a relic</h4>
-        ${vault.map((i) => `<div class="row between"><span>${esc(rname(i))}</span><button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${i.uid}" data-ask="Break this relic down for ${esc(cost(i.salvage))}?">♻️ ${esc(cost(i.salvage))}</button></div>`).join('')}` : '<p class="mute">The vault is empty. Relics come from the Wayfarer\'s Rift.</p>'}</div>
-    <div class="panel stack"><h2>⚔️ Gear: scrap &amp; merge</h2>
-      <p class="mute">Spare gear only (not worn). <b>Scrap</b> returns ${Math.round(gf.scrap * 100)}% of its price. <b>Merge</b> ${gf.merge_gear} identical pieces into one of the next tier (same slot).</p>
+        <h4>Break down a relic</h4>
+        ${vault.map((i) => `<div class="row between"><span>${esc(rname(i))}</span><button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${i.uid}" data-ask="Break this relic down for ${esc(cost(i.salvage))}?">🔨 Break down (${esc(cost(i.salvage))})</button></div>`).join('')}` : '<p class="mute">The vault is empty. Relics come from the Wayfarer\'s Rift.</p>'}</div>
+    <div class="panel stack"><h2>⚔️ Gear: sell back &amp; merge</h2>
+      <p class="mute">Spare gear only (not worn). <b>Sell back</b> returns ${Math.round(gf.scrap * 100)}% of its price. <b>Merge</b> ${gf.merge_gear} identical pieces into one of the next tier (same slot).</p>
       ${inv.length ? inv.map(([k, n]) => { const x = defs[k]; if (!x) return '';
         const ups = st.gear.all.filter((y) => y.slot === x.slot && y.tier === x.tier + 1);
         const back = cost(Object.fromEntries(Object.entries(x.cost).map(([a, v]) => [a, Math.max(1, Math.floor(v * gf.scrap))])));
         return `<div class="panel flat stack"><div class="row between"><span>${x.emoji} <b>${esc(x.name)}</b> ×${n} <small class="mute">tier ${x.tier} ${x.slot}</small></span>
-          <button class="btn small danger" data-act="scrap_gear" data-key="${k}" data-n="${esc(x.name)}" data-y="${esc(back)}">♻️ Scrap one (${esc(back)})</button></div>
+          <button class="btn small danger" data-act="scrap_gear" data-key="${k}" data-n="${esc(x.name)}" data-y="${esc(back)}">💰 Sell back one (${esc(back)})</button></div>
           ${ups.length ? `<div class="row">${ups.map((u) => `<button class="btn small" data-act="merge_gear" data-key="${k}" data-into="${u.key}" data-c="${gf.merge_gear}" data-n="${esc(x.name)}" data-in_n="${esc(u.name)}" ${n >= gf.merge_gear ? '' : 'disabled'}>🫧 ${gf.merge_gear} → ${u.emoji} ${esc(u.name)}</button>`).join('')}</div>` : '<small class="mute">Top tier.</small>'}</div>`; }).join('') : '<p class="mute">No spare gear. Buy some in the Armory or find it in dungeons.</p>'}</div></div>`;
 }
 
@@ -1904,7 +1904,7 @@ const A = {
     if (k === 'potion') Object.assign(args, { id: num(S.ui['gift_s_' + pid]), potion: S.ui.gift_k, grade: num(S.ui.gift_g, 1) });
     return act('commander_gift', args); },
   merge_relic: () => confirmThen('Feed the donor relic to the target? The donor is consumed for good.', () => act('merge_items', { target: num(S.ui.rt), donor: num(S.ui.rd) })),
-  scrap_gear: (d) => confirmThen(`Scrap one ${d.n} for ${d.y}?`, () => act('destroy_gear', { key: d.key, n: 1 })),
+  scrap_gear: (d) => confirmThen(`Sell back one ${d.n} for ${d.y}?`, () => act('destroy_gear', { key: d.key, n: 1 })),
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
   set_color: (d) => act('set_color', { id: num(d.id), color: '' }),

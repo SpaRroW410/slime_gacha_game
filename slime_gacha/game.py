@@ -3137,7 +3137,7 @@ class Game:
         return (f"🫧 {d.label()} melts into {t.label()}: level {before} -> {t.level}, fully mended.{note}")
 
     def destroy_gear(self, key: str, n: int = 1) -> str:
-        """Scrap spare gear (not equipped) for half of its price."""
+        """Sell spare gear (not equipped) back for half of its price."""
         g = equipment.GEAR.get(key)
         n = max(1, int(n))
         if self.inventory.items[key] < n:
@@ -3146,7 +3146,7 @@ class Game:
             self.inventory.take(key)
         back = {k: max(1, int(v * config.GEAR_SCRAP_REFUND)) * n for k, v in g.cost.items()}
         self.wallet.add_many(back)
-        return f"♻️ {n} x {g.emoji}{g.name} scrapped: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in back.items()) + "."
+        return f"💰 {n} x {g.emoji}{g.name} sold back: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in back.items()) + "."
 
     def merge_gear(self, key: str, into: str) -> str:
         """Merge GEAR_MERGE_COUNT identical spare gear into one piece of the next tier (same slot)."""

@@ -49,7 +49,7 @@ SECTIONS: List[Dict[str, object]] = [
         "Destruction Chamber. Their levels set how many slimes can be appointed and how well.",
         "Appointments: trainers, librarian, blacksmith (forges), brewer, chef (recipes, pantry) and doctor work three-hour shifts "
         "for a small bonus; idle ones forage and can be called back.",
-        "Merge and destroy slimes (only at home), scrap and merge gear and relics, fuse 100 white gel into 1 purple gel.",
+        "Merge and destroy slimes (only at home), sell back and merge spare gear, merge and break down relics, fuse 100 white gel into 1 purple gel.",
     ]),
     dict(title="You, the Keeper", icon="🧑‍🌾", items=[
         "Keeper XP from tending, pulling, winning, scouting and more gives skill points for passive bonuses and active powers.",

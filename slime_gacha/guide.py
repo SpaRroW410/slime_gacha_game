@@ -262,6 +262,20 @@ def build() -> list:
             dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),
+        dict(title="Gear and relics", icon="🛠️", blurb="Two kinds of things a slime can wear, and how to get them.", items=[
+            dict(name="Gear and relics", text=f"GEAR is bought at the Armory (Town > Armory & relics): plain pieces in three tiers for weapon, armor and charm, "
+                                              f"identical copies of one name. RELICS are one-of-a-kind pieces with their own rarity, stars, level and mods, "
+                                              f"found in the Wayfarer's Rift, forged by an appointed blacksmith, or made by merging. A slime wears one gear piece "
+                                              f"and one relic in each slot (weapon, armor, charm) at the same time. Their names never overlap, so a name tells you which it is "
+                                              f"(a Wooden Bow is gear; a Wayfarer's Recurve is a relic)."),
+            dict(name="Getting armor", text=f"Gear armor: Leather Wrap (tier 1, 30 white gel), Gel Mail (tier 2: 120 white gel and 10 essence, needs Armory level 3) "
+                                            f"and Obsidian Plate (tier 3: 400 white gel, 40 essence and 1 purple gel, needs Armory level 5). Buy it in Town > Armory & relics, or merge "
+                                            f"{c.GEAR_MERGE_COUNT} identical spares of one tier into the next. Relic armor (Padded Vest, Chain Shell, Robe of Threads) drops in the "
+                                            f"Rift and comes from the blacksmith's forge. Equip either from the slime's Gear tab."),
+            dict(name="Sell back and break down", text=f"Spare GEAR can be sold back for {c.GEAR_SCRAP_REFUND:.0%} of its price (same currency) or merged "
+                                                       f"{c.GEAR_MERGE_COUNT} into one of the next tier. A RELIC can be merged into another of the same slot (the target gains levels and may inherit a mod) or "
+                                                       f"broken down into crafting materials (Scrap, Alloy and up): better and higher-level relics give more, a Keeper's appraiser adds to it, and it cannot be undone. "
+                                                       f"Materials level your other relics. Both live in Town > Merge & destroy.")]),
         dict(title="Time", icon="⏳", blurb="Two ways time can pass.", items=[
             dict(name="Turn-based", text="Time passes when you act or press the wait buttons. Every activity costs game hours."),
             dict(name="Live (wall clock)", text=f"Time passes by itself. The lobby clock runs at {c.LIVE_LOBBY_RATE:g} game hour per real hour "

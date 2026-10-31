@@ -144,6 +144,7 @@ As of 27 October 2026:
 - [x] **79. Tailwind hastens rescues** — a slime that has mastered the wind element to the top level earns the Tailwind passive skill and shortens a rescue trip by 25% (up to 50% with two); an ordinary mage does not.  *Done when:* met (`passives.py`, `Game.rescue_speed`; passives show on the slime's Fight tab, locked ones with what it takes).
 - [x] **80. Mages a little rarer in pulls** — pull weight 0.85 against 1.0 for the other magic classes.  *Done when:* met.
 - [x] **81. Camps heal and rest in every mode** — a Pit or Rift session camp in turn mode no longer skips the sleepers' healing (the session now mends its own party), and a Descent camp in the web game restores energy as well as HP.  *Done when:* met (`Game._camp_hour`).
+- [x] **83. Gear and relics told apart** — the two screens use different words (gear is *sold back*, a relic is *broken down*), the clashing names are changed (gear Wooden Bow, River Pebble, Dawn Shard; relics Wayfarer's Recurve, Gnarled Rod), and the Guide explains gear versus relics and how to get armor.  *Done when:* met (display names only: saves are unaffected).
 
 ### After floor 50 (art and sound)
 
@@ -417,6 +418,7 @@ evolving specializations, and whether job skill decays like proficiency.
 
 ### M26 — Dungeon time (28 October 2026)
 - [x] Per-place time dilation (x3 for every dungeon except scouting, hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
+- [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83)
 - [x] Tailwind, the first passive skill, hastens rescue parties (79); mages slightly rarer in pulls (80); camps heal and rest properly in every mode (81)
 
 ### M24 — Troublemakers and the Keeper's shadow (27 October 2026)
