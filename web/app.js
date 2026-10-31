@@ -76,7 +76,7 @@ function callBtn(s, label = true) {
 /* What an away slime is doing, in a few words (foraging, on a post, resting, hunting, drilling). */
 function doing(s) {
   if (s.state === 'hunting') return s.job ? '🧺 foraging' : '🏞 hunting';
-  if (s.state === 'working') return `👷 on post${s.job ? ': ' + esc(s.job.name) : ''}`;
+  if (s.state === 'working') return `👷 on post${s.job ? ': ' + esc(s.job.name) + ' L' + (s.job_levels?.[s.job.key] || 1) : ''}`;
   if (s.state === 'studying') return '📚 studying';
   if (s.state === 'resting' || s.state === 'sleeping') return stateLabel(s);
   return '';
@@ -578,7 +578,7 @@ function card(s) {
   if (s.party) b.push(badge('👥 ' + esc(partyById(s.party)?.name || s.party)));
   if (s.hp < s.max_hp * 0.4) b.push(badge('wounded', 'warn'));
   if (s.grounded) b.push(badge('grounded', 'bad'));
-  if (s.job && s.state !== 'working') b.push(badge(`${s.job.emoji} ${esc(s.job.name)}`, 'ok'));
+  if (s.job && s.state !== 'working') b.push(badge(`${s.job.emoji} ${esc(s.job.name)} L${s.job_levels?.[s.job.key] || 1}`, 'ok'));
   if (s.dominant && !s.busy) b.push(badge(WISH[s.dominant], 'warn'));
   if (s.feelings.length && s.feelings[0].value >= 40) b.push(badge(`${s.feelings[0].emoji} ${esc(s.feelings[0].name)}`, s.feelings[0].kind === 'bad' ? 'warn' : 'ok'));
   if (s.morale_label === 'broken') b.push(badge('broken morale', 'bad'));
@@ -624,6 +624,7 @@ function dOverview(s, { st, free, inDun }) {
     ${bar(s.sanity, s.sanity_max, 'sanity', `Sanity ${s.sanity}/${s.sanity_max} — ${s.sanity_label}`, s.mood_cap < 1 ? `mood capped at ${Math.round(s.mood_cap * 100)}%` : 'no cap')} ${info('Sanity is how much a slime can take. Deaths of friends, knock-outs, lost battles, brawls and long miserable stretches wear it down; sleep, the Rest Area, the Hospital, a calm happy home, a won fight, the Keeper\'s Soothe and one talk a day build it back. Low sanity caps the mood, so food and pets alone cannot fix a worn-down slime; below 20% it refuses dungeons, below 10% work. Rarer slimes have a bigger reserve and lose less per blow.')}
     ${bar(s.stamina, s.max_stamina, 'know', `⚡ Stamina`, `${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}
     ${s.buffs.length ? `<div class="row"><small class="mute">potion slots ${s.buffs.length}/${s.potion_slots}</small>${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}
+    ${sect('Trades', 'What this slime has learned at the posts in town. Each shift worked earns a little experience in that trade; the level (up to 10) raises the post\'s output by 12% per level, and a natural talent adds 25%. A trade\'s level is kept when the slime moves to another post.', s.trades.length ? s.trades.map((t) => bar(t.next ? t.xp - t.floor : 1, t.next ? t.next - t.floor : 1, 'xp', `${t.emoji} ${esc(t.name)} · level ${t.level}${t.level >= t.max ? ' (max)' : ''}${t.current ? ' · at this post now' : ''}${t.talent ? ' · ⭐ talent' : ''}`, t.next ? `${t.xp - t.floor}/${t.next - t.floor} shifts` : 'max level')).join('') : '<small class="mute">No trade yet: appoint it to a post in Town.</small>')}
     ${sect(`Needs ${s.dominant ? badge(WISH[s.dominant], 'warn') : badge('content', 'ok')}`, 'Needs fall over time. Unmet needs lower mood and morale, stir bad feelings and, at zero, hurt the slime. See the Guide tab for details.', Object.entries(s.needs).map(([k, v]) => bar(v, 100, 'need', NEED_NAME[k], v)).join(''))}
     ${sect('Care', inDun ? 'This slime is inside a dungeon: feeding, petting, sleeping and potions are not possible until it is back.' : 'Feeding, petting and rest. Not possible while a slime is inside a dungeon.', `<div class="row">
       ${care('feed', st.jobs.kitchen.total > 0 ? '🍽 Feed (kitchen)' : '🍖 Feed', st.wallet.food > 0 || st.jobs.kitchen.total > 0 ? '' : 'x')}${care('serve', '🍽 Serve a dish', st.jobs.kitchen.total > 0 ? '' : 'x')}${care('pet', '🤗 Pet')}
@@ -1830,6 +1831,26 @@ const A = {
       { title: d.title || 'Expeditions', slow: true }).then(() => { S.ui.adv_ids = []; S.ui.send_parties = []; render(); });
     if (plan.away.length) return confirmThen(`${plan.away.length} slime(s) are busy at home (${plan.away.slice(0, 6).map((x) => x.name).join(', ')}${plan.away.length > 6 ? '…' : ''}).\n\nCalling them away from their post, foraging, hunt or rest costs each −${a.pull_morale} morale and makes them angry (a sleeper is simply woken). Send them anyway?`, () => go(true));
     return go(false); },
+  brew: () => act('brew', { id: num(ui('brewer', S.state.slimes.find((x) => !x.busy)?.id)), kind: ui('brew_kind', 'stamina'), grade: num(ui('brew_grade', 1), 1) }, { slow: true }),
+  use_potion: () => { const [kind, grade] = String(ui('pot_sel', S.state.potions.stock[0] ? S.state.potions.stock[0].kind + ':' + S.state.potions.stock[0].grade : ':')).split(':'); act('use_potion', { id: S.sel, kind, grade: num(grade) }); },
+  slime_repair: () => act('slime_repair', { id: S.sel }),
+  talk: () => act('talk', { id: S.sel }),
+  praise: () => act('praise', { id: S.sel }),
+  memorial: (d) => act('memorial', { gid: num(d.gid) }),
+  keeper_learn: (d) => act('keeper_learn', { key: d.key }),
+  keeper_use: (d) => act('keeper_use', { key: d.key }),
+  answer_request: (d) => { const s = slimeById(num(d.id));
+    if (d.yes === '1' && s && s.request && s.request.kind === 'leave')
+      return confirmThen(`Let ${s.name} leave the colony for good?\n\nThey walk away with nothing; their gear stays. Their friends will miss them. This cannot be undone.`, () => act('answer_request', { id: s.id, accept: true }));
+    return act('answer_request', { id: num(d.id), accept: d.yes === '1' }); },
+  craft_feather: () => act('craft_feather', { n: 1 }),
+  keeper_respec: () => confirm('Forget all learned skills? It costs gel and the price rises each time.') && act('keeper_respec', {}),
+  keeper_title: (d) => act('keeper_title', { key: d.key || '' }),
+  bud: (d) => confirmThen('Have a child? It costs ' + cost(S.state.family.bud_cost) + '.', () => act('bud', { a: num(d.a), b: num(d.b) })),
+  autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
+  merge_gel: (d) => act('merge_gel', { n: d.n === 'max' ? Math.floor(S.state.wallet.white_gel / S.state.rates.gel_merge) : num(d.n) }),
+  pit_lure: () => { S.ui.pit_lure = !ui('pit_lure', false); render(); },
+  adv_lure: () => { S.ui.adv_lure = !ui('adv_lure', false); render(); },
   send_party: (d) => { const id = num(d.pid), cur = (ui('send_parties', []) || []).map(num); S.ui.send_parties = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]; render(); },
   send_clear: () => { S.ui.adv_ids = []; render(); },
   adv_toggle: (d) => { const ids = new Set((ui('adv_ids', []) || []).map(num)); const id = num(d.id); ids.has(id) ? ids.delete(id) : ids.add(id); S.ui.adv_ids = [...ids].slice(0, S.state.gear.adventure.max_party * S.state.gear.adventure.max_groups); render(); },

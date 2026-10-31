@@ -362,3 +362,32 @@ class TestTrainerLessons(unittest.TestCase):
         g.tick(config.DRILL_TIERS[0][2] + 1)
         self.assertGreater(t.class_prof, 60.0)
         self.assertGreater(pupil.class_prof, 5.0)
+
+
+class TestTradesAndRequests(unittest.TestCase):
+    def test_a_slime_view_lists_its_trades_with_progress(self):
+        from slime_gacha.webapi import slime_view
+        g = rich(99)
+        s = g.gacha.make_slime("common", "medic", stars=2)
+        g.roster[s.id] = s
+        g.assign_job(s.id, "doctor")
+        s.job_xp["doctor"], s.job_xp["chef"] = 30, 7
+        t = {x["key"]: x for x in slime_view(g, s)["trades"]}
+        self.assertEqual((t["doctor"]["level"], t["doctor"]["current"]), (3, True))
+        self.assertEqual((t["doctor"]["floor"], t["doctor"]["next"]), (20, 45))     # 10 of 25 shifts into level 3
+        self.assertEqual(t["chef"]["level"], 2)
+        self.assertNotIn("brewer", t)                                                # a trade it never worked is not listed
+
+    def test_a_rest_request_can_be_granted_through_the_web_api(self):
+        se = Session()
+        se.new_game(33)
+        g = se.game
+        g.wallet.add("white_gel", 500)
+        se.call("pull", dict(n=3, pay="white_gel"))
+        s = g.slimes()[0]
+        s.request = dict(kind="rest", target=0, day=g.day, text="asks for a rest day: \"I can't keep going like this.\"")
+        s.needs.set("energy", 40.0)
+        r = se.call("answer_request", dict(id=s.id, accept=True))
+        self.assertTrue(r["ok"], r["error"])
+        self.assertIsNone(s.request)
+        self.assertGreater(s.needs.get("energy"), 40.0)
