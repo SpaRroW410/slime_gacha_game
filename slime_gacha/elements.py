@@ -167,3 +167,13 @@ for _a, _b, _r, _n, _e in [
     ("sand", "wind", "sandstorm", "Sandstorm", "🌫️"),
 ]:
     register_recipe(_a, _b, _r, _n, _e)
+
+# Tier 3, more ways to mix a tier-2 element with one more basic: the ones with three basics in them (mist, geyser, ash, clay, glass,
+# quicksand, thunderstone) need a slime attuned to all three (mastery is the weakest component), so they come late.
+for _a, _b, _r, _n, _e in [
+    ("steam", "wind", "mist", "Mist", "☁️"), ("steam", "earth", "geyser", "Geyser", "⛲"),
+    ("lava", "wind", "ash", "Ash", "🌑"), ("mud", "fire", "clay", "Clay", "🏺"),
+    ("sand", "fire", "glass", "Glass", "🪟"), ("sand", "water", "quicksand", "Quicksand", "⏳"),
+    ("ice", "water", "glacier", "Glacier", "🧊"), ("lightning", "earth", "thunderstone", "Thunderstone", "🌩️"),
+]:
+    register_recipe(_a, _b, _r, _n, _e)

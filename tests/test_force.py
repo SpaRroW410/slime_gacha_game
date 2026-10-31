@@ -391,3 +391,26 @@ class TestTradesAndRequests(unittest.TestCase):
         self.assertTrue(r["ok"], r["error"])
         self.assertIsNone(s.request)
         self.assertGreater(s.needs.get("energy"), 40.0)
+
+
+class TestGearAndRelicNames(unittest.TestCase):
+    """Gear (bought) and relics (found and forged) must never be mistaken for each other by name."""
+    def test_no_gear_and_relic_of_the_same_slot_share_a_word(self):
+        from slime_gacha import equipment, items
+
+        def words(name):
+            return {w.lower().rstrip("s").replace("'", "") for w in name.replace("'s", "").split()} - {"of"}
+        for slot in ("weapon", "armor", "charm"):
+            gear = [(g.name, words(g.name)) for g in equipment.GEAR if g.slot == slot]
+            relics = [(b.name, words(b.name)) for b in items.BASES if b.slot == slot]
+            for gn, gw in gear:
+                for rn, rw in relics:
+                    self.assertFalse(gw & rw, f"{gn!r} (gear) and {rn!r} (relic) share a word")
+
+    def test_the_two_screens_use_different_words_for_the_two_actions(self):
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "app.js"), encoding="utf-8") as f:
+            js = f.read()
+        self.assertIn("Sell back", js)
+        self.assertIn("Break down", js)
+        self.assertNotIn("Scrap one", js)
+        self.assertNotIn("Destroy a relic", js)

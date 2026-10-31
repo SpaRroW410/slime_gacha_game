@@ -319,7 +319,22 @@ CAMP_RELIEF_REACH = 3          # ... starting this many floors below
 STOP_REST_HEAL, STOP_REST_HOURS = 0.5, 3   # a wayside stop's safe rest: share of max HP healed, hours taken
 RETREAT_PURPLE_BASE, RETREAT_AMBUSH, RETREAT_MORALE = 2, 0.35, 12   # emergency retreat: purple gel base fee (+1 per 5 floors), ambush chance, morale lost
 CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
-RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35
+RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35   # the deadline is in LOBBY hours, the trip in dungeon hours
+# ---- passive skills (passives.py) -------------------------------------------------------------------------------------------------
+HEARTH_HEAL = 0.25               # Hearth (fire mastered): the party mends this much more at each camp hour
+WELLSPRING_CUT = 0.20            # Wellspring (water mastered): the party burns this much less food and energy inside dungeons
+BEDROCK_CUT = 0.30               # Bedrock (earth mastered): ambushes hurt the party this much less
+TRADE_PASSIVE_BOOST = 0.25       # a trade passive (trade level 10): that post's output is this much bigger
+DISTILLER_CHANCE = 0.25          # Distiller: chance a brew makes one more potion
+MASTER_TRAINER_BOOST = 0.5       # Master Trainer: the trainer's bonus is this much bigger
+SYNERGY_SOULBOUND = 0.03         # Soulbound: party synergy while its partner is in the party
+SYNERGY_HEART = 0.02             # Heart of the Party: party synergy for a slime with HEART_TIES or more ties
+HEART_TIES = 4
+SYNERGY_PASSIVE_MAX = 0.08       # all synergy passives of a party together
+PROFICIENCY_FULL = 100.0         # class (or second) proficiency that earns a mastery passive: the gold (or teal) star on the avatar
+STYLE_FULL = 10                  # fighting-style level that earns a style passive
+
+RESCUE_TAILWIND_SPEED, RESCUE_TAILWIND_MAX = 0.25, 0.50   # each slime with the Tailwind passive (passives.py: wind mastered) shortens a rescue trip by 25%, at most 50% together
 RESCUE_KNOWN_FLOOR_HOURS = 0.25     # a floor that is already scouted costs rescuers only this many hours to cross   # overdue scouts wait this long; trip = base + floor hours; base success chance
 SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 240
 SCOUT_RATE = 0.10               # knowledge: k' = 100 - (100 - k) * exp(-RATE * skill * hours)
@@ -576,7 +591,10 @@ CLEAR_BASE_HOURS = 1.5           # game hours to clear floor 0 ...
 CLEAR_HOURS_PER_FLOOR = 0.08     # ... plus this per floor (floor 50: ~5.5h before level and knowledge)
 CLEAR_KNOWLEDGE_CUT = 0.40       # a fully scouted floor is cleared 40% faster
 LIVE_LOBBY_RATE = 1.0            # game hours per REAL hour at home (study, hunts ... take wall-clock time)
-LIVE_DUNGEON_RATE = 3.0          # game hours per real hour while any party is in a dungeon
+# Time inside a dungeon runs faster than the lobby's: each Place (places.py) carries its own `dilation` (dungeon hours that pass per
+# lobby hour). An activity measured in dungeon hours costs ceil(hours / dilation) lobby hours (at least 1); the party inside burns food,
+# energy and stamina and grows closer at the dungeon rate. The live clock itself always runs at the lobby rate.
+AWAY_BOND_PER_HOUR = 0.05        # bond a pair of party members gain per dungeon hour spent away together (travelling and camping)
 LIVE_SCALES = (1, 6, 60)         # speed presets multiplying both rates
 LIVE_CATCHUP_MAX_HOURS = 48      # offline progress is capped (game hours)
 

@@ -179,7 +179,7 @@ class TestDelve(unittest.TestCase):
         g.rng.random = lambda: 0.99
         t0 = g.tick_count
         g.delve_camp(pid, 6)
-        self.assertEqual(g.tick_count - t0, 6)
+        self.assertEqual(g.tick_count - t0, g.lobby_hours("main", 6))      # 6 hours inside: a third of that on the lobby clock
         self.assertTrue(all(s.hp > s.max_hp // 4 + 1 for s in members(g, pid)))
         self.assertIn(pid, g.delves)
 

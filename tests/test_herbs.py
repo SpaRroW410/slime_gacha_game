@@ -174,7 +174,7 @@ class TestAutonomy(unittest.TestCase):
     def test_expedition_start_uses_it(self):
         g = mk(n=6)
         for s in g.slimes():
-            s.level, s.stage = 40, 2
+            s.archetype, s.level, s.stage = "barbarian", 40, 2         # a class that likes might potions (the pulled classes vary)
             s.hp = s.max_hp
         g.potions["might:1"] = 20
         g.potion_peak["might:1"] = 20

@@ -22,7 +22,8 @@ def lava():
 class TestForms(unittest.TestCase):
     def test_every_fused_element_has_two_forms_and_basic_spells_have_none(self):
         for key in ("steam", "lava", "lightning", "mud", "ice", "sand", "plasma", "storm", "obsidian", "inferno",
-                    "blizzard", "crystal", "sandstorm"):
+                    "blizzard", "crystal", "sandstorm", "mist", "geyser", "ash", "clay", "glass", "quicksand", "glacier",
+                    "thunderstone"):
             self.assertIn(key, spells.MUTATIONS)
             self.assertEqual(len(spells.MUTATIONS[key]), 2)
         self.assertEqual(spells.mutation_levels(get_ability("ember")), [])

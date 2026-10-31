@@ -43,7 +43,7 @@ def _g(key, name, emoji, slot, tier, stats):
 
 _g("wooden_club", "Wooden Club", "🏏", "weapon", 1, dict(atk=3))
 _g("apprentice_wand", "Apprentice Wand", "🪄", "weapon", 1, dict(mag=3))
-_g("hunting_bow", "Hunting Bow", "🏹", "weapon", 1, dict(atk=2, spd=2))
+_g("hunting_bow", "Wooden Bow", "🏹", "weapon", 1, dict(atk=2, spd=2))
 _g("goo_blade", "Goo Blade", "🗡️", "weapon", 2, dict(atk=6, spd=1))
 _g("crystal_staff", "Crystal Staff", "🔮", "weapon", 2, dict(mag=6, hp=4))
 _g("kings_edge", "King's Edge", "⚔️", "weapon", 3, dict(atk=11, spd=2))
@@ -51,9 +51,9 @@ _g("storm_staff", "Storm Staff", "⚡", "weapon", 3, dict(mag=11, spd=2))
 _g("leather_wrap", "Leather Wrap", "🧥", "armor", 1, dict(defense=2, hp=6))
 _g("gel_mail", "Gel Mail", "🛡️", "armor", 2, dict(defense=4, hp=14))
 _g("obsidian_plate", "Obsidian Plate", "⚫", "armor", 3, dict(defense=8, hp=30))
-_g("lucky_pebble", "Lucky Pebble", "🪨", "charm", 1, dict(spd=1, hp=4))
+_g("lucky_pebble", "River Pebble", "🪨", "charm", 1, dict(spd=1, hp=4))
 _g("moss_charm", "Moss Charm", "🍀", "charm", 2, dict(hp=10, mag=2, atk=2))
-_g("heart_shard", "Heart Shard", "💜", "charm", 3, dict(atk=3, mag=3, defense=3, spd=3, hp=10))
+_g("heart_shard", "Dawn Shard", "💜", "charm", 3, dict(atk=3, mag=3, defense=3, spd=3, hp=10))
 
 
 # Matching sets: wear two or three pieces of one set for a bonus (flat stats, on top of the pieces).
