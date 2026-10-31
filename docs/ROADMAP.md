@@ -35,10 +35,6 @@ As of 27 October 2026:
   Re-run on the current code (equal star levels, formations, one-day sessions): floor 50 needs level 57 / 50 / 41 / 31 / 25 for common / uncommon / rare / epic / legendary, ~130-186 real hours at x3; smoothness 0.132 (limit 0.22).
   *Done when:* the real descent to floor 50 has been played through (with gear, elements, scouting) and the follow-ups below are closed. Left: extend the harness (or a hand playthrough) to gear, relics, elements and potions.
 
-### Later
-
-- [ ] **82. More passive skills** — Tailwind (the wind element mastered; task 79) is the first passive skill and lives in `passives.py`. Design more for other slimes: perks earned by mastering something (an element, a class capstone, a fighting style, a trade), always on, shown on the Fight tab.  *Done when:* a set of passives covers every class and element, each earned in a way the slime card explains, and the Guide lists them.
-
 ### Mobile (phase 2) — Capacitor route, from the QA and mobile planning report
 
 - [ ] **48. Mobile M2: performance** — engine hot spots, smaller replies, in-place page updates, lazy rosters, startup measured on low-end phones.  *Done when:* Pyodide startup and big-colony turns are acceptable on a 2 GB Android phone and an iPhone SE.
@@ -146,6 +142,7 @@ As of 27 October 2026:
 - [x] **81. Camps heal and rest in every mode** — a Pit or Rift session camp in turn mode no longer skips the sleepers' healing (the session now mends its own party), and a Descent camp in the web game restores energy as well as HP.  *Done when:* met (`Game._camp_hour`).
 - [x] **83. Gear and relics told apart** — the two screens use different words (gear is *sold back*, a relic is *broken down*), the clashing names are changed (gear Wooden Bow, River Pebble, Dawn Shard; relics Wayfarer's Recurve, Gnarled Rod), and the Guide explains gear versus relics and how to get armor.  *Done when:* met (display names only: saves are unaffected).
 - [x] **84. Eight more elements to fuse** — Mist (steam + wind), Geyser (steam + earth), Ash (lava + wind), Clay (mud + fire), Glass (sand + fire), Quicksand (sand + water), Glacier (ice + water) and Thunderstone (lightning + earth): tier-3 elements, each with its own two spell forms; the ones with three basics in them need all three mastered (the weakest component counts).  *Done when:* met (`elements.py`, `spells.MUTATIONS`; 21 recipes now).
+- [x] **82. Passive skills** — 28 passive skills earned by mastering something, shown on the slime's Fight tab (earned first, locked ones grouped with what it takes): an element at the top level (Tailwind: rescue trips shorter; Hearth: camp healing; Wellspring: less food and energy burned inside; Bedrock: ambush damage), a trade at the top level (output +25%; Distiller: extra potions; Master Trainer: stronger teaching), class proficiency 100 (the gold star: one personal combat perk per class; Dual Mastery with the teal star), a fighting style at level 10 (three), and ties (Soulbound, Heart of the Party: party synergy).  *Done when:* met (`passives.py`; the Guide lists them from the data; more can be added by data alone).
 
 ### After floor 50 (art and sound)
 
@@ -420,7 +417,7 @@ evolving specializations, and whether job skill decays like proficiency.
 ### M26 — Dungeon time (28 October 2026)
 - [x] Per-place time dilation (x3 for every dungeon except scouting, hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
-- [x] Tailwind, the first passive skill, hastens rescue parties (79); mages slightly rarer in pulls (80); camps heal and rest properly in every mode (81)
+- [x] Passive skills: 28 perks earned by element, trade, proficiency, style and ties (82); Tailwind hastens rescue parties (79); mages slightly rarer in pulls (80); camps heal and rest properly in every mode (81)
 
 ### M24 — Troublemakers and the Keeper's shadow (27 October 2026)
 - [x] A troublemaker: came to blows with more than 5% of the colony (rounded down, at least 2 slimes) in 30 days, or disliked by most; one feud or being snapped at is not enough

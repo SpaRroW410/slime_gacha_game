@@ -343,7 +343,15 @@ class Game:
     def needs_scale(self, s: Slime) -> float:
         """Dungeon hours a slime lives per lobby hour while away on a step-by-step trip (Descent, scouting, rescue). Farming
         sessions pay their own needs (field_session) and everyone at home lives lobby hours."""
-        return places.dilation(s.in_dungeon) if s.in_dungeon and not self.field_session(s) else 1.0
+        if not s.in_dungeon or self.field_session(s):
+            return 1.0
+        k = places.dilation(s.in_dungeon)
+        if k > 1.0:                                              # a trip's food and energy: Wellspring (water mastered) saves some
+            p = self.parties.party_of(s.id)
+            mates = [m for m in self.party_members(p.id) if m.in_dungeon == s.in_dungeon] if p else [s]
+            if passives.party_has(self, mates, "wellspring"):
+                k *= 1.0 - config.WELLSPRING_CUT
+        return k
 
     def sync(self) -> List[str]:
         """Live mode: turn elapsed wall-clock time into game hours (at most a capped catch-up). No-op in turn mode."""
@@ -481,12 +489,15 @@ class Game:
         path = [f for f in range(1, e["stuck"] + 1) if self._knowledge(f) < 100.0]
         return path or [e["stuck"]]
 
-    @staticmethod
-    def rescue_speed(party) -> float:
+    def rescue_speed(self, party) -> float:
         """Share of a rescue trip a party saves: each slime with the Tailwind passive (the wind element mastered to the top
         level, see passives.py) hastens the whole party, RESCUE_TAILWIND_SPEED each, up to RESCUE_TAILWIND_MAX together.
         An ordinary mage does not: it has to earn it."""
-        return min(config.RESCUE_TAILWIND_MAX, config.RESCUE_TAILWIND_SPEED * sum(1 for m in party if passives.has(m, "tailwind")))
+        return min(config.RESCUE_TAILWIND_MAX, config.RESCUE_TAILWIND_SPEED * passives.count(self, party, "tailwind"))
+
+    def ambush_cut(self, party) -> float:
+        """Multiplier on the damage an ambush does to this party: Bedrock (the earth element mastered) softens it."""
+        return 1.0 - config.BEDROCK_CUT if passives.party_has(self, party, "bedrock") else 1.0
 
     def rescue_hours(self, e: dict, party=None) -> int:
         """Dungeon hours the trip to the stranded scouts takes (shorter with a mage along; the lobby clock pays a third)."""
@@ -540,7 +551,7 @@ class Game:
         p_hit = min(0.6, config.SCOUT_AMBUSH_BASE * 2 * danger / max(0.5, strength) * (1 - 0.7 * k))
         if members and self.rng.random() < p_hit:
             v = self.rng.choice(members)
-            dmg = max(1, int(v.max_hp * self.rng.uniform(0.15, 0.40) * danger))
+            dmg = max(1, int(v.max_hp * self.rng.uniform(0.15, 0.40) * danger * self.ambush_cut(members)))
             v.hp -= dmg
             out.append(f"   ambushed on the way! {v.name} takes {dmg} damage.")
             if v.hp <= 0:
@@ -2175,7 +2186,10 @@ class Game:
     def _battle_gen(self, party, enemies, intel: float = 1.0, allow_manual: bool = True, **opts):
         """One fight as a generator: party synergy (compatibility) and scouting intel applied. Under a manual flow it
         yields at every party slime's turn; the generator returns the BattleReport."""
-        syn = self.social.synergy(party) * intel * (1 + self.relations.synergy_delta(party)) * (1 + self._leader_bonus(party))
+        syn = (self.social.synergy(party) * intel * (1 + self.relations.synergy_delta(party)) * (1 + self._leader_bonus(party))
+               * (1 + passives.party_synergy(self, party)))
+        for s in party:
+            s.passive_mods = passives.battle_mods(self, s)               # personal combat perks of its passive skills
         self.relations.prebattle(party, emotions)
         bc = 6 * self.keeper.rank("battle_cry")
         if bc:
@@ -2904,12 +2918,13 @@ class Game:
             return [f"💥 {s.name}'s brew fails ({chance:.0%} chance). Half the herbs are saved."]
         g = grade + 1 if crit else grade
         k = potions.key(kind, g)
-        self.potions[k] = self.potions.get(k, 0) + 1
+        extra = 1 if passives.has(self, s, "distiller") and self.rng.random() < config.DISTILLER_CHANCE else 0   # a master brewer
+        self.potions[k] = self.potions.get(k, 0) + 1 + extra
         self.potion_peak[k] = max(self.potion_peak.get(k, 0), self.potions[k])
         if wait:
             self._xp("brew", config.KEEPER_XP["brew"])
         s.needs.add("esteem", 8)
-        return [f"{pk.emoji} {s.name} brews a grade {g} {pk.name}" + (" - a masterwork!" if crit else ".")]
+        return [f"{pk.emoji} {s.name} brews a grade {g} {pk.name}" + (" - a masterwork!" if crit else ".") + (" And one more!" if extra else "")]
 
     def use_potion(self, sid: int, kind: str, grade: int) -> str:
         s = self._tend(sid)
@@ -3798,7 +3813,7 @@ class Game:
     def _ambush_strike(self, pid: int, party: List[Slime], floor: int, out: List[str], headline: str, cause: str) -> None:
         """Something strikes one member of a party inside the Descent. It can be fatal (deaths are permanent)."""
         v = self.rng.choice(party)
-        dmg = max(1, int(v.max_hp * self.rng.uniform(*config.CAMP_AMBUSH_DAMAGE) * (1 + 0.05 * floor)))
+        dmg = max(1, int(v.max_hp * self.rng.uniform(*config.CAMP_AMBUSH_DAMAGE) * (1 + 0.05 * floor) * self.ambush_cut(party)))
         v.hp -= dmg
         out.append(f"⚠ {headline} {v.name} takes {dmg} damage.")
         if v.hp <= 0:
@@ -3908,7 +3923,7 @@ class Game:
                     * (1 - 0.7 * self._knowledge(now) / 100))
             if self.rng.random() < p:
                 v = self.rng.choice(members)
-                dmg = max(1, int(v.max_hp * self.rng.uniform(0.15, 0.40) * danger))
+                dmg = max(1, int(v.max_hp * self.rng.uniform(0.15, 0.40) * danger * self.ambush_cut(members)))
                 v.hp -= dmg
                 res.log.append(f"   hour {elapsed}: ambushed on floor {now}! {v.name} takes {dmg} damage.")
                 if v.hp <= 0:
@@ -4106,10 +4121,11 @@ class Game:
     def _field_hours(self, members, hours: int, asleep: bool = False, events: Optional[List[str]] = None) -> None:
         """Pay `hours` of needs (awake, or asleep) for the party of a farming session, then bury anyone neglect killed."""
         out = events if events is not None else []
+        scale = 1.0 - config.WELLSPRING_CUT if passives.party_has(self, members, "wellspring") else 1.0
         for _ in range(int(hours)):
             for s in members:
                 if s.id in self.roster and s.alive:
-                    self.needs.field_hour(s, asleep, out)
+                    self.needs.field_hour(s, asleep, out, scale)
         self._reap(out)
 
     def _field_meals(self, members) -> None:
@@ -4158,6 +4174,10 @@ class Game:
                 if s.id in self.roster:
                     s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR))
                     s.stamina_frac = min(1.0, s.stamina_frac + 0.1 * config.STAMINA_SLEEP_MULT)
+        if passives.party_has(self, members, "hearth"):                 # Hearth (fire mastered): the party mends more at camp
+            for s in members:
+                if s.id in self.roster:
+                    s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR * config.HEARTH_HEAL))
         events = self._spend(1, kind)
         self._field_hours(field, 1, True, events)
         return events

@@ -64,7 +64,7 @@ class NeedsEngine:
                 self._autonomy(s, idle, events)
             self._safety(s)
 
-    def field_hour(self, s, asleep: bool, events: List[str]) -> None:
+    def field_hour(self, s, asleep: bool, events: List[str], scale: float = 1.0) -> None:
         """One hour of a slime's needs while a farming session looks after its party: the usual decay (sleep restores energy
         and slows the rest) and the harm of neglect. The session's own rests and meals keep it from coming to that."""
         n = s.needs
@@ -72,7 +72,7 @@ class NeedsEngine:
         for need, rate in config.NEED_DECAY.items():
             if need not in active:
                 continue
-            r = rate * trait_mult(s, need)
+            r = rate * trait_mult(s, need) * scale
             if asleep:
                 r = 0.0 if need == "energy" else r * 0.4
             n.add(need, -r)

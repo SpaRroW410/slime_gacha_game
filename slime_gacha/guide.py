@@ -1,6 +1,6 @@
 """The in-game booklet: plain-language descriptions of every attribute and system, with what raises and lowers
 them. Built from the live constants so the numbers never go stale."""
-from . import bestiary, config, elements, emotions, specialization, sparring
+from . import bestiary, config, elements, emotions, passives, specialization, sparring
 from .abilities import get_ability
 
 
@@ -32,7 +32,6 @@ def _elements_section() -> dict:
              "through their components."),
         dict(name="Mastery", text=f"Each effective mastery level adds {c.MASTERY_SPELL_BONUS:.0%} spell power. Casting an element builds "
              "its mastery. Attuned or native elements are immune to a terrain's hazard of that element."),
-        dict(name="Passive skills", text="Perks a slime earns by mastering something, always on (nothing to cast). They show under Skills on the slime's Fight tab, locked until earned with what it takes. The first is Tailwind: a slime that has mastered the wind element to the top level (level 8: 5 stars, attuned to wind; any class can) hastens the rescue parties it joins. More passives for other slimes are planned."),
         dict(name="Spells", text=f"Learn spells in the Library (tier 1-3, costs rise with tier). A slime keeps {c.MAX_SPELLS} spells (more "
              "with Library levels). The Restricted Section (tier 3) opens at Library level 3."),
         dict(name="Spell lab", text="Fuse two learned spells of different elements into a brand-new spell. It costs essence, takes hours, can "
@@ -59,6 +58,19 @@ def _specialization_section() -> dict:
         items.append(dict(name=f"{sp.emoji} {sp.name}", text=f"{a.capitalize()} + {disc[b].style} training. Signature: "
                           f"{get_ability(sp.ability).name}. {sp.description}"))
     return dict(title="Specialization (hybrid classes)", icon="🧬", blurb="Which cross-training makes which hybrid.", items=items)
+
+
+def _passives_section() -> dict:
+    """Every passive skill, by what earns it (the list comes from passives.py, so a new one shows up here by itself)."""
+    items = [dict(name="What they are", text="Perks a slime earns by mastering something. They are always on (nothing to cast) and show on the slime's "
+                                               "Fight tab: the earned ones first, the locked ones grouped below with what it takes. Some are personal combat "
+                                               "perks, some lift the party the slime travels with, some make a trade's output bigger. Party perks do not stack "
+                                               "(one slime with Hearth is enough), except Tailwind and the synergy ones, up to their limits.")]
+    for key, title in passives.GROUPS:
+        ps = [p for p in passives.PASSIVES if p.group == key]
+        if ps:
+            items.append(dict(name=title, text=" ".join(f"{p.emoji} {p.name}: {p.desc} (Needs: {p.need})" for p in ps)))
+    return dict(title="Passive skills", icon="✨", blurb="Perks earned by mastering something.", items=items)
 
 
 def _class_skills_section() -> dict:
@@ -153,6 +165,7 @@ def build() -> list:
              + [dict(name="Traits", text="Grumpy slimes anger easily, timid ones fear more, brave ones less, kind ones feel more "
                                          "affection, proud ones more pride, chatty ones get lonely faster.")]),
         _elements_section(),
+        _passives_section(),
         _specialization_section(),
         dict(title="Stats and combat", icon="⚔️", blurb="What the numbers mean.", items=[
             dict(name="HP", text="Health. At zero a slime is knocked out (Pit, Rift, Quarry) or dies (Hollow Descent)."),

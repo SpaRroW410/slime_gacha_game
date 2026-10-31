@@ -612,6 +612,14 @@ function drawer(s) {
 }
 const sect = (title, tip, inner) => `<section class="dsec"><h4>${title}${tip ? info(tip) : ''}</h4>${inner}</section>`;
 
+/* A slime's passive skills: the earned ones first, then every locked one grouped under what earns it (collapsed). */
+function passivesHtml(s, st) {
+  const row = (p) => `<div class="${p.earned ? '' : 'mute'}" title="${esc(p.desc)}">${p.earned ? '✅' : '🔒'} ${p.emoji} <b>${esc(p.name)}</b> — ${esc(p.earned ? p.desc : p.need)}</div>`;
+  const done = s.passives.filter((p) => p.earned), todo = s.passives.filter((p) => !p.earned);
+  const groups = (st.passive_groups || []).map(([k, name]) => [name, todo.filter((p) => p.group === k)]).filter(([, l]) => l.length);
+  return `<div class="stack" style="gap:4px">${done.map(row).join('') || '<small class="mute">None earned yet.</small>'}</div>
+    ${todo.length ? `<details data-keep="passivesLocked"><summary class="mute">🔒 ${todo.length} locked: what earns them</summary>${groups.map(([name, l]) => `<h5 style="margin:6px 0 2px">${esc(name)}</h5><div class="stack" style="gap:3px">${l.map(row).join('')}</div>`).join('')}</details>` : ''}`;
+}
 function dOverview(s, { st, free, inDun }) {
   const care = (c, label, extra = '') => `<button class="btn small" data-act="do" data-c="${c}" ${inDun || extra ? 'disabled' : ''} ${inDun ? 'title="Inside a dungeon - you cannot tend to them"' : ''}>${label}</button>`;
   const zone = ui('zone', st.zones[0].key);
@@ -658,7 +666,7 @@ function dFight(s, { st, free }) {
   };
   const sp = s.spells.map((k) => { const d = st.spell_defs[k]; const g = (s.spell_stage || {})[k] || 0; return d ? badge(`${elName(d.element)} ${esc(d.name)}${g ? ' ' + '✦'.repeat(g) : ''}`, 'info') : ''; }).join(' ');
   return `${sect('Skills', 'Abilities come from the class (by level), evolution, specialization, rarity and learned spells.', `<p>${s.abilities.map((a) => badge((a.element ? elName(a.element) + ' ' : '') + esc(a.name), 'info')).join(' ')}</p>`)}
-    ${sect('Passive skills', 'Perks a slime earns by mastering something. They are always on: nothing to cast. Locked ones show what it takes.', `<div class="stack" style="gap:4px">${s.passives.map((p) => `<div class="${p.earned ? '' : 'mute'}" title="${esc(p.desc)}">${p.earned ? '✅' : '🔒'} ${p.emoji} <b>${esc(p.name)}</b> — ${esc(p.earned ? p.desc : p.need)}</div>`).join('') || '<small class="mute">None yet.</small>'}</div>`)}
+    ${sect('Passive skills', 'Perks a slime earns by mastering something: an element, a trade, its class or a fighting style, or ties with other slimes. They are always on: nothing to cast. Locked ones say what it takes.', passivesHtml(s, st))}
     ${sect('Attributes', 'Each extra star adds a class attribute; each rarity step adds a class skill.', `<div class="stack" style="gap:3px">
       ${s.star_attrs.map((a) => `<div>${stars(a.star)} <b>${esc(a.label)}</b> +${Math.round(a.value * 100)}%</div>`).join('') || '<small class="mute">No star attributes yet.</small>'}
       ${s.next_star_attr ? `<small class="mute">Next at ${s.next_star_attr.star}★: ${esc(s.next_star_attr.label)} +${Math.round(s.next_star_attr.value * 100)}%</small>` : ''}

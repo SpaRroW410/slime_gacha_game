@@ -138,15 +138,15 @@ class TestTailwindAndRescues(unittest.TestCase):
         plain_mage = self.slime(g)
         fire = self.slime(g)
         fire.attuned, fire.mastery_xp["fire"] = ["fire"], config.MASTERY_XP[-1]
-        self.assertTrue(passives.has(top, "tailwind"))
+        self.assertTrue(passives.has(g, top, "tailwind"))
         for s in (almost, plain_mage, fire):
-            self.assertFalse(passives.has(s, "tailwind"))
-        self.assertEqual([p.key for p in passives.earned(top)], ["tailwind"])
-        self.assertEqual(passives.earned(plain_mage), [])
+            self.assertFalse(passives.has(g, s, "tailwind"))
+        self.assertIn("tailwind", [p.key for p in passives.earned(g, top)])
+        self.assertNotIn("tailwind", [p.key for p in passives.earned(g, plain_mage)])
 
     def test_any_class_that_masters_wind_earns_it(self):
         g = rich(76)
-        self.assertTrue(passives.has(self.slime(g, arch="barbarian", wind=len(config.MASTERY_XP)), "tailwind"))
+        self.assertTrue(passives.has(g, self.slime(g, arch="barbarian", wind=len(config.MASTERY_XP)), "tailwind"))
 
     def test_only_the_bearers_hasten_a_rescue_up_to_a_limit(self):
         g = rich(76)
@@ -177,11 +177,14 @@ class TestTailwindAndRescues(unittest.TestCase):
 
     def test_a_new_passive_needs_only_data(self):
         g = rich(80)
-        passives.register_passive(passives.Passive("test_hardy", "Hardy", "🛡", "Tough.", "Reach level 3.", lambda s: s.level >= 3))
+        passives.register_passive(passives.Passive("test_hardy", "Hardy", "🛡", "proficiency", "Tough.", "Reach level 3.",
+                                                   lambda g, s: s.level >= 3, dict(guard=0.05)))
         s = self.slime(g, arch="barbarian")
         s.level = 3
-        self.assertTrue(passives.has(s, "test_hardy"))
-        self.assertFalse(passives.has(s, "no_such_passive"))
+        self.assertTrue(passives.has(g, s, "test_hardy"))
+        self.assertFalse(passives.has(g, s, "no_such_passive"))
+        self.assertEqual(passives.battle_mods(g, s).get("guard"), 0.05)
+        passives.PASSIVES.unregister("test_hardy")               # the registry is global: leave it as it was
 
 
 class TestMageRarity(unittest.TestCase):
