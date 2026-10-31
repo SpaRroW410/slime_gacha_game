@@ -215,6 +215,26 @@ class TestCommands(unittest.TestCase):
         self.assertIn("progress", st["slimes"][0])
 
 
+class TestUiWiring(unittest.TestCase):
+    """The page's buttons and the commands it sends must all exist (a dropped handler leaves a button that silently does nothing)."""
+    @classmethod
+    def setUpClass(cls):
+        import re
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "app.js"), encoding="utf-8") as f:
+            cls.js = f.read()
+        body = cls.js[cls.js.index("const A = {"):]
+        cls.handlers = set(re.findall(r"^  ([a-z_0-9]+): ", body, re.M))
+        cls.re = re
+
+    def test_every_button_has_a_handler(self):
+        used = set(self.re.findall(r'data-act="([a-z_0-9]+)"', self.js))
+        self.assertEqual(sorted(used - self.handlers), [])
+
+    def test_every_command_the_page_sends_exists(self):
+        sent = set(self.re.findall(r"\bact\('([a-z_0-9]+)'", self.js)) | set(self.re.findall(r"backend\.call\('([a-z_0-9]+)'", self.js))
+        self.assertEqual(sorted(c for c in sent if c not in HANDLERS and c not in ("new_game", "load", "peek_save")), [])
+
+
 class TestServer(unittest.TestCase):
     def test_http_roundtrip_and_static_files(self):
         import serve

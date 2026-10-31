@@ -38,6 +38,11 @@ def slime_view(g: Game, s) -> dict:
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
         job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji, foraging=(s.state == "hunting")) if s.job else None),
         job_levels={k: jobs_mod.level(s, k) for k in jobs_mod.JOBS},
+        trades=[dict(key=k, name=j.name, emoji=j.emoji, level=jobs_mod.level(s, k), xp=s.job_xp.get(k, 0), talent=s.archetype in j.talents,
+                     floor=jobs_mod.xp_for(jobs_mod.level(s, k)),
+                     next=(jobs_mod.xp_for(jobs_mod.level(s, k) + 1) if jobs_mod.level(s, k) < config.JOB_MAX_LEVEL else None),
+                     max=config.JOB_MAX_LEVEL, current=(s.job == k))
+                for k, j in jobs_mod.JOBS.items() if s.job_xp.get(k, 0) > 0 or s.job == k],
         is_vice=(s.id == g.vice), color=s.color, hp=s.hp, max_hp=s.max_hp, stats=st, state=s.state, in_dungeon=s.in_dungeon, busy=s.busy,
         behavior=s.behavior, traits=list(s.traits), grounded=s.grounded, merged=s.merged, wins=s.wins, fights=g.recent_fights(s), can_pull=g.can_pull_in(s),
         needs={k: round(s.needs.get(k)) for k in config.NEED_ORDER}, dominant=s.needs.dominant(),

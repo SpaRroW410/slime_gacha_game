@@ -134,6 +134,8 @@ As of 27 October 2026:
 - [x] **73. Trainers sharpen too** — each lesson that helps a pupil gives the trainer +0.15 proficiency.  *Done when:* met (`jobs.lesson`).
 - [x] **74. Send several groups at once** — the Rift, Quarry and places share one sender: collapsible Parties and Individual slimes (search, class filter), many groups in one go, each its own expedition.  *Done when:* met (`send_groups`; at most 12 groups; a group that cannot go stays home).
 - [x] **75. Calling slimes back for a trip** — busy slimes (resting, foraging, post, hunt, drill, asleep) can be picked and are called away at a cost (-6 morale, +12 anger); under 10% energy hidden, refusers greyed; expeditions now enforce refusals.  *Done when:* met (`Game.pull_in`, `recall` on Rift, Quarry, places, Pit and Descent entry).
+- [x] **76. Trades on the slime** — the slime's detail panel lists every trade it has worked with its level and progress to the next, and cards show the post's level ("Doctor L3").  *Done when:* met.
+- [x] **77. Guard against dropped buttons** — a page-wiring test checks that every button has a handler and every command the page sends exists (task 70-75's edit had dropped 17 handlers, among them Grant for requests, Talk and Praise).  *Done when:* met (`tests/test_web.py::TestUiWiring`).
 
 ### After floor 50 (art and sound)
 
