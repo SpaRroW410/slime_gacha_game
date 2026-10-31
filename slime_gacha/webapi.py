@@ -12,7 +12,7 @@ import json
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import passives as passives_mod, rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -38,6 +38,7 @@ def slime_view(g: Game, s) -> dict:
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
         job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji, foraging=(s.state == "hunting")) if s.job else None),
         job_levels={k: jobs_mod.level(s, k) for k in jobs_mod.JOBS},
+        passives=[dict(key=p.key, name=p.name, emoji=p.emoji, desc=p.desc, need=p.need, earned=bool(p.earned(s))) for p in passives_mod.PASSIVES],
         trades=[dict(key=k, name=j.name, emoji=j.emoji, level=jobs_mod.level(s, k), xp=s.job_xp.get(k, 0), talent=s.archetype in j.talents,
                      floor=jobs_mod.xp_for(jobs_mod.level(s, k)),
                      next=(jobs_mod.xp_for(jobs_mod.level(s, k) + 1) if jobs_mod.level(s, k) < config.JOB_MAX_LEVEL else None),
@@ -365,7 +366,7 @@ def snapshot(g: Game) -> dict:
                          adv_ticks=config.ADV_TICKS, adv_runs=config.ADV_MAX_RUNS, wave_ticks=config.WAVE_TICKS, wave_max=config.WAVE_MAX_WAVES),
             grind_depths=config.GRIND_DEPTHS, scout_hours=[config.SCOUT_MIN_HOURS, config.SCOUT_MAX_HOURS],
             scout_max_floors=config.SCOUT_MAX_FLOORS, scout_food=config.SCOUT_FOOD_PER_HOUR,
-            rescue_mage=dict(base=config.RESCUE_MAGE_SPEED, star=config.RESCUE_MAGE_SPEED_STAR, max=config.RESCUE_MAGE_SPEED_MAX),
+            rescue_tailwind=dict(each=config.RESCUE_TAILWIND_SPEED, max=config.RESCUE_TAILWIND_MAX),
         ),
         clock=dict(mode=g.time_mode, scale=g.time_scale, scales=list(config.LIVE_SCALES),
                    lobby_rate=config.LIVE_LOBBY_RATE * g.time_scale, dilation={p.key: p.dilation for p in places_mod.PLACES if p.dilation != 1.0},

@@ -16,7 +16,7 @@ from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
 from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
-from . import achievements, places, story, sanity, memory, meaning, mind, grief, coping, voice, routine, rituals, appraisal
+from . import achievements, passives, places, story, sanity, memory, meaning, mind, grief, coping, voice, routine, rituals, appraisal
 from .buildings import BUILDINGS, BuildingManager
 from .social import SocialEngine
 from .abilities import ABILITIES, get_ability
@@ -483,10 +483,10 @@ class Game:
 
     @staticmethod
     def rescue_speed(party) -> float:
-        """Share of a rescue trip a party's mages save: a mage buffs the whole party's pace (RESCUE_MAGE_SPEED, more per star), up
-        to RESCUE_MAGE_SPEED_MAX together."""
-        s = sum(config.RESCUE_MAGE_SPEED + config.RESCUE_MAGE_SPEED_STAR * m.stars for m in party if m.archetype == "mage")
-        return min(config.RESCUE_MAGE_SPEED_MAX, s)
+        """Share of a rescue trip a party saves: each slime with the Tailwind passive (the wind element mastered to the top
+        level, see passives.py) hastens the whole party, RESCUE_TAILWIND_SPEED each, up to RESCUE_TAILWIND_MAX together.
+        An ordinary mage does not: it has to earn it."""
+        return min(config.RESCUE_TAILWIND_MAX, config.RESCUE_TAILWIND_SPEED * sum(1 for m in party if passives.has(m, "tailwind")))
 
     def rescue_hours(self, e: dict, party=None) -> int:
         """Dungeon hours the trip to the stranded scouts takes (shorter with a mage along; the lobby clock pays a third)."""
@@ -532,7 +532,7 @@ class Game:
         speed = self.rescue_speed(party)
         out = [f"🛟 {who} sets out to rescue the scouts stranded on floor {stuck} ({hours}h inside, {lobby}h here)."]
         if speed:
-            out.append(f"   🔮 The mage's haste shortens the way by {round(speed * 100)}%.")
+            out.append(f"   🌪️ Tailwind shortens the way by {round(speed * 100)}%.")
         self._owed = 0.0
         self._set_flag(party, "rescue")
         out.extend("   " + x for x in self._spend(hours, "rescue") if "died" in x)

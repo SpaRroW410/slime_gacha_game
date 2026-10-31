@@ -66,7 +66,8 @@ register_place(Place("quarry", "Starfall Quarry", "💎", "expedition", "Ascensi
 register_place(Place("mossy_burrows", "Mossy Burrows", "🍄", "expedition",
                      "Damp tunnels where fat critters guard food and a little essence.", 0xB07, 0.25, "loot",
                      loot={"food": (0.5, 1, 3), "essence": (0.15, 1, 2)}, herb=0.2, dilation=3.0))
-for _k, _n, _e, _d in [("scout", "Scouting", "🔭", 3.0), ("rescue", "Rescue mission", "🛟", 3.0), ("wave", "Wave simulation", "🧪", 3.0),
+for _k, _n, _e, _d in [("scout", "Scouting", "🔭", 1.0),      # scouting budgets stay in lobby hours (no balance work wanted there)
+                       ("rescue", "Rescue mission", "🛟", 3.0), ("wave", "Wave simulation", "🧪", 3.0),
                        ("stranded", "Stranded", "🆘", 1.0),     # waiting for rescue: the 24-hour deadline assumes lobby-rate hunger
                        ("train", "Training Grounds", "🥊", 1.0), ("lab", "Alchemy Lab", "⚗️", 1.0)]:
     register_place(Place(_k, _n, _e, "job", dilation=_d))

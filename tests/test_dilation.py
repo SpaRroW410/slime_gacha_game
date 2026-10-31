@@ -6,18 +6,18 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from slime_gacha import config, places
+from slime_gacha import config, passives, places
 from slime_gacha.archetypes import all_archetypes
 from slime_gacha.game import Game
 from tests.test_delves import rich, party, members
 
 
 class TestPlaceRates(unittest.TestCase):
-    def test_every_dungeon_but_hunting_and_home_flags_runs_three_times_faster(self):
-        for k in ("main", "grind", "adventure", "quarry", "mossy_burrows", "scout", "rescue", "wave"):
+    def test_every_dungeon_but_scouting_hunting_and_home_flags_runs_three_times_faster(self):
+        for k in ("main", "grind", "adventure", "quarry", "mossy_burrows", "rescue", "wave"):
             self.assertEqual(places.dilation(k), 3.0, k)
-        for k in ("stranded", "train", "lab", "", "hunting", "no_such_place"):
-            self.assertEqual(places.dilation(k), 1.0, k)       # hunts and foraging are not places; stranded scouts wait at lobby pace
+        for k in ("scout", "stranded", "train", "lab", "", "hunting", "no_such_place"):
+            self.assertEqual(places.dilation(k), 1.0, k)       # scouting stays in lobby hours; hunts and foraging are not places
 
     def test_a_place_can_be_retuned_on_its_own(self):
         places.register_place(places.Place("test_flat", "Flat Cave", "🕳", "expedition", dilation=1.0)) if "test_flat" not in places.PLACES else None
@@ -121,30 +121,67 @@ class TestLivingFaster(unittest.TestCase):
         self.assertAlmostEqual(before - home.needs.get("food"), config.NEED_DECAY["food"], places=4)
 
 
-class TestMagesAndRescues(unittest.TestCase):
-    def mage(self, g, stars):
-        m = g.gacha.make_slime("common", "mage", stars=stars)
+class TestTailwindAndRescues(unittest.TestCase):
+    """Only a slime that has mastered the wind element to the top level hastens a rescue; an ordinary mage does not."""
+    def slime(self, g, arch="mage", stars=5, wind=0):
+        m = g.gacha.make_slime("common", arch, stars=stars)
         g.roster[m.id] = m
+        if wind:
+            m.attuned = ["wind"]
+            m.mastery_xp["wind"] = config.MASTERY_XP[wind - 1]
         return m
 
-    def test_a_mage_hastens_a_rescue_more_with_stars_up_to_a_limit(self):
+    def test_the_passive_needs_wind_mastered_to_the_top(self):
         g = rich(76)
-        m3, m5 = self.mage(g, 3), self.mage(g, 5)
-        fighter = g.gacha.make_slime("common", "barbarian", stars=5)
-        g.roster[fighter.id] = fighter
-        self.assertEqual(g.rescue_speed([fighter]), 0.0)
-        self.assertAlmostEqual(g.rescue_speed([m3]), config.RESCUE_MAGE_SPEED + 3 * config.RESCUE_MAGE_SPEED_STAR)
-        self.assertGreater(g.rescue_speed([m5]), g.rescue_speed([m3]))
-        self.assertEqual(g.rescue_speed([m5, m5, m5, m5]), config.RESCUE_MAGE_SPEED_MAX)
+        top = self.slime(g, wind=len(config.MASTERY_XP))
+        almost = self.slime(g, wind=len(config.MASTERY_XP) - 1)
+        plain_mage = self.slime(g)
+        fire = self.slime(g)
+        fire.attuned, fire.mastery_xp["fire"] = ["fire"], config.MASTERY_XP[-1]
+        self.assertTrue(passives.has(top, "tailwind"))
+        for s in (almost, plain_mage, fire):
+            self.assertFalse(passives.has(s, "tailwind"))
+        self.assertEqual([p.key for p in passives.earned(top)], ["tailwind"])
+        self.assertEqual(passives.earned(plain_mage), [])
 
-    def test_the_trip_is_shorter_with_a_mage_along(self):
+    def test_any_class_that_masters_wind_earns_it(self):
+        g = rich(76)
+        self.assertTrue(passives.has(self.slime(g, arch="barbarian", wind=len(config.MASTERY_XP)), "tailwind"))
+
+    def test_only_the_bearers_hasten_a_rescue_up_to_a_limit(self):
+        g = rich(76)
+        bearer = self.slime(g, wind=len(config.MASTERY_XP))
+        mage = self.slime(g)
+        self.assertEqual(g.rescue_speed([mage]), 0.0)
+        self.assertEqual(g.rescue_speed([bearer, mage]), config.RESCUE_TAILWIND_SPEED)
+        many = [self.slime(g, wind=len(config.MASTERY_XP)) for _ in range(4)]
+        self.assertEqual(g.rescue_speed(many), config.RESCUE_TAILWIND_MAX)
+
+    def test_the_trip_is_shorter_with_a_bearer_along(self):
         g = rich(77)
         e = dict(id=1, ids=[], first=1, last=10, stuck=10, needed=20, deadline=g.tick_count + 24)
         base = g.rescue_hours(e)
-        with_mage = g.rescue_hours(e, [self.mage(g, 5)])
-        self.assertLess(with_mage, base)
-        self.assertGreaterEqual(with_mage, 1)
-        self.assertEqual(g.rescue_hours(e, [g.gacha.make_slime("common", "barbarian")]), base)
+        self.assertLess(g.rescue_hours(e, [self.slime(g, wind=len(config.MASTERY_XP))]), base)
+        self.assertEqual(g.rescue_hours(e, [self.slime(g)]), base)
+
+    def test_the_slime_view_lists_passives_earned_or_locked(self):
+        from slime_gacha.webapi import slime_view
+        g = rich(79)
+        top = self.slime(g, wind=len(config.MASTERY_XP))
+        plain = self.slime(g)
+        v = {p["key"]: p for p in slime_view(g, top)["passives"]}
+        self.assertTrue(v["tailwind"]["earned"])
+        w = {p["key"]: p for p in slime_view(g, plain)["passives"]}
+        self.assertFalse(w["tailwind"]["earned"])
+        self.assertIn("wind", w["tailwind"]["need"])
+
+    def test_a_new_passive_needs_only_data(self):
+        g = rich(80)
+        passives.register_passive(passives.Passive("test_hardy", "Hardy", "🛡", "Tough.", "Reach level 3.", lambda s: s.level >= 3))
+        s = self.slime(g, arch="barbarian")
+        s.level = 3
+        self.assertTrue(passives.has(s, "test_hardy"))
+        self.assertFalse(passives.has(s, "no_such_passive"))
 
 
 class TestMageRarity(unittest.TestCase):

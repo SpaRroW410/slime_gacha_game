@@ -658,6 +658,7 @@ function dFight(s, { st, free }) {
   };
   const sp = s.spells.map((k) => { const d = st.spell_defs[k]; const g = (s.spell_stage || {})[k] || 0; return d ? badge(`${elName(d.element)} ${esc(d.name)}${g ? ' ' + '✦'.repeat(g) : ''}`, 'info') : ''; }).join(' ');
   return `${sect('Skills', 'Abilities come from the class (by level), evolution, specialization, rarity and learned spells.', `<p>${s.abilities.map((a) => badge((a.element ? elName(a.element) + ' ' : '') + esc(a.name), 'info')).join(' ')}</p>`)}
+    ${sect('Passive skills', 'Perks a slime earns by mastering something. They are always on: nothing to cast. Locked ones show what it takes.', `<div class="stack" style="gap:4px">${s.passives.map((p) => `<div class="${p.earned ? '' : 'mute'}" title="${esc(p.desc)}">${p.earned ? '✅' : '🔒'} ${p.emoji} <b>${esc(p.name)}</b> — ${esc(p.earned ? p.desc : p.need)}</div>`).join('') || '<small class="mute">None yet.</small>'}</div>`)}
     ${sect('Attributes', 'Each extra star adds a class attribute; each rarity step adds a class skill.', `<div class="stack" style="gap:3px">
       ${s.star_attrs.map((a) => `<div>${stars(a.star)} <b>${esc(a.label)}</b> +${Math.round(a.value * 100)}%</div>`).join('') || '<small class="mute">No star attributes yet.</small>'}
       ${s.next_star_attr ? `<small class="mute">Next at ${s.next_star_attr.star}★: ${esc(s.next_star_attr.label)} +${Math.round(s.next_star_attr.value * 100)}%</small>` : ''}
@@ -936,10 +937,10 @@ function cut(html, from, to) {
 /* How long a session will take, said before it starts (a farming session never lasts more than a day, camping included). */
 /* A rescue party's mages hasten the trip (dungeon hours), and the lobby clock pays a third of what is left. */
 function rescueNote(e, ids) {
-  const m = S.state.dungeon.rescue_mage, mages = ids.map(slimeById).filter((x) => x && x.archetype === 'mage');
-  const speed = Math.min(m.max, mages.reduce((a, x) => a + m.base + m.star * x.stars, 0));
+  const m = S.state.dungeon.rescue_tailwind, bearers = ids.map(slimeById).filter((x) => x && (x.passives || []).some((p) => p.key === 'tailwind' && p.earned));
+  const speed = Math.min(m.max, bearers.length * m.each);
   const hours = Math.max(1, Math.ceil(e.rescue_hours * (1 - speed) - 1e-9)), lobby = Math.max(1, Math.ceil(hours / (S.state.clock.dilation?.rescue || 1) - 1e-9));
-  return mages.length ? `🔮 ${mages.length} mage${mages.length > 1 ? 's' : ''} hasten${mages.length > 1 ? '' : 's'} the way by ${Math.round(speed * 100)}%: ~${hours}h inside (≈ ${lobby}h here).` : `A mage in the rescue party hastens the way (${Math.round(m.base * 100)}% + ${Math.round(m.star * 100)}% per star, up to ${Math.round(m.max * 100)}%).`;
+  return bearers.length ? `🌪️ Tailwind (${bearers.map((x) => esc(x.name)).join(', ')}) shortens the way by ${Math.round(speed * 100)}%: ~${hours}h inside (≈ ${lobby}h here).` : `A slime that has mastered the wind element (the Tailwind passive) shortens the way by ${Math.round(m.each * 100)}% (up to ${Math.round(m.max * 100)}% together). A mage alone does not.`;
 }
 function sessionNote(runs, ticks, maxRuns, what = 'run', kind = 'adventure') {
   const ss = S.state.dungeon.session, n = Math.max(1, Math.min(num(runs, 1), maxRuns)), hours = n * ticks;

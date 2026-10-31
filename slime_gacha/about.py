@@ -68,6 +68,8 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
          text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
+    dict(id=82, group="Later", title="More passive skills", status="planned",
+         text="Tailwind (wind mastered) is the first passive; more for other slimes, each earned by mastering something."),
     dict(id=48, group="Mobile", title="Mobile performance", status="planned",
          text="Faster turns, smaller replies, in-place updates, startup on low-end phones."),
     dict(id=49, group="Mobile", title="Capacitor shell", status="planned",
@@ -83,7 +85,7 @@ ROADMAP: List[Dict[str, object]] = [
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
 WHATS_NEW = dict(id="2026-10-28-dungeon-time",
-                 text="Dungeon time: inside a dungeon, time runs 3x faster than in the lobby (each place has its own number, so it can be tuned one by one; hunting, foraging and jobs stay on lobby time). A 3-hour floor now costs 1 hour on the clock, but the party inside eats, tires, mends and grows closer 3x as fast, and the live clock no longer speeds up when someone leaves. A mage in a rescue party hastens the rescue (15% plus 3% per star, up to 50%). Mages are a little rarer in pulls than the other magic classes. Screens show both clocks: \"3h inside = 1h here\".")
+                 text="Dungeon time: inside a dungeon, time runs 3x faster than in the lobby (each place has its own number, so it can be tuned one by one; scouting, hunting, foraging and jobs stay on lobby time). A 3-hour floor now costs 1 hour on the clock, but the party inside eats, tires, mends and grows closer 3x as fast, and the live clock no longer speeds up when someone leaves. Rescue parties get faster with a slime that has the new Tailwind passive skill: master the wind element to the top level to earn it (an ordinary mage does not). Passive skills show on the Fight tab, with what it takes to unlock the locked ones. Mages are a little rarer in pulls than the other magic classes. Screens show both clocks: \"3h inside = 1h here\".")
 
 
 def build() -> Dict[str, object]:
