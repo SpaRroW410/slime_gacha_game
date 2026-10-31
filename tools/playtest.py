@@ -15,7 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from slime_gacha import attributes, config, dungeon
+from slime_gacha import attributes, config, dungeon, places
 from slime_gacha.battle import BattleSystem
 from slime_gacha.gacha import GachaSystem
 from slime_gacha.growth import add_xp
@@ -109,8 +109,9 @@ def pit_runs_to(level_from: int, level_to: int, rarity: str, depth: int = 3) -> 
 
 
 def real_hours(runs: float) -> float:
-    """Wall-clock hours at the dungeon rate (x3 per real hour) for that many Pit runs."""
-    return runs * config.GRIND_TICKS / config.LIVE_DUNGEON_RATE
+    """Real hours (live time at 1x) for that many Pit runs: each run is GRIND_TICKS hours inside, and time inside the Pit runs
+    places.dilation("grind") times faster than the lobby clock."""
+    return runs * config.GRIND_TICKS / places.dilation("grind")
 
 
 def main():
@@ -130,7 +131,7 @@ def main():
     lines = [f"# Floor playtest ({a.rarity} party of {', '.join(CLASSES)}; no gear, relics or potions)", "",
              f"Minimum party level with a >= 70% chance to win each floor ({a.trials} seeded fights per level tested; "
              f"stars follow the {a.rarity} star-level table). Pit runs = Gloop Pit depth-3 runs "
-             f"({config.GRIND_TICKS} game hours each) to reach that level from level 1; real hours assume the x{config.LIVE_DUNGEON_RATE:g} dungeon rate.", "",
+             f"({config.GRIND_TICKS} game hours each) to reach that level from level 1; real hours assume the Pit's x{places.dilation('grind'):g} dungeon time at live speed 1x.", "",
              "| Floor | Boss | Min level, no intel | Min level, scouted | Pit runs to reach | ~real hours (x3) |",
              "|---|---|---|---|---|---|"]
     rows = []

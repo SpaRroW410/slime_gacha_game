@@ -98,8 +98,11 @@ class TestClearTime(unittest.TestCase):
         g.enter_dungeon(pid)
         t = g.tick_count
         g.delve_next(pid)
-        self.assertEqual(g.tick_count - t, g.delves[pid]["hours"] if pid in g.delves else g.tick_count - t)
-        self.assertGreaterEqual(g.tick_count - t, 1)
+        inside = g.delves[pid]["hours"] if pid in g.delves else None
+        self.assertIsNotNone(inside)
+        # the floor took `inside` hours in the dungeon; the lobby clock lived a third of them (the rest is carried to the next action)
+        self.assertAlmostEqual((g.tick_count - t) + g._turn_carry, inside / g.dilation_of("main"))
+        self.assertGreaterEqual(inside, 1)
 
 
 class TestLiveTime(unittest.TestCase):
@@ -123,15 +126,14 @@ class TestLiveTime(unittest.TestCase):
         with self.assertRaises(InvalidAction):
             g.set_time_mode("live", 7)
 
-    def test_dungeon_clock_is_three_times_faster(self):
+    def test_the_live_clock_does_not_speed_up_when_a_party_goes_inside(self):
         g = mk(live=True)
         pid = party(g)
         g.enter_dungeon(pid)
-        self.assertEqual(g.clock_rate(), config.LIVE_DUNGEON_RATE)
+        self.assertEqual(g.clock_rate(), config.LIVE_LOBBY_RATE)         # time INSIDE is faster, the clock is not
         g.clock.advance(2)
         g.sync()
-        self.assertEqual(g.tick_count, 6)
-        self.assertGreater(g.clock_rate(), config.LIVE_LOBBY_RATE)
+        self.assertEqual(g.tick_count, 2)
 
     def test_fractions_accumulate(self):
         g = mk(live=True)
@@ -159,7 +161,7 @@ class TestLiveTime(unittest.TestCase):
             self.assertIn("busy", str(cm.exception))
             need = g.delves[pid]["ready_tick"] - g.tick_count
             self.assertGreaterEqual(need, 1)
-            g.clock.advance(need / config.LIVE_DUNGEON_RATE + 0.01)
+            g.clock.advance(need / config.LIVE_LOBBY_RATE + 0.01)
             g.sync()
             self.assertGreaterEqual(g.tick_count, g.delves[pid]["ready_tick"])
             g.delve_next(pid)
@@ -178,10 +180,10 @@ class TestLiveTime(unittest.TestCase):
         self.assertTrue(all(s.in_dungeon == "grind" for s in away if s.id in g.roster))
         self.assertEqual(len(g.expeditions), 1)
         hours = g.expeditions[0]["until"] - g.tick_count
-        self.assertGreaterEqual(hours, 4 * config.GRIND_TICKS - 1)
+        self.assertGreaterEqual(hours, g.lobby_hours("grind", 4 * config.GRIND_TICKS))   # 8 hours inside = 3 lobby hours, plus any camping
         with self.assertRaises(InvalidAction):
             g.pet(away[0].id)
-        g.clock.advance(hours / config.LIVE_DUNGEON_RATE + 0.05)
+        g.clock.advance(hours / config.LIVE_LOBBY_RATE + 0.05)
         events = g.sync()
         self.assertEqual(g.expeditions, [])
         self.assertTrue(all(s.in_dungeon == "" for s in g.slimes()))
@@ -262,7 +264,8 @@ class TestApi(unittest.TestCase):
         r = s.call("set_time", {"mode": "live", "scale": 6})
         self.assertTrue(r["ok"])
         self.assertEqual(r["state"]["clock"]["mode"], "live")
-        self.assertEqual(r["state"]["clock"]["dungeon_rate"], 18.0)
+        self.assertEqual(r["state"]["clock"]["lobby_rate"], 6.0)
+        self.assertEqual(r["state"]["clock"]["dilation"]["main"], 3.0)
         self.assertFalse(s.call("wait", {"hours": 2})["ok"])
         self.assertTrue(s.call("sync")["ok"])
         s.call("set_time", {"mode": "turn"})
@@ -297,7 +300,7 @@ class TestDeferredTurn(unittest.TestCase):
             pid = party(g, strong=True)
             g.rng.random = lambda: 0.9
             g.battle(pid, 1, waves=2)
-            self.assertEqual(sum(e["hours"] for e in g.expeditions), config.WAVE_TICKS * 2)
+            self.assertEqual(sum(e["hours"] for e in g.expeditions), g.lobby_hours("wave", config.WAVE_TICKS * 2))
 
     def test_the_next_floor_waits_for_the_hours(self):
         from tests.test_delves import party

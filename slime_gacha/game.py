@@ -86,6 +86,8 @@ class Game:
         self.needs.rest_hook = self._auto_rest                    # wounded slimes self-admit to the Rest Area
         self.needs.skip_meal = self._skips_meal                   # deep despair: it stops feeding itself
         self.needs.field_fn = self.field_session                  # a Pit / Rift / Quarry session looks after its party's needs itself
+        self.needs.scale_fn = self.needs_scale                    # a party on a step-by-step trip lives dungeon hours per lobby hour
+        self._turn_carry = 0.0                                    # part of a lobby hour not yet ticked (turn mode without deferred time)
         self.needs.buddy_fn = lambda s, cands: max(cands, key=lambda o: self.social.bond(s, o))   # a lonely slime seeks a friend first
         self.coping_today = 0                                     # journal lines about coping today (coping.py)
         self.departed: List[dict] = []                            # slimes the Keeper let leave the colony
@@ -312,8 +314,8 @@ class Game:
         if mode == "turn" and not self.deferred_turn:
             self.expeditions_flush()
             return "Turn-based time: time passes when you say so."
-        return (f"Live time: {config.LIVE_LOBBY_RATE * self.time_scale:g} game hour(s) per real hour at home, "
-                f"{config.LIVE_DUNGEON_RATE * self.time_scale:g} while a party is in a dungeon.")
+        return (f"Live time: {config.LIVE_LOBBY_RATE * self.time_scale:g} lobby hour(s) per real hour. Inside a dungeon time runs "
+                f"faster still (the Hollow Descent: x{places.dilation('main'):g}).")
 
     def expeditions_flush(self) -> None:
         """Leaving live mode: everyone who was away comes home at once."""
@@ -324,9 +326,24 @@ class Game:
             d.pop("ready_tick", None)
 
     def clock_rate(self) -> float:
-        """Game hours per real hour right now: faster while a party is away in a dungeon."""
-        busy = bool(self.expeditions or self.delves)
-        return (config.LIVE_DUNGEON_RATE if busy else config.LIVE_LOBBY_RATE) * self.time_scale
+        """Lobby hours per real hour. The clock always runs at the lobby rate: what is faster is the time INSIDE a dungeon (each
+        place's `dilation`), which shortens its trips on this clock but not what the party goes through while it is away."""
+        return config.LIVE_LOBBY_RATE * self.time_scale
+
+    @staticmethod
+    def dilation_of(kind: str) -> float:
+        """Dungeon hours per lobby hour at the place `kind` (places.py sets it place by place)."""
+        return places.dilation(kind)
+
+    @staticmethod
+    def lobby_hours(kind: str, hours: float) -> int:
+        """Lobby hours an activity of `hours` dungeon hours costs at the place `kind`: rounded up, at least 1 (0 for no time)."""
+        return max(1, int(math.ceil(hours / places.dilation(kind) - 1e-9))) if hours > 0 else 0
+
+    def needs_scale(self, s: Slime) -> float:
+        """Dungeon hours a slime lives per lobby hour while away on a step-by-step trip (Descent, scouting, rescue). Farming
+        sessions pay their own needs (field_session) and everyone at home lives lobby hours."""
+        return places.dilation(s.in_dungeon) if s.in_dungeon and not self.field_session(s) else 1.0
 
     def sync(self) -> List[str]:
         """Live mode: turn elapsed wall-clock time into game hours (at most a capped catch-up). No-op in turn mode."""
@@ -346,11 +363,19 @@ class Game:
             events.extend(self.tick(1))
         return events
 
-    def _spend(self, hours: float) -> List[str]:
+    def _spend(self, hours: float, kind: str = "") -> List[str]:
         """Pay the time a dungeon activity takes: turn mode ticks the colony now; live mode keeps the party away
-        and lets the wall clock bring the colony forward."""
+        and lets the wall clock bring the colony forward. `hours` are dungeon hours at the place `kind` (they pass `dilation`
+        times faster than lobby hours there); with no `kind` they are plain lobby hours."""
+        if kind:
+            hours = hours / places.dilation(kind)
         if not self.timed:
-            return self.tick(int(hours)) if hours >= 1 else []
+            if not kind:
+                return self.tick(int(hours)) if hours >= 1 else []
+            self._turn_carry += hours                         # the part of a lobby hour not yet lived waits for the next activity
+            n = int(self._turn_carry + 1e-9)
+            self._turn_carry = max(0.0, self._turn_carry - n)
+            return self.tick(n) if n >= 1 else []
         self._owed += hours
         return []
 
@@ -390,7 +415,7 @@ class Game:
 
     def _release(self, party) -> None:
         """End of a session: free the party now (turn mode) or when its time has been paid (live mode)."""
-        owed, self._owed = int(math.ceil(self._owed)), 0.0
+        owed, self._owed = int(math.ceil(self._owed - 1e-9)), 0.0
         arena, self._arena = self._arena, None
         alive = [s for s in party if s.id in self.roster]
         if self.timed and owed > 0 and alive:
@@ -456,12 +481,21 @@ class Game:
         path = [f for f in range(1, e["stuck"] + 1) if self._knowledge(f) < 100.0]
         return path or [e["stuck"]]
 
-    def rescue_hours(self, e: dict) -> int:
-        scouted = e["stuck"] - len(self.rescue_path(e))
-        return config.RESCUE_BASE_HOURS + len(self.rescue_path(e)) + int(math.ceil(scouted * config.RESCUE_KNOWN_FLOOR_HOURS))
+    @staticmethod
+    def rescue_speed(party) -> float:
+        """Share of a rescue trip a party's mages save: a mage buffs the whole party's pace (RESCUE_MAGE_SPEED, more per star), up
+        to RESCUE_MAGE_SPEED_MAX together."""
+        s = sum(config.RESCUE_MAGE_SPEED + config.RESCUE_MAGE_SPEED_STAR * m.stars for m in party if m.archetype == "mage")
+        return min(config.RESCUE_MAGE_SPEED_MAX, s)
 
-    def rescue_food(self, e: dict) -> int:
-        return int(math.ceil(self.rescue_hours(e) * config.SCOUT_FOOD_PER_HOUR))
+    def rescue_hours(self, e: dict, party=None) -> int:
+        """Dungeon hours the trip to the stranded scouts takes (shorter with a mage along; the lobby clock pays a third)."""
+        scouted = e["stuck"] - len(self.rescue_path(e))
+        hours = config.RESCUE_BASE_HOURS + len(self.rescue_path(e)) + int(math.ceil(scouted * config.RESCUE_KNOWN_FLOOR_HOURS))
+        return max(1, int(math.ceil(hours * (1 - self.rescue_speed(party or ())) - 1e-9)))
+
+    def rescue_food(self, e: dict, party=None) -> int:
+        return int(math.ceil(self.rescue_hours(e, party) * config.SCOUT_FOOD_PER_HOUR))
 
     def rescue(self, pid: Optional[int], sid: int, ids: Optional[Sequence[int]] = None) -> List[str]:
         """Send slimes (one is enough, or a party's members) to bring overdue scouts home. The trip takes hours (it must beat
@@ -472,12 +506,13 @@ class Game:
         e = next((x for x in self.stranded if x["id"] == sid), None)
         if not e:
             raise InvalidAction("Nobody is waiting to be rescued.")
-        hours = self.rescue_hours(e)
-        if hours >= self.stranded_left(e):
-            raise InvalidAction(f"It would take {hours}h to reach them, but they only have {self.stranded_left(e)}h left.")
         party = self._explorers(pid, ids, limit=False)             # any number of rescuers, several parties together
         if not party:
             raise InvalidAction("Nobody is there to go.")
+        hours = self.rescue_hours(e, party)                        # dungeon hours: a mage along hastens the way
+        lobby = self.lobby_hours("rescue", hours)                  # ... and the lobby clock pays a third of them
+        if lobby >= self.stranded_left(e):
+            raise InvalidAction(f"It would take {lobby}h to reach them, but they only have {self.stranded_left(e)}h left.")
         for s in party:
             self._check_explorer(s)
         unscouted = [f for f in range(1, e["stuck"]) if self._knowledge(f) < 100.0]
@@ -486,7 +521,7 @@ class Game:
         if laggard.progress < need:
             raise InvalidAction(f"{laggard.name} has only cleared floor {laggard.progress}; rescuers must have walked every "
                                 f"unscouted floor on the way (up to floor {need}).")
-        self.wallet.spend("food", self.rescue_food(e))
+        self.wallet.spend("food", self.rescue_food(e, party))
         stuck = e["stuck"]
         danger = 1 + 0.06 * stuck
         strength = sum(s.power_rating() for s in party) / len(party) / (25 * danger)
@@ -494,10 +529,13 @@ class Game:
         k = self._knowledge(stuck) / 100
         p_ok = min(0.95, config.RESCUE_BASE_CHANCE + 0.4 * min(1.5, strength) + 0.2 * k)
         who = self.parties.get(pid).name if pid is not None and not ids else ", ".join(s.name for s in party)
-        out = [f"🛟 {who} sets out to rescue the scouts stranded on floor {stuck} ({hours}h)."]
+        speed = self.rescue_speed(party)
+        out = [f"🛟 {who} sets out to rescue the scouts stranded on floor {stuck} ({hours}h inside, {lobby}h here)."]
+        if speed:
+            out.append(f"   🔮 The mage's haste shortens the way by {round(speed * 100)}%.")
         self._owed = 0.0
         self._set_flag(party, "rescue")
-        out.extend("   " + x for x in self._spend(hours) if "died" in x)
+        out.extend("   " + x for x in self._spend(hours, "rescue") if "died" in x)
         members = [s for s in party if s.id in self.roster]
         p_hit = min(0.6, config.SCOUT_AMBUSH_BASE * 2 * danger / max(0.5, strength) * (1 - 0.7 * k))
         if members and self.rng.random() < p_hit:
@@ -523,11 +561,11 @@ class Game:
             self._xp("scout", config.KEEPER_XP["scout"])
             out.append(f"✅ The rescuers reach the scouts and bring {len(scouts)} slime(s) home.")
             self._set_flag(scouts, "rescue")
-            self._owed = hours
+            self._owed = hours / places.dilation("rescue")
             self._release(members + scouts)
         else:
             out.append("✖ The rescuers could not break through to the scouts." if members else "☠ The rescue party is gone.")
-            self._owed = hours
+            self._owed = hours / places.dilation("rescue")
             self._release(members)
         self.journal.extend(out)
         return out
@@ -560,6 +598,7 @@ class Game:
             self._return_expeditions(events)
             self._stranded_tick(events)
             self._stamina_tick()
+            self._away_bonds()
             self._emotion_tick(events)
             coping.hourly(self, events)
             routine.hourly(self, events)
@@ -846,11 +885,26 @@ class Game:
         roots = [unit(p) for p in units if not (p & children)]
         return dict(ties=ties, families=roots)
 
+    def _away_bonds(self) -> None:
+        """Party members away together grow closer with every dungeon hour spent travelling and camping (so synergy builds at the
+        dungeon's pace, per lobby hour)."""
+        groups: Dict[tuple, List[Slime]] = {}
+        for s in self.slimes():
+            if s.in_dungeon and places.dilation(s.in_dungeon) > 1.0:
+                p = self.parties.party_of(s.id)
+                if p:
+                    groups.setdefault((p.id, s.in_dungeon), []).append(s)
+        for (_, kind), ms in groups.items():
+            gain = config.AWAY_BOND_PER_HOUR * places.dilation(kind)
+            for i, a in enumerate(ms):
+                for b in ms[i + 1:]:
+                    self.social.add_bond(a, b, gain)
+
     def _stamina_tick(self) -> None:
         """Stamina refills by the hour (faster asleep); potions wear off."""
         for s in self.slimes():
             lull = 1 + 0.2 * self.keeper.rank("lullaby") if s.state in ("sleeping", "resting") else 1.0
-            s.stamina_frac = min(1.0, s.stamina_frac + attributes.hourly_regen(s) * lull)
+            s.stamina_frac = min(1.0, s.stamina_frac + attributes.hourly_regen(s) * lull * places.dilation(s.in_dungeon))   # away: dungeon hours
             if s.buffs:
                 for b in s.buffs:
                     b["hours"] -= 1
@@ -2092,7 +2146,7 @@ class Game:
             for b in party[i + 1:]:
                 self.social.add_bond(a, b, config.WAVE_BOND * won)
         report.log.append(f"🧪 Simulation over ({won}/{waves} waves won): nobody is hurt for real - {total_xp} XP and battle proficiency gained.")
-        events.extend(self._spend(config.WAVE_TICKS * waves))
+        events.extend(self._spend(config.WAVE_TICKS * waves, "wave"))
         report.log.extend(events)
         self.journal.extend(events)
         return report
@@ -3281,7 +3335,7 @@ class Game:
                             it = self.new_item(lure)
                             events.append(f"🎁 Found {it.label()}"
                                           + (" - " + ", ".join(it.mod_text(m) for m in it.mods) if it.mods else "") + "!")
-                events.extend(self._spend(config.ADV_TICKS))
+                events.extend(self._spend(config.ADV_TICKS, kind))
                 self._field_hours(members, config.ADV_TICKS, False, events)
                 used += config.ADV_TICKS
                 rep.log.extend(events)
@@ -3567,13 +3621,14 @@ class Game:
         if by_hand and report.victory:
             events.append("   ⏱ You led this fight yourself: no waiting, the party is ready for the next floor.")
         self._owed = 0.0
-        events.extend(self._spend(spent))
+        lobby = self.lobby_hours("main", spent)                   # `spent` is time inside (dungeon hours): the lobby clock pays a third
+        events.extend(self._spend(spent, "main"))
         for q in pids:
             if q in self.delves:
                 self.delves[q]["hours"] += spent
                 if self.timed:
-                    self.delves[q]["ready_tick"] = self.tick_count + spent
-                    self.last_due = max(self.last_due, self.tick_count + spent)
+                    self.delves[q]["ready_tick"] = self.tick_count + lobby
+                    self.last_due = max(self.last_due, self.tick_count + lobby)
                 if not self._members_in("main", q):        # everyone starved / died in the meantime
                     self.delves.pop(q, None)
         self._owed = 0.0
@@ -3624,10 +3679,10 @@ class Game:
             s.stamina_frac = min(1.0, s.stamina_frac + 0.3)
         st["rested"] = True
         self._owed = 0.0
-        self._spend(config.STOP_REST_HOURS)
+        self._spend(config.STOP_REST_HOURS, "main")
         self.delves[pid]["hours"] += config.STOP_REST_HOURS
         if self.timed:
-            self.delves[pid]["ready_tick"] = self.tick_count + config.STOP_REST_HOURS
+            self.delves[pid]["ready_tick"] = self.tick_count + self.lobby_hours("main", config.STOP_REST_HOURS)
         return f"🏕 {self.parties.get(pid).name} rests safely at the wayside stop ({config.STOP_REST_HOURS}h)."
 
     def stop_buy(self, pid: int, item: str) -> str:
@@ -3735,7 +3790,7 @@ class Game:
             if s.state == "sleeping":
                 s.state = "idle"
         if self.timed and pid in self.delves:
-            self.delves[pid]["ready_tick"] = self.tick_count + int(math.ceil(self._owed))
+            self.delves[pid]["ready_tick"] = self.tick_count + int(math.ceil(self._owed - 1e-9))
         self._owed = 0.0
         self.journal.extend(out)
         return out
@@ -3835,7 +3890,7 @@ class Game:
             members = alive_scouts()
             if not members or elapsed >= total:
                 break
-            events = self._spend(1)
+            events = self._spend(1, "scout")
             elapsed += 1
             res.log.extend("   " + e for e in events if "died" in e)
             members = alive_scouts()
@@ -3881,7 +3936,7 @@ class Game:
                 # a floor they finished is fully known; only the one they were still exploring becomes a half-finished note
                 self.intel[f] = max(self.intel.get(f, 0.0), 100.0 if frac >= 1.0 else round(100 * frac * config.SCOUT_NOTE_FRACTION, 1))
             if survivors:                              # out of time and supplies: overdue - a rescue party may still reach them
-                owed = int(math.ceil(self._owed)) if self.timed else 0
+                owed = int(math.ceil(self._owed - 1e-9)) if self.timed else 0
                 self._owed = 0.0
                 self._set_flag(survivors, "stranded")
                 self.stranded.append(dict(id=self.next_stranded, ids=[s.id for s in survivors], first=first, last=last,
@@ -4012,7 +4067,7 @@ class Game:
                     self._herb_drop("grind", len(enemies), events, theme.terrain)
                     self._farm_loot(len(enemies), events)
                     self._recover_pit_gear(members, events)
-                events.extend(self._spend(config.GRIND_TICKS))
+                events.extend(self._spend(config.GRIND_TICKS, "grind"))
                 self._field_hours(members, config.GRIND_TICKS, False, events)
                 used += config.GRIND_TICKS
                 rep.log.extend(events)
@@ -4090,15 +4145,20 @@ class Game:
         """One hour of rest in the field. Turn mode lets the colony live that hour; live mode applies the rest to
         the party directly (the colony only moves with the wall clock) and charges the hour to the session."""
         field = [s for s in members if self.field_session(s)]
-        if not self.timed:
-            events = self.tick(1)
-            self._field_hours(field, 1, True, events)
-            return events
-        for s in members:
-            if s.id in self.roster:
-                s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR))
-                s.stamina_frac = min(1.0, s.stamina_frac + 0.1 * config.STAMINA_SLEEP_MULT)
-        events = self._spend(1)
+        kind = members[0].in_dungeon if members else ""
+        if self.timed:                                           # time is paid later: mend the whole party now
+            for s in members:
+                if s.id in self.roster:
+                    s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR))
+                    s.stamina_frac = min(1.0, s.stamina_frac + 0.1 * config.STAMINA_SLEEP_MULT)
+                    if s not in field:                           # a step-by-step party sleeps off its tiredness too (its food and
+                        s.needs.add("energy", config.SLEEP_ENERGY_GAIN)    # energy decay is paid by the clock as time passes)
+        else:                                                    # a session's party is skipped by the colony's tick: mend it here
+            for s in field:
+                if s.id in self.roster:
+                    s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR))
+                    s.stamina_frac = min(1.0, s.stamina_frac + 0.1 * config.STAMINA_SLEEP_MULT)
+        events = self._spend(1, kind)
         self._field_hours(field, 1, True, events)
         return events
 

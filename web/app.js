@@ -388,7 +388,7 @@ function liveBar() {
   if (clk.mode !== 'live') return '';
   const rate = clk.rate_now || clk.lobby_rate;
   const mins = (h) => { const m = Math.round(h / rate * 60); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`; };
-  return `<div class="livebar"><span>⏱ Live time — home ×${clk.lobby_rate}, dungeons ×${clk.dungeon_rate}${rate ? ` · now ×${rate}` : ''}</span></div>`;
+  return `<div class="livebar"><span>⏱ Live time — lobby ×${clk.lobby_rate}; inside the Descent time runs ×${clk.dilation?.main ?? 1} faster${rate ? ` · now ×${rate}` : ''}</span></div>`;
 }
 
 /* ---- timers for everything that keeps slimes away (hunts, study, dungeon trips, scouting, the Descent) ----
@@ -868,7 +868,7 @@ function dungeonsAll() {
     <p class="mute">Rough, permanent death. Walk the floors <b>in order</b>. You may only <b>leave for free after a boss floor</b> (every ${d.boss_every}) — go home, train, study, come back stronger. Mid-segment there is one costed escape: a risky <b>Retreat</b> (purple gel). <b>Each slime must have cleared the floors above</b> to enter a floor, so nobody can be carried; other parties may walk the same floors again. Best floor ever: <b>${d.best_floor}</b> of ${d.max_floor}.</p>
     ${d.cleared ? '<div class="panel flat">👑 <b>The Parched King has fallen.</b> The Descent is conquered — but the floors remain for training and scouting.</div>' : ''}
     ${delves.map(([pid, v]) => { const p = partyById(+pid); return `<div class="panel flat"><div class="row between"><b>${esc(p?.name)}</b>${chip(`floor ${v.floor} · exit after boss ${v.boss_floor}`, v.can_leave ? 'ok' : 'bad')}</div>
-      <p class="mute">${v.hours}h inside · this floor ${v.knowledge.toFixed(0)}% known · clearing it takes ~${v.next_hours} game hour${v.next_hours === 1 ? '' : 's'}${S.state.clock.mode === 'live' ? ` (~${Math.max(1, Math.round(v.next_hours / S.state.clock.dungeon_rate * 60))} real min)` : ''}</p>
+      <p class="mute">${v.hours}h inside · this floor ${v.knowledge.toFixed(0)}% known · clearing it takes ~${v.next_hours}h inside (≈ ${v.next_lobby}h here)${S.state.clock.mode === 'live' ? ` (~${Math.max(1, Math.round(v.next_lobby / (S.state.clock.rate_now || S.state.clock.lobby_rate) * 60))} real min)` : ''}</p>
       ${v.ready_in > 0 ? `<div class="chip bad">⏱ busy — ${S.state.clock.mode === 'live' ? `back in ~${Math.max(1, Math.round(v.ready_in / (S.state.clock.rate_now || 1) * 60))} real min` : `${v.ready_in}h to go (press +1h / +4h)`}</div>` : ''}
       <div class="row">${v.members.map((id) => mini(id)).join('')}</div>
       ${v.joinable.length || v.force_cap > 1 ? forceBox(pid, v) : `<small class="mute">Floor ${v.floor} is a narrow passage: one party at a time${v.callers.length ? ' (a mage can still call one more)' : ''}.</small>`}
@@ -896,10 +896,11 @@ function dungeonsAll() {
   const chips = (key, ids) => `<div class="row">${walkers.map((s) => `<button class="btn small ${ids.includes(s.id) ? 'primary' : ''}" data-act="pick_walker" data-k="${key}" data-id="${s.id}" title="has cleared floor ${s.progress}" ${s.refuse_dungeon ? 'disabled' : ''}>${ids.includes(s.id) ? '✔ ' : ''}${s.refuse_dungeon ? '🚫 ' : ''}${esc(s.name)} · Lv${s.level} · floor ${s.progress}</button>`).join('') || '<small class="mute">Nobody is free.</small>'}</div>`;
   const stranded = st.stranded.length ? `<div class="panel stack warnbox"><h2>🆘 Overdue scouts</h2>
       <p class="mute">These scouts ran out of supplies. <b>One slime is enough</b> to go and bring them home, and <b>several parties can go together</b> (tap a party to add all its free members; a bigger force breaks through more easily). Floors that are already scouted are a known road: rescuers only have to have walked the <i>unscouted</i> floors on the way, and the trip is shorter. It takes hours and food, can be ambushed, and must arrive before the deadline.</p>
-      ${st.stranded.map((e) => `<div class="panel flat"><b>${e.names.map(esc).join(', ')}</b><br><small class="mute">stuck on floor ${e.stuck} (scouting ${e.first}–${e.last}) · ${e.hours_left}h left · rescue takes ${e.rescue_hours}h and ${e.food} 🍖 · must have walked ${e.need ? 'floors up to ' + e.need : 'no floors (the way is scouted)'}</small>
+      ${st.stranded.map((e) => `<div class="panel flat"><b>${e.names.map(esc).join(', ')}</b><br><small class="mute">stuck on floor ${e.stuck} (scouting ${e.first}–${e.last}) · ${e.hours_left}h left · rescue takes ${e.rescue_hours}h inside (≈ ${e.rescue_lobby}h here) and ${e.food} 🍖 · must have walked ${e.need ? 'floors up to ' + e.need : 'no floors (the way is scouted)'}</small>
         <div class="row">${st.parties.map((q) => `<button class="btn small" data-act="pick_party" data-k="rescue_ids" data-pid="${q.id}">👥 ${esc(q.name)}</button>`).join('')}</div>
         ${chips('rescue_ids', rescueIds)}
-        <button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_hours >= e.hours_left || !rescueIds.length ? 'disabled' : ''}>🛟 Send rescue (${rescueIds.length})</button></div>`).join('')}</div>` : '';
+        <button class="btn danger" data-act="rescue" data-sid="${e.id}" ${e.rescue_lobby >= e.hours_left || !rescueIds.length ? 'disabled' : ''}>🛟 Send rescue (${rescueIds.length})</button>
+        <small class="mute">${rescueNote(e, rescueIds)}</small></div>`).join('')}</div>` : '';
   const scouting = `<div class="panel stack"><h2>🔭 Scouting ${info('Scouts learn specific floors (any run of floors up to the limit, not only multiples of 5). They must reach 100% of every floor they were sent to within the hour budget; floors they finish stay known even if they run out of time. Leave the budget empty to use the safe budget from the estimate. One slime is enough; more only helps if they are good scouts.')}</h2>
       <p class="mute">Send <b>one to ${st.party_size}</b> slimes (no party needed) to learn floors (1 to ${d.scout_max_floors} at a time). Scouts must reach <b>100% of every targeted floor</b> within the budget, or they are stranded until rescued. The floor above the first one scouted must be <b>scouted already or cleared in the Descent</b> (by anyone in the colony), so even a level-1 slime can go on over known floors.</p>
       ${partyPickRow('scout_ids', st.party_size)}
@@ -917,12 +918,12 @@ function dungeonsAll() {
         <label class="f">Runs <input type="number" min="1" max="${d.session.grind_runs}" value="${runs}" data-ui="runs" data-rerender="1" style="width:70px"></label>
         <button class="btn small ${ui('pit_lure', false) ? 'primary' : ''}" data-act="pit_lure" title="Richer prey: x${d.pit.lure_xp} XP and x${d.pit.lure_gear} gear drops">${ui('pit_lure', false) ? '✔ ' : ''}Lure (${d.pit.lure_cost} 🟣/run)</button>
         <button class="btn primary" data-act="grind">Commit</button></div>
-      ${sessionNote(runs, d.session.grind_ticks, d.session.grind_runs)}
+      ${sessionNote(runs, d.session.grind_ticks, d.session.grind_runs, 'run', 'grind')}
       <small class="mute">Depth 3 = enemies at your party's average level; 1 is easier, 5 is harder and pays more XP. A <b>lure</b> (${d.pit.lure_cost} 🟣 per run) draws richer prey: <b>×${d.pit.lure_xp} XP</b> and <b>×${d.pit.lure_gear} chance of gear</b>; it stops when the purple gel runs out.</small></div>`;
   const wave = `<div class="panel stack"><h2>🧪 Wave simulation ${info('A training drill, not a real fight: a full party at home fights waves of monsters whose level lies between the minimum and maximum you set (1-50), and nobody can die. Each wave takes 2 hours. The XP is fixed by the monsters and their level (deeper monsters pay more, no luck or rarity involved, split between the members); there is no loot. It also trains battle (class) proficiency and builds teamwork. If the party loses a wave the simulation stops. You can take command of every turn, like any other fight.')}</h2>
       <p class="mute">A full party fights a <b>wave of monsters</b> as a simulation: <b>nobody dies</b>, no loot. Pick the <b>monster level range</b> and the <b>number of waves</b>; the XP is fixed by the monsters and their level.</p>
       <div class="row">${partyOptions('kpid')}<label>Min lvl <input type="number" data-ui="wlo" min="1" max="50" value="${num(ui('wlo', 1), 1)}" style="width:4.5em"></label><label>Max lvl <input type="number" data-ui="whi" min="1" max="50" value="${num(ui('whi', 5), 5)}" style="width:4.5em"></label><label>Waves <input type="number" data-ui="waves" data-rerender="1" min="1" max="5" value="${num(ui('waves', 1), 1)}" style="width:3.5em"></label><button class="btn primary" data-act="skirmish">Run the simulation</button>${cmdToggle()}</div>
-      ${sessionNote(ui('waves', 1), st.dungeon.session.wave_ticks, st.dungeon.session.wave_max, 'wave')}</div>`;
+      ${sessionNote(ui('waves', 1), st.dungeon.session.wave_ticks, st.dungeon.session.wave_max, 'wave', 'wave')}</div>`;
   return { descent, stranded, scouting, pit, wave };
 }
 
@@ -933,11 +934,19 @@ function cut(html, from, to) {
   return html.slice(Math.max(0, a), b < 0 ? html.length : b);
 }
 /* How long a session will take, said before it starts (a farming session never lasts more than a day, camping included). */
-function sessionNote(runs, ticks, maxRuns, what = 'run') {
+/* A rescue party's mages hasten the trip (dungeon hours), and the lobby clock pays a third of what is left. */
+function rescueNote(e, ids) {
+  const m = S.state.dungeon.rescue_mage, mages = ids.map(slimeById).filter((x) => x && x.archetype === 'mage');
+  const speed = Math.min(m.max, mages.reduce((a, x) => a + m.base + m.star * x.stars, 0));
+  const hours = Math.max(1, Math.ceil(e.rescue_hours * (1 - speed) - 1e-9)), lobby = Math.max(1, Math.ceil(hours / (S.state.clock.dilation?.rescue || 1) - 1e-9));
+  return mages.length ? `🔮 ${mages.length} mage${mages.length > 1 ? 's' : ''} hasten${mages.length > 1 ? '' : 's'} the way by ${Math.round(speed * 100)}%: ~${hours}h inside (≈ ${lobby}h here).` : `A mage in the rescue party hastens the way (${Math.round(m.base * 100)}% + ${Math.round(m.star * 100)}% per star, up to ${Math.round(m.max * 100)}%).`;
+}
+function sessionNote(runs, ticks, maxRuns, what = 'run', kind = 'adventure') {
   const ss = S.state.dungeon.session, n = Math.max(1, Math.min(num(runs, 1), maxRuns)), hours = n * ticks;
-  const live = S.state.clock.mode === 'live' && S.state.clock.dungeon_rate ? ` (about ${Math.max(1, Math.round(hours / S.state.clock.dungeon_rate * 60))} real minutes at the current speed)` : '';
+  const lobby = Math.max(1, Math.ceil(hours / (S.state.clock.dilation?.[kind] || 1) - 1e-9));
+  const live = S.state.clock.mode === 'live' ? ` (about ${Math.max(1, Math.round(lobby / (S.state.clock.rate_now || S.state.clock.lobby_rate) * 60))} real minutes at the current speed)` : '';
   const cut = num(runs, 1) > maxRuns ? ` <b>Limited to ${maxRuns} ${what}s: a session is one day at most.</b>` : '';
-  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h</b>${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h (earlier if the whole party is knocked out). The report and the haul arrive when it is back.${cut}</small>`;
+  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here)${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h inside (earlier if the whole party is knocked out). The report and the haul arrive when it is back.${cut}</small>`;
 }
 /* Which party (or group of slimes) is away and how long it has left. */
 const partyNameOf = (ids) => { const p = (S.state.parties || []).find((q) => ids.every((i) => q.members.includes(i))) || (S.state.parties || []).find((q) => ids.some((i) => q.members.includes(i))); return p ? p.name : null; };
@@ -1778,7 +1787,7 @@ function modalHtml() {
   if (m.type === 'menu') {
     return `<div class="scrim" style="z-index:55" data-act="closemodal"></div><div class="modal" style="width:min(420px,94vw)"><header><h3 style="margin:0">Menu</h3><button class="btn small" data-act="closemodal">✕</button></header>
       <div class="body stack">
-      <h4 style="margin:0">Time ${info('Turn-based: time passes when you press the wait buttons or act. Live: time passes by itself with the wall clock — study, hunts and brewing take real time; at home 1 game hour = 1 real hour, and while a party is in a dungeon the clock runs 3x faster. The speed presets multiply both. Offline progress is capped at 48 game hours.')}</h4>
+      <h4 style="margin:0">Time ${info('Turn-based: time passes when you press the wait buttons or act. Live: time passes by itself with the wall clock — study, hunts and brewing take real time (1 game hour = 1 real hour; the clock never speeds up). Time INSIDE a dungeon runs faster, place by place (3x for now): a 3-hour floor takes 1 lobby hour, and the party inside eats, tires and bonds 3x as fast. The speed presets multiply the clock. Offline progress is capped at 48 game hours.')}</h4>
       <div class="seg"><button class="${S.state.clock.mode === 'turn' ? 'on' : ''}" data-act="set_time" data-mode="turn">Turn-based</button><button class="${S.state.clock.mode === 'live' ? 'on' : ''}" data-act="set_time" data-mode="live" data-scale="${S.state.clock.scale}">Live (wall clock)</button></div>
       ${S.state.clock.mode === 'live' || true ? `<div class="row"><small class="mute">Speed</small><div class="seg small">${S.state.clock.scales.map((x) => `<button class="${S.state.clock.scale === x ? 'on' : ''}" data-act="set_time" data-mode="${S.state.clock.mode}" data-scale="${x}">×${x}</button>`).join('')}</div></div>` : ''}
       ${Object.keys(I18N.langs).length > 1 ? `<h4 style="margin:6px 0 0">Language</h4>

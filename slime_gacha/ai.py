@@ -48,6 +48,7 @@ class NeedsEngine:
         self.buddy_fn = None             # Game sets: callable(slime, candidates) -> the one it cuddles up to (a friend first)
         self.cuddles: Dict[str, int] = {}   # name -> cuddles today (summarised once a day instead of a line each)
         self.field_fn = None             # Game sets: callable(slime) -> is a farming session looking after its needs (see field_hour)?
+        self.scale_fn = None             # Game sets: callable(slime) -> dungeon hours it lives per lobby hour (1.0 at home)
 
     def tick(self, slimes: List, events: List[str]) -> None:
         slimes = [s for s in slimes if s.alive]
@@ -56,8 +57,9 @@ class NeedsEngine:
             if self.field_fn and self.field_fn(s):           # a Pit / Rift / Quarry session eats and sleeps for its party
                 self._safety(s)
                 continue
-            self._decay(s)
-            self._starve(s, events)
+            k = self.scale_fn(s) if self.scale_fn else 1.0   # a party inside a dungeon lives its hours faster than the lobby's
+            self._decay(s, k)
+            self._starve(s, events, k)
             if self.auto_care:
                 self._autonomy(s, idle, events)
             self._safety(s)
@@ -79,7 +81,7 @@ class NeedsEngine:
         self._starve(s, events)
 
     # -- internals ---------------------------------------------------------
-    def _decay(self, s) -> None:
+    def _decay(self, s, scale: float = 1.0) -> None:
         n = s.needs
         active = n.active()
         for need, rate in config.NEED_DECAY.items():
@@ -94,18 +96,18 @@ class NeedsEngine:
                 r *= config.WORK_DECAY_MULT.get(need, 1.0)
             if s.state in ("sleeping", "resting"):
                 r = 0.0 if need == "energy" else r * 0.4
-            n.add(need, -r)
+            n.add(need, -r * scale)
         if s.state == "resting":                 # the Rest Area (buildings.rest_tick) handles healing & leaving
             return
         if s.state == "sleeping":
-            n.add("energy", config.SLEEP_ENERGY_GAIN)
-            s.hp = min(s.max_hp, s.hp + max(1, int(s.max_hp * config.SLEEP_HP_REGEN)))
+            n.add("energy", config.SLEEP_ENERGY_GAIN * scale)
+            s.hp = min(s.max_hp, s.hp + max(1, int(s.max_hp * config.SLEEP_HP_REGEN * scale)))
             if n.get("energy") >= config.AUTO_WAKE_AT:
                 s.state = "idle"
 
-    def _starve(self, s, events) -> None:
+    def _starve(self, s, events, scale: float = 1.0) -> None:
         if s.needs.get("food") <= 0 or s.needs.get("energy") <= 0:
-            loss = max(1, int(s.max_hp * config.STARVE_HP_LOSS))
+            loss = max(1, int(s.max_hp * config.STARVE_HP_LOSS * scale))
             s.hp -= loss                     # neglect is lethal; Game reaps hp <= 0
             if s.hp <= 0:
                 s.death_cause = "starvation" if s.needs.get("food") <= 0 else "exhaustion"

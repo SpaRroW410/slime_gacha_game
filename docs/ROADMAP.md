@@ -136,6 +136,10 @@ As of 27 October 2026:
 - [x] **75. Calling slimes back for a trip** — busy slimes (resting, foraging, post, hunt, drill, asleep) can be picked and are called away at a cost (-6 morale, +12 anger); under 10% energy hidden, refusers greyed; expeditions now enforce refusals.  *Done when:* met (`Game.pull_in`, `recall` on Rift, Quarry, places, Pit and Descent entry).
 - [x] **76. Trades on the slime** — the slime's detail panel lists every trade it has worked with its level and progress to the next, and cards show the post's level ("Doctor L3").  *Done when:* met.
 - [x] **77. Guard against dropped buttons** — a page-wiring test checks that every button has a handler and every command the page sends exists (task 70-75's edit had dropped 17 handlers, among them Grant for requests, Talk and Praise).  *Done when:* met (`tests/test_web.py::TestUiWiring`).
+- [x] **78. Dungeon time dilation** — time inside a dungeon runs faster than the lobby's, place by place (`Place.dilation`, 3.0 for the Descent, Pit, Rift, Quarry, Mossy Burrows, scouting, rescue and wave simulations; 1.0 for hunting, foraging, posts, drills, spars and stranded scouts). An activity of H dungeon hours costs the lobby clock ceil(H / rate), at least 1; the party inside burns food, energy and stamina and bonds at the dungeon rate; the live clock no longer speeds up when a party leaves.  *Done when:* met (`Game.lobby_hours`, `_spend(hours, kind)`, `NeedsEngine.scale_fn`, `_away_bonds`; the screens show "3h inside ≈ 1h here").
+- [x] **79. Mages hasten rescues** — each mage in a rescue party shortens the trip by 15% + 3% per star, up to 50% together.  *Done when:* met (`Game.rescue_speed`).
+- [x] **80. Mages a little rarer in pulls** — pull weight 0.85 against 1.0 for the other magic classes.  *Done when:* met.
+- [x] **81. Camps heal and rest in every mode** — a Pit or Rift session camp in turn mode no longer skips the sleepers' healing (the session now mends its own party), and a Descent camp in the web game restores energy as well as HP.  *Done when:* met (`Game._camp_hour`).
 
 ### After floor 50 (art and sound)
 
@@ -407,6 +411,10 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Pit and Rift sessions look after their party's needs, fixing deaths by exhaustion (71); no taking command in the Pit (72)
 - [x] Trainers sharpen with every lesson (73); send several groups at once (74); call busy slimes away for a trip at a cost (75)
 
+### M26 — Dungeon time (28 October 2026)
+- [x] Per-place time dilation (x3 for every dungeon except hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
+- [x] Mages hasten rescue parties (79); mages slightly rarer in pulls (80); camps heal and rest properly in every mode (81)
+
 ### M24 — Troublemakers and the Keeper's shadow (27 October 2026)
 - [x] A troublemaker: came to blows with more than 5% of the colony (rounded down, at least 2 slimes) in 30 days, or disliked by most; one feud or being snapped at is not enough
 - [x] Removing one: no morale, no stress, no grief except its partner's and best friend's at half; its foes breathe easier
@@ -537,7 +545,7 @@ Barbarian, Ranger, Mage, Medic and Rogue with **no gear, relics, potions, elemen
 the rarity's star-level table, evolved to the stage its level allows, class proficiency 100 (capstones usable for legendaries).
 "Min level" is the lowest party level with a >= 70% win chance over 12 seeded fights per level tested ("scouted" adds the
 intel bonus). "Pit runs" is how many Gloop Pit depth-3 runs a party needs to reach that level from level 1 under the real reward rule
-(`config.pit_xp_per_run`, 2 game hours each); "real hours" assumes the x3 dungeon rate. The Descent's own XP is not counted,
+(`config.pit_xp_per_run`, 2 game hours each); "real hours" assumes the Pit's x3 dungeon time (`places.py`) at live speed 1x. The Descent's own XP is not counted,
 so this overstates the grind a little.
 
 ### What the playtest found (and what was done)

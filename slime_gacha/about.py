@@ -57,7 +57,7 @@ SECTIONS: List[Dict[str, object]] = [
         "Commander's gifts (purple gel) are the one way to reach a party deep in the Descent.",
     ]),
     dict(title="Time and saving", icon="⏱", items=[
-        "Turn mode: time passes when you say so (+1h, +4h, +1 day). Live mode: the real clock moves the colony (dungeons run faster), "
+        "Turn mode: time passes when you say so (+1h, +4h, +1 day). Live mode: the real clock moves the colony (time inside a dungeon runs faster, place by place), "
         "with a capped catch-up for when you were away.",
         "The away bar counts down every hunt, study, drill, shift and delve. Saves live in your browser or a save file you can export; "
         "the in-game Guide has the numbers behind every mechanic.",
@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-27-trips",
-                 text="The Hollow Descent takes 1-5 parties at once by floor (a mage's call adds one more): choose them in the Strike force list, and a floor you fight by hand costs no waiting. The Rift, the Quarry and the other places share one sender with collapsible Parties and Individual slimes lists (search, class filter): tick several parties and send them all at once, each fighting separately. Slimes busy at home (resting, foraging, on a post) can be called away for a trip, at a cost in morale and temper; those under 10% energy are not listed and refusers are greyed out. Pit and Rift sessions now eat and sleep for their party, so nobody dies of exhaustion mid-session. The Pit no longer offers taking command. Trainers must fight in the style they teach, only help pupils who know less, and sharpen a little with every lesson. Slimes away from home show it and have Call back buttons.")
+WHATS_NEW = dict(id="2026-10-28-dungeon-time",
+                 text="Dungeon time: inside a dungeon, time runs 3x faster than in the lobby (each place has its own number, so it can be tuned one by one; hunting, foraging and jobs stay on lobby time). A 3-hour floor now costs 1 hour on the clock, but the party inside eats, tires, mends and grows closer 3x as fast, and the live clock no longer speeds up when someone leaves. A mage in a rescue party hastens the rescue (15% plus 3% per star, up to 50%). Mages are a little rarer in pulls than the other magic classes. Screens show both clocks: \"3h inside = 1h here\".")
 
 
 def build() -> Dict[str, object]:

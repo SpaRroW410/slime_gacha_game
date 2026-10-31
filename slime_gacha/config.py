@@ -319,7 +319,8 @@ CAMP_RELIEF_REACH = 3          # ... starting this many floors below
 STOP_REST_HEAL, STOP_REST_HOURS = 0.5, 3   # a wayside stop's safe rest: share of max HP healed, hours taken
 RETREAT_PURPLE_BASE, RETREAT_AMBUSH, RETREAT_MORALE = 2, 0.35, 12   # emergency retreat: purple gel base fee (+1 per 5 floors), ambush chance, morale lost
 CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
-RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35
+RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35   # the deadline is in LOBBY hours, the trip in dungeon hours
+RESCUE_MAGE_SPEED, RESCUE_MAGE_SPEED_STAR, RESCUE_MAGE_SPEED_MAX = 0.15, 0.03, 0.50   # each mage in a rescue party hastens it (buffing): 15% + 3% per star, at most 50% together
 RESCUE_KNOWN_FLOOR_HOURS = 0.25     # a floor that is already scouted costs rescuers only this many hours to cross   # overdue scouts wait this long; trip = base + floor hours; base success chance
 SCOUT_MIN_HOURS, SCOUT_MAX_HOURS = 2, 240
 SCOUT_RATE = 0.10               # knowledge: k' = 100 - (100 - k) * exp(-RATE * skill * hours)
@@ -576,7 +577,10 @@ CLEAR_BASE_HOURS = 1.5           # game hours to clear floor 0 ...
 CLEAR_HOURS_PER_FLOOR = 0.08     # ... plus this per floor (floor 50: ~5.5h before level and knowledge)
 CLEAR_KNOWLEDGE_CUT = 0.40       # a fully scouted floor is cleared 40% faster
 LIVE_LOBBY_RATE = 1.0            # game hours per REAL hour at home (study, hunts ... take wall-clock time)
-LIVE_DUNGEON_RATE = 3.0          # game hours per real hour while any party is in a dungeon
+# Time inside a dungeon runs faster than the lobby's: each Place (places.py) carries its own `dilation` (dungeon hours that pass per
+# lobby hour). An activity measured in dungeon hours costs ceil(hours / dilation) lobby hours (at least 1); the party inside burns food,
+# energy and stamina and grows closer at the dungeon rate. The live clock itself always runs at the lobby rate.
+AWAY_BOND_PER_HOUR = 0.05        # bond a pair of party members gain per dungeon hour spent away together (travelling and camping)
 LIVE_SCALES = (1, 6, 60)         # speed presets multiplying both rates
 LIVE_CATCHUP_MAX_HOURS = 48      # offline progress is capped (game hours)
 
