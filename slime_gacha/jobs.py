@@ -63,6 +63,7 @@ JOBS: Dict[str, Job] = {j.key: j for j in (
         ("medic",), 1, ("medic",), forages=True),
 )}
 TRAINERS = {j.discipline: j.key for j in JOBS.values() if j.discipline}
+TRADE_PASSIVE = dict(chef="chef_master", blacksmith="blacksmith_master", doctor="doctor_master", librarian="librarian_master")   # output passives (passives.py)
 
 
 def get(key: str) -> Job:
@@ -85,6 +86,10 @@ def power(slime, key: str, game=None) -> float:
     """Output multiplier: 1.0 at level 1, +12% per level, +25% for a natural talent, +10% per building level above 1."""
     p = 1 + 0.12 * (level(slime, key) - 1)
     p *= 1.25 if slime.archetype in JOBS[key].talents else 1.0
+    if game is not None and key in TRADE_PASSIVE:
+        from . import passives
+        if passives.has(game, slime, TRADE_PASSIVE[key]):
+            p *= 1 + config.TRADE_PASSIVE_BOOST            # the trade mastered: its output is bigger
     return p * (game.buildings.job_mult(JOBS[key].building) if game else 1.0)
 
 
@@ -344,6 +349,9 @@ def trainer_bonus(game, discipline: str, pupil=None) -> float:
         return 1.0
     b = config.TRAINER_BONUS + config.TRAINER_BONUS_PER_LEVEL * (level(t, key) - 1)
     b *= 1.25 if t.archetype in JOBS[key].talents else 1.0
+    from . import passives
+    if passives.has(game, t, "master_" + discipline):
+        b *= 1 + config.MASTER_TRAINER_BOOST
     return 1 + b * game.buildings.job_mult("training_grounds")
 
 

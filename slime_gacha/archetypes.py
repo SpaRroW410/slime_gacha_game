@@ -63,7 +63,7 @@ register_archetype(Archetype(
 register_archetype(Archetype(
     "mage", "Mage", "🔮", _s(24, 2, 2, 10, 5), _s(3, 0.3, 0.5, 2.2, 0.6),
     {1: "spark", 3: "fireblob", 7: "arcane_surge"}, "attack",
-    discipline="magic",
+    discipline="magic", pull_weight=0.85,                 # a little rarer than the other magic classes (medic, necromancer, alchemist)
     likes=("shiny things", "books"), hunt_bonus={"essence": 1.4}, rivals=("barbarian",)))
 
 register_archetype(Archetype(

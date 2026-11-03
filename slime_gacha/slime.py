@@ -138,6 +138,7 @@ class Slime:
         self.grounded = False          # set by an unresolved brawl: refuses hunts
         self.row = ""                  # formation: "front" | "back" | "" (automatic: casters and archers stand at the back)
         self.brawls = 0                # brawls this slime has been in, ever (a stat)
+        self.passive_mods: Dict[str, float] = {}   # combat perks of its passive skills, set before each fight (never saved)
         self.fights: Dict[int, int] = {}   # slime id -> last day it came to blows with it, counting against it (Game.unwelcome)
 
     # ---- derived ---------------------------------------------------------

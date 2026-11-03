@@ -232,7 +232,7 @@ class BattleSystem:
                          mastery={b: elements.basic_level(s, b) for b in s.attuned},
                          cap_scale=({attributes.hybrid_capstone(s): attributes.hybrid_scale(s)} if attributes.hybrid_capstone(s) else {}),
                          hybrid=frozenset(attributes.hybrid_keys(s)),
-                         style=sparring.style_levels(s), morale=s.morale, mods=_merge_mods(_merge_mods(items_mod.battle_mods(s), attributes.battle_mods(s)), emods),
+                         style=sparring.style_levels(s), morale=s.morale, mods=_merge_mods(_merge_mods(_merge_mods(items_mod.battle_mods(s), attributes.battle_mods(s)), emods), getattr(s, "passive_mods", {})),
                          stamina=s.stamina, stamina_max=s.max_stamina, sta_regen=attributes.regen_per_round(s),
                          row=(s.row if s.row in ("front", "back") else default_row(s)))
 

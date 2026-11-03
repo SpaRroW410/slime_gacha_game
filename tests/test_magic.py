@@ -61,12 +61,12 @@ class TestElements(Cleanup):
 
     def test_new_recipe_extension(self):
         try:
-            elements.register_recipe("steam", "earth", "geyser", "Geyser", "🌊")
-            self.assertEqual(elements.combine("earth", "steam").key, "geyser")
-            self.assertEqual(elements.get("geyser").tier, 3)
+            elements.register_recipe("lava", "mud", "test_brick", "Brick", "🧱")
+            self.assertEqual(elements.combine("mud", "lava").key, "test_brick")
+            self.assertEqual(elements.get("test_brick").tier, 3)
         finally:
-            elements.RECIPES.pop(frozenset(("steam", "earth")), None)
-            elements.ELEMENTS.unregister("geyser")
+            elements.RECIPES.pop(frozenset(("lava", "mud")), None)
+            elements.ELEMENTS.unregister("test_brick")
 
     def test_mastery_rules_by_stars(self):
         g = rich_game()

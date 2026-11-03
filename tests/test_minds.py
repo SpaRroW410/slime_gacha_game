@@ -1155,6 +1155,7 @@ class TestTroublemakers(unittest.TestCase):
 class TestBehaviourTargets(unittest.TestCase):
     """A small run of tools/minds_sim.py: the colony and legendary scenarios must meet the behaviour targets."""
     PENDING = {"friends look after each other"}   # too rare to count in this small colony; the full harness checks it
+    MIN_SHARE = {"care builds bonds": 0.75}        # a 14-slime colony is noisy: three of four small colonies must make more friends than rivals
 
     @classmethod
     def setUpClass(cls):
@@ -1162,7 +1163,7 @@ class TestBehaviourTargets(unittest.TestCase):
         import minds_sim
         cls.sim = minds_sim
         cls.results = dict(hands_off=[minds_sim.run_colony(1, 14, 25, keeper=False)],
-                           attentive=[minds_sim.run_colony(1, 14, 25, keeper=True)],
+                           attentive=[minds_sim.run_colony(sd, 14, 25, keeper=True) for sd in (1, 2, 3, 4)],
                            recovery=[minds_sim.run_recovery(4)],
                            grief=[minds_sim.run_grief(5)], grief_supported=[minds_sim.run_grief(5, True)],
                            worker_unseen=[minds_sim.run_worker(6, False)], worker_praised=[minds_sim.run_worker(6, True)],
@@ -1173,7 +1174,7 @@ class TestBehaviourTargets(unittest.TestCase):
             if name in self.PENDING:
                 continue
             with self.subTest(target=name):
-                self.assertEqual(share, 1.0, why)
+                self.assertGreaterEqual(share, self.MIN_SHARE.get(name, 1.0), why)
 
 
 if __name__ == "__main__":

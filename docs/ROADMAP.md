@@ -136,6 +136,13 @@ As of 27 October 2026:
 - [x] **75. Calling slimes back for a trip** — busy slimes (resting, foraging, post, hunt, drill, asleep) can be picked and are called away at a cost (-6 morale, +12 anger); under 10% energy hidden, refusers greyed; expeditions now enforce refusals.  *Done when:* met (`Game.pull_in`, `recall` on Rift, Quarry, places, Pit and Descent entry).
 - [x] **76. Trades on the slime** — the slime's detail panel lists every trade it has worked with its level and progress to the next, and cards show the post's level ("Doctor L3").  *Done when:* met.
 - [x] **77. Guard against dropped buttons** — a page-wiring test checks that every button has a handler and every command the page sends exists (task 70-75's edit had dropped 17 handlers, among them Grant for requests, Talk and Praise).  *Done when:* met (`tests/test_web.py::TestUiWiring`).
+- [x] **78. Dungeon time dilation** — time inside a dungeon runs faster than the lobby's, place by place (`Place.dilation`, 3.0 for the Descent, Pit, Rift, Quarry, Mossy Burrows, rescue and wave simulations; 1.0 for scouting, hunting, foraging, posts, drills, spars and stranded scouts). An activity of H dungeon hours costs the lobby clock ceil(H / rate), at least 1; the party inside burns food, energy and stamina and bonds at the dungeon rate; the live clock no longer speeds up when a party leaves.  *Done when:* met (`Game.lobby_hours`, `_spend(hours, kind)`, `NeedsEngine.scale_fn`, `_away_bonds`; the screens show "3h inside ≈ 1h here").
+- [x] **79. Tailwind hastens rescues** — a slime that has mastered the wind element to the top level earns the Tailwind passive skill and shortens a rescue trip by 25% (up to 50% with two); an ordinary mage does not.  *Done when:* met (`passives.py`, `Game.rescue_speed`; passives show on the slime's Fight tab, locked ones with what it takes).
+- [x] **80. Mages a little rarer in pulls** — pull weight 0.85 against 1.0 for the other magic classes.  *Done when:* met.
+- [x] **81. Camps heal and rest in every mode** — a Pit or Rift session camp in turn mode no longer skips the sleepers' healing (the session now mends its own party), and a Descent camp in the web game restores energy as well as HP.  *Done when:* met (`Game._camp_hour`).
+- [x] **83. Gear and relics told apart** — the two screens use different words (gear is *sold back*, a relic is *broken down*), the clashing names are changed (gear Wooden Bow, River Pebble, Dawn Shard; relics Wayfarer's Recurve, Gnarled Rod), and the Guide explains gear versus relics and how to get armor.  *Done when:* met (display names only: saves are unaffected).
+- [x] **84. Eight more elements to fuse** — Mist (steam + wind), Geyser (steam + earth), Ash (lava + wind), Clay (mud + fire), Glass (sand + fire), Quicksand (sand + water), Glacier (ice + water) and Thunderstone (lightning + earth): tier-3 elements, each with its own two spell forms; the ones with three basics in them need all three mastered (the weakest component counts).  *Done when:* met (`elements.py`, `spells.MUTATIONS`; 21 recipes now).
+- [x] **82. Passive skills** — 28 passive skills earned by mastering something, shown on the slime's Fight tab (earned first, locked ones grouped with what it takes): an element at the top level (Tailwind: rescue trips shorter; Hearth: camp healing; Wellspring: less food and energy burned inside; Bedrock: ambush damage), a trade at the top level (output +25%; Distiller: extra potions; Master Trainer: stronger teaching), class proficiency 100 (the gold star: one personal combat perk per class; Dual Mastery with the teal star), a fighting style at level 10 (three), and ties (Soulbound, Heart of the Party: party synergy).  *Done when:* met (`passives.py`; the Guide lists them from the data; more can be added by data alone).
 
 ### After floor 50 (art and sound)
 
@@ -407,6 +414,11 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Pit and Rift sessions look after their party's needs, fixing deaths by exhaustion (71); no taking command in the Pit (72)
 - [x] Trainers sharpen with every lesson (73); send several groups at once (74); call busy slimes away for a trip at a cost (75)
 
+### M26 — Dungeon time (28 October 2026)
+- [x] Per-place time dilation (x3 for every dungeon except scouting, hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
+- [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
+- [x] Passive skills: 28 perks earned by element, trade, proficiency, style and ties (82); Tailwind hastens rescue parties (79); mages slightly rarer in pulls (80); camps heal and rest properly in every mode (81)
+
 ### M24 — Troublemakers and the Keeper's shadow (27 October 2026)
 - [x] A troublemaker: came to blows with more than 5% of the colony (rounded down, at least 2 slimes) in 30 days, or disliked by most; one feud or being snapped at is not enough
 - [x] Removing one: no morale, no stress, no grief except its partner's and best friend's at half; its foes breathe easier
@@ -537,7 +549,7 @@ Barbarian, Ranger, Mage, Medic and Rogue with **no gear, relics, potions, elemen
 the rarity's star-level table, evolved to the stage its level allows, class proficiency 100 (capstones usable for legendaries).
 "Min level" is the lowest party level with a >= 70% win chance over 12 seeded fights per level tested ("scouted" adds the
 intel bonus). "Pit runs" is how many Gloop Pit depth-3 runs a party needs to reach that level from level 1 under the real reward rule
-(`config.pit_xp_per_run`, 2 game hours each); "real hours" assumes the x3 dungeon rate. The Descent's own XP is not counted,
+(`config.pit_xp_per_run`, 2 game hours each); "real hours" assumes the Pit's x3 dungeon time (`places.py`) at live speed 1x. The Descent's own XP is not counted,
 so this overstates the grind a little.
 
 ### What the playtest found (and what was done)
@@ -736,7 +748,7 @@ Every commit since the first, oldest first, grouped by the pull request (or dire
 
 <!-- changelog:start -->
 
-163 commits, oldest first. Generated by `python3 tools/changelog.py` at `278ac7b`.
+173 commits, oldest first. Generated by `python3 tools/changelog.py` at `975b2e1`.
 
 ### Straight to the main line (2026-10-10)
 
@@ -971,12 +983,28 @@ Every commit since the first, oldest first, grouped by the pull request (or dire
 - `d165eba` 2026-10-27 — Council: merge suggestions right after quarrels, then collapsible Keep / Flexible / Merge groups
 - `4c74934` 2026-10-27 — Commit history in ROADMAP.md includes the Council layout change
 
-### Not merged yet: branch `claude/elegant-meitner-beippt`
+### Pull request #25 (merged 2026-10-28)
 
 - `def4b75` 2026-10-27 — Descent strike forces, no waiting after a fight by hand, trainer rules, call back everywhere
 - `02b7354` 2026-10-27 — Commit history in ROADMAP.md includes the strike force change
 - `65a3df2` 2026-10-27 — Pit sessions look after their party, no taking command in the Pit, sending several groups, call busy slimes away
 - `b443251` 2026-10-27 — Commit history in ROADMAP.md includes the session needs and sender change
+
+### Pull request #26 (merged 2026-10-31)
+
 - `278ac7b` 2026-10-31 — Restore the handlers dropped by the sender edit (Grant a request, Talk, Praise ...), add Trades
+- `a7dff8b` 2026-10-31 — Commit history in ROADMAP.md includes the handler fix
+
+### Not merged yet: branch `claude/elegant-meitner-beippt`
+
+- `ec7bdf3` 2026-10-31 — Dungeon time: x3 inside every dungeon but not hunting or foraging, set place by place
+- `1d18e57` 2026-10-31 — Commit history in ROADMAP.md includes the dungeon time change
+- `99d1f69` 2026-10-31 — Scouting back on lobby time; rescue speed needs the Tailwind passive (wind mastered), not just a mage
+- `98b2e7a` 2026-10-31 — Commit history in ROADMAP.md includes the Tailwind change
+- `31466d8` 2026-10-31 — Tell gear and relics apart: sell back vs break down, distinct names, a Guide section
+- `e1435ab` 2026-10-31 — Commit history in ROADMAP.md includes the gear and relic wording change
+- `3713aac` 2026-10-31 — Eight more elements to fuse: Mist, Geyser, Ash, Clay, Glass, Quicksand, Glacier, Thunderstone
+- `88196dd` 2026-10-31 — Commit history in ROADMAP.md includes the new elements
+- `975b2e1` 2026-10-31 — Passive skills: 28 perks earned by element, trade, proficiency, fighting style and ties
 
 <!-- changelog:end -->

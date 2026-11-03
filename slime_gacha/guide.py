@@ -1,6 +1,6 @@
 """The in-game booklet: plain-language descriptions of every attribute and system, with what raises and lowers
 them. Built from the live constants so the numbers never go stale."""
-from . import bestiary, config, elements, emotions, specialization, sparring
+from . import bestiary, config, elements, emotions, passives, specialization, sparring
 from .abilities import get_ability
 
 
@@ -58,6 +58,19 @@ def _specialization_section() -> dict:
         items.append(dict(name=f"{sp.emoji} {sp.name}", text=f"{a.capitalize()} + {disc[b].style} training. Signature: "
                           f"{get_ability(sp.ability).name}. {sp.description}"))
     return dict(title="Specialization (hybrid classes)", icon="🧬", blurb="Which cross-training makes which hybrid.", items=items)
+
+
+def _passives_section() -> dict:
+    """Every passive skill, by what earns it (the list comes from passives.py, so a new one shows up here by itself)."""
+    items = [dict(name="What they are", text="Perks a slime earns by mastering something. They are always on (nothing to cast) and show on the slime's "
+                                               "Fight tab: the earned ones first, the locked ones grouped below with what it takes. Some are personal combat "
+                                               "perks, some lift the party the slime travels with, some make a trade's output bigger. Party perks do not stack "
+                                               "(one slime with Hearth is enough), except Tailwind and the synergy ones, up to their limits.")]
+    for key, title in passives.GROUPS:
+        ps = [p for p in passives.PASSIVES if p.group == key]
+        if ps:
+            items.append(dict(name=title, text=" ".join(f"{p.emoji} {p.name}: {p.desc} (Needs: {p.need})" for p in ps)))
+    return dict(title="Passive skills", icon="✨", blurb="Perks earned by mastering something.", items=items)
 
 
 def _class_skills_section() -> dict:
@@ -152,6 +165,7 @@ def build() -> list:
              + [dict(name="Traits", text="Grumpy slimes anger easily, timid ones fear more, brave ones less, kind ones feel more "
                                          "affection, proud ones more pride, chatty ones get lonely faster.")]),
         _elements_section(),
+        _passives_section(),
         _specialization_section(),
         dict(title="Stats and combat", icon="⚔️", blurb="What the numbers mean.", items=[
             dict(name="HP", text="Health. At zero a slime is knocked out (Pit, Rift, Quarry) or dies (Hollow Descent)."),
@@ -246,7 +260,7 @@ def build() -> list:
             dict(name="Floor modifiers", text="Many floors of the Hollow Descent (never a boss floor) lie under a modifier that changes the whole fight, using the battle's own statuses: Poison Fog (everyone starts poisoned), Darkness (everyone is harder to hit), Thin Air (everyone slower), Brittle Ground (less armor for everyone), Bloodlust (foes hit harder, the party crits more) and Sacred Spring (the party mends each round). A floor scouted to 40% reveals its modifier; the fight log always shows it."),
             dict(name="Wave simulation", text="Dungeons > Wave simulation: a full party at home fights 1-5 waves of monsters as a drill. You set the minimum and maximum monster level (1-50). Nobody can die and there is no loot. The XP is fixed by the monsters and their level (deeper monsters pay more; no luck, no rarity factor) and is split between the members. It also trains class (battle) proficiency and builds teamwork (bonds). Each wave takes 2 hours, a lost wave ends the simulation, and you can take command of every turn."),
             dict(name="Scouting", text="Dungeons > Scouting: send one to five slimes (no party needed) to learn floors. They must reach 100% of every floor within the hour budget; leave the budget empty for the safe budget the estimate recommends. Floors they finish stay fully known even if they run out of time on the last one. The floor above the first floor scouted must be scouted already or cleared in the Descent (by anyone in the colony, not each scout), so even a level-1 slime can scout onward over known floors."),
-            dict(name="Rescue parties", text="Scouts that run out of budget are no longer lost on the spot: they are stranded on the floor they reached, and the Colony shows a timer (24 hours). One to five slimes can be sent to rescue them. Floors that are already scouted are a known road: rescuers only need to have walked the unscouted floors on the way, and each scouted floor costs a quarter hour instead of an hour. The trip takes 4 hours plus the floors to cross, costs food, can be ambushed (deaths are permanent) and succeeds more often the stronger and better-informed the rescuers are. A failed attempt leaves the scouts waiting if time remains; if the deadline passes they are lost, as before. Several parties can be in the Descent, a rescue or other expeditions at the same time, each with its own timer in live mode."),
+            dict(name="Rescue parties", text="Scouts that run out of budget are no longer lost on the spot: they are stranded on the floor they reached, and the Colony shows a timer (24 hours). One to five slimes can be sent to rescue them. Floors that are already scouted are a known road: rescuers only need to have walked the unscouted floors on the way, and each scouted floor costs a quarter hour instead of an hour. The trip takes 4 hours plus the floors to cross (hours inside: the lobby clock pays a third of them), and a slime with the Tailwind passive (the wind element mastered to the top level: an ordinary mage does not hasten it) makes the way 25% shorter, up to 50% with two or more. It costs food, can be ambushed (deaths are permanent) and succeeds more often the stronger and better-informed the rescuers are. A failed attempt leaves the scouts waiting if time remains; if the deadline passes they are lost, as before. Several parties can be in the Descent, a rescue or other expeditions at the same time, each with its own timer in live mode."),
             dict(name="Retreat", text="Mid-segment there is one costed way out: a Retreat. It costs purple gel (2, plus 1 per 5 floors deep), 12 morale per slime and drains the party's stamina, and the flight can be ambushed (35% base, higher deeper, lower on well-scouted floors) - a hit can be fatal, and deaths are permanent. Floors already cleared stay cleared for each slime, but to go back down the party must enter again from a checkpoint. At a checkpoint the exit is free."),
             dict(name="Wayside stops", text="On floors 3, 8, 13, 18 ... a wayside stop waits between fights. The party can rest there once (3 hours, +50% HP, no ambush) and buy one of each supply with white gel: Healing Salve (+35% HP), Trail Ration (+5 food), Ward Charm (+15% defense next fight) and Whetstone (+15% attack next fight). Prices rise with depth."),
             dict(name="Spell mutation", text="A fused (tier 2 or 3) spell changes form as its caster's mastery of the spell's element grows. Stage 1 (✦) comes one mastery level above the level needed to cast it, stage 2 (✦✦) three levels above: tier 2 spells at mastery 4 and 6, tier 3 at 6 and 8. Each form adds effects and about 10% / 25% more power: lava burns, lightning pierces armor and stuns, ice freezes, storm strikes several times, obsidian shields the caster, and healing fusions cleanse and turn overhealing into a shield. The weakest component of a compound element sets the mastery. The Academy shows each spell's forms."),
@@ -261,12 +275,33 @@ def build() -> list:
             dict(name="Potion slots", text="A slime can have 2 potions active at once at 1 star, up to 6 at 5 stars; wait for one to wear off before adding another."),
             dict(name="No care inside", text="You cannot feed, pet, talk to or give potions to a slime that is inside a dungeon. "
                                               "Slimes' autonomy still helps them before they leave.")]),
+        dict(title="Gear and relics", icon="🛠️", blurb="Two kinds of things a slime can wear, and how to get them.", items=[
+            dict(name="Gear and relics", text=f"GEAR is bought at the Armory (Town > Armory & relics): plain pieces in three tiers for weapon, armor and charm, "
+                                              f"identical copies of one name. RELICS are one-of-a-kind pieces with their own rarity, stars, level and mods, "
+                                              f"found in the Wayfarer's Rift, forged by an appointed blacksmith, or made by merging. A slime wears one gear piece "
+                                              f"and one relic in each slot (weapon, armor, charm) at the same time. Their names never overlap, so a name tells you which it is "
+                                              f"(a Wooden Bow is gear; a Wayfarer's Recurve is a relic)."),
+            dict(name="Getting armor", text=f"Gear armor: Leather Wrap (tier 1, 30 white gel), Gel Mail (tier 2: 120 white gel and 10 essence, needs Armory level 3) "
+                                            f"and Obsidian Plate (tier 3: 400 white gel, 40 essence and 1 purple gel, needs Armory level 5). Buy it in Town > Armory & relics, or merge "
+                                            f"{c.GEAR_MERGE_COUNT} identical spares of one tier into the next. Relic armor (Padded Vest, Chain Shell, Robe of Threads) drops in the "
+                                            f"Rift and comes from the blacksmith's forge. Equip either from the slime's Gear tab."),
+            dict(name="Sell back and break down", text=f"Spare GEAR can be sold back for {c.GEAR_SCRAP_REFUND:.0%} of its price (same currency) or merged "
+                                                       f"{c.GEAR_MERGE_COUNT} into one of the next tier. A RELIC can be merged into another of the same slot (the target gains levels and may inherit a mod) or "
+                                                       f"broken down into crafting materials (Scrap, Alloy and up): better and higher-level relics give more, a Keeper's appraiser adds to it, and it cannot be undone. "
+                                                       f"Materials level your other relics. Both live in Town > Merge & destroy.")]),
         dict(title="Time", icon="⏳", blurb="Two ways time can pass.", items=[
             dict(name="Turn-based", text="Time passes when you act or press the wait buttons. Every activity costs game hours."),
-            dict(name="Live (wall clock)", text=f"Time passes by itself. At home the clock runs at {c.LIVE_LOBBY_RATE:g} game hour per real hour "
-                                                f"(study, hunts and brewing take real time); while any party is in a dungeon it runs "
-                                                f"{c.LIVE_DUNGEON_RATE:g}x faster. Speed presets multiply both. Offline progress is capped at "
-                                                f"{c.LIVE_CATCHUP_MAX_HOURS} game hours."),
+            dict(name="Live (wall clock)", text=f"Time passes by itself. The lobby clock runs at {c.LIVE_LOBBY_RATE:g} game hour per real hour "
+                                                f"(study, hunts and brewing take real time) and never speeds up, whoever is away; the speed presets "
+                                                f"multiply it. Offline progress is capped at {c.LIVE_CATCHUP_MAX_HOURS} game hours."),
+            dict(name="Dungeon time", text="Time INSIDE a dungeon runs faster than in the lobby, place by place: the Hollow Descent, the Gloop Pit, "
+                                           "the Wayfarer's Rift, the Starfall Quarry, Mossy Burrows, rescue missions and wave simulations "
+                                           "are all x3 for now (each place has its own number, so they can be tuned one by one). Scouting budgets, "
+                                           "hunting, foraging, drills, spars and posts stay on lobby time, and so do stranded scouts waiting for rescue. Anything "
+                                           "measured in hours inside costs the lobby clock a third of them, rounded up and at least 1: a 3-hour "
+                                           "floor takes one +1h, a 24-hour Pit session 8. The party inside lives at the dungeon's pace: per lobby "
+                                           "hour it eats, tires and mends three times as much, and its members grow closer as they travel and camp "
+                                           "together. The colony at home does not speed up, and the 24-hour rescue deadline counts lobby hours."),
             dict(name="Clearing a floor", text="Takes longer deeper down, shorter if the party is stronger than the floor and if it has been "
                                                f"scouted (up to {c.CLEAR_KNOWLEDGE_CUT:.0%} faster). Bigger parties are a little slower.")]),
         dict(title="Autonomy", icon="🤖", blurb="What slimes do without asking.", items=[

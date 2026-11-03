@@ -86,7 +86,7 @@ class TestWaysideStop(unittest.TestCase):
             s.hp = max(1, s.max_hp // 10)
         t0 = g.tick_count
         g.stop_rest(pid)
-        self.assertEqual(g.tick_count - t0, config.STOP_REST_HOURS)
+        self.assertEqual(g.tick_count - t0, g.lobby_hours("main", config.STOP_REST_HOURS))
         self.assertTrue(all(s.hp >= s.max_hp * 0.5 for s in members(g, pid)))
         with self.assertRaises(InvalidAction):
             g.stop_rest(pid)

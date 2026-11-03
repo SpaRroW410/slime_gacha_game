@@ -12,7 +12,7 @@ import json
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import passives as passives_mod, rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -38,6 +38,7 @@ def slime_view(g: Game, s) -> dict:
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
         job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji, foraging=(s.state == "hunting")) if s.job else None),
         job_levels={k: jobs_mod.level(s, k) for k in jobs_mod.JOBS},
+        passives=[dict(key=p.key, name=p.name, emoji=p.emoji, group=p.group, desc=p.desc, need=p.need, earned=bool(p.earned(g, s))) for p in passives_mod.PASSIVES],
         trades=[dict(key=k, name=j.name, emoji=j.emoji, level=jobs_mod.level(s, k), xp=s.job_xp.get(k, 0), talent=s.archetype in j.talents,
                      floor=jobs_mod.xp_for(jobs_mod.level(s, k)),
                      next=(jobs_mod.xp_for(jobs_mod.level(s, k) + 1) if jobs_mod.level(s, k) < config.JOB_MAX_LEVEL else None),
@@ -334,7 +335,7 @@ def snapshot(g: Game) -> dict:
         buildings=g.building_report(),
         version=config.VERSION, whats_new=about_mod.WHATS_NEW,
         stranded=[dict(id=e["id"], ids=e["ids"], names=[g.roster[i].name for i in e["ids"] if i in g.roster], first=e["first"], last=e["last"],
-                       stuck=e["stuck"], hours_left=g.stranded_left(e), rescue_hours=g.rescue_hours(e), food=g.rescue_food(e),
+                       stuck=e["stuck"], hours_left=g.stranded_left(e), rescue_hours=g.rescue_hours(e), rescue_lobby=g.lobby_hours("rescue", g.rescue_hours(e)), food=g.rescue_food(e),
                        path=g.rescue_path(e), need=max([f for f in range(1, e["stuck"]) if g._knowledge(f) < 100.0], default=0)) for e in g.stranded],
         modifiers={k: dict(name=m.name, emoji=m.emoji, desc=m.desc, boon=m.boon) for k, m in modifiers_mod.MODIFIERS.items()},
         jobs=_jobs_view(g),
@@ -357,6 +358,7 @@ def snapshot(g: Game) -> dict:
                                    joinable=g.joinable(pid), callers=[s.id for s in g.callers(pid)], call_cost=g.call_cost(d["floor"]),
                                    force_cap=g.force_cap(d["floor"]), called=(d.get("called") == d["floor"]),
                                    ready_in=(max(0, d.get("ready_tick", 0) - g.tick_count) if g.timed else 0),
+                                   next_lobby=g.lobby_hours("main", dungeon.clear_hours(d["floor"], sum(s.level for s in g._members_in("main", pid)) / max(1, len(g._members_in("main", pid))), g._knowledge(d["floor"]), max(1, len(g._members_in("main", pid))))),
                                    next_hours=dungeon.clear_hours(d["floor"], sum(s.level for s in g._members_in("main", pid)) / max(1, len(g._members_in("main", pid))), g._knowledge(d["floor"]), max(1, len(g._members_in("main", pid)))),
                                    members=[m.id for m in g._members_in("main", pid)])
                     for pid, d in g.delves.items()},
@@ -364,9 +366,11 @@ def snapshot(g: Game) -> dict:
                          adv_ticks=config.ADV_TICKS, adv_runs=config.ADV_MAX_RUNS, wave_ticks=config.WAVE_TICKS, wave_max=config.WAVE_MAX_WAVES),
             grind_depths=config.GRIND_DEPTHS, scout_hours=[config.SCOUT_MIN_HOURS, config.SCOUT_MAX_HOURS],
             scout_max_floors=config.SCOUT_MAX_FLOORS, scout_food=config.SCOUT_FOOD_PER_HOUR,
+            rescue_tailwind=dict(each=config.RESCUE_TAILWIND_SPEED, max=config.RESCUE_TAILWIND_MAX),
         ),
+        passive_groups=[list(x) for x in passives_mod.GROUPS],
         clock=dict(mode=g.time_mode, scale=g.time_scale, scales=list(config.LIVE_SCALES),
-                   lobby_rate=config.LIVE_LOBBY_RATE * g.time_scale, dungeon_rate=config.LIVE_DUNGEON_RATE * g.time_scale,
+                   lobby_rate=config.LIVE_LOBBY_RATE * g.time_scale, dilation={p.key: p.dilation for p in places_mod.PLACES if p.dilation != 1.0},
                    rate_now=(g.clock_rate() if g.live else None),
                    expeditions=[dict(names=[g.roster[i].name for i in e["ids"] if i in g.roster],
                                      hours=max(0, e["until"] - g.tick_count),
