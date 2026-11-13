@@ -631,7 +631,8 @@ function gentleNote(gk) {
 }
 function passivesHtml(s, st) {
   const row = (p) => `<div class="${p.earned ? '' : 'mute'}" title="${esc(p.desc)}">${p.earned ? '✅' : '🔒'} ${p.emoji} <b>${esc(p.name)}</b> — ${esc(p.earned ? p.desc : p.need)}</div>`;
-  const done = s.passives.filter((p) => p.earned), todo = s.passives.filter((p) => !p.earned);
+  const mine = new Set(s.passives || []), all = (st.passive_defs || []).map((p) => ({ ...p, earned: mine.has(p.key) }));
+  const done = all.filter((p) => p.earned), todo = all.filter((p) => !p.earned);
   const groups = (st.passive_groups || []).map(([k, name]) => [name, todo.filter((p) => p.group === k)]).filter(([, l]) => l.length);
   return `<div class="stack" style="gap:4px">${done.map(row).join('') || '<small class="mute">None earned yet.</small>'}</div>
     ${todo.length ? `<details data-keep="passivesLocked"><summary class="mute">🔒 ${todo.length} locked: what earns them</summary>${groups.map(([name, l]) => `<h5 style="margin:6px 0 2px">${esc(name)}</h5><div class="stack" style="gap:3px">${l.map(row).join('')}</div>`).join('')}</details>` : ''}`;
@@ -961,7 +962,7 @@ function cut(html, from, to) {
 /* How long a session will take, said before it starts (a farming session never lasts more than a day, camping included). */
 /* A rescue party's mages hasten the trip (dungeon hours), and the lobby clock pays a third of what is left. */
 function rescueNote(e, ids) {
-  const m = S.state.dungeon.rescue_tailwind, bearers = ids.map(slimeById).filter((x) => x && (x.passives || []).some((p) => p.key === 'tailwind' && p.earned));
+  const m = S.state.dungeon.rescue_tailwind, bearers = ids.map(slimeById).filter((x) => x && (x.passives || []).includes('tailwind'));
   const speed = Math.min(m.max, bearers.length * m.each);
   const hours = Math.max(1, Math.ceil(e.rescue_hours * (1 - speed) - 1e-9)), lobby = Math.max(1, Math.ceil(hours / (S.state.clock.dilation?.rescue || 1) - 1e-9));
   return bearers.length ? `🌪️ Tailwind (${bearers.map((x) => esc(x.name)).join(', ')}) shortens the way by ${Math.round(speed * 100)}%: ~${hours}h inside (≈ ${lobby}h here).` : `A slime that has mastered the wind element (the Tailwind passive) shortens the way by ${Math.round(m.each * 100)}% (up to ${Math.round(m.max * 100)}% together). A mage alone does not.`;

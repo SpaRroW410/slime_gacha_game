@@ -38,7 +38,7 @@ def slime_view(g: Game, s) -> dict:
         xp=s.xp, xp_next=s.xp_needed(s.level), total_xp=s.total_xp,
         job=(dict(key=s.job, name=jobs_mod.JOBS[s.job].name, emoji=jobs_mod.JOBS[s.job].emoji, foraging=(s.state == "hunting")) if s.job else None),
         job_levels={k: jobs_mod.level(s, k) for k in jobs_mod.JOBS},
-        passives=[dict(key=p.key, name=p.name, emoji=p.emoji, group=p.group, desc=p.desc, need=p.need, earned=bool(p.earned(g, s))) for p in passives_mod.PASSIVES],
+        passives=[p.key for p in passives_mod.PASSIVES if p.earned(g, s)],      # keys only: the definitions travel once (state.passive_defs)
         trades=[dict(key=k, name=j.name, emoji=j.emoji, level=jobs_mod.level(s, k), xp=s.job_xp.get(k, 0), talent=s.archetype in j.talents,
                      floor=jobs_mod.xp_for(jobs_mod.level(s, k)),
                      next=(jobs_mod.xp_for(jobs_mod.level(s, k) + 1) if jobs_mod.level(s, k) < config.JOB_MAX_LEVEL else None),
@@ -370,6 +370,7 @@ def snapshot(g: Game) -> dict:
             rescue_tailwind=dict(each=config.RESCUE_TAILWIND_SPEED, max=config.RESCUE_TAILWIND_MAX),
         ),
         passive_groups=[list(x) for x in passives_mod.GROUPS],
+        passive_defs=[dict(key=p.key, name=p.name, emoji=p.emoji, group=p.group, desc=p.desc, need=p.need) for p in passives_mod.PASSIVES],
         clock=dict(mode=g.time_mode, scale=g.time_scale, scales=list(config.LIVE_SCALES),
                    lobby_rate=config.LIVE_LOBBY_RATE * g.time_scale, dilation={p.key: p.dilation for p in places_mod.PLACES if p.dilation != 1.0},
                    rate_now=(g.clock_rate() if g.live else None),

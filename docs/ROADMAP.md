@@ -144,6 +144,7 @@ As of 27 October 2026:
 - [x] **84. Eight more elements to fuse** — Mist (steam + wind), Geyser (steam + earth), Ash (lava + wind), Clay (mud + fire), Glass (sand + fire), Quicksand (sand + water), Glacier (ice + water) and Thunderstone (lightning + earth): tier-3 elements, each with its own two spell forms; the ones with three basics in them need all three mastered (the weakest component counts).  *Done when:* met (`elements.py`, `spells.MUTATIONS`; 21 recipes now).
 - [x] **82. Passive skills** — 28 passive skills earned by mastering something, shown on the slime's Fight tab (earned first, locked ones grouped with what it takes): an element at the top level (Tailwind: rescue trips shorter; Hearth: camp healing; Wellspring: less food and energy burned inside; Bedrock: ambush damage), a trade at the top level (output +25%; Distiller: extra potions; Master Trainer: stronger teaching), class proficiency 100 (the gold star: one personal combat perk per class; Dual Mastery with the teal star), a fighting style at level 10 (three), and ties (Soulbound, Heart of the Party: party synergy).  *Done when:* met (`passives.py`; the Guide lists them from the data; more can be added by data alone).
 - [x] **85. Gentle Keeper badges** — the game is meant to need merging and destroying; a milestone floor (10, 20, 30, 40, 50) first cleared with few slimes sacrificed earns a gold, silver or bronze medal (limits per floor in `config.GENTLE_FLOORS`), and the first gold the title "the Gentle".  *Done when:* met (`Game.sacrifices` counts merges, chamber destroys and ego fusions; `Game.milestones` keeps the count at each first clear; colonies saved before the count earn none; People > Keeper shows the medals, the merge screens how many more sacrifices the next medal allows).
+- [x] **86. Lighter replies (first step of task 48)** — every reply carried all 28 passive descriptions for every slime (6.8 KB a slime, 64% of the state); now the definitions travel once and each slime only the keys it has earned. At 120 slimes a reply went from 1.8 MB to 1.0 MB.  *Done when:* met (`state.passive_defs`, `slime.passives` as keys).
 
 ### After floor 50 (art and sound)
 
@@ -420,7 +421,7 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
 
 ### M27 — Gentle Keeper (13 November 2026)
-- [x] Gentle Keeper badges: milestone floors cleared with few sacrifices (85)
+- [x] Gentle Keeper badges: milestone floors cleared with few sacrifices (85); replies 43% lighter (86)
 - [x] Passive skills: 28 perks earned by element, trade, proficiency, style and ties (82); Tailwind hastens rescue parties (79); mages slightly rarer in pulls (80); camps heal and rest properly in every mode (81)
 
 ### M24 — Troublemakers and the Keeper's shadow (27 October 2026)
