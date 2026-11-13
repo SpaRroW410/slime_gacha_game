@@ -320,6 +320,11 @@ STOP_REST_HEAL, STOP_REST_HOURS = 0.5, 3   # a wayside stop's safe rest: share o
 RETREAT_PURPLE_BASE, RETREAT_AMBUSH, RETREAT_MORALE = 2, 0.35, 12   # emergency retreat: purple gel base fee (+1 per 5 floors), ambush chance, morale lost
 CAMP_AMBUSH_DAMAGE = (0.10, 0.30)      # fraction of max HP, x(1 + 0.05 * floor)
 RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35   # the deadline is in LOBBY hours, the trip in dungeon hours
+# ---- Gentle Keeper badges (achievements.py): a milestone floor of the Descent cleared while merging or destroying few slimes --------
+# floor -> most sacrifices (merges, chamber destroys, ego fusions, ever) for (gold, silver, bronze) when that floor is first cleared.
+# The game is meant to need sacrifices; clearing deep with few of them is the feat.
+GENTLE_FLOORS = {10: (0, 3, 8), 20: (2, 8, 20), 30: (5, 15, 35), 40: (8, 25, 55), 50: (12, 35, 80)}
+
 # ---- passive skills (passives.py) -------------------------------------------------------------------------------------------------
 HEARTH_HEAL = 0.25               # Hearth (fire mastered): the party mends this much more at each camp hour
 WELLSPRING_CUT = 0.20            # Wellspring (water mastered): the party burns this much less food and energy inside dungeons

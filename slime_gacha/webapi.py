@@ -314,6 +314,7 @@ def snapshot(g: Game) -> dict:
                     respec=dict(cost=g.keeper.respec_cost(), count=g.keeper.respecs),
                     achievements=[dict(key=a.key, name=a.name, emoji=a.emoji, desc=a.desc, title=a.title,
                                        done=a.key in g.keeper.achieved) for a in achievements_mod.ACHIEVEMENTS.values()],
+                    gentle=dict(sacrifices=g.sacrifices, tracked=g.sacrifices_tracked, badges=achievements_mod.gentle_badges(g)),
                     title_pick=g.keeper.title_pick,
                     branches={k: dict(name=v[0], emoji=v[1]) for k, v in keeper_mod.BRANCHES.items()},
                     skills=[dict(key=sk.key, branch=sk.branch, name=sk.name, emoji=sk.emoji, level=sk.level,

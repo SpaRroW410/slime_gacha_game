@@ -103,6 +103,9 @@ class Game:
         self.best_floor = 0                            # deepest floor ever cleared by anyone
         self.descent_cleared = False                   # the final boss (floor 50) has fallen
         self.bounties: set = set()                     # boss floors whose purple-gel bounty is already paid
+        self.sacrifices = 0                            # slimes merged away, destroyed in the chamber or fused into a relic, ever
+        self.sacrifices_tracked = True                 # False for a colony saved before the count existed: no Gentle Keeper badges
+        self.milestones: Dict[int, int] = {}           # milestone floor -> sacrifices when it was first cleared (achievements.py)
         self.delves: Dict[int, dict] = {}              # party id -> active delve {floor, start, hours}
         self.intel: Dict[int, float] = {}              # floor -> knowledge 0-100 (scouting / having walked it)
         self.dungeon_seed = (random.Random((seed or 0) ^ 0x5EED).randrange(2 ** 31) if seed is not None
@@ -1900,6 +1903,7 @@ class Game:
         friends |= {i for k, v in self.social.bonds.items() if d.id in k and v >= 20 for i in k if i != d.id}
         self.social.inherit(d, t, self.slimes())               # the target keeps half the donor's friendships
         del self.roster[d.id]
+        self.sacrifices += 1
         self.conflicts.forget(d.id)
         self.parties.remove(d.id)
         self._lose_ties(d, relief=relief)
@@ -2574,6 +2578,17 @@ class Game:
         self.journal.extend(out)
         return out
 
+    def _milestone(self, floor: int) -> List[str]:
+        """A milestone floor is cleared for the first time: remember how many slimes it took (the Gentle Keeper badge)."""
+        if not self.sacrifices_tracked:
+            self.milestones[floor] = -1
+            return []
+        n = self.milestones[floor] = self.sacrifices
+        grade = achievements.gentle_grade(floor, n)
+        medal = dict(achievements.GRADES).get(grade, "")
+        return [f"🏅 Floor {floor} cleared with {n} slime(s) merged or destroyed"
+                + (f": a {grade} Gentle Keeper badge {medal}!" if grade else ". (No Gentle Keeper badge: too many sacrifices.)")]
+
     def _consume_slime(self, s: Slime, stress: float) -> List[str]:
         """Remove a slime sacrificed by the player: gear comes home, the colony mourns, stress rises (a troublemaker: nobody
         but its partner and best friend minds, see _troublemaker_gone). Returns lines for the log."""
@@ -2585,6 +2600,7 @@ class Game:
         eased = self._troublemaker_gone(s) if relief else []
         self._return_gear(s)
         del self.roster[s.id]
+        self.sacrifices += 1
         self.conflicts.forget(s.id)
         self.parties.remove(s.id)
         self._lose_ties(s, relief=relief)
@@ -3594,6 +3610,8 @@ class Game:
         events: List[str] = []
         self._drop_gear([s for s in party if s.hp <= 0], survivors, party, "Hollow Descent", events)
         if report.victory:
+            if floor in config.GENTLE_FLOORS and floor > self.best_floor and floor not in self.milestones:
+                events.extend(self._milestone(floor))
             self.best_floor = max(self.best_floor, floor)
             self.intel[floor] = 100.0                       # having walked it, the colony knows the floor
             for s in survivors:
@@ -4229,7 +4247,8 @@ class Game:
     # ---- persistence -----------------------------------------------------------
     def to_dict(self) -> dict:
         return dict(version=config.SAVE_VERSION, seed=self.seed, tick=self.tick_count,
-                    bounties=sorted(self.bounties), descent_cleared=self.descent_cleared, custom_spells=spells.custom_records(),
+                    bounties=sorted(self.bounties), descent_cleared=self.descent_cleared, sacrifices=self.sacrifices,
+                    sacrifices_tracked=self.sacrifices_tracked, milestones={str(k): v for k, v in self.milestones.items()}, custom_spells=spells.custom_records(),
                     buildings=self.buildings.to_dict(), best_floor=self.best_floor,
                     delves={str(k): v for k, v in self.delves.items()},
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
@@ -4262,7 +4281,8 @@ class Game:
     # the top-level shape every save has: key -> accepted types (a missing key is fine: old saves lack newer ones)
     _SAVE_SHAPE = dict(tick=int, seed=(int, type(None)), wallet=dict, gacha=dict, parties=dict, slimes=list, buildings=(dict, type(None)),
                        delves=dict, intel=dict, keeper=(dict, type(None)), pantry=dict, journal=list, graveyard=list, conflicts=list,
-                       bonds=list, bounties=list, expeditions=list, stranded=list, inventory=dict, plans=dict, construction=dict, chapters=list, pending_battle=(dict, type(None)))
+                       bonds=list, bounties=list, expeditions=list, stranded=list, inventory=dict, plans=dict, construction=dict, chapters=list, pending_battle=(dict, type(None)),
+                       sacrifices=int, sacrifices_tracked=bool, milestones=dict)
 
     @classmethod
     def check_save(cls, d) -> None:
@@ -4304,6 +4324,9 @@ class Game:
         g.tick_count = d.get("tick", 0)
         g.bounties = set(d.get("bounties", range(config.MAIN_BOSS_EVERY, d.get("main_floor", 0) + 1,
                                                config.MAIN_BOSS_EVERY)))
+        g.sacrifices = int(d.get("sacrifices", 0))
+        g.sacrifices_tracked = bool(d.get("sacrifices_tracked", "sacrifices" in d))     # an older colony never counted them
+        g.milestones = {int(k): int(v) for k, v in (d.get("milestones") or {}).items()}
         wallet = dict(d.get("wallet") or {})
         for old, new in (("gel", "white_gel"), ("silver", "white_gel"), ("gold", "purple_gel")):
             if old in wallet:                                # v1/v2 saves: migrate old currency names

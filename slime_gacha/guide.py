@@ -206,6 +206,12 @@ def build() -> list:
             dict(name="The Keeper", text="You level up by playing; each level gives a skill point for the four skill branches and unlocks "
                                          "daily abilities.")]),
         dict(title="Dungeons and death", icon="🕳️", blurb="Where death is possible.", items=[
+            dict(name="Gentle Keeper badges", text="The Descent is meant to be hard enough that you merge and destroy slimes to get stronger. "
+                 "Clearing a milestone floor for the first time while having sacrificed few slimes (merges, chamber destroys and ego fusions, "
+                 "counted over the colony's whole life) earns a medal: " + "; ".join(
+                     f"floor {f}: gold at {g} or fewer, silver at {s_}, bronze at {b}" for f, (g, s_, b) in sorted(c.GENTLE_FLOORS.items()))
+                 + ". Your first gold earns the title 'the Gentle'. People > Keeper shows the medals and the count; the merge screens (Town > Merge & destroy and People > Council) show how "
+                   "many more sacrifices the next medal allows."),
             dict(name="Hollow Descent", text="Permadeath. Floors in order; you may leave for free only after a boss floor (an emergency Retreat is the costed exception). Every slime must have "
                                              "cleared the floors above."),
             dict(name="Gloop Pit, Wayfarer's Rift, Starfall Quarry", text="Nobody dies. A knocked-out slime loses morale (never XP) and its relics are battered; in the Pit it also drops its gear. All three farming dungeons now and then (about 5% per foe) hand out a little extra gel, food, essence or scrap. The Pit (XP) is run by a full party, always fought automatically (no taking command); the Rift (relics) and the Quarry (ascension stones) take any 1-5 slimes. Each has its own sub-tab in Dungeons."),
