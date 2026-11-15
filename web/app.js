@@ -613,9 +613,26 @@ function drawer(s) {
 const sect = (title, tip, inner) => `<section class="dsec"><h4>${title}${tip ? info(tip) : ''}</h4>${inner}</section>`;
 
 /* A slime's passive skills: the earned ones first, then every locked one grouped under what earns it (collapsed). */
+/* Gentle Keeper: each milestone floor of the Descent, first cleared with few slimes merged or destroyed, earns a medal. */
+function gentleBadges(gk) {
+  if (!gk) return '';
+  const cell = (b) => b.sacrifices == null ? chip(`Floor ${b.floor}: 🥇 ≤${b.limits.gold} · 🥈 ≤${b.limits.silver} · 🥉 ≤${b.limits.bronze}`)
+    : b.sacrifices < 0 ? chip(`Floor ${b.floor}: cleared before the count`) : chip(`Floor ${b.floor}: ${b.grade ? b.emoji + ' ' + b.grade : 'no badge'} (${b.sacrifices})`, b.grade === 'gold' ? 'ok' : b.grade ? 'info' : '');
+  return `<div class="panel flat stack" style="margin-top:8px"><b>🏅 Gentle Keeper badges</b>
+    <small class="mute">The Descent is meant to need sacrifices. Clear a milestone floor having merged or destroyed few slimes (counted over the colony's whole life) for a medal. So far: <b>${gk.sacrifices}</b>${gk.tracked ? '' : '. This colony was started before the count, so it earns no badges'}.</small>
+    <div class="row" style="gap:6px;flex-wrap:wrap">${gk.badges.map(cell).join('')}</div></div>`;
+}
+function gentleNote(gk) {
+  if (!gk || !gk.tracked) return '';
+  const next = gk.badges.find((b) => b.sacrifices == null);
+  if (!next) return '';
+  const left = (lim) => Math.max(0, lim - gk.sacrifices);
+  return `<small class="mute" style="display:block">🏅 ${gk.sacrifices} slime${gk.sacrifices === 1 ? '' : 's'} merged or destroyed so far. Gentle Keeper badge for floor ${next.floor}: ${gk.sacrifices <= next.limits.bronze ? `${['gold', 'silver', 'bronze'].filter((g) => gk.sacrifices <= next.limits[g]).map((g) => `${g} still possible (${left(next.limits[g])} more allowed)`)[0]}` : 'out of reach for that floor'}.</small>`;
+}
 function passivesHtml(s, st) {
   const row = (p) => `<div class="${p.earned ? '' : 'mute'}" title="${esc(p.desc)}">${p.earned ? '✅' : '🔒'} ${p.emoji} <b>${esc(p.name)}</b> — ${esc(p.earned ? p.desc : p.need)}</div>`;
-  const done = s.passives.filter((p) => p.earned), todo = s.passives.filter((p) => !p.earned);
+  const mine = new Set(s.passives || []), all = (st.passive_defs || []).map((p) => ({ ...p, earned: mine.has(p.key) }));
+  const done = all.filter((p) => p.earned), todo = all.filter((p) => !p.earned);
   const groups = (st.passive_groups || []).map(([k, name]) => [name, todo.filter((p) => p.group === k)]).filter(([, l]) => l.length);
   return `<div class="stack" style="gap:4px">${done.map(row).join('') || '<small class="mute">None earned yet.</small>'}</div>
     ${todo.length ? `<details data-keep="passivesLocked"><summary class="mute">🔒 ${todo.length} locked: what earns them</summary>${groups.map(([name, l]) => `<h5 style="margin:6px 0 2px">${esc(name)}</h5><div class="stack" style="gap:3px">${l.map(row).join('')}</div>`).join('')}</details>` : ''}`;
@@ -945,7 +962,7 @@ function cut(html, from, to) {
 /* How long a session will take, said before it starts (a farming session never lasts more than a day, camping included). */
 /* A rescue party's mages hasten the trip (dungeon hours), and the lobby clock pays a third of what is left. */
 function rescueNote(e, ids) {
-  const m = S.state.dungeon.rescue_tailwind, bearers = ids.map(slimeById).filter((x) => x && (x.passives || []).some((p) => p.key === 'tailwind' && p.earned));
+  const m = S.state.dungeon.rescue_tailwind, bearers = ids.map(slimeById).filter((x) => x && (x.passives || []).includes('tailwind'));
   const speed = Math.min(m.max, bearers.length * m.each);
   const hours = Math.max(1, Math.ceil(e.rescue_hours * (1 - speed) - 1e-9)), lobby = Math.max(1, Math.ceil(hours / (S.state.clock.dilation?.rescue || 1) - 1e-9));
   return bearers.length ? `🌪️ Tailwind (${bearers.map((x) => esc(x.name)).join(', ')}) shortens the way by ${Math.round(speed * 100)}%: ~${hours}h inside (≈ ${lobby}h here).` : `A slime that has mastered the wind element (the Tailwind passive) shortens the way by ${Math.round(m.each * 100)}% (up to ${Math.round(m.max * 100)}% together). A mage alone does not.`;
@@ -1546,7 +1563,8 @@ function keeper() {
     <p class="mute">You earn Keeper XP by tending slimes, pulling, winning fights, clearing floors, scouting, mediating, forging, brewing and by seeing families grow. Each level gives a skill point (a bonus one every 5 levels).</p></div>
   <div class="panel stack" style="margin-top:12px"><div class="row between"><h3>🏆 Achievements <small class="mute">${k.achievements.filter((x) => x.done).length}/${k.achievements.length}</small></h3>
     <button class="btn small" data-act="keeper_respec" title="Forget every learned skill and get the points back" ${affordable(k.respec.cost) ? '' : 'disabled'}>🔄 Respec · ${cost(k.respec.cost)}</button></div>
-    <div class="grid cols2">${k.achievements.map((x) => `<div class="row between ${x.done ? '' : 'mute'}"><span>${x.done ? x.emoji : '🔒'} <b>${esc(x.name)}</b><br><small>${esc(x.desc)}${x.title ? ` · title “${esc(x.title)}”` : ''}</small></span>${x.done && x.title ? `<button class="btn small ${k.title_pick === x.key ? 'primary' : ''}" data-act="keeper_title" data-key="${k.title_pick === x.key ? '' : x.key}">${k.title_pick === x.key ? 'Worn' : 'Wear'}</button>` : ''}</div>`).join('')}</div></div>
+    <div class="grid cols2">${k.achievements.map((x) => `<div class="row between ${x.done ? '' : 'mute'}"><span>${x.done ? x.emoji : '🔒'} <b>${esc(x.name)}</b><br><small>${esc(x.desc)}${x.title ? ` · title “${esc(x.title)}”` : ''}</small></span>${x.done && x.title ? `<button class="btn small ${k.title_pick === x.key ? 'primary' : ''}" data-act="keeper_title" data-key="${k.title_pick === x.key ? '' : x.key}">${k.title_pick === x.key ? 'Worn' : 'Wear'}</button>` : ''}</div>`).join('')}</div>
+    ${gentleBadges(k.gentle)}</div>
   <div class="grid cols2" style="margin-top:12px">${Object.entries(k.branches).map(([b, br]) => `<div class="panel stack"><h3>${br.emoji} ${esc(br.name)}</h3>
     ${k.skills.filter((s) => s.branch === b).map((s) => `<div class="panel flat"><div class="row between"><b>${s.emoji} ${esc(s.name)}${info(s.per_rank + ' (per rank). Needs Keeper level ' + s.level + '+, +2 for each further rank.')}</b><span>${pips(s.rank, s.max_rank)}</span></div>
       <div class="row" style="margin-top:4px"><button class="btn small ${!s.why_not ? 'primary' : ''}" data-act="keeper_learn" data-key="${s.key}" ${s.why_not ? 'disabled' : ''} title="${esc(s.why_not || '')}">${s.rank >= s.max_rank ? 'Mastered' : 'Learn'}</button>${s.why_not && s.rank < s.max_rank ? `<small class="mute">${esc(s.why_not)}</small>` : ''}</div></div>`).join('')}
@@ -1572,7 +1590,7 @@ function sacrificeView() {
   const pv = S.mprev && S.mprev.t === tid && S.mprev.d === did ? S.mprev : null;
   const ok = free.length >= 2 && tid !== did;
   return `<div class="grid cols2">
-    <div class="panel stack"><h2>🫧 Merge two slimes</h2>
+    <div class="panel stack"><h2>🫧 Merge two slimes</h2>${gentleNote(st.keeper.gentle)}
       <p class="mute">The <b>donor</b> is consumed: its collected XP and a share of its stats go to the <b>target</b>. It lowers the whole colony's morale, and <b>sacrifices compound</b> (stress now <b>${st.stress}</b>; it fades by 1 per day). Slimes away from the colony cannot be chosen${away ? ` (${away} away now)` : ''}. The Council tab still suggests good pairs.</p>
       ${bar(Math.min(st.stress, 5), 5, 'morale', 'Sacrifice stress', st.stress)}
       <div class="row"><label class="f">Target (keeps living) ${t}</label><label class="f">Donor (consumed) ${d}</label></div>
@@ -1672,6 +1690,7 @@ function council() {
   }).join('') : '<p class="mute">No slimes yet.</p>';
   return `<div class="stack" style="margin-bottom:12px">${quarrels.replace('<h3>Quarrels</h3>', `<h3>⚔️ Quarrels to mediate ${st.conflicts.length ? chip(String(st.conflicts.length), 'bad') : ''}</h3>`)}
     <div class="panel stack"><h3>⚖️ Best merge suggestions</h3>
+      ${gentleNote(S.state.keeper.gentle)}
       <p class="mute">Merging consumes the donor to feed the target. It lowers everyone's morale (not for a troublemaker), and <b>sacrifices compound</b>: stress now <b>${st.stress}</b> (each recent merge makes the next cost +${Math.round(st.max_stress_amp * 100)}% more and lowers the whole colony's morale target; it fades by 1 per day).</p>
       ${bar(Math.min(st.stress, 5), 5, 'morale', 'Sacrifice stress', st.stress)}
       ${c && c.merges.length ? c.merges.map((m) => `<div class="row between panel flat"><span><b>${esc(m.donor_name)}</b> → <b>${esc(m.target_name)}</b><br><small class="mute">+${m.xp} XP · compat ${m.compat >= 0 ? '+' : ''}${m.compat} · ${m.relief ? 'a troublemaker: no morale cost' : `colony morale cost ${m.grief}`}</small></span>

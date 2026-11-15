@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-10-28-dungeon-time",
-                 text="Dungeon time: inside a dungeon, time runs 3x faster than in the lobby (each place has its own number, so it can be tuned one by one; scouting, hunting, foraging and jobs stay on lobby time). A 3-hour floor now costs 1 hour on the clock, but the party inside eats, tires, mends and grows closer 3x as fast, and the live clock no longer speeds up when someone leaves. 28 passive skills, earned by mastering something: an element at the top level (Tailwind speeds rescues, Hearth, Wellspring and Bedrock help the party in dungeons), a trade at level 10, class proficiency 100 (the gold star), a fighting style at level 10, or ties with other slimes. They show on the Fight tab, with what it takes to unlock the locked ones. Mages are a little rarer in pulls than the other magic classes. Eight new elements to fuse: Mist, Geyser, Ash, Clay, Glass, Quicksand, Glacier and Thunderstone. Screens show both clocks: \"3h inside = 1h here\".")
+WHATS_NEW = dict(id="2026-11-13-gentle-keeper",
+                 text="Gentle Keeper badges: the Descent is meant to need sacrifices, so clearing floor 10, 20, 30, 40 or 50 for the first time while having merged or destroyed few slimes earns a gold, silver or bronze medal (your first gold also gives the title 'the Gentle'). People > Keeper shows your medals and how many slimes the colony has sacrificed; the merge screens show how many more the next medal allows.")
 
 
 def build() -> Dict[str, object]:

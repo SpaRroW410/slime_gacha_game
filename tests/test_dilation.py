@@ -169,11 +169,11 @@ class TestTailwindAndRescues(unittest.TestCase):
         g = rich(79)
         top = self.slime(g, wind=len(config.MASTERY_XP))
         plain = self.slime(g)
-        v = {p["key"]: p for p in slime_view(g, top)["passives"]}
-        self.assertTrue(v["tailwind"]["earned"])
-        w = {p["key"]: p for p in slime_view(g, plain)["passives"]}
-        self.assertFalse(w["tailwind"]["earned"])
-        self.assertIn("wind", w["tailwind"]["need"])
+        self.assertIn("tailwind", slime_view(g, top)["passives"])          # each slime carries only the keys it has earned
+        self.assertNotIn("tailwind", slime_view(g, plain)["passives"])
+        from slime_gacha.webapi import snapshot
+        defs = {p["key"]: p for p in snapshot(g)["passive_defs"]}           # the definitions travel once per reply
+        self.assertIn("wind", defs["tailwind"]["need"])
 
     def test_a_new_passive_needs_only_data(self):
         g = rich(80)
