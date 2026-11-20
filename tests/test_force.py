@@ -414,3 +414,57 @@ class TestGearAndRelicNames(unittest.TestCase):
         self.assertIn("Break down", js)
         self.assertNotIn("Scrap one", js)
         self.assertNotIn("Destroy a relic", js)
+
+
+class TestPlacesWithTheirOwnLoot(unittest.TestCase):
+    def test_a_won_fight_in_mossy_burrows_brings_its_loot_home(self):
+        """A place with its own loot table used to crash the whole trip on the first win (the loot loop reused `res`)."""
+        from slime_gacha.growth import add_xp
+        g = rich(160)
+        team = []
+        for _ in range(5):
+            s = g.gacha.make_slime("common", "barbarian", stars=3)
+            g.roster[s.id] = s
+            add_xp(s, 2000)
+            s.hp = s.max_hp
+            team.append(s)
+        g.rng.random = lambda: 0.0                              # every loot roll succeeds
+        food = g.wallet.get("food")
+        r = g.explore("mossy_burrows", [s.id for s in team], 2)
+        self.assertTrue(r.runs and any(run.victory for run in r.runs))
+        self.assertGreater(g.wallet.get("food"), food - 50)
+        self.assertTrue(any("Found" in l for run in r.runs for l in run.log))
+
+    def test_every_expedition_place_runs_through_the_sender(self):
+        se = Session()
+        se.new_game(161)
+        g = se.game
+        g.wallet.add("white_gel", 3000)
+        se.call("pull", dict(n=10, pay="white_gel"))
+        for s in g.slimes():
+            s.hp = s.max_hp
+        from slime_gacha import places
+        built_in = ("adventure", "quarry", "mossy_burrows")      # other tests add their own caves to the shared registry
+        self.assertTrue(all(places.PLACES.get(k).kind == "expedition" for k in built_in))
+        kinds = list(built_in)
+        for kind in kinds:
+            free = [s.id for s in g.slimes() if not s.in_dungeon and s.state == "idle"][:3]
+            r = se.call("send_groups", dict(kind=kind, groups=[free], runs=2))
+            self.assertTrue(r["ok"], f"{kind}: {r['error']}")
+            se.call("wait", dict(hours=24))
+            for s in g.slimes():
+                s.hp, s.needs.v["energy"] = s.max_hp, 100.0
+
+
+class TestWaveSimulationCallBack(unittest.TestCase):
+    def test_a_resting_member_is_called_back_when_asked(self):
+        g = rich(162)
+        pid = party(g, strong=True)
+        m = members(g, pid)[0]
+        m.state = "resting"
+        with self.assertRaises(InvalidAction):
+            g.battle(pid, 1)
+        self.assertEqual(m.state, "resting")
+        r = g.battle(pid, 1, recall=True)
+        self.assertIsNotNone(r)
+        self.assertLess(m.morale, 100)

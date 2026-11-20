@@ -2100,13 +2100,13 @@ class Game:
 
     # ---- battle -----------------------------------------------------------------
     def battle(self, pid: int, tier: int = 1, manual: bool = False, lo: Optional[int] = None, hi: Optional[int] = None,
-               waves: int = 1):
+               waves: int = 1, recall: bool = False):
         """The wave simulation: a full party fights `waves` waves of monsters (one per party slot) as a drill. Nobody dies
         and there is no loot. Monsters are of a level between `lo` and `hi` (a floor-equivalent, 1-50); the XP is fixed by
         the monsters and their level (no randomness, no rarity factor). Without lo/hi it uses the monsters of `tier` (4 is a
         boss). It also trains battle proficiency and teamwork. With manual=True it pauses for orders (returns None until
         it ends)."""
-        return self._play(self._skirmish_gen(pid, tier, lo, hi, waves), "skirmish", manual, pid)
+        return self._play(self._skirmish_gen(pid, tier, lo, hi, waves, recall), "skirmish", manual, pid)
 
     def wave_enemies(self, tier: int, lo: Optional[int], hi: Optional[int]):
         if lo is None and hi is None:
@@ -2120,10 +2120,11 @@ class Game:
             out.append(bestiary.build_enemy(self.rng.choice(pool), lvl, pit=True))
         return out
 
-    def _skirmish_gen(self, pid: int, tier: int, lo: Optional[int] = None, hi: Optional[int] = None, waves: int = 1):
+    def _skirmish_gen(self, pid: int, tier: int, lo: Optional[int] = None, hi: Optional[int] = None, waves: int = 1,
+                      recall: bool = False):
         self._require_full(pid)
         waves = max(1, min(config.WAVE_MAX_WAVES, int(waves)))
-        party = self._ready_party(pid)
+        party = self._ready_party(pid, recall)
         total_xp, won, log = 0, 0, []
         report = None
         self._owed = 0.0
@@ -3354,11 +3355,11 @@ class Game:
                     self._farm_loot(len(enemies), events)
                 if rep.victory and pl.loot:
                     for _ in enemies:
-                        for res, (chance, lo, hi) in pl.loot.items():
+                        for what, (chance, lo, hi) in pl.loot.items():      # (not `res`: that is the session's result)
                             if self.rng.random() < chance:
                                 n_ = self.rng.randint(lo, hi)
-                                self.wallet.add(res, n_)
-                                events.append(f"🎒 Found {n_} {res.replace('_', ' ')}.")
+                                self.wallet.add(what, n_)
+                                events.append(f"🎒 Found {n_} {what.replace('_', ' ')}.")
                 if rep.victory and pl.drop == "relics":
                     self._stone_side_drop("adventure", len(enemies), events)
                     for _ in enumerate(enemies):

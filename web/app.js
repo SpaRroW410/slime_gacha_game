@@ -1986,7 +1986,8 @@ const A = {
     confirmThen(`${busy.length ? pullNote(busy) : ''}Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose morale and drop their gear (no XP is lost).`, () => act('grind', { pid, depth, runs, recall: busyMembers(pid).length > 0, lure: !!ui('pit_lure', false) }, { slow: true, title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
-    act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn() }, { title: 'Wave simulation' }); },
+    const busy = busyMembers(pid), go = () => act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn(), recall: busy.length > 0 }, { title: 'Wave simulation' });
+    return busy.length ? confirmThen(`${pullNote(busy)}Run the wave simulation?`, go) : go(); },
   drill: (d) => act('drill', { id: num(ui('dsl_' + d.d)), discipline: d.d, tier: num(ui('dtier', 1), 1) }),
   party_train: () => { const pid = num(S.ui.ptpid); if (!pid) return toast('You need a full party at home.', true); act('party_train', { pid, tier: num(ui('dtier', 1), 1) }, { slow: true }); },
   spar: (d) => { const a = num(ui('spa_' + d.d)), b = num(ui('spb_' + d.d)); act('spar', { a, b, discipline: d.d }, { title: 'Sparring match' }); },
