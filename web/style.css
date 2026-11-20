@@ -335,3 +335,11 @@ nav.tabs { top: calc(56px + env(safe-area-inset-top)); }
 .blob.geared .gear-front, .blob.geared .gear-back { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
 .bar.sanity > i { background: linear-gradient(90deg, #7b6bff, #b58cff); }
 .why { display: block; margin: -2px 0 4px; }
+/* First-game tutorial: a spotlight on one real control, and a card that says what to do. Clicks pass through to the page. */
+#tour .tour-spot { position: fixed; z-index: 74; border-radius: 12px; pointer-events: none; box-shadow: 0 0 0 3px var(--accent, #4cc38a), 0 0 0 200vmax rgba(0, 0, 0, .5);
+  animation: tourpulse 1.6s ease-in-out infinite; transition: left .15s, top .15s, width .15s, height .15s; }
+#tour .tour-dim { position: fixed; inset: 0; z-index: 74; background: rgba(0, 0, 0, .5); pointer-events: none; }
+#tour .tour-card { position: fixed; z-index: 85; padding: 12px 14px; border-radius: 12px; background: var(--card); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); }
+#tour .tour-card p { margin: 6px 0 10px; line-height: 1.45; }
+@keyframes tourpulse { 50% { box-shadow: 0 0 0 5px var(--accent, #4cc38a), 0 0 0 200vmax rgba(0, 0, 0, .5); } }
+@media (prefers-reduced-motion: reduce) { #tour .tour-spot { animation: none; transition: none; } }
