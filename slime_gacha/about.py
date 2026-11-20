@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-13-gentle-keeper",
-                 text="Gentle Keeper badges: the Descent is meant to need sacrifices, so clearing floor 10, 20, 30, 40 or 50 for the first time while having merged or destroyed few slimes earns a gold, silver or bronze medal (your first gold also gives the title 'the Gentle'). People > Keeper shows your medals and how many slimes the colony has sacrificed; the merge screens show how many more the next medal allows.")
+WHATS_NEW = dict(id="2026-11-20-first-steps",
+                 text="A clickable tour for new colonies (skip it, or replay it from the menu), and Mossy Burrows no longer breaks after a won fight. The wave simulation can call back members who are resting or at work.")
 
 
 def build() -> Dict[str, object]:

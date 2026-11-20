@@ -100,6 +100,11 @@ def build() -> list:
         ("Esteem", "Rises with victories, levelling, praise and being useful; falls with defeats. High esteem breeds pride."),
     ]
     sections = [
+        dict(title="Getting started", icon="🎓", blurb="A new colony opens with a short clickable tour; skip it if you know the game.", items=[
+            dict(name="The tour", text="It lights up one real button at a time (the Well, your free pull, a slime's card, a new party, the Descent, "
+                                       "the time bar, Merge & destroy) and moves on once you have clicked it. Next skips a step, Skip tutorial ends it. "
+                                       "Replay it any time from the slime menu at the top left (Menu > Tutorial)."),
+        ]),
         dict(title="Needs and mood", icon="🫧", blurb="The five needs decide how a slime feels, whether it asks for care, "
              "and how well it fights.", items=[dict(name=n, text=t) for n, t in need_rows] + [
             dict(name="Mood", text=f"Mood is the weighted average of the needs that currently matter (the first unmet tier and "

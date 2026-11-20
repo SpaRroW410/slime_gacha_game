@@ -325,6 +325,7 @@ function render() {
   const view = captureView(app);
   renderNow();
   restoreView(app, view);
+  TOUR.paint();
 }
 function renderNow() {
   const app = document.getElementById('app');
@@ -1823,6 +1824,8 @@ function modalHtml() {
       <h4 style="margin:6px 0 0">Helpers</h4>
       <div class="row"><button class="btn small ${S.state.auto_care ? 'primary' : ''}" data-act="autocare" title="Auto-care feeds, sleeps and rests slimes by itself">🤖 Auto-care ${S.state.auto_care ? 'on' : 'off'}</button>
         <button class="btn small ${S.state.potions.autonomy ? 'primary' : ''}" data-act="autonomy" title="Slimes use up to 66% of your stocks by themselves">🤖 Autonomy ${S.state.potions.autonomy ? 'on' : 'off'}</button></div>
+      <h4 style="margin:6px 0 0">Tutorial</h4>
+      <button class="btn" data-act="tour">🎓 Replay the tutorial</button>
       <h4 style="margin:6px 0 0">Save</h4>
       <button class="btn" data-act="export">⬇ Export save (.json)</button>
       <button class="btn" data-act="copy_save">📋 Copy save text</button>
@@ -1846,6 +1849,7 @@ const A = {
   closemodal: () => { const m = S.modal; S.modal = null; if (m && m.report_id) return act('ack_report', { id: m.report_id }); render(); },
   battle_nav: (d) => { const m = S.modal; m.i = Math.max(0, Math.min(m.battles.length - 1, (m.i ?? m.battles.length - 1) + num(d.d))); render(); },
   menu: () => { S.modal = { type: 'menu' }; render(); },
+  tour: () => { S.modal = null; S.sel = null; S.tab = 'colony'; render(); TOUR.start(true); },
   set_time: (d) => act('set_time', { mode: d.mode, scale: d.scale ? Number(d.scale) : undefined }).then(() => { S.modal = { type: 'menu' }; render(); }),
   wait: (d) => act('wait', { hours: num(d.h) }, { slow: num(d.h) >= 24 }),
   autocare: () => act('auto_care', { on: !S.state.auto_care }),
@@ -1986,7 +1990,8 @@ const A = {
     confirmThen(`${busy.length ? pullNote(busy) : ''}Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose morale and drop their gear (no XP is lost).`, () => act('grind', { pid, depth, runs, recall: busyMembers(pid).length > 0, lure: !!ui('pit_lure', false) }, { slow: true, title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
-    act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn() }, { title: 'Wave simulation' }); },
+    const busy = busyMembers(pid), go = () => act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn(), recall: busy.length > 0 }, { title: 'Wave simulation' });
+    return busy.length ? confirmThen(`${pullNote(busy)}Run the wave simulation?`, go) : go(); },
   drill: (d) => act('drill', { id: num(ui('dsl_' + d.d)), discipline: d.d, tier: num(ui('dtier', 1), 1) }),
   party_train: () => { const pid = num(S.ui.ptpid); if (!pid) return toast('You need a full party at home.', true); act('party_train', { pid, tier: num(ui('dtier', 1), 1) }, { slow: true }); },
   spar: (d) => { const a = num(ui('spa_' + d.d)), b = num(ui('spb_' + d.d)); act('spar', { a, b, discipline: d.d }, { title: 'Sparring match' }); },
@@ -2009,7 +2014,7 @@ const A = {
     return A.merge_go(d); },
   merge_go: (d) => confirmThen(`Sacrifice ${d.dn} to feed ${d.tn}?\n\n${d.dn} is consumed for good (+${d.xp} XP for ${d.tn}).\nThe colony's morale will fall (about ${d.g} points in total), and repeated sacrifices compound.`,
     () => act('merge', { target: num(d.t), donor: num(d.d) })),
-  newgame: () => { const prev = rawLocal(); if (prev) { try { localStorage.setItem(LS_PREV, prev); } catch (e) { /* full */ } } return act('new_game', { seed: ui('seed') ? num(ui('seed')) : null, party_size: num(ui('psize', 5), 5) }).then(() => { S.tab = 'colony'; S.sel = null; S.pull = null; render(); }); },
+  newgame: () => { const prev = rawLocal(); if (prev) { try { localStorage.setItem(LS_PREV, prev); } catch (e) { /* full */ } } return act('new_game', { seed: ui('seed') ? num(ui('seed')) : null, party_size: num(ui('psize', 5), 5) }).then(() => { S.tab = 'colony'; S.sel = null; S.pull = null; render(); TOUR.start(); }); },
   newgame2: () => confirmThen('Abandon this colony and start over? The current save will be overwritten.', () => { S.modal = null; S.state = null; S.feed = []; render(); }),
   take_over: async () => { const save = loadLocal(); if (!save) return; let r; try { r = await backend.call('load', { save }); } catch (e) { r = { ok: false, error: e.message }; }
     if (r.ok) { S.otherTab = false; S.myAt = Date.now(); S.state = r.state; S.sel = null; render(); } else toast('Could not load the latest save: ' + r.error, true); },
@@ -2098,6 +2103,127 @@ async function syncLive(force = false) {
   if (moved || force || r.state.away.length || Object.keys(r.state.dungeon.delves).length) render();
 }
 setInterval(() => syncLive(), 30000);
+
+/* ---------------------------------------------------------------- first-game tutorial
+   A clickable walkthrough shown when a colony is first started (and on demand from the menu). Each step lights up one real control;
+   a step with done() moves on by itself once the player has done it, so the tour is played rather than read. Skip ends it for good.
+   It lives outside #app so a re-render never wipes it, and it hides while a modal or a fight is open. */
+const TOUR = {
+  key: 'slimegacha.tour',
+  i: -1, shown: -1,
+  steps: [
+    { title: 'Welcome, Keeper 🟢', text: 'Your colony is empty. This short tour shows the basics: wake slimes, form a party, send it into the Descent and keep everyone alive. Click the glowing control at each step — or skip the tour; you can replay it from the slime menu at the top left.', start: true },
+    { target: 'nav.tabs [data-t="gacha"]', title: 'The Gacha Well', text: 'Slimes come from the Last Gacha Well. Click the 🎰 Gacha tab.', done: () => S.tab === 'gacha' },
+    { target: '[data-act="pull"][data-pay="free"]', tab: 'gacha', title: 'Your free pull', text: 'The Well gives one free pull every day. Claim it.', done: () => S.state.slimes.length > 0 || !S.state.free_pull.available },
+    { target: '[data-act="pull"][data-n="10"][data-pay="white_gel"]', tab: 'gacha', title: 'Ten more', text: 'Spend your ⚪ white gel on ten slimes at once (ten together are 10% cheaper). 🟣 Purple gel makes rare slimes far likelier — keep it for later.',
+      when: () => S.state.wallet.white_gel >= 90, done: () => S.state.slimes.length >= 6 },
+    { target: 'nav.tabs [data-t="colony"]', title: 'Meet your colony', text: 'Click the 🟢 Colony tab to see who woke up.', done: () => S.tab === 'colony' },
+    { target: '.grid.roster [data-act="sel"]', tab: 'colony', title: 'A slime up close', text: 'Click a slime to open its card.', when: () => S.state.slimes.length > 0, done: () => !!S.sel },
+    { target: '.drawer', title: 'Needs, moods and friends', text: 'Every slime needs food, energy, safety, belonging and esteem. Hungry, tired or unhappy slimes fight badly, refuse orders and quarrel — and slimes can die. Auto-care in the menu feeds and rests them for you.',
+      when: () => !!S.sel, leave: () => { S.sel = null; } },
+    { target: 'nav.tabs [data-t="parties"]', title: 'Parties', text: 'Slimes fight in parties. Click the 👥 Parties tab.', done: () => S.tab === 'parties' },
+    { target: '[data-act="party_create"]', tab: 'parties', title: 'Form a party', text: 'Create your first party (the name is optional).', done: () => S.state.parties.length > 0 },
+    { target: '[data-act="party_fill"]', tab: 'parties', title: 'Fill it', text: 'Fill it with your best free slimes. A good mix of classes and slimes who like each other give the party synergy.',
+      when: () => S.state.parties.some((p) => !p.full) && !S.state.parties.some((p) => p.full), done: () => S.state.parties.some((p) => p.full) },
+    { target: 'nav.tabs [data-t="dungeons"]', title: 'The dungeons', text: 'Click the 🕳 Dungeons tab.', done: () => S.tab === 'dungeons' },
+    { target: '[data-act="enter_dungeon"]', tab: 'dungeons', sub: ['dungeons', 'descent'], title: 'The Hollow Descent', text: 'Fifty floors, a boss every five. Choose your party and click Enter — or press Next to look around first. The other dungeons (above) give XP, relics, stones and more.',
+      done: () => Object.keys(S.state.dungeon.delves).length > 0 },
+    { target: '[data-act="delve_next"]', tab: 'dungeons', sub: ['dungeons', 'descent'], title: 'One floor at a time', text: 'Each floor is a fight; the report opens when it is over. Time inside runs faster than at home, so the party eats and tires faster too: camp to rest, and bring a hurt party home before it breaks.',
+      when: () => Object.keys(S.state.dungeon.delves).length > 0 },
+    { target: '.timebar', title: 'Time', text: 'In turn-based time nothing happens until you act or wait. Waiting lets slimes heal, eat and come home. Live time (in the menu) runs on the clock instead.', when: () => S.state.clock.mode === 'turn' },
+    { target: 'nav.tabs [data-t="town"]', title: 'Town', text: 'Click the 🏠 Town tab: buildings, gear, the kitchen and the hospital.', done: () => S.tab === 'town' },
+    { target: '[data-act="sub"][data-s="sacrifice"]', tab: 'town', title: 'Merge & destroy', text: 'Open Merge & destroy.', done: () => S.tab === 'town' && sub('town') === 'sacrifice' },
+    { title: 'Hard choices', text: 'The colony cannot feed everyone. Merge slimes to raise their stars, or destroy them for essence. Keepers who clear floor 10, 20, 30… with few sacrifices earn the Gentle Keeper badges.' },
+    { target: 'nav.tabs [data-t="guide"]', title: 'That is the tour', text: 'The 📖 Guide explains every system in detail. Good luck, Keeper — and choose wisely.', last: true },
+  ],
+  read() { try { return JSON.parse(localStorage.getItem(this.key) || 'null') || {}; } catch (e) { return {}; } },
+  write(status) { try { localStorage.setItem(this.key, JSON.stringify({ status, i: this.i })); } catch (e) { /* storage blocked: the tour simply starts over next time */ } },
+  /* Start on a brand-new colony unless this browser has already finished or skipped it; force replays it. */
+  start(force = false) {
+    const r = this.read();
+    if (!force && (r.status === 'done' || r.status === 'skipped')) return;
+    if (!force && S.state && S.state.whats_new) lsSet(LS_NEWS, S.state.whats_new.id);      // a first-time Keeper has no 'what changed' to read
+    this.i = 0; this.shown = -1; this.write('on'); render();
+  },
+  resume() { const r = this.read(); if (r.status === 'on' && Number.isInteger(r.i)) { this.i = Math.min(r.i, this.steps.length - 1); } },
+  end(status) { const st = this.steps[this.i]; if (st && st.leave) st.leave(); this.i = -1; this.write(status); this.paint(); if (status === 'skipped') toast('Tutorial skipped — replay it any time from the menu.'); render(); },
+  next() {
+    const st = this.steps[this.i];
+    if (st && st.leave) st.leave();
+    if (st && st.last) return this.end('done');
+    this.i += 1; this.write('on'); render();
+  },
+  go() {                                   // "Take me there": open the tab the step points into
+    const st = this.steps[this.i];
+    if (!st) return;
+    if (st.tab) S.tab = st.tab;
+    if (st.sub) S.sub[st.sub[0]] = st.sub[1];
+    S.sel = null; S.modal = null; render();
+  },
+  el() {
+    let t = document.getElementById('tour');
+    if (!t) { t = document.createElement('div'); t.id = 'tour'; document.body.appendChild(t); }
+    return t;
+  },
+  /* Called after every render: skip steps that do not apply or are already done, then light up the current target. */
+  paint() {
+    const box = this.el();
+    if (this.i < 0 || !S.state || S.modal || S.state.battle) { box.innerHTML = ''; return; }
+    while (this.i < this.steps.length) {
+      const st = this.steps[this.i];
+      if ((st.when && !st.when()) || (st.done && st.done())) { if (st.last) break; this.i += 1; continue; }
+      break;
+    }
+    if (this.i >= this.steps.length) { this.i = this.steps.length - 1; }
+    this.write('on');
+    const st = this.steps[this.i], n = this.steps.length;
+    const target = st.target ? [...document.querySelectorAll(st.target)].find((x) => x.getClientRects().length) : null;
+    const lost = st.target && !target;
+    const btns = st.start
+      ? '<button class="btn" data-tour="skip">Skip tutorial</button><button class="btn primary" data-tour="next">Start the tour ›</button>'
+      : `<button class="btn small" data-tour="skip">Skip tutorial</button>${lost && st.tab ? '<button class="btn small primary" data-tour="go">Take me there</button>' : ''}<button class="btn small ${st.done && !lost ? '' : 'primary'}" data-tour="next">${st.last ? 'Finish ✓' : 'Next ›'}</button>`;
+    box.innerHTML = `${target ? '<div class="tour-spot"></div>' : '<div class="tour-dim"></div>'}
+      <div class="tour-card" role="dialog" aria-live="polite" aria-label="Tutorial"><div class="row between"><b>${esc(st.title)}</b><small class="mute">${this.i + 1} / ${n}</small></div>
+      <p>${esc(st.text)}${lost ? ' <i class="mute">(It is on another screen.)</i>' : ''}</p><div class="row" style="justify-content:flex-end;gap:6px">${btns}</div></div>`;
+    I18N.apply(box);
+    if (target && this.shown !== this.i) {
+      const r = target.getBoundingClientRect();
+      if (r.top < 110 || r.bottom > innerHeight - 160) target.scrollIntoView({ block: 'center' });
+    }
+    this.shown = this.i;
+    this.place(target);
+  },
+  place(target) {
+    const box = document.getElementById('tour');
+    if (!box) return;
+    const spot = box.querySelector('.tour-spot'), card = box.querySelector('.tour-card');
+    if (!card) return;
+    const W = innerWidth, H = innerHeight, pad = 6, cw = Math.min(360, W - 32);
+    card.style.width = cw + 'px';
+    if (!target || !spot) { card.style.left = (W - cw) / 2 + 'px'; card.style.top = Math.max(16, (H - card.offsetHeight) / 2) + 'px'; return; }
+    const r = target.getBoundingClientRect();
+    Object.assign(spot.style, { left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px' });
+    const ch = card.offsetHeight;
+    let top;
+    if (r.height > H * 0.5) top = H - ch - 16;                         // a tall target (the slime card): keep the text at the bottom
+    else if (r.bottom + pad + 12 + ch < H - 70) top = r.bottom + pad + 12;   // below it, clear of the time bar
+    else top = Math.max(16, r.top - pad - 12 - ch);                   // otherwise above it
+    const left = Math.min(Math.max(16, r.left + r.width / 2 - cw / 2), W - cw - 16);
+    card.style.left = left + 'px'; card.style.top = top + 'px';
+  },
+};
+TOUR.resume();
+document.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('[data-tour]');
+  if (!b) return;
+  e.stopPropagation();
+  const k = b.dataset.tour;
+  if (k === 'skip') TOUR.end('skipped');
+  else if (k === 'go') TOUR.go();
+  else TOUR.next();
+});
+addEventListener('resize', () => { if (TOUR.i >= 0) TOUR.paint(); });
+addEventListener('scroll', () => { if (TOUR.i >= 0) { const st = TOUR.steps[TOUR.i]; const t = st && st.target ? [...document.querySelectorAll(st.target)].find((x) => x.getClientRects().length) : null; TOUR.place(t); } }, { passive: true });
 
 /* If the game cannot start: try again, repair the offline copy (service worker and its cache - never the saved colony),
    or run Python in safe mode (on the page itself). Offered on the error screen, and on the loading screen if it seems stuck. */

@@ -234,6 +234,17 @@ class TestUiWiring(unittest.TestCase):
         sent = set(self.re.findall(r"\bact\('([a-z_0-9]+)'", self.js)) | set(self.re.findall(r"backend\.call\('([a-z_0-9]+)'", self.js))
         self.assertEqual(sorted(c for c in sent if c not in HANDLERS and c not in ("new_game", "load", "peek_save")), [])
 
+    def test_the_first_game_tour_starts_on_a_new_colony_and_can_be_skipped_or_replayed(self):
+        newgame = self.js[self.js.index("  newgame: "):].split("\n", 1)[0]
+        self.assertIn("TOUR.start()", newgame)                        # a new colony opens the tour (once per browser)
+        self.assertIn("TOUR.paint()", self.js[self.js.index("function render()"):self.js.index("function renderNow()")])
+        self.assertIn('data-tour="skip"', self.js)
+        self.assertIn('data-act="tour"', self.js)                     # Menu > Tutorial replays it
+        targets = self.re.findall(r"target: '([^']+)'", self.js[self.js.index("const TOUR = {"):])
+        for t in targets:                                             # every step points at a control the page really draws
+            for act in self.re.findall(r'data-act="([a-z_0-9]+)"', t):
+                self.assertIn(act, self.handlers, t)
+
 
 class TestServer(unittest.TestCase):
     def test_http_roundtrip_and_static_files(self):
