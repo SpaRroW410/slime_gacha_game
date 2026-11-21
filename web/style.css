@@ -351,3 +351,21 @@ details.party[open] .caret { transform: rotate(90deg); }
 details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 .pavs { display: flex; flex-wrap: wrap; gap: 4px; }
 @media (prefers-reduced-motion: reduce) { details.party .caret { transition: none; } }
+/* What a slime is doing, as a badge on its head (a chef's hat, a dungeon, hunting, asleep ...). */
+.blob .actb { position: absolute; top: -7px; left: -7px; z-index: 5; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%;
+  background: var(--card); border: 1px solid var(--line); box-shadow: 0 1px 3px rgba(0, 0, 0, .25); font-size: .72rem; line-height: 1; pointer-events: auto; }
+.blob.sm .actb { width: 20px; height: 20px; top: -7px; left: -7px; font-size: .72rem; }
+.blob.big .actb { width: 28px; height: 28px; top: -4px; left: -4px; font-size: 1rem; }
+.blob.big .actb svg { width: 20px; height: 20px; }
+/* Faces in a folded party open the slime's card; the members' controls sit in rows when it is open. */
+.pface { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; width: 58px; padding: 6px 2px 2px; background: none; border: 0; border-radius: 10px; color: inherit; cursor: pointer; font: inherit; }
+.pface small { font-size: .68rem; max-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pface:hover, .pface:focus-visible { background: var(--card2); }
+.mrows { gap: 6px; margin: 8px 0; }
+.mrow { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 6px; border-bottom: 1px dashed var(--line); }
+.mrow .mtop { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.mrow .mbot { display: flex; align-items: center; gap: 8px; }
+.mrow .mhp { flex: 1 1 auto; min-width: 60px; }
+.mrow .mhp .bar { margin: 0; }
+.linkish { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.linkish:hover b { text-decoration: underline; }

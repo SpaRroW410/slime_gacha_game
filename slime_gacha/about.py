@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-21-tidy-gear",
-                 text="Tidier screens. Town > Relics lists every relic (vault and worn) as one line you tap for its actions; Town > Armory (gear) is the shop and your spare gear. A slime's card has a Train tab for drills, sparring, elements and spells; the Academy now shows the facilities, their trainers and party training. Parties fold to a one-glance summary.")
+WHATS_NEW = dict(id="2026-11-21-head-badges",
+                 text="Every slime now wears a small badge on its head saying what it is doing: a chef's hat for the chef, the emblem of its post, the dungeon it is in, hunting, studying, resting or asleep. In the Parties tab, tap a face to open that slime; an opened party lists its members as rows instead of repeating the faces.")
 
 
 def build() -> Dict[str, object]:
