@@ -287,3 +287,26 @@ class TestServer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWhatASlimeIsTraining(unittest.TestCase):
+    """The head badge shows a book with the style a slime is training: the spar's own style, kept with the trip."""
+    def test_a_spar_keeps_its_style_and_a_party_drill_shows_each_members_own_field(self):
+        from slime_gacha.webapi import Session, slime_view
+        se = Session()
+        se.new_game(9)
+        g = se.game
+        g.wallet.add("white_gel", 20000)
+        se.call("pull", dict(n=30, pay="white_gel"))
+        idle = [s for s in g.slimes() if s.state == "idle" and not s.in_dungeon]
+        a, b, c = idle[:3]
+        self.assertTrue(se.call("spar", dict(a=a.id, b=b.id, discipline="archery"))["ok"])
+        self.assertEqual(slime_view(g, a)["train_style"], "archery")       # not its class's own style
+        self.assertIsNone(slime_view(g, c)["train_style"])                # not training
+        se.call("party_create", dict(name="P"))
+        pid = se.call("state", {})["state"]["parties"][0]["id"]
+        se.call("party_fill", dict(pid=pid))
+        self.assertTrue(se.call("party_train", dict(pid=pid, tier=1))["ok"])
+        for sid in g.parties.get(pid).members:
+            v = slime_view(g, g.roster[sid])
+            self.assertEqual(v["train_style"], v["discipline"])

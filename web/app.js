@@ -81,11 +81,38 @@ function doing(s) {
   if (s.state === 'resting' || s.state === 'sleeping') return stateLabel(s);
   return '';
 }
+/* A small badge on a slime's head saying what it is doing: its post (a chef's hat for the chef), the dungeon it is in, hunting,
+   studying, resting or asleep. Nothing when it is simply at home. */
+const PLACE_IC = { main: ['🕳️', 'in the Hollow Descent'], grind: ['🫧', 'in the Gloop Pit'], adventure: ['🧭', "in the Wayfarer's Rift"], quarry: ['⛏️', 'in Starfall Quarry'],
+  mossy_burrows: ['🍄', 'in Mossy Burrows'], scout: ['🔭', 'scouting'], rescue: ['🛟', 'on a rescue'], wave: ['🌊', 'in the wave simulation'], stranded: ['🆘', 'stranded in the Descent'],
+  train: ['🥋', 'training'], lab: ['🧪', 'in the lab'] };
+const CHEF_HAT = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.2 9.6C2.5 9.6 1.5 8.4 1.5 7c0-1.7 1.5-2.8 3-2.4C5 3 6.4 2 8 2s3 1 3.5 2.6c1.5-.4 3 .7 3 2.4 0 1.4-1 2.6-2.7 2.6V13.5H4.2z" fill="#fff" stroke="#6b6b6b" stroke-width=".9" stroke-linejoin="round"/><path d="M4.2 11.6h7.6" stroke="#9a9a9a" stroke-width=".9"/></svg>';
+/* Two signs in one badge: the main one, with a small second one tucked at its corner (book + sword, chef's hat + basket). */
+const duo = (main, small) => `<span class="ab-main">${main}</span><span class="ab-sub">${small}</span>`;
+const discOf = (k) => (S.state?.disciplines || []).find((d) => d.key === k);
+const elemOf = (k) => (S.state?.elements?.list || []).find((e) => e.key === k);
+function actBadge(s) {
+  let ic = '', tip = '', two = false;
+  const jobIc = s.job ? (s.job.key === 'chef' ? CHEF_HAT : esc(s.job.emoji)) : '';
+  const t = s.task || {};
+  if (s.in_dungeon === 'train') {                                   // sparring or a party drill: the book and the style
+    const d = discOf(s.train_style || s.discipline);
+    [ic, tip, two] = d ? [duo('📖', d.emoji), `training ${d.style}`, true] : ['🥋', 'training', false];
+  } else if (s.in_dungeon) [ic, tip] = PLACE_IC[s.in_dungeon] || ['🕳️', 'away in a dungeon'];
+  else if (s.state === 'hunting') [ic, tip, two] = s.job ? [duo(jobIc, '🧺'), `${s.job.name}, out foraging`, true] : ['🏞️', 'hunting', false];
+  else if (s.state === 'studying') {                                 // a drill shows its discipline; element study its element
+    const d = t.discipline && discOf(t.discipline), e = t.element && elemOf(t.element);
+    [ic, tip, two] = d ? [duo('📖', d.emoji), `drilling ${d.style}`, true] : e ? [duo('📖', e.emoji), `studying ${e.name}`, true] : ['📚', 'studying', false];
+  } else if (s.state === 'resting') [ic, tip] = s.ward ? ['🏥', 'in the hospital'] : ['🛏️', 'in the Rest Area'];
+  else if (s.state === 'sleeping') [ic, tip] = ['💤', 'asleep'];
+  else if (s.job) [ic, tip] = [jobIc, `${s.job.name}${s.state === 'working' ? ' (on shift)' : ''}`];
+  return ic ? `<span class="actb${two ? ' duo' : ''}" title="${esc(s.name)}: ${esc(tip)}">${ic}</span>` : '';
+}
 function avatar(s, cls = '') {
   const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);
   const st = s.state === 'sleeping' || s.state === 'resting' ? s.state : '';
   const g = AV.gear(s.archetype, s.rarity, { stage: s.stage, disc: s.spec && s.spec.disc, cm: !!(s.prof && s.prof.value >= 100), hm: !!(s.prof && s.prof.hybrid && s.prof.hybrid.value >= 100) });                     // class gear that grows with rarity (avatars.js); a mod class keeps its emoji
-  return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)} ${g.front ? 'geared' : ''}" style="--c:${c}">${g.back || ''}<div class="body"><i></i><i></i></div><div class="mouth"></div>${g.front || `<span class="em">${s.emoji}</span>`}</div>`;
+  return `<div class="blob ${s.rarity} ${st} ${cls} ${faceClass(s)} ${g.front ? 'geared' : ''}" style="--c:${c}">${g.back || ''}<div class="body"><i></i><i></i></div><div class="mouth"></div>${g.front || `<span class="em">${s.emoji}</span>`}${cls.includes('nobadge') ? '' : actBadge(s)}</div>`;
 }
 /* The three-digit power tag (001-999) shown beside a slime's figure; the full number and parts are on its card. */
 const ptag = (s) => `<span class="ptag t${Math.min(4, Math.floor(s.power_tag / 250) + 1)}" title="Total power ${s.power}">⚡${String(s.power_tag).padStart(3, '0')}</span>`;
@@ -866,7 +893,7 @@ function parties() {
       ${p.members.length ? `<div class="row" style="gap:6px">👑 <b>${esc(slimeById(p.leader)?.name || '—')}</b> <small class="mute">${p.leader_set ? 'leader (your choice)' : 'leader (highest level)'}</small>
         ${!(p.in_delve || p.away) && p.members.length > 1 ? `<select data-ui="lead_${p.id}">${p.members.map((id) => `<option value="${id}" ${id === p.leader ? 'selected' : ''}>${esc(slimeById(id)?.name)}</option>`).join('')}</select><button class="btn small" data-act="set_leader" data-pid="${p.id}">Set leader</button>` : ''}
         ${p.temp ? badge('hunt party', 'info') : ''}</div>` : ''}
-      <div class="row" style="margin:6px 0">${p.members.map((id) => mini(id, !p.activity && !slimeById(id)?.in_dungeon)).join('') || '<small class="mute">Empty</small>'}</div>
+      ${p.members.length ? `<div class="stack mrows">${p.members.map((id) => memberRow(id, !p.activity && !slimeById(id)?.in_dungeon)).join('')}</div>` : ''}
       <div class="row">
         ${!p.full && !(p.in_delve || p.away) ? `<button class="btn small" data-act="party_fill" data-pid="${p.id}">⚡ Fill with best free</button>` : ''}
         ${!(p.in_delve || p.away) ? `<select data-ui="add_${p.id}"><option value="">Add slime…</option>${freeSlimes.map((s) => `<option value="${s.id}">${esc(s.name)} (${esc(s.class_name)} Lv${s.level})</option>`).join('')}</select><button class="btn small" data-act="party_add" data-pid="${p.id}">Add</button>` : ''}
@@ -879,17 +906,28 @@ function parties() {
       <div class="row" style="margin-top:8px"><button class="btn small danger" data-act="party_disband" data-pid="${p.id}" ${p.activity ? 'disabled' : ''} title="${p.activity ? esc(`Away ${p.activity}: disband it when it is back`) : 'Break the party up (the slimes stay)'}">Disband${p.activity ? ` (away ${esc(p.activity)})` : ''}</button></div>
     </details>`).join('') || '<p class="mute">No parties yet.</p>'}</div>`;
 }
+/* One member inside an opened party card: no face (the summary above shows it), just its state and the controls. */
+function memberRow(id, removeBtn) {
+  const m = slimeById(id);
+  if (!m) return '';
+  const d = doing(m);
+  return `<div class="mrow"><div class="mtop"><button class="linkish" data-act="sel" data-id="${m.id}"><b>${esc(m.name)}</b></button>
+    <small class="mute">${esc(m.class_name)} Lv${m.level}${d ? ' · ' + d : m.in_dungeon ? ' · ' + esc((PLACE_IC[m.in_dungeon] || ['', 'away'])[1]) : ''}</small></div>
+    <div class="mbot"><span class="mhp" title="HP ${m.hp}/${m.max_hp}">${bar(m.hp, m.max_hp, 'hp')}</span>
+    <span class="row" style="gap:4px">${callBtn(m, false)}<button class="btn small" data-act="toggle_row" data-id="${m.id}" title="${m.row === 'back' ? 'Back row (tap to move to the front)' : 'Front row (tap to move to the back)'}">${m.row === 'back' ? '⬅ back' : '▶ front'}</button>
+    ${removeBtn ? `<button class="btn small" data-act="party_remove" data-id="${m.id}" title="Remove from party">✕</button>` : ''}</span></div></div>`;
+}
 /* The folded party: where it is, who is in it, and how it is doing, in three short lines. */
 function partySummary(p) {
   const st = S.state, ms = p.members.map(slimeById).filter(Boolean);
   const delve = st.dungeon.delves[p.id];
-  const away = [...new Set(ms.map((m) => awayOf(m.id)).filter(Boolean))];
-  const busy = ms.filter((m) => m.busy && !m.in_dungeon);
-  const resting = ms.filter((m) => !m.in_dungeon && (m.state === 'resting' || m.state === 'sleeping'));
+  const trips = [...new Set(ms.filter((m) => m.in_dungeon).map((m) => awayOf(m.id)).filter(Boolean))];   // the party away somewhere together
+  const home = (f) => ms.filter((m) => !m.in_dungeon && f(m)).length;
+  const at = [['👷', 'at work', home((m) => m.state === 'working')], ['🏞', 'out', home((m) => m.state === 'hunting')], ['📚', 'studying', home((m) => m.state === 'studying')],
+    ['🛏', 'resting', home((m) => m.state === 'resting' || m.state === 'sleeping')]].filter((x) => x[2]);
   const status = p.in_delve ? chip(`🕳 Descent${delve ? ' · floor ' + delve.floor : ''}`, 'bad')
-    : away.length ? chip(`${esc(away[0].label)}${away.length > 1 ? ` +${away.length - 1}` : ''} · ${etaHtml(away[0])}`, 'warn')
-    : busy.length ? chip(`${busy.length} busy at home`, 'warn')
-    : resting.length ? chip(`🛏 ${resting.length} resting`, 'info')
+    : trips.length ? chip(`${esc(trips[0].label)} · ${etaHtml(trips[0])}`, 'warn')
+    : at.length ? at.map(([e, w, n]) => chip(`${e} ${n} ${w}`, w === 'resting' ? 'info' : 'warn')).join('')
     : p.full ? chip('🏠 ready', 'ok') : chip('not full yet');
   const power = Math.round(ms.reduce((a, m) => a + (m.power || 0), 0) * (1 + p.synergy));
   const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
@@ -898,7 +936,7 @@ function partySummary(p) {
   const hurt = ms.filter((m) => m.hp < m.max_hp * 0.6).length, needy = ms.filter((m) => m.dominant).length;
   const flags = [hurt ? `🤕 ${hurt} hurt` : '', needy ? `🫧 ${needy} need care` : '', ms.filter((m) => m.refuse_dungeon).map((m) => `🚫 ${esc(m.name)} refuses`).slice(0, 2).join(' · ')].filter(Boolean);
   return `<summary class="psum"><div class="row between"><span class="row" style="gap:6px"><span class="caret">▸</span><b>${esc(p.name)}</b>${status}${p.temp ? badge('hunt party', 'info') : ''}</span>${chip(`${p.members.length}/${st.party_size}`, p.full ? 'ok' : 'warn')}</div>
-    ${ms.length ? `<div class="pavs">${ms.map((m) => `<span title="${esc(m.name)} · ${esc(m.class_name)} Lv${m.level}${doing(m) ? ' · ' + doing(m).replace(/<[^>]+>/g, '') : ''}">${avatar(m, 'sm')}</span>`).join('')}</div>
+    ${ms.length ? `<div class="pavs">${ms.map((m) => `<button class="pface" data-act="sel" data-id="${m.id}" title="${esc(m.name)} · ${esc(m.class_name)} Lv${m.level}${doing(m) ? ' · ' + doing(m).replace(/<[^>]+>/g, '') : ''} (tap for its card)">${avatar(m, 'sm')}<small>${esc(m.name)}</small></button>`).join('')}</div>
     <small class="mute" title="Leader · party power (the members' power added up, times synergy) · synergy (from how well they get on) · health · average morale">👑 ${esc(slimeById(p.leader)?.name || '—')} · ⚡ ${power} · 🤝 ${(p.synergy * 100).toFixed(1)}% · ❤️ ${hp}% · 💪 ${morale}${flags.length ? ' · <b>' + flags.join(' · ') + '</b>' : ''}</small>` : '<small class="mute">Empty: add slimes to it.</small>'}</summary>`;
 }
 
@@ -2134,7 +2172,7 @@ document.addEventListener('click', (e) => {
   if (!el || el.tagName === 'SELECT' || el.tagName === 'INPUT') return;
   const fn = A[el.dataset.act];
   if (!fn) return;
-  if (el.tagName === 'A') e.preventDefault();
+  if (el.tagName === 'A' || el.closest('summary')) e.preventDefault();
   if (el.disabled) return;
   e.stopPropagation();
   document.querySelectorAll('select[data-ui], input[data-ui]').forEach((x) => { if (x.type !== 'checkbox') S.ui[x.dataset.ui] = x.value; });   // what every dropdown shows is what the action uses
