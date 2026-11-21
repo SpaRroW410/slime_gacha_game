@@ -859,14 +859,14 @@ function parties() {
   return `<div class="panel flat row"><input type="text" data-ui="pname" placeholder="Party name" maxlength="24" value="${esc(ui('pname', ''))}">
       <button class="btn primary" data-act="party_create">➕ New party</button>
       <small class="mute">Parties are fixed at <b>${st.party_size}</b> slimes. Only full parties can battle, hunt together or scout. A slime belongs to one party.</small></div>
-    <div class="grid cols2" style="margin-top:12px">${st.parties.map((p) => `<div class="panel">
-      <div class="row between"><h3>${esc(p.name)} <button class="btn small" data-act="rename_party" data-pid="${p.id}" data-n="${esc(p.name)}" title="Rename">✏</button> ${p.in_delve ? badge('🕳 inside dungeon', 'bad') : ''}</h3>${chip(`${p.members.length}/${st.party_size}`, p.full ? 'ok' : 'warn')}</div>
+    ${st.parties.length > 1 ? `<div class="row" style="margin-top:10px"><button class="btn small" data-act="party_fold" data-open="1">▾ Open all</button><button class="btn small" data-act="party_fold" data-open="0">▸ Fold all</button><small class="mute">Tap a party to open it.</small></div>` : ''}
+    <div class="grid cols2" style="margin-top:12px">${st.parties.map((p) => `<details class="panel party" data-keep="pty_${p.id}" ${ui('pty_' + p.id, st.parties.length === 1) ? 'open' : ''}>${partySummary(p)}
+      <div class="row" style="margin-top:6px"><button class="btn small" data-act="rename_party" data-pid="${p.id}" data-n="${esc(p.name)}" title="Rename">✏ Rename</button></div>
       ${[...new Set(p.members.map(awayOf).filter(Boolean))].map((a) => `<div class="chip warn" style="margin-bottom:4px">${esc(a.label)} · ${etaHtml(a)}</div>`).join('')}
       ${p.members.length ? `<div class="row" style="gap:6px">👑 <b>${esc(slimeById(p.leader)?.name || '—')}</b> <small class="mute">${p.leader_set ? 'leader (your choice)' : 'leader (highest level)'}</small>
         ${!(p.in_delve || p.away) && p.members.length > 1 ? `<select data-ui="lead_${p.id}">${p.members.map((id) => `<option value="${id}" ${id === p.leader ? 'selected' : ''}>${esc(slimeById(id)?.name)}</option>`).join('')}</select><button class="btn small" data-act="set_leader" data-pid="${p.id}">Set leader</button>` : ''}
         ${p.temp ? badge('hunt party', 'info') : ''}</div>` : ''}
       <div class="row" style="margin:6px 0">${p.members.map((id) => mini(id, !p.activity && !slimeById(id)?.in_dungeon)).join('') || '<small class="mute">Empty</small>'}</div>
-      ${p.members.length > 1 ? `<p class="mute">Synergy <b>${(p.synergy * 100).toFixed(1)}%</b> power (from average compatibility) · ⚡ party power <b>${Math.round(p.members.reduce((a, id) => a + (slimeById(id)?.power || 0), 0) * (1 + p.synergy))}</b> ${info('The members\' total power added up, times the party synergy.')}</p>` : ''}
       <div class="row">
         ${!p.full && !(p.in_delve || p.away) ? `<button class="btn small" data-act="party_fill" data-pid="${p.id}">⚡ Fill with best free</button>` : ''}
         ${!(p.in_delve || p.away) ? `<select data-ui="add_${p.id}"><option value="">Add slime…</option>${freeSlimes.map((s) => `<option value="${s.id}">${esc(s.name)} (${esc(s.class_name)} Lv${s.level})</option>`).join('')}</select><button class="btn small" data-act="party_add" data-pid="${p.id}">Add</button>` : ''}
@@ -877,7 +877,29 @@ function parties() {
         <button class="btn small" data-act="party_hunt" data-pid="${p.id}" ${p.full ? '' : 'disabled'}>🏞 Hunt together</button>
         </div>` : ''}
       <div class="row" style="margin-top:8px"><button class="btn small danger" data-act="party_disband" data-pid="${p.id}" ${p.activity ? 'disabled' : ''} title="${p.activity ? esc(`Away ${p.activity}: disband it when it is back`) : 'Break the party up (the slimes stay)'}">Disband${p.activity ? ` (away ${esc(p.activity)})` : ''}</button></div>
-    </div>`).join('') || '<p class="mute">No parties yet.</p>'}</div>`;
+    </details>`).join('') || '<p class="mute">No parties yet.</p>'}</div>`;
+}
+/* The folded party: where it is, who is in it, and how it is doing, in three short lines. */
+function partySummary(p) {
+  const st = S.state, ms = p.members.map(slimeById).filter(Boolean);
+  const delve = st.dungeon.delves[p.id];
+  const away = [...new Set(ms.map((m) => awayOf(m.id)).filter(Boolean))];
+  const busy = ms.filter((m) => m.busy && !m.in_dungeon);
+  const resting = ms.filter((m) => !m.in_dungeon && (m.state === 'resting' || m.state === 'sleeping'));
+  const status = p.in_delve ? chip(`🕳 Descent${delve ? ' · floor ' + delve.floor : ''}`, 'bad')
+    : away.length ? chip(`${esc(away[0].label)}${away.length > 1 ? ` +${away.length - 1}` : ''} · ${etaHtml(away[0])}`, 'warn')
+    : busy.length ? chip(`${busy.length} busy at home`, 'warn')
+    : resting.length ? chip(`🛏 ${resting.length} resting`, 'info')
+    : p.full ? chip('🏠 ready', 'ok') : chip('not full yet');
+  const power = Math.round(ms.reduce((a, m) => a + (m.power || 0), 0) * (1 + p.synergy));
+  const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
+  const hp = pct(ms.reduce((a, m) => a + m.hp, 0), ms.reduce((a, m) => a + m.max_hp, 0));
+  const morale = ms.length ? Math.round(ms.reduce((a, m) => a + m.morale, 0) / ms.length) : 0;
+  const hurt = ms.filter((m) => m.hp < m.max_hp * 0.6).length, needy = ms.filter((m) => m.dominant).length;
+  const flags = [hurt ? `🤕 ${hurt} hurt` : '', needy ? `🫧 ${needy} need care` : '', ms.filter((m) => m.refuse_dungeon).map((m) => `🚫 ${esc(m.name)} refuses`).slice(0, 2).join(' · ')].filter(Boolean);
+  return `<summary class="psum"><div class="row between"><span class="row" style="gap:6px"><span class="caret">▸</span><b>${esc(p.name)}</b>${status}${p.temp ? badge('hunt party', 'info') : ''}</span>${chip(`${p.members.length}/${st.party_size}`, p.full ? 'ok' : 'warn')}</div>
+    ${ms.length ? `<div class="pavs">${ms.map((m) => `<span title="${esc(m.name)} · ${esc(m.class_name)} Lv${m.level}${doing(m) ? ' · ' + doing(m).replace(/<[^>]+>/g, '') : ''}">${avatar(m, 'sm')}</span>`).join('')}</div>
+    <small class="mute" title="Leader · party power (the members' power added up, times synergy) · synergy (from how well they get on) · health · average morale">👑 ${esc(slimeById(p.leader)?.name || '—')} · ⚡ ${power} · 🤝 ${(p.synergy * 100).toFixed(1)}% · ❤️ ${hp}% · 💪 ${morale}${flags.length ? ' · <b>' + flags.join(' · ') + '</b>' : ''}</small>` : '<small class="mute">Empty: add slimes to it.</small>'}</summary>`;
 }
 
 /* ---------------------------------------------------------------- dungeons */
@@ -1967,6 +1989,7 @@ const A = {
   lang: (d) => { I18N.set(d.c); document.documentElement.lang = I18N.lang; render(); },
   sound: () => { SFX.toggle(); render(); },
   pull: (d) => { if (d.pay === 'purple_gel' && num(d.n) >= 10 && !window.confirm(`Spend ${S.state.rates.pull_cost * num(d.n) * (1 - S.state.rates.bulk_discount)} purple gel on ${d.n} pulls?`)) return; S.pull = null; return act('pull', { n: num(d.n), pay: d.pay }); },
+  party_fold: (d) => { S.state.parties.forEach((p) => { S.ui['pty_' + p.id] = d.open === '1'; }); render(); },
   party_create: () => act('party_create', { name: ui('pname', '') }).then(() => { S.ui.pname = ''; render(); }),
   party_add: (d) => { const id = num(ui('add_' + d.pid)); return id ? act('party_add', { pid: num(d.pid), id }) : toast('Choose a slime first.', true); },
   party_remove: (d) => act('party_remove', { id: num(d.id) }),

@@ -343,3 +343,11 @@ nav.tabs { top: calc(56px + env(safe-area-inset-top)); }
 #tour .tour-card p { margin: 6px 0 10px; line-height: 1.45; }
 @keyframes tourpulse { 50% { box-shadow: 0 0 0 5px var(--accent, #4cc38a), 0 0 0 200vmax rgba(0, 0, 0, .5); } }
 @media (prefers-reduced-motion: reduce) { #tour .tour-spot { animation: none; transition: none; } }
+/* Parties fold to a short summary: status, the members' faces, and power, synergy, health and morale. */
+details.party > summary.psum { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+details.party > summary.psum::-webkit-details-marker { display: none; }
+details.party .caret { display: inline-block; transition: transform .15s; color: var(--mute); }
+details.party[open] .caret { transform: rotate(90deg); }
+details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.pavs { display: flex; flex-wrap: wrap; gap: 4px; }
+@media (prefers-reduced-motion: reduce) { details.party .caret { transition: none; } }

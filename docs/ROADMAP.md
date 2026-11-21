@@ -149,6 +149,7 @@ As of 27 October 2026:
 - [x] **88. Clickable first-game tour** — a new colony opens an 18-step tour that lights up one real control at a time (the Well, the free pull, ten pulls, a slime's card, a new party, Fill, the Descent, the time bar, Merge & destroy, the Guide) and moves on when it is clicked; Next skips a step, Skip tutorial ends it, the choice is remembered in the browser, and Menu > Tutorial replays it.  *Done when:* met (played through in Chromium at desktop and phone sizes with no page errors).
 - [x] **89. Relics and gear tidied** — relics had three screens (Armory & relics, Merge & destroy, the Rift) and a big card each; now Town > Relics lists every relic, in the vault and worn, as one line (filter by where and slot, sort by rarity, level or wear) that opens for all its actions: equip (✓ marks the classes it suits), level, ascend, repair, merge another into it, break it down, fuse an ego. Town > Armory (gear) has the shop and the spare gear (equip, sell back, merge) with the blacksmith folded below. A slime's Gear tab shows each relic slot and equips straight from the vault. Merge & destroy is about slimes only.  *Done when:* met (every action clicked in Chromium at desktop and phone sizes).
 - [x] **90. Training on the slime's card; trainers in the Academy** — a Train tab on the slime card holds its proficiency drill, a spar against a chosen partner, element study and spell learning (spells it cannot learn yet are greyed with the reason). The Academy's first screen is Facilities & trainers: each discipline's yard, arena and trainer post together, plus party training and party sparring.  *Done when:* met.
+- [x] **91. Parties fold to a summary** — each party on the Parties tab is a fold-out card; folded, it shows its status (in the Descent and on which floor, away with the time left, busy or resting at home, ready, not full), the members' faces, and one line with the leader, party power, synergy, health, average morale and any trouble (hurt, needing care, who refuses). Open all / Fold all; a lone party starts open, and a card stays open while you use it.  *Done when:* met (checked in Chromium at desktop and phone sizes).
 
 ### After floor 50 (art and sound)
 
@@ -425,7 +426,7 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
 
 ### M29 — Tidier screens (21 November 2026)
-- [x] One Relics screen and a gear-only Armory (89); training on the slime card, trainers in the Academy (90)
+- [x] One Relics screen and a gear-only Armory (89); training on the slime card, trainers in the Academy (90); parties fold to a summary (91)
 
 ### M28 — First steps (20 November 2026)
 - [x] A clickable tour for a new colony, skippable and replayable (88); Mossy Burrows fixed, wave simulation call-back (87)
