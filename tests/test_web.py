@@ -234,6 +234,17 @@ class TestUiWiring(unittest.TestCase):
         sent = set(self.re.findall(r"\bact\('([a-z_0-9]+)'", self.js)) | set(self.re.findall(r"backend\.call\('([a-z_0-9]+)'", self.js))
         self.assertEqual(sorted(c for c in sent if c not in HANDLERS and c not in ("new_game", "load", "peek_save")), [])
 
+    def test_one_slime_trains_from_its_card_and_relics_and_gear_have_their_own_screens(self):
+        tabs = self.js[self.js.index("function drawer(s)"):self.js.index("function drawer(s)") + 600]
+        self.assertIn("['train', 'Train']", tabs)
+        for act in ("drill_me", "spar_me", "learn_me", "study"):              # the Train tab drills, spars, studies and learns
+            self.assertIn(f'data-act="{act}"', self.js[self.js.index("function dTrain("):self.js.index("function dMind(")])
+        self.assertIn("['relics', 'Relics']", self.js)
+        self.assertNotIn("function relicGearSection", self.js)               # relic and gear upkeep left Merge & destroy
+        self.assertNotIn('data-act="drill" ', self.js)                       # no second, Academy-side drill picker
+        rift = self.js[self.js.index("function riftAll()"):self.js.index("function riftAll()") + 4000]
+        self.assertNotIn("Relic vault", rift)
+
     def test_the_first_game_tour_starts_on_a_new_colony_and_can_be_skipped_or_replayed(self):
         newgame = self.js[self.js.index("  newgame: "):].split("\n", 1)[0]
         self.assertIn("TOUR.start()", newgame)                        # a new colony opens the tour (once per browser)

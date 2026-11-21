@@ -12,8 +12,8 @@ const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '�
   ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide'], ['about', 'ℹ️ About']];
 const SUBS = {
   dungeons: [['descent', 'Hollow Descent'], ['scouting', 'Scouting'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['places', 'More places'], ['hunts', 'Hunts & foraging'], ['wave', 'Wave simulation']],
-  town: [['buildings', 'Buildings'], ['armory', 'Armory & relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
-  academy: [['training', '🥋 Training & sparring'], ['library', '📚 Library & spells']],
+  town: [['buildings', 'Buildings'], ['armory', 'Armory (gear)'], ['relics', 'Relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
+  academy: [['training', '🥋 Facilities & trainers'], ['library', '📚 Library & spells']],
   people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'mossy_burrows', 'stranded', 'rescue'];
@@ -598,9 +598,9 @@ function drawer(s) {
   const free = !s.busy;
   const inDun = DUNGEON_KINDS.includes(s.in_dungeon);
   const ctx = { st, free, inDun };
-  const tabs = [['overview', 'Overview'], ['fight', 'Fight'], ['mind', 'Mind'], ['gear', 'Gear']];
+  const tabs = [['overview', 'Overview'], ['fight', 'Fight'], ['train', 'Train'], ['mind', 'Mind'], ['gear', 'Gear']];
   const dt = tabs.some(([k]) => k === S.dtab) ? S.dtab : 'overview';
-  const body = { overview: dOverview, fight: dFight, mind: dMind, gear: dGear }[dt](s, ctx);
+  const body = { overview: dOverview, fight: dFight, train: dTrain, mind: dMind, gear: dGear }[dt](s, ctx);
   return `<aside class="drawer">
     <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button> <input type="color" class="colpick" data-colorid="${s.id}" value="${s.color || CLASS_COLORS[s.archetype] || '#5be0a0'}" title="Slime colour (ring colour stays with rarity)"> ${s.color ? `<button class="btn small" data-act="set_color" data-id="${s.id}" data-reset="1" title="Back to class colour">↺</button>` : ''}</h2><button class="btn small" data-act="closesel">✕</button></div>
     ${s.fights > (st.shadow?.fight_limit ?? 1) ? `<div class="panel flat"><small>⚠ A troublemaker: came to blows with ${s.fights} different slimes this month (more than ${st.shadow.fight_limit} makes one). Merging or destroying it costs no morale.</small></div>` : ''}
@@ -676,13 +676,6 @@ function dOverview(s, { st, free, inDun }) {
 }
 
 function dFight(s, { st, free }) {
-  const el = (b) => {
-    const e = st.elements.list.find((x) => x.key === b);
-    const lv = s.mastery[b];
-    return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${Math.max(s.mastery_cap, lv)}</b>` : '<span class="mute">not attuned</span>'}</span>
-      <button class="btn small" data-act="study" data-el="${b}" ${free && s.can_master && (lv === undefined ? s.attuned.length < s.element_slots : lv < s.mastery_cap) ? '' : 'disabled'}>Study (${cost(st.library.study_cost)})</button></div>`;
-  };
-  const sp = s.spells.map((k) => { const d = st.spell_defs[k]; const g = (s.spell_stage || {})[k] || 0; return d ? badge(`${elName(d.element)} ${esc(d.name)}${g ? ' ' + '✦'.repeat(g) : ''}`, 'info') : ''; }).join(' ');
   return `${sect('Skills', 'Abilities come from the class (by level), evolution, specialization, rarity and learned spells.', `<p>${s.abilities.map((a) => badge((a.element ? elName(a.element) + ' ' : '') + esc(a.name), 'info')).join(' ')}</p>`)}
     ${sect('Passive skills', 'Perks a slime earns by mastering something: an element, a trade, its class or a fighting style, or ties with other slimes. They are always on: nothing to cast. Locked ones say what it takes.', passivesHtml(s, st))}
     ${sect('Attributes', 'Each extra star adds a class attribute; each rarity step adds a class skill.', `<div class="stack" style="gap:3px">
@@ -705,9 +698,73 @@ function dFight(s, { st, free }) {
     ${sect('Class &amp; progress', 'Specialization turns cross-training into a hybrid class. Outlook forms from what the slime does most.', `<p>${s.spec ? `${s.spec.emoji} <b>${esc(s.spec.name)}</b> <small class="mute">(${esc(s.class_name)} + ${esc(s.spec.disc)})</small>` : `<b>${esc(s.class_name)}</b>`} · Descent: <b>floor ${s.progress}</b></p>
       <p>${s.outlook ? `${s.outlook.emoji} <b>${esc(s.outlook.name)}</b> <small class="mute">${esc(s.outlook.perk)}</small>` : '<span class="mute">Outlook undecided.</span>'}</p>
       ${s.spec_options.length ? `<div class="stack">${s.spec_options.map((o) => `<div class="row between panel flat"><span>${o.emoji} <b>${esc(o.name)}</b> <small class="mute">via ${esc(o.style)} (lvl ${o.level})</small><br><small class="mute">${o.ok ? esc(o.desc) : esc(o.reason)}</small></span>
-        <button class="btn small ${o.ok ? 'primary' : ''}" data-act="specialize" data-id="${s.id}" data-disc="${o.discipline}" data-n="${esc(s.name)}" data-spec="${esc(o.name)}" data-cost="${esc(cost(st.spec.cost))}" ${o.ok && free && st.wallet.white_gel >= (st.spec.cost.white_gel || 0) && st.wallet.essence >= (st.spec.cost.essence || 0) ? '' : 'disabled'}>Specialize</button></div>`).join('')}</div>` : ''}`)}
-    ${sect('Fighting style', 'Trained in the Academy by sparring; each style gives permanent perks.', st.disciplines.map((d) => bar(s.style[d.key], 10, '', `${d.emoji} ${d.style}${s.discipline === d.key ? ' (class)' : ''}`, `L${s.style[d.key]}`)).join(''))}
-    ${sect('Elemental mastery', 'Unlocks at 3★ for any class; earned levels are kept (on hold) if the stars reset.', s.can_master || s.attuned.length ? `<p class="mute">Attuned ${s.attuned.length}/${s.element_slots} · cap L${s.mastery_cap}</p>${s.mastery_paused ? `<p class="mute">⏸ Earned mastery is kept and still works, but it cannot grow until this slime has ${s.mastery_paused}★ again.</p>` : ''}<div class="stack">${st.elements.basics.map(el).join('')}</div><p>${sp || '<span class="mute">No spells learned.</span>'}</p>` : `<p class="mute">This slime is ${s.stars}★.</p>`)}`;
+        <button class="btn small ${o.ok ? 'primary' : ''}" data-act="specialize" data-id="${s.id}" data-disc="${o.discipline}" data-n="${esc(s.name)}" data-spec="${esc(o.name)}" data-cost="${esc(cost(st.spec.cost))}" ${o.ok && free && st.wallet.white_gel >= (st.spec.cost.white_gel || 0) && st.wallet.essence >= (st.spec.cost.essence || 0) ? '' : 'disabled'}>Specialize</button></div>`).join('')}</div>` : ''}`)}`;
+}
+
+/* The Train tab: everything one slime can practise, in one place (drills, sparring, elements, spells). The Academy keeps the
+   facilities, their trainers and whole-party training. */
+const canTrain = (s) => !s.in_dungeon && s.state !== 'hunting' && s.state !== 'studying' && !s.grounded;
+const trainWhy = (s) => s.in_dungeon ? 'away in a dungeon' : s.state === 'hunting' ? 'out hunting or foraging' : s.state === 'studying' ? 'already training or studying' : s.grounded ? 'grounded after a brawl' : '';
+function dTrain(s, { st }) {
+  const ok = canTrain(s), why = trainWhy(s), tags = trainTags(s);
+  const fac = (k) => st.facilities[k];
+  const room = (k, n = 1) => fac(k).capacity - fac(k).users.length >= n;
+  const discs = st.disciplines;
+  const tiers = st.drill.tiers;
+  const tier = Math.min(num(ui('dtier', 1), 1), tiers.filter((t) => t.unlocked).length) || 1;
+  S.ui.dtier = tier;
+  const tr = tiers[tier - 1];
+  let dk = ui('my_disc', s.discipline);
+  if (!discs.some((d) => d.key === dk)) dk = discs[0].key;
+  S.ui.my_disc = dk;
+  const yard = st.facility_yards[dk], gain = s.prof?.drill?.[dk]?.[tier - 1] || 0;
+  const discOpts = (key, cur) => discs.map((d) => `<option value="${d.key}" ${d.key === cur ? 'selected' : ''}>${d.emoji} ${esc(key === 'yard' ? fac(st.facility_yards[d.key]).name : d.style)}${d.key === s.discipline ? ' (its class)' : ''}</option>`).join('');
+  const drill = `<div class="row"><select data-ui="my_disc" data-rerender="1">${discOpts('yard', dk)}</select>
+      <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select>
+      <button class="btn small primary" data-act="drill_me" ${ok && room(yard) ? '' : 'disabled'}>🥋 Drill · ${tr.ticks}h · ${esc(cost(tr.cost))}</button></div>
+    <small class="mute">${gain > 0 ? `Worth about <b>+${gain}</b> proficiency` : 'Not its discipline: only a little general practice'}${s.prof ? ` (now ${s.prof.value})` : ''} · ${fac(yard).users.length}/${fac(yard).capacity} places taken · trainer ${st.jobs.trainer[dk] ? `+${st.jobs.trainer[dk]}% gains` : 'none appointed'}${!room(yard) ? ' · <b>the yard is full</b>' : ''}</small>`;
+  let sk = ui('my_style', s.discipline);
+  if (!discs.some((d) => d.key === sk)) sk = discs[0].key;
+  S.ui.my_style = sk;
+  const arena = st.facility_arenas[sk];
+  const opps = st.slimes.filter((o) => o.id !== s.id && canTrain(o)).sort((a, b) => (b.discipline === sk) - (a.discipline === sk) || Math.abs(a.level - s.level) - Math.abs(b.level - s.level));
+  let opp = num(ui('my_opp', opps[0]?.id));
+  if (!opps.some((o) => o.id === opp)) opp = opps[0]?.id;
+  S.ui.my_opp = opp;
+  const spar = `<div class="row"><select data-ui="my_style" data-rerender="1">${discOpts('style', sk)}</select>
+      ${opps.length ? `<label class="f">vs <select data-ui="my_opp">${opps.map((o) => `<option value="${o.id}" ${o.id === opp ? 'selected' : ''}>${esc(o.name)} (${esc(o.class_name)} Lv${o.level})${trainTags(o)}</option>`).join('')}</select></label>` : '<small class="mute">nobody else is free to spar</small>'}
+      <button class="btn small primary" data-act="spar_me" ${ok && opps.length && room(arena, 2) ? '' : 'disabled'}>⚔ Spar · ${esc(cost(st.mercy.spar_cost))} · ${st.mercy.train_ticks}h</button></div>
+    <small class="mute">${esc(discs.find((d) => d.key === sk).perk)} · ${fac(arena).name}: ${fac(arena).users.length}/${fac(arena).capacity} places${!room(arena, 2) ? ' · <b>no room for a duel</b>' : ''}. Non-lethal: the loser is left at 1 HP.</small>
+    ${discs.map((d) => bar(s.style[d.key], 10, '', `${d.emoji} ${d.style}${s.discipline === d.key ? ' (class)' : ''}`, `L${s.style[d.key]}`)).join('')}`;
+  const el = (b) => {
+    const e = st.elements.list.find((x) => x.key === b), lv = s.mastery[b];
+    return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${Math.max(s.mastery_cap, lv)}</b>` : '<span class="mute">not attuned</span>'}</span>
+      <button class="btn small" data-act="study" data-el="${b}" ${ok && s.can_master && (lv === undefined ? s.attuned.length < s.element_slots : lv < s.mastery_cap) ? '' : 'disabled'}>Study · ${cost(st.library.study_cost)} · 4h</button></div>`;
+  };
+  const lib = st.library, nameOf = (k) => st.spell_defs[k]?.name || k;
+  /* What stops it learning a spell (the same checks the Library makes), so the list can grey those out and say why. */
+  const blocker = (a) => {
+    const comps = st.elements.list.find((e) => e.key === a.element)?.components || [a.element];
+    const missing = comps.filter((c) => !s.attuned.includes(c));
+    if (a.tier >= 3 && !lib.tier3) return 'Library L3';
+    if (missing.length) return `study ${missing.map(elName).join(' ')} first`;
+    const have = Math.min(...comps.map((c) => s.mastery[c] || 0)), need = lib.tier_mastery[a.tier];
+    return have < need ? `needs mastery ${need}` : '';
+  };
+  const learnable = lib.catalog.filter((a) => !s.spells.includes(a.key)).map((a) => ({ ...a, why: blocker(a) })).sort((x, y) => !!x.why - !!y.why || x.tier - y.tier);
+  if (!learnable.some((a) => a.key === ui('my_learn') && !a.why)) S.ui.my_learn = learnable.find((a) => !a.why)?.key;
+  const elems = s.can_master || s.attuned.length ? `<p class="mute">Attuned ${s.attuned.length}/${s.element_slots} · cap L${s.mastery_cap}${s.mastery_paused ? ` · ⏸ mastery cannot grow until it has ${s.mastery_paused}★ again (what it earned still works)` : ''}</p>
+      <div class="stack">${st.elements.basics.map(el).join('')}</div>
+      <p>Spells (${s.spells.length}/${lib.slots}): ${s.spells.map((k) => `${badge(esc(nameOf(k)) + ((s.spell_stage || {})[k] ? ' ' + '✦'.repeat(s.spell_stage[k]) : ''), 'info')} <button class="btn small" data-act="forget" data-id="${s.id}" data-spell="${k}" title="Forget it to free a slot">✕</button>`).join(' ') || '<span class="mute">none</span>'}</p>
+      ${learnable.length ? `<div class="row"><select data-ui="my_learn">${learnable.map((a) => `<option value="${a.key}" ${a.key === S.ui.my_learn ? 'selected' : ''} ${a.why ? 'disabled' : ''}>${elName(a.element)} ${esc(a.name)} · T${a.tier} · ${a.why ? `(${esc(a.why)})` : esc(cost(lib.learn_cost[a.tier]))}</option>`).join('')}</select>
+        <button class="btn small" data-act="learn_me" ${ok && S.ui.my_learn && s.spells.length < lib.slots ? '' : 'disabled'}>📚 Learn</button></div>
+        ${S.ui.my_learn ? '' : '<small class="mute">No spell is ready yet: study an element first (each spell needs its elements attuned and some mastery).</small>'}` : ''}
+      ${mutationNotes(s)}`
+    : `<p class="mute">Elements unlock at 3★ for any class: this slime is ${s.stars}★.</p>`;
+  return `${!ok ? `<div class="panel flat"><small>⏳ It cannot train right now: ${esc(why)}.</small></div>` : tags ? `<small class="mute">Note${tags}</small>` : ''}
+    ${sect('Proficiency drill', 'Solo drills in the Blade Yard, Archery Range or Mana Pool raise class proficiency (what keeps capstone skills usable). Its own discipline gives the most. Upgrade the yards in Town > Buildings; appoint trainers in the Academy.', drill)}
+    ${sect('Sparring — fighting styles', 'Duels with another slime build a fighting style with permanent combat perks. Sparring outside its class leads to specialization.', spar)}
+    ${sect('Elements &amp; spells', 'Study raises mastery of a basic element (mages have an extra slot and study faster). Spells come from the Library catalogue; fuse new ones in the Academy Spell lab.', elems)}`;
 }
 
 function dMind(s, { st, free, inDun }) {
@@ -729,23 +786,31 @@ function dMind(s, { st, free, inDun }) {
 }
 
 function dGear(s, { st, free }) {
-  const inv = Object.keys(st.gear.inventory);
+  const inv = Object.keys(st.gear.inventory).filter((k) => st.gear.inventory[k] > 0);
   const slotOf = (k) => st.gear.all.find((g) => g.key === k);
   const slots = ['weapon', 'armor', 'charm'].map((sl) => {
     const cur = s.gear[sl] ? slotOf(s.gear[sl]) : null;
-    const opts = inv.map((k) => slotOf(k)).filter((g) => g.slot === sl);
-    return `<div class="row between"><span>${sl}: ${cur ? `<b>${cur.emoji} ${esc(cur.name)}</b>` : '<span class="mute">empty</span>'}</span>
-      <span class="row">${opts.length ? `<select data-ui="eq_${sl}">${opts.map((g) => `<option value="${g.key}">${g.emoji} ${esc(g.name)} ×${st.gear.inventory[g.key]}</option>`).join('')}</select><button class="btn small" data-act="equip" data-slot="${sl}" ${free ? '' : 'disabled'}>Equip</button>` : ''}
+    const opts = inv.map((k) => slotOf(k)).filter((g) => g && g.slot === sl);
+    return `<div class="row between"><span>${sl}: ${cur ? `<b>${cur.emoji} ${esc(cur.name)}</b> <small class="mute">${relicStat(cur)}</small>` : '<span class="mute">empty</span>'}</span>
+      <span class="row">${opts.length ? `<select data-ui="eq_${sl}">${opts.map((g) => `<option value="${g.key}">${g.emoji} ${esc(g.name)} ×${st.gear.inventory[g.key]}</option>`).join('')}</select><button class="btn small" data-act="equip" data-slot="${sl}" ${free ? '' : 'disabled'}>Equip</button>` : '<small class="mute">no spare</small>'}
       ${cur ? `<button class="btn small" data-act="unequip" data-slot="${sl}" ${free ? '' : 'disabled'}>Remove</button>` : ''}</span></div>`;
   }).join('');
-  const relics = Object.values(s.items).map((it) => `<div class="row between"><span>${it.emoji} <b>${esc(it.name)}</b> ${chip(it.rarity, RARITY_CLS[it.rarity])} ${stars(it.stars)} Lv${it.level} <small class="mute">💞${it.compat}%</small></span><button class="btn small" data-act="item_unequip" data-id="${s.id}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Remove</button></div>`).join('');
   const bt = (b) => Object.entries(b || {}).map(([k, v]) => `+${v} ${k}`).join(' ');
-  const sets = (s.gear_sets || []).map((x) => `<small class="${x.bonus && Object.keys(x.bonus).length ? '' : 'mute'}">${x.emoji} <b>${esc(x.name)}</b> ${x.count}/3 · ${Object.keys(x.bonus).length ? bt(x.bonus) : 'wear 2 pieces for a bonus'}${x.next ? ` <span class="mute">(next: ${bt(x.next)})</span>` : ''}</small>`).join('');
-  return `${sect('Gear', 'Plain armory gear. Relics (below) come from the Rift and are managed in Town → Armory & relics. Matching set pieces give a bonus.', `<div class="stack">${slots}${sets}</div>`)}
-    ${sect('Relics', 'Unique equipment with rarity, stars, mods and a compatibility with this slime.', relics || '<small class="mute">No relics worn.</small>')}
+  const sets = (s.gear_sets || []).filter((x) => x.count > 0).map((x) => `<small class="${x.bonus && Object.keys(x.bonus).length ? '' : 'mute'}">${x.emoji} <b>${esc(x.name)}</b> ${x.count}/3 · ${Object.keys(x.bonus).length ? bt(x.bonus) : 'wear 2 pieces for a bonus'}${x.next ? ` <span class="mute">(next: ${bt(x.next)})</span>` : ''}</small>`).join('');
+  const relicSlot = (sl) => {
+    const it = s.items[sl];
+    const spare = st.gear.vault.filter((x) => x.slot === sl && !x.ego).sort((a, b) => b.fits.includes(s.archetype) - a.fits.includes(s.archetype) || RAR_N[b.rarity] - RAR_N[a.rarity] || b.stars - a.stars || b.level - a.level);
+    const pick = spare.length ? `<select data-ui="dr_${sl}">${spare.map((x) => `<option value="${x.uid}">${x.fits.includes(s.archetype) ? '✓ ' : ''}${x.emoji} ${esc(x.name)} · ${x.rarity} ${x.stars}★ Lv${x.level}</option>`).join('')}</select><button class="btn small" data-act="drawer_relic" data-slot="${sl}" ${free ? '' : 'disabled'}>${it ? 'Swap' : 'Equip'}</button>` : '';
+    return `<div class="stack" style="gap:2px"><div class="row between"><span>${sl}: ${it ? `<b>${it.emoji} ${esc(it.name)}</b> ${chip(it.rarity, RARITY_CLS[it.rarity])} ${stars(it.stars)} Lv${it.level}` : '<span class="mute">empty</span>'}</span>
+        ${it ? `<button class="btn small" data-act="item_unequip" data-id="${s.id}" data-slot="${sl}" ${free ? '' : 'disabled'}>Remove</button>` : ''}</div>
+      ${it ? `<small class="mute">${relicStat(it)} · 💞 ${it.compat}% compatible${it.durability === null ? ' · unbreakable' : ` · durability ${it.durability}/${it.max_durability}`}</small>` : ''}
+      ${pick ? `<div class="row">${pick}</div>` : ''}</div>`;
+  };
+  return `${sect('Gear', 'Plain armory gear: buy, sell back and merge it in Town → Armory. Matching set pieces give a bonus.', `<div class="stack">${slots}${sets}</div>`)}
+    ${sect('Relics', 'Unique equipment from the Wayfarer\'s Rift, with rarity, stars, mods and a compatibility with this slime (✓ = made for its class). Level, repair and break relics down in Town → Relics.', `<div class="stack">${['weapon', 'armor', 'charm'].map(relicSlot).join('')}
+      <div class="row"><button class="btn small" data-act="goto" data-t="town" data-s="relics">🗡️ All relics</button><button class="btn small" data-act="slime_repair" ${free && Object.keys(s.items).length ? '' : 'disabled'}>🔧 Repair own relics</button></div></div>`)}
     ${sect('Weapons', 'A slime remembers up to three weapon families; practice sharpens them.', `<small class="mute">Favourite: ${s.weapons.favourite} · remembers ${s.weapons.memory.length}/${s.weapons.slots}</small>
-      ${Object.entries(s.weapons.proficiency).map(([f, p]) => `<div>${f}${s.weapons.memory.includes(f) ? '' : ' <small class="mute">(forgotten)</small>'} <b>Lv${p.level}</b> <small class="mute">${p.uses} uses</small></div>`).join('')}
-      <div class="row"><button class="btn small" data-act="slime_repair" ${free && Object.keys(s.items).length ? '' : 'disabled'}>🔧 Repair own gear</button></div>`)}`;
+      ${Object.entries(s.weapons.proficiency).map(([f, p]) => `<div>${f}${s.weapons.memory.includes(f) ? '' : ' <small class="mute">(forgotten)</small>'} <b>Lv${p.level}</b> <small class="mute">${p.uses} uses</small></div>`).join('')}`)}`;
 }
 
 /* ---------------------------------------------------------------- gacha */
@@ -1112,27 +1177,20 @@ function quarryView() {
   </div></div>`;
 }
 function riftView() {
-  const all = riftAll();
-  const left = cut(all, '<div class="panel stack"><h2>🧭', '  <div class="stack"><div class="panel stack"><h2>🎒 Relic vault');
-  return `<div class="grid cols2">${left}</div>`;
+  return riftAll();
 }
 function town() {
   const v = sub('town');
   const all = townAll();
-  const alch = '<div class="panel stack" style="margin-top:12px"><h2>⚗️', armory = '<div class="grid cols2" style="margin-top:12px">\n    <div class="panel stack"><h2>🛠️ Armory';
+  const alch = '<div class="panel stack" style="margin-top:12px"><h2>⚗️';
   let body;
   if (v === 'sacrifice') return subnav('town') + sacrificeView();
   if (v === 'kitchen') return subnav('town') + kitchenView();
   if (v === 'hospital') return subnav('town') + hospitalView();
   if (v === 'buildings') body = wakePanel() + cut(all, null, alch);
-  else if (v === 'alchemy') body = cut(all, alch, armory).replace('margin-top:12px', 'margin-top:0') + `<div class="panel stack" style="margin-top:12px"><h2>⚗️ Brewer</h2><p class="mute">An appointed brewer brews the basic potions the colony is shortest of from the herbs in the stores (never using more than 66% of a stock), one try per ${S.state.jobs.shift}-hour shift.</p>${postPanel('brewer')}</div>`;
-  else {
-    const rv = riftAll();
-    const relics = cut(rv, '  <div class="stack"><div class="panel stack"><h2>🎒 Relic vault', null);
-    const fg = S.state.jobs.forge;
-    body = `<div class="panel stack"><h2>🔨 Blacksmith</h2><p class="mute">An appointed blacksmith mends worn gear carried by slimes at home for free, and slowly forges: every ${fg.shifts} shifts a <b>${fg.next === 'weapon' ? 'weapon (the best tier the Armory sells, at ' + Math.round(fg.share * 100) + '% of the shop price)' : 'relic (' + esc(cost(fg.relic_cost)) + ')'}</b>, if the materials are there — alternating weapon and relic. With no materials the shift goes foraging.</p>
-      <div class="row">${chip(`⚒️ Forge progress ${fg.progress}/${fg.shifts}`, 'info')}</div>${postPanel('blacksmith')}</div>` + cut(all, armory, null) + `<div class="grid cols2" style="margin-top:12px">${relics.replace(/^\s*<div class="stack">/, '<div class="stack">')}`;
-  }
+  else if (v === 'alchemy') body = cut(all, alch, null).replace('margin-top:12px', 'margin-top:0') + `<div class="panel stack" style="margin-top:12px"><h2>⚗️ Brewer</h2><p class="mute">An appointed brewer brews the basic potions the colony is shortest of from the herbs in the stores (never using more than 66% of a stock), one try per ${S.state.jobs.shift}-hour shift.</p>${postPanel('brewer')}</div>`;
+  else if (v === 'relics') body = relicsView();
+  else body = armoryView();
   return subnav('town') + body;
 }
 /* ---------------------------------------------------------------- appointments: posts live in their own buildings */
@@ -1384,50 +1442,33 @@ function academyAll() {
   const tier = Math.min(num(ui('dtier', 1), 1), tiers.filter((t) => t.unlocked).length) || 1;
   S.ui.dtier = tier;
   const tr = tiers[tier - 1];
-  const yardPanel = (d) => {
-    const k = st.facility_yards[d.key], sel = slimeSel('dsl_' + d.key, avail, 'data-rerender="1"', 0, d.key);
-    const s = slimeById(num(ui('dsl_' + d.key)));
-    const gain = s?.prof?.drill?.[d.key]?.[tier - 1] || 0;
-    return `<div class="panel flat stack">${facHead(k)}
-      <small class="mute">${esc(d.feeds.join(', '))} · Trainer: ${st.jobs.trainer[d.key] ? `+${st.jobs.trainer[d.key]}% gains` : 'none appointed'}</small>
-      <div class="row">${sel}<button class="btn primary" data-act="drill" data-d="${d.key}" ${s && !full(k) ? '' : 'disabled'}>${esc(tr.name)} (${tr.ticks}h)</button></div>
-      ${s ? `<small class="mute">${esc(s.name)}: ${s.prof ? `proficiency ${s.prof.value}` : ''} · ${gain > 0 ? `this drill is worth about +${gain}` : 'not their discipline: only a little general practice'}</small>` : ''}
-      ${full(k) ? '<small class="mute">The yard is full.</small>' : ''}
-      ${facUsers(k, 'In training')}
+  const discPanel = (d) => {
+    const y = st.facility_yards[d.key], ar = st.facility_arenas[d.key];
+    return `<div class="panel stack"><h3 style="margin:0">${d.emoji} ${esc(d.style)} <small class="mute">${esc(d.feeds.join(', '))}</small></h3>
+      <small class="mute">${esc(d.perk)} · trainer: ${st.jobs.trainer[d.key] ? `<b>+${st.jobs.trainer[d.key]}%</b> gains` : 'none appointed'}</small>
+      <div class="panel flat stack">${facHead(y)}${facUsers(y, 'Drilling')}</div>
+      <div class="panel flat stack">${facHead(ar)}${facUsers(ar, 'Sparring')}</div>
       ${postPanel('trainer_' + d.key)}</div>`;
-  };
-  const trainingFacility = `<div class="panel stack"><h2>🥋 Training facilities — proficiency</h2>
-    <p class="mute">Solo drills sharpen a slime's <b>class proficiency</b> (what keeps its capstone skills usable). Each discipline has its own facility with its own places (plus a yard for whole parties): the <b>Blade Yard</b> (sword classes), the <b>Archery Range</b> (rangers) and the <b>Mana Pool</b> (casters). Upgrade each one separately in Town &gt; Buildings; every level adds two places. The Training Grounds (L${tg.level}) boost the gains and unlock stronger drills (Advanced at level 3, Master at level 5). A drill is worth less as a slime nears mastery.</p>
-    <div class="row"><label class="f">Drill <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)} · ${t.ticks}h · ${esc(cost(t.cost))}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select></label></div>
-    ${st.disciplines.map(yardPanel).join('')}
-    <div class="panel flat stack">${facHead(st.party_yard)}
-      <small class="mute">A yard for a whole party: pick a party and everyone trains for themselves in their own field. Proficiency rises for every member and the party grows closer (synergy). One flat drill cost for the whole party (the basic drill is 1 ⚪). Each level holds one more party.</small>
-      <div class="row">${partyOptions('ptpid')}<button class="btn primary" data-act="party_train" ${lvl(st.party_yard).capacity - lvl(st.party_yard).users.length >= st.party_size && S.ui.ptpid ? '' : 'disabled'}>🥋 ${esc(tr.name)} (${tr.ticks}h) · ${esc(cost(tr.cost))}</button></div>
-      ${facUsers(st.party_yard, 'In training')}</div></div>`;
-  const duelPanel = (d) => {
-    const k = st.facility_arenas[d.key], a = 'spa_' + d.key, b = 'spb_' + d.key;
-    const A = slimeSel(a, avail, 'data-rerender="1"', 0, d.key), B = slimeSel(b, (s) => avail(s) && s.id != num(ui(a)), 'data-rerender="1"', 1, d.key);
-    const ok = ui(a) && ui(b) && ui(a) != ui(b) && lvl(k).capacity - lvl(k).users.length >= 2;
-    return `<div class="panel flat stack">${facHead(k)}
-      <small class="mute"><b>${esc(d.style)}</b> · ${esc(d.perk)}</small>
-      <div class="row">${A} vs ${B}<button class="btn primary" data-act="spar" data-d="${d.key}" ${ok ? '' : 'disabled'}>Spar · 2 ⚪</button></div>
-      ${facUsers(k, 'Sparring')}</div>`;
   };
   const partyK = st.party_arena, pstyle = ui('pstyle', 'sword');
   const partyFree = lvl(partyK).capacity - lvl(partyK).users.length >= 2 * st.party_size;
-  const sparPanel = `<div class="panel stack"><h2>⚔ Sparring — fighting styles ${info('A duel costs 2 white gel. Two parties sparring as teams cost a flat 3 white gel (not per pair). Each takes 3 hours. A sleeping slime is woken first (mood cost: morale and a flash of anger); a slime at a job leaves it (that shift is lost); a slime below half health is too hurt to spar and drills for less. Check the tags in the pickers.')}</h2>
-    <p class="mute">Training is not for XP. Slimes duel each other (non-lethal; the loser is left at <b>1 HP</b>; heal them at the Rest Area) to develop a <b>fighting style</b> with permanent combat perks. Costs ${cost(st.mercy.spar_cost)} per duel and ${st.mercy.train_ticks}h. Each style has its own arena with its own places (every level holds one more duel at once); the Training Grounds (L${tg.level}) set the style ceiling: ${esc(tg.now)}.</p>
-    ${st.disciplines.map(duelPanel).join('')}
-    ${away ? `<small class="mute">${away} slime${away > 1 ? 's are' : ' is'} away (dungeon, hunt or study) and not listed.</small>` : ''}
-    <div class="panel flat stack">${facHead(partyK)}
-      <small class="mute">Two full parties fight each other as teams: a flat 3 ⚪ and 3 hours. Every level holds one more team match at once, and upgrading it costs much more.</small>
-      <div class="row"><b>Party vs party:</b> ${partyA} vs ${partyB}<label class="f">Style <select data-ui="pstyle">${st.disciplines.map((d) => `<option value="${d.key}" ${d.key === pstyle ? 'selected' : ''}>${esc(d.emoji)} ${esc(d.style)}</option>`).join('')}</select></label>
-        <button class="btn" data-act="spar_parties" ${partyOk && partyFree ? '' : 'disabled'}>Parties spar · 3 ⚪</button>${info('Two full parties at home fight each other, non-lethally, for a flat 3 white gel (not per pair) and 3 hours. Every member gains fighting-style XP and class proficiency, and the members of each party grow closer, which raises party synergy. The loser is left low on health (the Hospital heals them).')}</div>
-      <small class="mute">${partyOk ? (partyFree ? 'Two parties fight as teams to knit together and sharpen their class.' : 'The Party Arena has no room for two more parties: wait or upgrade it.') : 'You need two full parties at home to spar them against each other. Make them in the Parties tab.'}</small>
-      ${facUsers(partyK, 'In the arena')}</div></div>`;
+  const trainHub = `<div class="panel stack" style="grid-column:1/-1"><h2>🥋 Facilities &amp; trainers</h2>
+    <p class="mute">To train <b>one slime</b> — a drill, a spar, an element or a spell — open its card and use the <b>🥋 Train</b> tab. Here are the yards and arenas (who is in them, and their places), the <b>trainers</b> who make them better, and training for <b>whole parties</b>. The Training Grounds (L${tg.level}) unlock stronger drills and set the style ceiling: ${esc(tg.now)}. Upgrade every yard and arena in Town &gt; Buildings.</p>
+    <div class="row"><button class="btn small" data-act="goto" data-t="colony">🟢 Pick a slime to train</button></div></div>
+  ${st.disciplines.map(discPanel).join('')}
+  <div class="panel stack">${facHead(st.party_yard)}
+    <small class="mute">A whole party drills, each member in its own field: proficiency for everyone and the party grows closer (synergy). One flat cost for the party.</small>
+    <div class="row">${partyOptions('ptpid')}<select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)} · ${t.ticks}h · ${esc(cost(t.cost))}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select>
+      <button class="btn primary" data-act="party_train" ${lvl(st.party_yard).capacity - lvl(st.party_yard).users.length >= st.party_size && S.ui.ptpid ? '' : 'disabled'}>🥋 Drill the party</button></div>
+    ${facUsers(st.party_yard, 'In training')}</div>
+  <div class="panel stack">${facHead(partyK)}
+    <small class="mute">Two full parties at home fight as teams (non-lethal): a flat 3 ⚪ and 3 hours. Every member gains style XP and proficiency, and each party grows closer.</small>
+    <div class="row">${partyA} vs ${partyB}<select data-ui="pstyle">${st.disciplines.map((d) => `<option value="${d.key}" ${d.key === pstyle ? 'selected' : ''}>${esc(d.emoji)} ${esc(d.style)}</option>`).join('')}</select>
+      <button class="btn" data-act="spar_parties" ${partyOk && partyFree ? '' : 'disabled'}>Parties spar · 3 ⚪</button></div>
+    <small class="mute">${partyOk ? (partyFree ? '' : 'The Party Arena has no room for two more parties: wait or upgrade it.') : 'You need two full parties at home. Make them in the Parties tab.'}</small>
+    ${facUsers(partyK, 'In the arena')}</div>`;
   return `<div class="grid acad">
-  ${trainingFacility}
-  ${sparPanel}
+  ${trainHub}
   <div class="panel stack"><h2>📚 Library</h2>
     <p class="mute">Elemental mastery unlocks at <b>3★ for any class</b> (mages get an extra element slot and study faster). Library spell slots: <b>${lib.slots}</b>${lib.tier3 ? '' : ' · Restricted Section (tier-3) needs Library L3'}.</p>
     ${postPanel('librarian')}
@@ -1462,28 +1503,92 @@ function academyAll() {
 
 /* ---------------------------------------------------------------- rift (adventure dungeon & relics) */
 const RARITY_CLS = { common: '', uncommon: 'uncommon', rare: 'rare', epic: 'epic', legendary: 'legendary' };
-function relicCard(it, holderId = null) {
-  const st = S.state, a = st.gear.adventure, free = holderId ? !slimeById(holderId)?.busy : true;
-  const stat = Object.entries(it.stats).map(([k, v]) => `+${v} ${k}`).join(' ');
-  const dur = it.durability === null ? '<span class="chip ok">unbreakable</span>' : `<div class="mute">Durability ${it.durability}/${it.max_durability}</div>${bar(it.durability, it.max_durability, it.durability < it.max_durability * 0.3 ? 'bad' : '')}`;
-  const act_ = (c, label, cs, cls = '') => `<button class="btn small ${cls}" data-act="item_cmd" data-c="${c}" data-uid="${it.uid}" ${cs && !affordable(cs) ? 'disabled' : ''} ${free ? '' : 'disabled'}>${label}${cs ? ' · ' + cost(cs) : ''}</button>`;
-  const slimeSel = holderId ? '' : `<select data-ui="ie_${it.uid}">${st.slimes.filter((s) => !s.busy).map((s) => `<option value="${s.id}" ${s.id == ui('ie_' + it.uid, st.slimes[0]?.id) ? 'selected' : ''}>${esc(s.name)} (${esc(s.class_name)})</option>`).join('')}</select><button class="btn small primary" data-act="item_equip" data-uid="${it.uid}">Equip</button>`;
-  return `<div class="panel flat stack"><div class="row between"><b>${it.emoji} ${esc(it.name)}</b>${chip(it.rarity, RARITY_CLS[it.rarity])}</div>
-    <div>${stars(it.stars)} · Lv${it.level}/10 · ${stat}${it.compat !== null ? ` · 💞 compat ${it.compat}%` : ''}</div>
-    ${it.mods.length ? `<div>${it.mods.map((m) => chip(esc(m), 'info')).join(' ')}</div>` : ''}
-    ${it.ego ? `<div class="mute">👁️ Soul of ${esc(it.ego.name)} (Lv${it.ego.level}) — only 5★ legendaries may wield it.</div>` : `<small class="mute">${it.family ? it.family + ' · ' : ''}fits: ${it.fits.join(', ')}</small>`}
-    ${dur}
-    <div class="row">${slimeSel}
-      ${it.level_cost ? act_('level_item', '⬆ Level', it.level_cost) : ''}${it.star_cost ? act_('ascend_star', '🌟 Ascend ★', it.star_cost) : ''}${it.rarity_cost ? act_('ascend_rarity', '💎 Raise rarity', it.rarity_cost) : ''}
-      ${it.repair_cost ? act_('repair_item', '🛠 Repair', { white_gel: it.repair_cost }) : ''}
-      ${it.salvage ? `<button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${it.uid}" data-ask="Break this relic down for ${cost(it.salvage)}?" ${free ? '' : 'disabled'}>🔨 Break down → ${cost(it.salvage)}</button>` : ''}
-      ${holderId ? `<button class="btn small" data-act="item_unequip" data-id="${holderId}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Remove</button>` : ''}
-      ${!it.ego && it.rarity === 'legendary' && it.stars === 5 ? `<button class="btn small danger" data-act="item_fuse" data-uid="${it.uid}">👁 Fuse ego…</button>` : ''}</div></div>`;
+const RAR_N = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
+const relicStat = (it) => Object.entries(it.stats || {}).map(([k, v]) => `+${v} ${k}`).join(' ');
+/* One relic as a single line (worn or in the vault); tap it for everything that can be done with it. */
+function relicRow(it, holder = null) {
+  const st = S.state, free = holder ? !holder.busy : true, key = 'rel_' + it.uid;
+  const act_ = (c, label, cs) => `<button class="btn small" data-act="item_cmd" data-c="${c}" data-uid="${it.uid}" ${(cs && !affordable(cs)) || !free ? 'disabled' : ''}>${label}${cs ? ' · ' + cost(cs) : ''}</button>`;
+  const dur = it.durability === null ? null : Math.round(it.durability / it.max_durability * 100);
+  let equip = '';
+  if (!holder) {
+    const fit = (x) => it.fits.includes(x.archetype);
+    const cands = st.slimes.filter((x) => !x.busy).sort((a, b) => fit(b) - fit(a) || b.power - a.power);
+    let cur = num(ui('ie_' + it.uid, cands[0]?.id));
+    if (!cands.some((x) => x.id === cur)) cur = cands[0]?.id;
+    S.ui['ie_' + it.uid] = cur;
+    equip = cands.length ? `<select data-ui="ie_${it.uid}">${cands.map((x) => `<option value="${x.id}" ${x.id === cur ? 'selected' : ''}>${fit(x) ? '✓ ' : ''}${esc(x.name)} (${esc(x.class_name)})${x.items[it.slot] ? ' · swaps ' + esc(x.items[it.slot].name) : ''}</option>`).join('')}</select><button class="btn small primary" data-act="item_equip" data-uid="${it.uid}">Equip</button>`
+      : '<small class="mute">Nobody is free to wear it.</small>';
+  }
+  const donors = holder || it.ego ? [] : st.gear.vault.filter((x) => x.uid !== it.uid && x.slot === it.slot && !x.ego);
+  return `<details class="relic panel flat" data-keep="${key}" ${ui(key, false) ? 'open' : ''}><summary><span class="row between" style="display:inline-flex;width:calc(100% - 20px)">
+      <span>${it.emoji} <b>${esc(it.name)}</b> ${chip(it.rarity, RARITY_CLS[it.rarity])} ${stars(it.stars)} Lv${it.level} <small class="mute">${it.slot} · ${relicStat(it)}</small></span>
+      <span class="row" style="gap:4px">${holder ? chip(`${esc(holder.name)}${it.compat !== null ? ' · 💞' + it.compat + '%' : ''}`, 'info') : chip('vault')}${dur === null ? '' : chip(`🛡 ${dur}%`, dur < 30 ? 'bad' : dur < 70 ? 'warn' : '')}</span></span></summary>
+    <div class="stack" style="margin-top:6px">
+      ${it.mods.length ? `<div>${it.mods.map((m) => chip(esc(m), 'info')).join(' ')}</div>` : ''}
+      ${it.ego ? `<small class="mute">👁️ Soul of ${esc(it.ego.name)} (Lv${it.ego.level}) — only 5★ legendaries may wield it.</small>` : `<small class="mute">${it.family ? it.family + ' · ' : ''}made for: ${it.fits.join(', ')}</small>`}
+      ${dur === null ? '<small class="mute">Unbreakable.</small>' : bar(it.durability, it.max_durability, dur < 30 ? 'bad' : '', 'Durability', `${it.durability}/${it.max_durability}`)}
+      <div class="row">${equip}${holder ? `<button class="btn small" data-act="item_unequip" data-id="${holder.id}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Take off ${esc(holder.name)}</button>` : ''}</div>
+      <div class="row">${it.level_cost ? act_('level_item', '⬆ Level', it.level_cost) : ''}${it.star_cost ? act_('ascend_star', '🌟 Ascend ★', it.star_cost) : ''}${it.rarity_cost ? act_('ascend_rarity', '💎 Raise rarity', it.rarity_cost) : ''}${it.repair_cost ? act_('repair_item', '🛠 Repair', { white_gel: it.repair_cost }) : ''}</div>
+      ${donors.length ? `<div class="row"><small class="mute">Feed another ${it.slot} relic into it (levels it, mends it, may pass on a mod):</small><select data-ui="rd_${it.uid}">${donors.map((x) => `<option value="${x.uid}">${x.emoji} ${esc(x.name)} · ${x.rarity} ${x.stars}★ Lv${x.level}</option>`).join('')}</select><button class="btn small danger" data-act="relic_feed" data-uid="${it.uid}">🫧 Merge in</button></div>` : ''}
+      <div class="row">${it.salvage && !holder ? `<button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${it.uid}" data-ask="Break this relic down for ${esc(cost(it.salvage))}? It is gone for good.">🔨 Break down → ${cost(it.salvage)}</button>` : ''}
+        ${!it.ego && it.rarity === 'legendary' && it.stars === 5 ? `<button class="btn small danger" data-act="item_fuse" data-uid="${it.uid}">👁 Fuse ego…</button>` : ''}</div></div></details>`;
+}
+/* Town > Relics: every relic, in the vault and worn, as one filterable list. */
+function relicsView() {
+  const st = S.state, a = st.gear.adventure;
+  const worn = st.slimes.flatMap((x) => Object.values(x.items).map((it) => ({ it, s: x })));
+  const all = [...st.gear.vault.map((it) => ({ it, s: null })), ...worn];
+  const where = ui('rl_where', 'all'), slot = ui('rl_slot', 'all'), sort = ui('rl_sort', 'rarity');
+  const sorters = { rarity: (x, y) => RAR_N[y.it.rarity] - RAR_N[x.it.rarity] || y.it.stars - x.it.stars || y.it.level - x.it.level,
+    level: (x, y) => y.it.level - x.it.level || y.it.stars - x.it.stars,
+    worn_out: (x, y) => (x.it.durability === null ? 2 : x.it.durability / x.it.max_durability) - (y.it.durability === null ? 2 : y.it.durability / y.it.max_durability),
+    name: (x, y) => x.it.name.localeCompare(y.it.name) };
+  const list = all.filter(({ it, s: h }) => (where === 'all' || (where === 'vault') === !h) && (slot === 'all' || it.slot === slot)).sort(sorters[sort] || sorters.rarity);
+  const opt = (o, cur) => Object.entries(o).map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('');
+  const worn_out = all.filter(({ it }) => it.durability !== null && it.durability < it.max_durability * 0.3).length;
+  return `<div class="panel stack"><div class="row between"><h2>🗡️ Relics <small class="mute">${st.gear.vault.length} in the vault · ${worn.length} worn</small></h2>
+      <div class="row"><label class="f">Show <select data-ui="rl_where" data-rerender="1">${opt({ all: 'All', vault: 'In the vault', worn: 'Worn' }, where)}</select></label>
+        <label class="f">Slot <select data-ui="rl_slot" data-rerender="1">${opt({ all: 'Any', weapon: 'Weapon', armor: 'Armor', charm: 'Charm' }, slot)}</select></label>
+        <label class="f">Sort <select data-ui="rl_sort" data-rerender="1">${opt({ rarity: 'Rarity', level: 'Level', worn_out: 'Most worn', name: 'Name' }, sort)}</select></label></div></div>
+    <p class="mute">Relics come from the Wayfarer's Rift (and the blacksmith's forge). Tap one for what you can do with it: equip it, level it, ascend it, repair it, merge another relic into it, or break it down for materials. ✓ marks the slimes it was made for.${worn_out ? ` <b>${worn_out} relic${worn_out > 1 ? 's are' : ' is'} badly worn.</b>` : ''}</p>
+    <div class="row">${Object.entries(a.materials || st.gear.materials).map(([k, v]) => chip(`${RES[k][0]} ${RES[k][1]}: ${v}`)).join('')}
+      ${info("Breaking a relic down gives materials of its tier (more, and a better tier, for higher level and stars). Levelling needs materials of the relic's own tier. Star ascension (at level 10) also needs an Armory level at least the current star count; raising rarity needs 5 stars, level 10 and Armory level 5.")}</div>
+    <div class="stack" style="gap:6px">${list.map(({ it, s: h }) => relicRow(it, h)).join('') || `<p class="mute">${all.length ? 'No relic matches.' : "No relics yet. Venture into the Wayfarer's Rift."}</p>`}</div>
+    <div class="row"><button class="btn small" data-act="goto" data-t="dungeons" data-s="rift">🧭 To the Wayfarer's Rift</button></div></div>`;
+}
+/* Town > Armory: the gear shop, the spare gear (give, sell back, merge) and the blacksmith. */
+function armoryView() {
+  const st = S.state, gf = st.gift, fg = st.jobs.forge;
+  const defs = Object.fromEntries(st.gear.all.map((x) => [x.key, x]));
+  const inv = Object.entries(st.gear.inventory).filter(([k, n]) => n > 0 && defs[k]);
+  const free = st.slimes.filter((x) => !x.busy);
+  const spare = inv.map(([k, n]) => { const x = defs[k];
+    const ups = st.gear.all.filter((y) => y.slot === x.slot && y.tier === x.tier + 1);
+    const back = cost(Object.fromEntries(Object.entries(x.cost).map(([c, v]) => [c, Math.max(1, Math.floor(v * gf.scrap))])));
+    let to = num(ui('gg_' + k, free[0]?.id));
+    if (!free.some((y) => y.id === to)) to = free[0]?.id;
+    S.ui['gg_' + k] = to;
+    return `<div class="panel flat stack"><div class="row between"><span>${x.emoji} <b>${esc(x.name)}</b> ×${n} <small class="mute">T${x.tier} ${x.slot} · ${relicStat(x)}</small></span>
+        <button class="btn small danger" data-act="scrap_gear" data-key="${k}" data-n="${esc(x.name)}" data-y="${esc(back)}">💰 Sell back one · ${esc(back)}</button></div>
+      <div class="row">${free.length ? `<select data-ui="gg_${k}">${free.map((y) => `<option value="${y.id}" ${y.id === to ? 'selected' : ''}>${esc(y.name)} (${esc(y.class_name)})${y.gear[x.slot] ? ' · swaps ' + esc(defs[y.gear[x.slot]]?.name || '') : ''}</option>`).join('')}</select><button class="btn small primary" data-act="gear_give" data-key="${k}">Equip</button>` : '<small class="mute">nobody is free to wear it</small>'}
+        ${ups.map((u) => `<button class="btn small" data-act="merge_gear" data-key="${k}" data-into="${u.key}" data-c="${gf.merge_gear}" data-n="${esc(x.name)}" data-in_n="${esc(u.name)}" ${n >= gf.merge_gear ? '' : 'disabled'} title="Merge ${gf.merge_gear} identical pieces into one of the next tier">🫧 ${gf.merge_gear} → ${u.emoji} ${esc(u.name)}</button>`).join('') || '<small class="mute">top tier</small>'}</div></div>`; }).join('');
+  return `<div class="grid cols2">
+    <div class="panel stack"><h2>🛠️ Armory shop ${info('Gear is usable by any class. The Armory level limits which tier it sells. Gear also drops in dungeons — but a fallen slime\'s gear can be lost.')}</h2>
+      <table><tbody>${st.gear.shop.map((g) => `<tr><td>${g.emoji} <b>${esc(g.name)}</b><br><small class="mute">T${g.tier} ${g.slot} · ${relicStat(g)}</small></td><td>${cost(g.cost)}</td>
+        <td><button class="btn small" data-act="buy_gear" data-key="${g.key}" ${affordable(g.cost) ? '' : 'disabled'}>Buy</button></td></tr>`).join('')}</tbody></table>
+      <details><summary>🧩 Gear sets</summary><div class="stack">${st.gear.sets.map((x) => `<small>${x.emoji} <b>${esc(x.name)}</b>: ${x.pieces.map((k) => esc(defs[k]?.name || k)).join(', ')}<br><span class="mute">2 pieces: ${relicStat(x.bonus[2])} · 3 pieces: ${relicStat(x.bonus[3])}</span></small>`).join('')}</div></details></div>
+    <div class="panel stack"><h2>🎒 Spare gear <small class="mute">(not worn)</small></h2>
+      <p class="mute">Equip a piece on a slime, <b>sell one back</b> for ${Math.round(gf.scrap * 100)}% of its price, or <b>merge</b> ${gf.merge_gear} identical pieces into one of the next tier.</p>
+      ${spare || '<p class="mute">No spare gear. Buy some in the shop or find it in dungeons.</p>'}
+      ${st.gear.pit_lost.length ? `<div class="warnbox">Left behind in the Pit: ${st.gear.pit_lost.map((k) => esc(defs[k]?.name || k)).join(', ')}. A later Pit victory may dig it up.</div>` : ''}</div></div>
+  <details class="panel" style="margin-top:12px" data-keep="smithOpen" ${ui('smithOpen', false) ? 'open' : ''}><summary><b>🔨 Blacksmith</b> <small class="mute">${chip(`⚒️ forge ${fg.progress}/${fg.shifts}`, 'info')}</small></summary>
+    <p class="mute">An appointed blacksmith mends worn gear carried by slimes at home for free, and slowly forges: every ${fg.shifts} shifts a <b>${fg.next === 'weapon' ? 'weapon (the best tier the Armory sells, at ' + Math.round(fg.share * 100) + '% of the shop price)' : 'relic (' + esc(cost(fg.relic_cost)) + ')'}</b>, if the materials are there — alternating weapon and relic. With no materials the shift goes foraging.</p>
+    ${postPanel('blacksmith')}</details>`;
 }
 function riftAll() {
   const st = S.state, a = st.gear.adventure;
   const pick = sendPicker();
-  const equipped = st.slimes.flatMap((s) => Object.values(s.items).map((it) => ({ it, s })));
   const rates = Object.entries(a.rates).map(([k, v]) => `${k} ${v}%`).join(' · ');
   return `<div class="grid cols2">
   <div class="panel stack"><h2>🧭 The Wayfarer's Rift <small class="mute">(relics)</small></h2>
@@ -1494,11 +1599,8 @@ function riftAll() {
       ${sendButton('adventure', '🧭 Rift', "The Wayfarer's Rift")}</div>
     ${sessionNote(ui('adv_runs', 5), st.dungeon.session.adv_ticks, a.max_runs)}
     <h4>Materials</h4><div class="row">${Object.entries(a.materials || st.gear.materials).map(([k, v]) => chip(`${RES[k][0]} ${RES[k][1]}: ${v}`)).join('')}</div>
-    <small class="mute">Salvaging relics gives materials of their tier; the higher the level and stars, the more — and a better tier. Levelling needs materials of the relic's own tier. Star ascension (level 10) also needs Armory level ≥ the current star count; raising rarity needs ★5 Lv10 and Armory level 5.</small></div>
-  <div class="stack"><div class="panel stack"><h2>🎒 Relic vault <small class="mute">(${st.gear.vault.length})</small></h2>
-    ${st.gear.vault.map((it) => relicCard(it)).join('') || '<p class="mute">No relics yet. Venture into the Rift.</p>'}</div>
-    <div class="panel stack"><h2>⚔ Worn relics</h2>
-    ${equipped.map(({ it, s }) => `<div><small class="mute">${esc(s.name)}</small>${relicCard(it, s.id)}</div>`).join('') || '<p class="mute">Nothing worn.</p>'}</div></div></div>`;
+    <div class="row"><button class="btn small" data-act="goto" data-t="town" data-s="relics">🗡️ Your relics (${st.gear.vault.length} in the vault)</button></div></div>
+</div>`;
 }
 
 /* ---------------------------------------------------------------- bonds (relationship tree) */
@@ -1604,46 +1706,12 @@ function sacrificeView() {
       <div class="row">${ds}</div>
       ${ssl ? `<div class="panel flat">${esc(ssl.name)} (${esc(ssl.rarity)} ${ssl.stars}★ Lv${ssl.level}) would give: <b>${esc(cost(ssl.ascend.chamber))}</b></div>` : ''}
       <button class="btn danger" data-act="destroy_slime" data-id="${sid}" data-n="${esc(ssl?.name)}" data-y="${esc(ssl ? cost(ssl.ascend.chamber) : '')}" ${ssl ? '' : 'disabled'}>🔥 Destroy</button></div></div>
-  ${relicGearSection()}`;
-}
-function relicGearSection() {
-  const st = S.state, gf = st.gift;
-  const vault = st.gear.vault.filter((i) => !i.ego);
-  const rname = (i) => `${i.emoji} ${i.name} [${i.rarity}] ${i.stars}★ Lv${i.level} (${i.slot})`;
-  const sel = (key, idx) => {
-    let cur = ui(key, vault[Math.min(idx, vault.length - 1)]?.uid);
-    if (!vault.some((i) => i.uid == cur)) cur = vault[Math.min(idx, vault.length - 1)]?.uid;
-    S.ui[key] = cur;
-    return `<select data-ui="${key}" data-rerender="1">${vault.map((i) => `<option value="${i.uid}" ${i.uid == cur ? 'selected' : ''}>${esc(rname(i))}</option>`).join('')}</select>`;
-  };
-  const t = vault.find((i) => i.uid == S.ui.rt), d = vault.find((i) => i.uid == S.ui.rd);
-  const okR = vault.length >= 2 && t && d && t.uid !== d.uid && t.slot === d.slot;
-  const inv = Object.entries(st.gear.inventory).filter(([, n]) => n > 0);
-  const defs = Object.fromEntries(st.gear.all.map((x) => [x.key, x]));
-  return `<div class="grid cols2" style="margin-top:12px">
-    <div class="panel stack"><h2>🗡️ Relics: merge &amp; break down</h2>
-      <p class="mute">Only relics in the vault (not worn). <b>Merge</b>: the donor is consumed; the target gains levels, is fully mended and may inherit a mod. Both must be the same slot. <b>Break down</b> turns one into crafting materials (it cannot be undone).</p>
-      ${vault.length ? `<div class="row"><label class="f">Target ${sel('rt', 0)}</label><label class="f">Donor ${sel('rd', 1)}</label></div>
-        ${t && d && t.slot !== d.slot ? '<small class="mute">Choose two relics of the same slot.</small>' : ''}
-        <button class="btn danger" data-act="merge_relic" ${okR ? '' : 'disabled'}>🫧 Merge relics</button>
-        <h4>Break down a relic</h4>
-        ${vault.map((i) => `<div class="row between"><span>${esc(rname(i))}</span><button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${i.uid}" data-ask="Break this relic down for ${esc(cost(i.salvage))}?">🔨 Break down (${esc(cost(i.salvage))})</button></div>`).join('')}` : '<p class="mute">The vault is empty. Relics come from the Wayfarer\'s Rift.</p>'}</div>
-    <div class="panel stack"><h2>⚔️ Gear: sell back &amp; merge</h2>
-      <p class="mute">Spare gear only (not worn). <b>Sell back</b> returns ${Math.round(gf.scrap * 100)}% of its price. <b>Merge</b> ${gf.merge_gear} identical pieces into one of the next tier (same slot).</p>
-      ${inv.length ? inv.map(([k, n]) => { const x = defs[k]; if (!x) return '';
-        const ups = st.gear.all.filter((y) => y.slot === x.slot && y.tier === x.tier + 1);
-        const back = cost(Object.fromEntries(Object.entries(x.cost).map(([a, v]) => [a, Math.max(1, Math.floor(v * gf.scrap))])));
-        return `<div class="panel flat stack"><div class="row between"><span>${x.emoji} <b>${esc(x.name)}</b> ×${n} <small class="mute">tier ${x.tier} ${x.slot}</small></span>
-          <button class="btn small danger" data-act="scrap_gear" data-key="${k}" data-n="${esc(x.name)}" data-y="${esc(back)}">💰 Sell back one (${esc(back)})</button></div>
-          ${ups.length ? `<div class="row">${ups.map((u) => `<button class="btn small" data-act="merge_gear" data-key="${k}" data-into="${u.key}" data-c="${gf.merge_gear}" data-n="${esc(x.name)}" data-in_n="${esc(u.name)}" ${n >= gf.merge_gear ? '' : 'disabled'}>🫧 ${gf.merge_gear} → ${u.emoji} ${esc(u.name)}</button>`).join('')}</div>` : '<small class="mute">Top tier.</small>'}</div>`; }).join('') : '<p class="mute">No spare gear. Buy some in the Armory or find it in dungeons.</p>'}</div></div>`;
+  <p class="mute" style="margin-top:12px">Relics and gear are merged, sold back and broken down where they live: <button class="btn small" data-act="goto" data-t="town" data-s="relics">🗡️ Relics</button> <button class="btn small" data-act="goto" data-t="town" data-s="armory">🛠️ Armory</button></p>`;
 }
 
 /* ---------------------------------------------------------------- town */
 function townAll() {
   const st = S.state;
-  const inv = Object.entries(st.gear.inventory);
-  const gearOf = (k) => st.gear.all.find((g) => g.key === k);
-  const stat = (o) => Object.entries(o).map(([k, v]) => `+${v} ${k}`).join(' ');
   return `<div class="grid cols3">${st.buildings.map((b) => `<div class="panel stack"><h3>${b.emoji} ${esc(b.name)} <small class="mute">L${b.level}/${b.max}</small></h3>
       ${bar(b.level, b.max)}<p>${esc(b.now)}</p>
       ${b.building ? '<p class="chip warn">🚧 Under construction</p>' : b.cost ? `<p class="mute">Next: ${esc(b.nxt)}</p><button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="${b.key}" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade · ${cost(b.cost)}</button>` : '<p class="chip ok">Max level</p>'}</div>`).join('')}</div>
@@ -1660,15 +1728,7 @@ function townAll() {
     <small class="mute">Grades: ${st.potions.grades.map((g) => `${g.grade}: +${Math.round(g.bonus * 100)}% for ${g.hours}h`).join(' · ')}</small>
     <div class="row">${st.potions.stock.map((p) => chip(`${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}`, 'info')).join('') || '<small class="mute">No potions yet.</small>'}</div>
     <div class="row"><button class="btn small ${st.potions.autonomy ? 'primary' : ''}" data-act="autonomy">🤖 Slime autonomy: ${st.potions.autonomy ? 'on' : 'off'}</button>
-      <small class="mute">When on, slimes help themselves to up to ${Math.round(st.potions.autonomy_share * 100)}% of your stocks without asking: they drink potions (tired ones stamina, hurt ones vigor, class-suited ones before a trip), mend worn gear, dress themselves from the relic vault and armory, and brew potions the colony is short of — the rest is yours.</small></div></div>
-  <div class="grid cols2" style="margin-top:12px">
-    <div class="panel stack"><h2>🛠️ Armory</h2><p class="mute">Gear is usable by any class. The Armory level limits which tier it sells. Gear also drops in dungeons — but a fallen slime's gear can be lost.</p>
-      <details><summary>🧩 Gear sets</summary><div class="stack">${st.gear.sets.map((x) => `<small>${x.emoji} <b>${esc(x.name)}</b>: ${x.pieces.map((k) => esc((st.gear.all.find((g) => g.key === k) || {}).name || k)).join(', ')}<br><span class="mute">2 pieces: ${stat(x.bonus[2])} · 3 pieces: ${stat(x.bonus[3])}</span></small>`).join('')}</div></details>
-      <table><tbody>${st.gear.shop.map((g) => `<tr><td>${g.emoji} <b>${esc(g.name)}</b><br><small class="mute">T${g.tier} ${g.slot} · ${stat(g.stats)}</small></td><td>${cost(g.cost)}</td>
-        <td><button class="btn small" data-act="buy_gear" data-key="${g.key}" ${affordable(g.cost) ? '' : 'disabled'}>Buy</button></td></tr>`).join('')}</tbody></table></div>
-    <div class="panel stack"><h2>🎒 Inventory</h2>
-      ${inv.length ? inv.map(([k, n]) => { const g = gearOf(k); return `<div class="row between"><span>${g.emoji} ${esc(g.name)} ×${n} <small class="mute">${stat(g.stats)}</small></span></div>`; }).join('') : '<p class="mute">Empty. Equip from a slime\'s card (Colony tab).</p>'}
-      ${st.gear.pit_lost.length ? `<div class="warnbox">Left behind in the Pit: ${st.gear.pit_lost.map((k) => esc(gearOf(k).name)).join(', ')}. A later Pit victory may dig it up.</div>` : ''}</div></div>`;
+      <small class="mute">When on, slimes help themselves to up to ${Math.round(st.potions.autonomy_share * 100)}% of your stocks without asking: they drink potions (tired ones stamina, hurt ones vigor, class-suited ones before a trip), mend worn gear, dress themselves from the relic vault and armory, and brew potions the colony is short of — the rest is yours.</small></div></div>`;
 }
 
 /* ---------------------------------------------------------------- council */
@@ -1934,7 +1994,6 @@ const A = {
   gift: (d) => { const pid = num(d.pid), k = d.k; const args = { pid, kind: k };
     if (k === 'potion') Object.assign(args, { id: num(S.ui['gift_s_' + pid]), potion: S.ui.gift_k, grade: num(S.ui.gift_g, 1) });
     return act('commander_gift', args); },
-  merge_relic: () => confirmThen('Feed the donor relic to the target? The donor is consumed for good.', () => act('merge_items', { target: num(S.ui.rt), donor: num(S.ui.rd) })),
   scrap_gear: (d) => confirmThen(`Sell back one ${d.n} for ${d.y}?`, () => act('destroy_gear', { key: d.key, n: 1 })),
   merge_gear: (d) => confirmThen(`Fuse ${d.c} x ${d.n} into ${d.in_n}?`, () => act('merge_gear', { key: d.key, into: d.into })),
   rename_slime: (d) => { const n = window.prompt('New name for ' + d.n + ':', d.n); if (n && n.trim() && n.trim() !== d.n) act('rename_slime', { id: num(d.id), name: n }); },
@@ -1992,9 +2051,16 @@ const A = {
     const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
     const busy = busyMembers(pid), go = () => act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn(), recall: busy.length > 0 }, { title: 'Wave simulation' });
     return busy.length ? confirmThen(`${pullNote(busy)}Run the wave simulation?`, go) : go(); },
-  drill: (d) => act('drill', { id: num(ui('dsl_' + d.d)), discipline: d.d, tier: num(ui('dtier', 1), 1) }),
   party_train: () => { const pid = num(S.ui.ptpid); if (!pid) return toast('You need a full party at home.', true); act('party_train', { pid, tier: num(ui('dtier', 1), 1) }, { slow: true }); },
-  spar: (d) => { const a = num(ui('spa_' + d.d)), b = num(ui('spb_' + d.d)); act('spar', { a, b, discipline: d.d }, { title: 'Sparring match' }); },
+  drill_me: () => act('drill', { id: S.sel, discipline: ui('my_disc'), tier: num(ui('dtier', 1), 1) }),
+  spar_me: () => { const b = num(ui('my_opp')); if (!b) return toast('Choose a sparring partner.', true); act('spar', { a: S.sel, b, discipline: ui('my_style') }, { title: 'Sparring match' }); },
+  learn_me: () => { const spell = ui('my_learn'); return spell ? act('learn', { id: S.sel, spell }) : toast('No spell is ready to learn yet.', true); },
+  drawer_relic: (d) => { const uid = num(ui('dr_' + d.slot, S.state.gear.vault.find((x) => x.slot === d.slot && !x.ego)?.uid)); return uid ? act('equip_item', { id: S.sel, uid }) : toast('No relic for that slot in the vault.', true); },
+  relic_feed: (d) => { const donor = num(ui('rd_' + d.uid, S.state.gear.vault.find((x) => x.uid != d.uid && x.slot === S.state.gear.vault.find((y) => y.uid == d.uid)?.slot)?.uid));
+    if (!donor) return toast('Choose a relic to merge in.', true);
+    confirmThen('Merge the chosen relic into this one? The relic you merge in is consumed for good.', () => act('merge_items', { target: num(d.uid), donor })); },
+  gear_give: (d) => { const id = num(ui('gg_' + d.key)); return id ? act('equip', { id, key: d.key }) : toast('Nobody is free to wear it.', true); },
+  goto: (d) => { S.tab = d.t; if (d.s) S.sub[d.t] = d.s; S.sel = null; S.modal = null; S.nextScroll = 0; render(); },
   spar_parties: () => { const pid = num(S.ui.sppid), other = num(S.ui.sppid2); if (!pid || !other) return toast('You need two full parties at home.', true);
     act('spar_parties', { pid, other, discipline: ui('pstyle', 'sword') }, { title: 'Party spar', slow: true }); },
   learn: (d) => { const id = num(ui('lib_s', S.state.slimes.find((s) => s.can_master)?.id)); act('learn', { id, spell: d.spell }); },

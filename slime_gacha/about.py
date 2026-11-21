@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-20-first-steps",
-                 text="A clickable tour for new colonies (skip it, or replay it from the menu), and Mossy Burrows no longer breaks after a won fight. The wave simulation can call back members who are resting or at work.")
+WHATS_NEW = dict(id="2026-11-21-tidy-gear",
+                 text="Tidier screens. Town > Relics lists every relic (vault and worn) as one line you tap for its actions; Town > Armory (gear) is the shop and your spare gear. A slime's card has a Train tab for drills, sparring, elements and spells; the Academy now shows the facilities, their trainers and party training.")
 
 
 def build() -> Dict[str, object]:

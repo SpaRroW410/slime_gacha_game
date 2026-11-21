@@ -147,6 +147,8 @@ As of 27 October 2026:
 - [x] **86. Lighter replies (first step of task 48)** — every reply carried all 28 passive descriptions for every slime (6.8 KB a slime, 64% of the state); now the definitions travel once and each slime only the keys it has earned. At 120 slimes a reply went from 1.8 MB to 1.0 MB.  *Done when:* met (`state.passive_defs`, `slime.passives` as keys).
 - [x] **87. Mossy Burrows works again; the wave simulation calls members back** — every won fight in a place with its own loot table (Mossy Burrows) ended in an error since 14 October (the loot loop reused the name of the session's result); the wave simulation now offers to call back members who are resting, at work or foraging, at the usual morale cost, instead of refusing.  *Done when:* met (tests send a party through every built-in expedition place and win a Mossy Burrows fight).
 - [x] **88. Clickable first-game tour** — a new colony opens an 18-step tour that lights up one real control at a time (the Well, the free pull, ten pulls, a slime's card, a new party, Fill, the Descent, the time bar, Merge & destroy, the Guide) and moves on when it is clicked; Next skips a step, Skip tutorial ends it, the choice is remembered in the browser, and Menu > Tutorial replays it.  *Done when:* met (played through in Chromium at desktop and phone sizes with no page errors).
+- [x] **89. Relics and gear tidied** — relics had three screens (Armory & relics, Merge & destroy, the Rift) and a big card each; now Town > Relics lists every relic, in the vault and worn, as one line (filter by where and slot, sort by rarity, level or wear) that opens for all its actions: equip (✓ marks the classes it suits), level, ascend, repair, merge another into it, break it down, fuse an ego. Town > Armory (gear) has the shop and the spare gear (equip, sell back, merge) with the blacksmith folded below. A slime's Gear tab shows each relic slot and equips straight from the vault. Merge & destroy is about slimes only.  *Done when:* met (every action clicked in Chromium at desktop and phone sizes).
+- [x] **90. Training on the slime's card; trainers in the Academy** — a Train tab on the slime card holds its proficiency drill, a spar against a chosen partner, element study and spell learning (spells it cannot learn yet are greyed with the reason). The Academy's first screen is Facilities & trainers: each discipline's yard, arena and trainer post together, plus party training and party sparring.  *Done when:* met.
 
 ### After floor 50 (art and sound)
 
@@ -421,6 +423,9 @@ evolving specializations, and whether job skill decays like proficiency.
 ### M26 — Dungeon time (28 October 2026)
 - [x] Per-place time dilation (x3 for every dungeon except scouting, hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
+
+### M29 — Tidier screens (21 November 2026)
+- [x] One Relics screen and a gear-only Armory (89); training on the slime card, trainers in the Academy (90)
 
 ### M28 — First steps (20 November 2026)
 - [x] A clickable tour for a new colony, skippable and replayable (88); Mossy Burrows fixed, wave simulation call-back (87)
