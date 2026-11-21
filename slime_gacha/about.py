@@ -83,7 +83,7 @@ ROADMAP: List[Dict[str, object]] = [
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
 WHATS_NEW = dict(id="2026-11-21-head-badges",
-                 text="Every slime now wears a small badge on its head saying what it is doing: a chef's hat for the chef, the emblem of its post, the dungeon it is in, hunting, studying, resting or asleep. In the Parties tab, tap a face to open that slime; an opened party lists its members as rows instead of repeating the faces.")
+                 text="Every slime now wears a small badge on its head saying what it is doing: a chef's hat for the chef, the emblem of its post, the dungeon it is in, a book with the sword, bow, orb or element it is training or studying, a basket beside the post's sign when a worker is out foraging, resting or asleep. In the Parties tab, tap a face to open that slime; an opened party lists its members as rows instead of repeating the faces.")
 
 
 def build() -> Dict[str, object]:

@@ -369,3 +369,9 @@ details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px sol
 .mrow .mhp .bar { margin: 0; }
 .linkish { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
 .linkish:hover b { text-decoration: underline; }
+/* A two-sign badge is a small pill with both signs side by side (book + sword, chef's hat + basket). */
+.blob .actb.duo { width: auto; padding: 0 3px; gap: 1px; display: flex; align-items: center; border-radius: 10px; }
+.blob .actb.duo .ab-main, .blob .actb.duo .ab-sub { display: grid; place-items: center; line-height: 1; }
+.blob .actb.duo .ab-sub { font-size: .92em; }
+.blob .actb.duo svg { width: 13px; height: 13px; }
+.blob.big .actb.duo svg { width: 18px; height: 18px; }

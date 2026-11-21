@@ -27,6 +27,14 @@ from .social import SocialEngine
 
 
 # ---- views -------------------------------------------------------------------------------------
+def _train_style(g: Game, s, own: str):
+    """The fighting style a slime away at the Training Grounds is working on: the spar's style, or its own field in a party drill."""
+    if s.in_dungeon != "train":
+        return None
+    e = next((e for e in g.expeditions if s.id in e["ids"]), None)
+    return (e or {}).get("style") or own
+
+
 def slime_view(g: Game, s) -> dict:
     st = s.max_stats()
     a = s.arch
@@ -110,7 +118,7 @@ def slime_view(g: Game, s) -> dict:
                     star_cost=ascension.star_cost(s), star_level=ascension.star_level(s), chamber=ascension.chamber_yield(s, g.buildings.level("chamber"))),
         gear=dict(s.gear), gear_sets=equipment.set_status(s.gear), items={k: _item_view(v, s) for k, v in s.items.items()}, task=s.task, hunt=(s.hunt.to_dict() if s.hunt else None),
         party=(party.id if party else None), can_evolve=can_evolve(s),
-        evolve_cost=(evolve_cost(s) if can_evolve(s) else None), discipline=a.discipline,
+        evolve_cost=(evolve_cost(s) if can_evolve(s) else None), discipline=a.discipline, train_style=_train_style(g, s, a.discipline),
         progress=s.progress, exp=dict(s.exp), outlook=_outlook_view(s),
         spec=(dict(key=s.spec, name=specialization.SPECS[s.spec].name, emoji=specialization.SPECS[s.spec].emoji,
                    disc=s.spec_disc) if s.spec in specialization.SPECS else None),

@@ -87,15 +87,26 @@ const PLACE_IC = { main: ['🕳️', 'in the Hollow Descent'], grind: ['🫧', '
   mossy_burrows: ['🍄', 'in Mossy Burrows'], scout: ['🔭', 'scouting'], rescue: ['🛟', 'on a rescue'], wave: ['🌊', 'in the wave simulation'], stranded: ['🆘', 'stranded in the Descent'],
   train: ['🥋', 'training'], lab: ['🧪', 'in the lab'] };
 const CHEF_HAT = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.2 9.6C2.5 9.6 1.5 8.4 1.5 7c0-1.7 1.5-2.8 3-2.4C5 3 6.4 2 8 2s3 1 3.5 2.6c1.5-.4 3 .7 3 2.4 0 1.4-1 2.6-2.7 2.6V13.5H4.2z" fill="#fff" stroke="#6b6b6b" stroke-width=".9" stroke-linejoin="round"/><path d="M4.2 11.6h7.6" stroke="#9a9a9a" stroke-width=".9"/></svg>';
+/* Two signs in one badge: the main one, with a small second one tucked at its corner (book + sword, chef's hat + basket). */
+const duo = (main, small) => `<span class="ab-main">${main}</span><span class="ab-sub">${small}</span>`;
+const discOf = (k) => (S.state?.disciplines || []).find((d) => d.key === k);
+const elemOf = (k) => (S.state?.elements?.list || []).find((e) => e.key === k);
 function actBadge(s) {
-  let ic = '', tip = '';
-  if (s.in_dungeon) [ic, tip] = PLACE_IC[s.in_dungeon] || ['🕳️', 'away in a dungeon'];
-  else if (s.state === 'hunting') [ic, tip] = s.job ? ['🧺', 'foraging'] : ['🏞️', 'hunting'];
-  else if (s.state === 'studying') [ic, tip] = ['📚', 'studying or training'];
-  else if (s.state === 'resting') [ic, tip] = s.ward ? ['🏥', 'in the hospital'] : ['🛏️', 'in the Rest Area'];
+  let ic = '', tip = '', two = false;
+  const jobIc = s.job ? (s.job.key === 'chef' ? CHEF_HAT : esc(s.job.emoji)) : '';
+  const t = s.task || {};
+  if (s.in_dungeon === 'train') {                                   // sparring or a party drill: the book and the style
+    const d = discOf(s.train_style || s.discipline);
+    [ic, tip, two] = d ? [duo('📖', d.emoji), `training ${d.style}`, true] : ['🥋', 'training', false];
+  } else if (s.in_dungeon) [ic, tip] = PLACE_IC[s.in_dungeon] || ['🕳️', 'away in a dungeon'];
+  else if (s.state === 'hunting') [ic, tip, two] = s.job ? [duo(jobIc, '🧺'), `${s.job.name}, out foraging`, true] : ['🏞️', 'hunting', false];
+  else if (s.state === 'studying') {                                 // a drill shows its discipline; element study its element
+    const d = t.discipline && discOf(t.discipline), e = t.element && elemOf(t.element);
+    [ic, tip, two] = d ? [duo('📖', d.emoji), `drilling ${d.style}`, true] : e ? [duo('📖', e.emoji), `studying ${e.name}`, true] : ['📚', 'studying', false];
+  } else if (s.state === 'resting') [ic, tip] = s.ward ? ['🏥', 'in the hospital'] : ['🛏️', 'in the Rest Area'];
   else if (s.state === 'sleeping') [ic, tip] = ['💤', 'asleep'];
-  else if (s.job) [ic, tip] = [s.job.key === 'chef' ? CHEF_HAT : esc(s.job.emoji), `${s.job.name}${s.state === 'working' ? ' (on shift)' : ''}`];
-  return ic ? `<span class="actb" title="${esc(s.name)}: ${esc(tip)}">${ic}</span>` : '';
+  else if (s.job) [ic, tip] = [jobIc, `${s.job.name}${s.state === 'working' ? ' (on shift)' : ''}`];
+  return ic ? `<span class="actb${two ? ' duo' : ''}" title="${esc(s.name)}: ${esc(tip)}">${ic}</span>` : '';
 }
 function avatar(s, cls = '') {
   const c = s.color || CLASS_COLORS[s.archetype] || hashColor(s.archetype);

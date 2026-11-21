@@ -136,6 +136,7 @@ class Game:
         self._owed = 0.0                               # hours the current session still has to pay (live mode)
         self.deferred_turn = False                     # turn mode: sessions keep their slimes away until the player waits the time out
         self._arena: Optional[str] = None              # the sparring facility the current session uses (live mode bookkeeping)
+        self._style: Optional[str] = None              # ... and the fighting style it trains (shown on the slimes)
         self.clock_fn = time.time
         self.keeper = keeper_mod.Keeper()
         self.relations = relationships.RelationshipEngine()
@@ -413,7 +414,7 @@ class Game:
             raise InvalidAction(f"The {b.name} is full (level {self.buildings.level(key)} holds {self.facility_capacity(key)}): "
                                 f"{room} place(s) free, {n} needed. Upgrade it in Town > Buildings or wait.")
 
-    def _occupy(self, slimes, hours: float, kind: str, arena: Optional[str] = None) -> List[str]:
+    def _occupy(self, slimes, hours: float, kind: str, arena: Optional[str] = None, style: Optional[str] = None) -> List[str]:
         """A home activity that takes time: turn mode lets the colony live those hours now; live mode keeps the
         slimes busy until the wall clock has paid for them."""
         if not self.timed:
@@ -421,6 +422,7 @@ class Game:
         self._set_flag(slimes, kind)
         self._owed = hours
         self._arena = arena
+        self._style = style
         self._release(slimes)
         return []
 
@@ -428,11 +430,12 @@ class Game:
         """End of a session: free the party now (turn mode) or when its time has been paid (live mode)."""
         owed, self._owed = int(math.ceil(self._owed - 1e-9)), 0.0
         arena, self._arena = self._arena, None
+        style, self._style = getattr(self, "_style", None), None
         alive = [s for s in party if s.id in self.roster]
         if self.timed and owed > 0 and alive:
             self.last_due = max(self.last_due, self.tick_count + owed)
             self.expeditions.append(dict(ids=[s.id for s in alive], until=self.tick_count + owed, hours=owed,
-                                         **({"arena": arena} if arena else {})))
+                                         **({"arena": arena} if arena else {}), **({"style": style} if style else {})))
         else:
             self._clear_flag(party)
 
@@ -1543,7 +1546,7 @@ class Game:
             for s in team:
                 self._spar_reward(res, s, d, i == winner, cap)
             res.summary.append(f"   {names[i]}'s synergy {before - 1:+.1%} -> {self.social.synergy(team) - 1:+.1%}")
-        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train", bld.PARTY_ARENA)
+        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train", bld.PARTY_ARENA, d.key)
         res.summary.extend("   " + e for e in events if "died" in e)
         self.journal.extend(events)
         return res
@@ -1594,7 +1597,7 @@ class Game:
             self._spar_reward(res, win, d, True, cap)
             self._spar_reward(res, lose, d, False, cap)
             self.social.add_bond(a, b, config.SPAR_BOND)
-        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train", arena)
+        events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train", arena, d.key)
         res.summary.extend("   " + e for e in events if "died" in e)
         self.journal.extend(events)
         return res
