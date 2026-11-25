@@ -588,3 +588,28 @@ class TestSpellNamesByClass(unittest.TestCase):
         self.assertEqual(c.spell_names, {"ember": "Fire Blaze"})
         from slime_gacha.webapi import slime_view
         self.assertIn("Fire Blaze", [a["name"] for a in slime_view(g, s)["abilities"]])
+
+
+class TestArenaEvents(unittest.TestCase):
+    """A fight records who acted on whom (for the arena's animations), numbered so the page plays only new ones."""
+    def test_a_manual_fight_reports_its_actions_and_party_slime_ids(self):
+        g = rich(211)
+        pid = party(g, strong=True)
+        g.enter_dungeon(pid)
+        g.delve_next(pid, manual=True)
+        self.assertIsNotNone(g.battle_run())
+        seen, units = [], None
+        while g.battle_run() is not None:
+            run = g.battle_run()
+            g.battle_auto_turn()                                   # one turn; the run's view now holds what happened
+            v = run.view()
+            units = units or v["units"]
+            seen.extend(e for e in v["fx"] if not seen or e["n"] > seen[-1]["n"])
+        self.assertTrue(seen)
+        ns = [e["n"] for e in seen]
+        self.assertEqual(ns, sorted(ns))
+        for e in seen:
+            self.assertIn(e["k"], ("hit", "spell", "drain", "heal", "guard", "poison", "dodge"))
+            self.assertTrue(0 <= e["a"] < len(units) + 4 and 0 <= e["t"] < len(units) + 4)   # summons may join the field
+        ids = {u["sid"] for u in units if u["side"] == "party" and not u["minion"]}
+        self.assertEqual(ids, set(g.parties.get(pid).members))

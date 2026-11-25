@@ -257,6 +257,7 @@ class BattleSystem:
               xp_mult: float = 1.0, synergy: float = 1.0, terrain=None, manual: bool = False,
               modifier=None, boons=(), rarity_xp: bool = False, loot: bool = True) -> "BattleRun":
         """Set a battle up and return it un-advanced; BattleRun.advance() plays it until a manual slime must choose."""
+        self.fx_events = []                                   # the arena's animation queue starts over with each fight
         totals: Dict[str, int] = {}
         for e in enemies:
             totals[e.key] = totals.get(e.key, 0) + 1
@@ -719,6 +720,21 @@ def _damage_value(bs: BattleSystem, actor, ability, target):
     return max(1, int(raw)), crit, eff
 
 
+def _fxev(bs, everyone, actor, t, kind: str, element: str = "", crit: bool = False, amount: int = 0) -> None:
+    """Record one action for the arena to animate (who, on whom, what kind, which element). Display only: the rules
+    never read it. Kept short; each event carries a running number so the page plays only the new ones."""
+    try:
+        a, b = everyone.index(actor), everyone.index(t)
+    except ValueError:
+        return
+    bs.fx_seq = getattr(bs, "fx_seq", 0) + 1
+    ev = getattr(bs, "fx_events", None)
+    if ev is None:
+        ev = bs.fx_events = []
+    ev.append(dict(n=bs.fx_seq, a=a, t=b, k=kind, el=element or "", c=bool(crit), v=int(amount)))
+    del ev[:-24]
+
+
 def _eff_tag(eff: float) -> str:
     return " (WEAK!)" if eff > 1 else " (resisted)" if eff < 1 else ""
 
@@ -732,6 +748,7 @@ def _h_damage(bs, actor, ab, targets, everyone, log):
         ev = 0.0 if fx.find(ab, "nomiss") else min(0.5, t.mods.get("evasion", 0.0))
         if ev and bs.rng.random() < ev:
             log.append(f"  {t.emoji}{t.name} dodges {actor.name}'s {ab.name}!")
+            _fxev(bs, everyone, actor, t, "dodge", ab.element)
             continue
         hit_ab = replace(ab, element=bs.rng.choice(elements.BASICS)) if fx.find(ab, "prism") else ab
         if actor.imbue[1] > 0 and not hit_ab.element and hit_ab.stat == "atk":
@@ -739,6 +756,7 @@ def _h_damage(bs, actor, ab, targets, everyone, log):
         dmg, crit, eff = _damage_value(bs, actor, hit_ab, t)
         t.hurt(dmg)
         bs.last_hits[id(t)] = bs.last_hits.get(id(t), 0) + dmg
+        _fxev(bs, everyone, actor, t, "spell" if hit_ab.element or hit_ab.stat == "mag" else "hit", hit_ab.element, crit, dmg)
         log.append(f"  {actor.emoji}{actor.name} uses {ab.name} on {t.name}: {dmg} dmg{' (CRIT!)' if crit else ''}{_eff_tag(eff)}"
                    f" [{max(0, int(t.hp))}/{int(t.max_hp)}]")
         ls = actor.mods.get("lifesteal", 0.0)
@@ -755,6 +773,7 @@ def _h_drain(bs, actor, ab, targets, everyone, log):
         dmg, _, _ = _damage_value(bs, actor, ab, t)
         t.hurt(dmg)
         bs.last_hits[id(t)] = dmg
+        _fxev(bs, everyone, actor, t, "drain", ab.element, False, dmg)
         heal = max(1, dmg // 2)
         actor.hp = min(actor.max_hp, actor.hp + heal)
         log.append(f"  {actor.emoji}{actor.name} siphons {dmg} from {t.name} and heals {heal}.")
@@ -766,6 +785,7 @@ def _h_heal(bs, actor, ab, targets, everyone, log):
                          * _mastery_mult(actor, ab) * _style_attack(actor, ab) * _terrain_mult(bs, ab)))
         before = t.hp
         t.hp = min(t.max_hp, t.hp + amt)
+        _fxev(bs, everyone, actor, t, "heal", ab.element, False, int(t.hp - before))
         log.append(f"  💚 {actor.name} uses {ab.name} on {t.name}: +{int(t.hp - before)} HP")
         extra = amt - (t.hp - before)
         if extra > 0 and fx.find(ab, "overheal"):
@@ -776,6 +796,7 @@ def _h_heal(bs, actor, ab, targets, everyone, log):
 def _h_guard(bs, actor, ab, targets, everyone, log):
     for t in targets:
         t.guard = max(t.guard, ab.duration or 1)
+        _fxev(bs, everyone, actor, t, "guard", ab.element)
         log.append(f"  🛡 {actor.name} uses {ab.name}: {t.name} takes reduced damage for {t.guard} turn(s).")
 
 
@@ -785,6 +806,7 @@ def _h_poison(bs, actor, ab, targets, everyone, log):
         if fx.find(ab, "stack") and t.poison[0] > 0:
             per += t.poison[1]
         t.poison = (ab.duration, per)
+        _fxev(bs, everyone, actor, t, "poison", ab.element)
         log.append(f"  🧪 {actor.name} uses {ab.name} on {t.name}: poisoned ({per}/turn for {ab.duration}).")
 
 
@@ -966,7 +988,8 @@ class BattleRun:
                     alive=c.alive, minion=c.minion, element=c.element or "", guard=c.guard,
                     poison=c.poison[0] if c.poison[0] > 0 else 0,
                     stamina=int(c.stamina) if c.stamina_max else None, stamina_max=int(c.stamina_max) or None,
-                    winded=c.winded, status=fx.statuses(c), row=c.row)
+                    winded=c.winded, status=fx.statuses(c), row=c.row,
+                    sid=(getattr(c.source, "id", None) if c.side == "party" and not c.minion and hasattr(c.source, "archetype") else None))
 
     def view(self, tail: int = 40) -> dict:
         t = self.terrain
@@ -978,4 +1001,5 @@ class BattleRun:
                     current=self.everyone.index(self.order[self.turn_index]) if self.order and self.turn_index < len(self.order) else None,
                     waiting=self.everyone.index(w) if w is not None else None,
                     abilities=self.legal_abilities() if w is not None else [],
+                    fx=list(getattr(self.bs, "fx_events", []) or []),
                     log=self.log[-tail:])
