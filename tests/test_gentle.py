@@ -134,3 +134,14 @@ class TestSaves(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDeepGentleLimits(unittest.TestCase):
+    def test_deep_limits_leave_room_for_a_full_ego_party(self):
+        from slime_gacha import achievements, config
+        for size in (5, 10, 15):
+            gold = achievements.gentle_limits(100, size)[0]
+            self.assertGreater(gold, config.GENTLE_EGO_PER_SLOT * size)          # three ego relics for every slot, and more
+            self.assertEqual(achievements.gentle_limits(50, size), config.GENTLE_FLOORS[50])   # the first half is unchanged
+        self.assertEqual(achievements.gentle_grade(100, 49, 5), "gold")
+        self.assertEqual(achievements.gentle_grade(100, 51, 5), "silver")

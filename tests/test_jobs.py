@@ -274,7 +274,7 @@ class TestKitchen(unittest.TestCase):
 
     def test_the_pantry_is_capped_by_the_kitchen_level_and_hunger_is_counted(self):
         g = quiet(rich(109))
-        self.assertEqual(jobs.pantry_cap(g), config.PANTRY_PER_LEVEL)
+        self.assertEqual(jobs.pantry_cap(g), config.PANTRY_PER_LEVEL + config.COLD_SERVINGS_PER_LEVEL)   # kitchen + cold storage, level 1 each
         g.pantry["porridge"] = jobs.pantry_cap(g)
         chef = slime(g, "medic")
         g.assign_job(chef.id, "chef")
@@ -482,3 +482,25 @@ class TestDayPlans(unittest.TestCase):
         self.assertIn(chef.state, ("working", "hunting"))               # ... then goes back to the post
         with self.assertRaises(InvalidAction):
             g.set_plan("chef", ["dance"] * 8, [])
+
+
+class TestColdStorage(unittest.TestCase):
+    def test_finer_dishes_need_the_cold_storage_and_trips_carry_dishes_first(self):
+        g = quiet(rich(301))
+        chef = slime(g, "medic")
+        chef.job_xp["chef"] = 10 ** 6                                # a master chef
+        g.wallet.add_many({"food": 50, "herb_blue": 5, "herb_yellow": 5, "essence": 20})
+        self.assertNotIn("banquet", [r.key for r in [jobs.pick_recipe(g, chef)] if r])
+        g.buildings.levels["cold_storage"] = 4
+        self.assertEqual(jobs.pick_recipe(g, chef).key, "banquet")
+        self.assertEqual(jobs.pantry_cap(g), config.PANTRY_PER_LEVEL + 4 * config.COLD_SERVINGS_PER_LEVEL)
+        g.pantry["banquet"] = 2
+        s = slime(g)
+        s.needs.set("food", 10)
+        rations = [5, 0, 1]                                          # one dish allowed on this trip
+        g._wave_meals([s], rations)
+        self.assertEqual(g.pantry.get("banquet"), 1)                 # ate the dish first ...
+        s.needs.set("food", 10)
+        g._wave_meals([s], rations)
+        self.assertEqual(g.pantry.get("banquet"), 1)                 # ... then raw rations once the allowance is used
+        self.assertGreater(rations[1], 0)

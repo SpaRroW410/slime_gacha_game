@@ -1,6 +1,6 @@
 """The in-game booklet: plain-language descriptions of every attribute and system, with what raises and lowers
 them. Built from the live constants so the numbers never go stale."""
-from . import bestiary, config, elements, emotions, passives, specialization, sparring
+from . import achievements, bestiary, config, elements, emotions, passives, specialization, sparring
 from .abilities import get_ability
 
 
@@ -219,7 +219,9 @@ def build() -> list:
             dict(name="Gentle Keeper badges", text="The Descent is meant to be hard enough that you merge and destroy slimes to get stronger. "
                  "Clearing a milestone floor for the first time while having sacrificed few slimes (merges, chamber destroys and ego fusions, "
                  "counted over the colony's whole life) earns a medal: " + "; ".join(
-                     f"floor {f}: gold at {g} or fewer, silver at {s_}, bronze at {b}" for f, (g, s_, b) in sorted(c.GENTLE_FLOORS.items()))
+                     f"floor {f}: gold at {g} or fewer, silver at {s_}, bronze at {b}" for f, (g, s_, b) in ((f, achievements.gentle_limits(f, 5)) for f in sorted(c.GENTLE_FLOORS)))
+                 + f" (for a party of five; below floor {c.HEART_FLOOR} every limit also grows with the party size: up to {c.GENTLE_EGO_PER_SLOT} more per party slot "
+                   "by floor 100, for the ego fusions an endgame party needs, so gold always leaves room for what clearing takes)"
                  + ". Your first gold earns the title 'the Gentle'. People > Keeper shows the medals and the count; the merge screens (Town > Merge & destroy and People > Council) show how "
                    "many more sacrifices the next medal allows."),
             dict(name="The Deep Hollow (floors 51-100)", text=f"Below the Parched King's throne on floor {c.HEART_FLOOR} the Descent goes on for fifty more floors, "
@@ -261,6 +263,9 @@ def build() -> list:
             dict(name="Vice Keeper hunts and challenges", text=f"The Vice Keeper can organise a hunt: it forms up to {c.VICE_HUNT_MAX_PARTIES} full parties from free, rested slimes, joins and leads the first, "
                                                               "and acts for every party in that hunt. The parties disband when the hunt ends. Any 3-star slime can challenge the Vice Keeper "
                                                               "for the post (a proud, stronger slime may ask by itself); you approve or reject, and an approved challenge is settled in a friendly duel."),
+            dict(name="Cold Storage", text=f"An ice cellar next to the Kitchen: each level keeps {c.COLD_SERVINGS_PER_LEVEL} more cooked servings fresh in the pantry, "
+                 f"lets a party carry up to {c.COLD_PACK_PER_LEVEL} dishes per level on a trip (eaten before raw rations: more food and a little morale), "
+                 "and unlocks finer dishes for a skilled chef: the Smoked Fish Platter at level 2 and the Royal Banquet at level 4."),
             dict(name="Day plans for posts", text="Every post has a Day plan (in its building's tab): eight 3-hour shifts of the day, each work, forage or sleep, plus up to three 'if' rules checked at the start of every shift (the first that fits wins), e.g. 'if nobody is hurt: forage', 'if the pantry holds 10 days of food or more: sleep', 'if my energy is under 30%: sleep'. A sleep shift restores energy, and the worker goes back to the post afterwards. A blacksmith or brewer can forage twice, sleep, then craft."),
             dict(name="Formations: front and back rows", text=f"Every slime stands in the front or the back row of a fight (set it on the party card or the slime's Orders; 'auto' puts casters and archers at the back). Melee single-target blows can only reach the front row while someone stands there, unless the attacker uses arrows, spells, area attacks or backstabs. Whoever stands in the back row takes x{c.ROW_BACK_GUARD:g} damage, and a melee fighter in the back row hits for only x{c.ROW_BACK_MELEE:g}. Monsters line up too: casters, supports and hunters stand at the back. The manual arena only lets you pick targets that can be reached."),
             dict(name="Reports and hauls arrive with the party", text="When a party leaves for a dungeon session (Pit, Rift, Quarry, Descent floor, wave simulation, sparring) the fight is already settled, but its report and the resources it earned only arrive when the party is back: the report opens by itself and the haul is added to your stores then. A session ends early, and the party comes home earlier, if the whole party is knocked out."),

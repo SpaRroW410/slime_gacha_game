@@ -78,6 +78,9 @@ register_building(Building("hospital", "Hospital", "🏥", MAX_LEVEL,
                            "Wards for the injured: a medic doctor heals everyone hurt at home. Level sets the places and the healing.", _costs(80, 12)))
 register_building(Building("kitchen", "Kitchen", "🍳", MAX_LEVEL,
                            "A warm hearth where chefs cook: places for chefs and better meals.", _costs(75, 10)))
+register_building(Building("cold_storage", "Cold Storage", "❄️", MAX_LEVEL,
+                           "An ice cellar that keeps cooked dishes fresh: a bigger pantry, finer dishes the chef can make, and dishes parties "
+                           "can carry on their trips (better than raw rations).", _costs(70, 10)))
 
 # Training and sparring facilities: each has its own building, and its level sets how many slimes can use it at once.
 register_building(Building("blade_yard", "Blade Yard", "⚔️", MAX_LEVEL, "Drill yard for sword classes: a bigger yard trains more slimes at once.", _costs(70, 10)))
@@ -165,6 +168,8 @@ class BuildingManager:
             PARTY_YARD: lambda: f"trains {lv} part{'ies' if lv > 1 else 'y'} at once",
             PARTY_ARENA: lambda: f"{lv} team match{'es' if lv > 1 else ''} at once ({lv} x 2 parties)",
             "kitchen": lambda: f"pantry holds {config.PANTRY_PER_LEVEL * lv} servings",
+            "cold_storage": lambda: (f"+{config.COLD_SERVINGS_PER_LEVEL * lv} pantry servings, parties carry up to {config.COLD_PACK_PER_LEVEL * lv} "
+                                     f"dishes a trip" + (", Smoked Fish Platter" if lv >= 2 else "") + (", Royal Banquet" if lv >= 4 else "")),
             "hospital": lambda: f"{config.HOSPITAL_BEDS[lv - 1]} ward beds (patients heal +{int(config.WARD_NO_DOCTOR_BONUS * 100)}%, +{int(config.WARD_DOCTOR_BONUS * 100)}% with a doctor); a doctor heals the injured at home {int(config.HOSPITAL_HEAL[lv - 1] * 100)}% HP/hour",
             "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",
             "reliquary": lambda: f"relics ascend to {min(5, lv + 1)} stars, rarity up to {self.relic_rarity_max(lv) or 'none yet (level 3: uncommon)'}",

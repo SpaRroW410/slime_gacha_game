@@ -287,6 +287,8 @@ TRAINER_LESSON_GAIN, TRAINER_LESSON_OTHER = 0.15, 0.05  # a trainer's own profic
 CRAFT_SHIFTS, CRAFT_COST_SHARE = 4, 0.6       # a blacksmith forges every 4 shifts, at this share of the shop price
 CRAFT_RELIC_COST = {"scrap": 6, "white_gel": 15}
 RELIC_RARITY_LEVEL = {"uncommon": 3, "rare": 5, "epic": 8, "legendary": 10}   # Reliquary level needed to raise a relic to that rarity
+COLD_SERVINGS_PER_LEVEL = 8       # Cold Storage: extra pantry servings kept fresh, per level
+COLD_PACK_PER_LEVEL = 3           # ... and cooked dishes a party may carry on one trip, per level (then raw rations)
 PANTRY_PER_LEVEL, HUNGRY_BELOW = 12, 50       # servings the pantry holds per Kitchen level; food need below which a slime counts as hungry
 HOSPITAL_BEDS = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]                 # slimes the Hospital ward holds, by level
 WARD_DOCTOR_BONUS, WARD_NO_DOCTOR_BONUS = 0.30, 0.05   # patients in the ward heal this much faster than in the Rest Area (with / without a doctor on duty)
@@ -331,7 +333,8 @@ RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35   # t
 # floor -> most sacrifices (merges, chamber destroys, ego fusions, ever) for (gold, silver, bronze) when that floor is first cleared.
 # The game is meant to need sacrifices; clearing deep with few of them is the feat.
 GENTLE_FLOORS = {10: (0, 3, 8), 20: (2, 8, 20), 30: (5, 15, 35), 40: (8, 25, 55), 50: (12, 35, 80),
-                 60: (16, 45, 100), 70: (20, 55, 120), 80: (25, 65, 140), 90: (30, 75, 160), 100: (35, 85, 180)}
+                 60: (18, 48, 105), 70: (24, 60, 130), 80: (28, 70, 150), 90: (32, 78, 165), 100: (35, 85, 180)}
+GENTLE_EGO_PER_SLOT = 3          # below floor 50 the limits also allow the ego fusions an endgame party needs: up to 3 per party slot by floor 100
 
 # ---- passive skills (passives.py) -------------------------------------------------------------------------------------------------
 HEARTH_HEAL = 0.25               # Hearth (fire mastered): the party mends this much more at each camp hour

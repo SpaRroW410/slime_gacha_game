@@ -22,9 +22,20 @@ def _count(g, pred) -> int:
 
 
 # ---- Gentle Keeper badges: a milestone floor cleared with few slimes merged or destroyed ---------------------------------------------------
-def gentle_grade(floor: int, sacrifices: int) -> str:
+def gentle_limits(floor: int, party_size: int = 5):
+    """(gold, silver, bronze) for a milestone floor. Below floor 50 each grade also allows the ego fusions the Deep Hollow
+    asks for (GENTLE_EGO_PER_SLOT per party slot by floor 100), so gold is always above what clearing it requires."""
+    base = config.GENTLE_FLOORS.get(floor)
+    if not base:
+        return None
+    deep = max(0, floor - config.HEART_FLOOR) / max(1, 100 - config.HEART_FLOOR)
+    extra = round(config.GENTLE_EGO_PER_SLOT * party_size * deep)
+    return tuple(x + extra for x in base)
+
+
+def gentle_grade(floor: int, sacrifices: int, party_size: int = 5) -> str:
     """"gold", "silver", "bronze" or "" for clearing `floor` (a milestone in config.GENTLE_FLOORS) after `sacrifices` sacrifices."""
-    limits = config.GENTLE_FLOORS.get(floor)
+    limits = gentle_limits(floor, party_size)
     if not limits or sacrifices < 0:
         return ""
     return next((name for (name, _), most in zip(GRADES, limits) if sacrifices <= most), "")
@@ -34,9 +45,11 @@ def gentle_badges(g) -> List[dict]:
     """One row per milestone floor: the sacrifices when it was first cleared (None: not yet; -1: before the colony counted them),
     the grade it earned and the limits for each grade."""
     out = []
-    for floor, limits in sorted(config.GENTLE_FLOORS.items()):
+    size = g.parties.size
+    for floor in sorted(config.GENTLE_FLOORS):
+        limits = gentle_limits(floor, size)
         n = g.milestones.get(floor)
-        grade = gentle_grade(floor, n) if n is not None else ""
+        grade = gentle_grade(floor, n, size) if n is not None else ""
         out.append(dict(floor=floor, sacrifices=n, grade=grade, emoji=dict(GRADES).get(grade, ""),
                         limits=dict(zip((x for x, _ in GRADES), limits))))
     return out

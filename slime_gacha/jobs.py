@@ -478,6 +478,7 @@ class Recipe:
     servings: int
     morale: int                     # morale each serving gives
     level: int                      # chef level needed
+    cold: int = 0                   # Cold Storage level needed (finer dishes keep only on ice)
 
 
 RECIPES: Dict[str, Recipe] = {r.key: r for r in (
@@ -485,11 +486,14 @@ RECIPES: Dict[str, Recipe] = {r.key: r for r in (
     Recipe("stew", "Hearty Stew", "🍲", {"food": 2, "herb_green": 1}, 55, 4, 3, 2),
     Recipe("pie", "Berry Pie", "🥧", {"food": 2, "herb_red": 1}, 40, 4, 7, 3),
     Recipe("feast", "Feast", "🍗", {"food": 4, "essence": 1}, 70, 6, 9, 5),
+    Recipe("fish_platter", "Smoked Fish Platter", "🐟", {"food": 4, "herb_blue": 1}, 80, 5, 8, 6, 2),
+    Recipe("banquet", "Royal Banquet", "🍱", {"food": 6, "essence": 2, "herb_yellow": 1}, 100, 8, 12, 8, 4),
 )}
 
 
 def pantry_cap(game) -> int:
-    return config.PANTRY_PER_LEVEL * game.buildings.level("kitchen")
+    return (config.PANTRY_PER_LEVEL * game.buildings.level("kitchen")
+            + config.COLD_SERVINGS_PER_LEVEL * game.buildings.level("cold_storage"))
 
 
 def pantry_total(game) -> int:
@@ -504,7 +508,8 @@ def hungry(game) -> List:
 def pick_recipe(game, chef) -> Optional[Recipe]:
     lvl = level(chef, "chef")
     pref = game.recipe_pref
-    options = [r for r in RECIPES.values() if r.level <= lvl and game.wallet.can_afford(r.cost)]
+    cold = game.buildings.level("cold_storage")
+    options = [r for r in RECIPES.values() if r.level <= lvl and r.cold <= cold and game.wallet.can_afford(r.cost)]
     if pref != "auto":
         r = RECIPES.get(pref)
         return r if r in options else None

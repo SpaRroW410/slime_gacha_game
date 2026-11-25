@@ -2151,7 +2151,8 @@ class Game:
         are gone and someone is hungry, or when someone is too worn out to go on. Waves led by hand cost no time at all."""
         report = None
         auto_waves, home_early, camped = 0, "", 0
-        rations = [int(self.wallet.get("food") * self.share), 0]      # [packed, eaten]
+        rations = [int(self.wallet.get("food") * self.share), 0,      # [packed raw rations, eaten, dishes it may carry]
+                   config.COLD_PACK_PER_LEVEL * self.buildings.level("cold_storage")]
         for w in range(waves):
             members = [s for s in party if s.id in self.roster]
             if w and not self._by_hand():                             # between waves: eat, and rest if needed
@@ -4252,13 +4253,14 @@ class Game:
         self._reap(out)
 
     def _wave_meals(self, members, rations) -> None:
-        """Hungry members of a wave trip eat: a cooked dish from the pantry first, else one of the packed rations
-        (rations = [left, eaten]; the trip packs at most 66% of the food stores)."""
+        """Hungry members of a wave trip eat: a cooked dish carried from the pantry first (as many as the Cold Storage lets a
+        trip carry), else one of the packed rations (rations = [left, eaten, dishes]; at most 66% of the food stores)."""
         for s in members:
             n = 0
             while s.id in self.roster and s.needs.get("food") < config.AUTO_EAT_BELOW and n < 3:
                 n += 1
-                if self.needs.meal_hook and self.needs.meal_hook(s):
+                if len(rations) > 2 and rations[2] > 0 and self.needs.meal_hook and self.needs.meal_hook(s):
+                    rations[2] -= 1
                     continue
                 if rations[0] < 1 or self.wallet.get("food") < 1:
                     break

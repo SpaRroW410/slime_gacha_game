@@ -255,7 +255,7 @@ def _jobs_view(g: Game) -> dict:
         kitchen=dict(pref=g.recipe_pref, pantry=dict(g.pantry), total=jobs_mod.pantry_total(g), cap=jobs_mod.pantry_cap(g),
                      hungry=len(hungry), hungry_names=[s.name for s in hungry[:8]], hungry_list=[dict(id=s.id, name=s.name, food=round(s.needs.get("food"))) for s in hungry], chef_level=(jobs_mod.level(chef, "chef") if chef else 0),
                      recipes=[dict(key=r.key, name=r.name, emoji=r.emoji, cost=r.cost, nutrition=r.nutrition, servings=r.servings,
-                                   morale=r.morale, level=r.level, stock=g.pantry.get(r.key, 0)) for r in jobs_mod.RECIPES.values()]),
+                                   morale=r.morale, level=r.level, cold=r.cold, stock=g.pantry.get(r.key, 0)) for r in jobs_mod.RECIPES.values()]),
         hospital=dict(injured=len(hurt), wounded=len(wounded), names=[s.name for s in sorted(hurt, key=lambda s: s.hp / s.max_hp)[:8]],
                       rate=round(config.HOSPITAL_HEAL[g.buildings.level("hospital") - 1] * 100), on_duty=bool(jobs_mod.holder(g, "doctor")),
                       beds=config.HOSPITAL_BEDS[g.buildings.level("hospital") - 1], used=g.ward_count()),

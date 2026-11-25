@@ -1388,8 +1388,8 @@ function kitchenView() {
     ${b.cost ? `<button class="btn ${affordable(b.cost) ? 'primary' : ''}" data-act="upgrade" data-key="kitchen" ${affordable(b.cost) ? '' : 'disabled'}>⬆ Upgrade the Kitchen · ${cost(b.cost)}</button>` : ''}</div>
   <div class="panel stack"><h2>📖 Recipes</h2>
     <div class="row"><label class="f">The chef cooks <select data-act-change="recipe"><option value="auto" ${k.pref === 'auto' ? 'selected' : ''}>the best available</option>${k.recipes.map((r) => `<option value="${r.key}" ${k.pref === r.key ? 'selected' : ''}>${r.emoji} ${esc(r.name)}</option>`).join('')}</select></label></div>
-    <table><thead><tr><th>Dish</th><th>Needs</th><th>Gives</th><th>Chef lvl</th><th>Stock</th></tr></thead><tbody>${k.recipes.map((r) => `<tr class="${k.chef_level >= r.level ? '' : 'mute'}"><td>${r.emoji} <b>${esc(r.name)}</b></td><td>${esc(cost(r.cost))}</td><td>${r.servings}× +${r.nutrition} food${r.morale ? `, +${r.morale} morale` : ''}</td><td>${r.level}</td><td>${r.stock}</td></tr>`).join('')}</tbody></table>
-    <small class="mute">A dish restores that much of a slime's food need per serving. Chef level ${k.chef_level || '—'}.</small></div></div>`;
+    <table><thead><tr><th>Dish</th><th>Needs</th><th>Gives</th><th>Chef lvl</th><th>Stock</th></tr></thead><tbody>${k.recipes.map((r) => `<tr class="${k.chef_level >= r.level ? '' : 'mute'}"><td>${r.emoji} <b>${esc(r.name)}</b></td><td>${esc(cost(r.cost))}</td><td>${r.servings}× +${r.nutrition} food${r.morale ? `, +${r.morale} morale` : ''}</td><td>${r.level}${r.cold ? ` <small title="Needs Cold Storage level ${r.cold}">❄️${r.cold}</small>` : ''}</td><td>${r.stock}</td></tr>`).join('')}</tbody></table>
+    <small class="mute">A dish restores that much of a slime's food need per serving. Chef level ${k.chef_level || '—'}. ❄️ dishes keep only in the Cold Storage (Town › Buildings), which also enlarges the pantry and lets parties carry dishes on trips instead of raw rations.</small></div></div>`;
 }
 function hospitalView() {
   const st = S.state, h = st.jobs.hospital, b = st.buildings.find((x) => x.key === 'hospital');
