@@ -33,13 +33,20 @@ CHAPTERS: List[Chapter] = [
     Chapter("heart", "5. The Heart of the Hollow", "Defeat the Parched King on floor 50.", "cleared", 1,
             "The Parched King falls the way a dry riverbed fills: all at once, and then quietly. Below his throne the Mother Gloop stirs. The "
             "droplets you pulled one by one, hungry and opinionated and yours, hum a single note, and the Dry Tide begins to withdraw. "
-            "The Well, for the first time in an age, is full."),
+            "The Well, for the first time in an age, is full. And under the throne, a second stair goes down."),
+    Chapter("deep", "6. The Deep Hollow", "Clear floor 75 of the Deep Hollow.", "floor", 75,
+            "Below the throne nothing is dry and nothing is wet: it is the inside of a thirst. The monsters here are old enough to remember "
+            "the Mother Gloop awake. Your slimes go quiet on the stairs, and walk closer together."),
+    Chapter("mother", "7. The Dry Mother", "Defeat the Dry Mother on floor 100.", "deep", 1,
+            "The Dry Mother does not fall so much as run out. The thirst that made the Hollow is gone, and the Mother Gloop wakes - "
+            "enormous, sleepy, delighted to see you. Every slime you ever pulled was a drop of her, she says, and every one came home."),
 ]
 
 
 def reached(g, c: Chapter) -> bool:
     return {"pulls": lambda: g.gacha.total_pulls >= c.value, "colony": lambda: len(g.roster) >= c.value,
-            "floor": lambda: g.best_floor >= c.value, "cleared": lambda: bool(g.descent_cleared)}[c.kind]()
+            "floor": lambda: g.best_floor >= c.value, "cleared": lambda: bool(g.descent_cleared),
+            "deep": lambda: bool(getattr(g, "deep_cleared", False))}[c.kind]()
 
 
 def check(g) -> List[str]:

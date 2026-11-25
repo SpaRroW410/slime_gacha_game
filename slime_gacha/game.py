@@ -101,7 +101,8 @@ class Game:
         self.shadow_tick: Optional[int] = None         # when the Keeper last removed a troublemaker (the Keeper's shadow)
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
         self.best_floor = 0                            # deepest floor ever cleared by anyone
-        self.descent_cleared = False                   # the final boss (floor 50) has fallen
+        self.descent_cleared = False                   # the heart of the Hollow (floor 50, the Parched King) has fallen
+        self.deep_cleared = False                      # ... and the bottom of the Deep Hollow (floor 100, the Dry Mother)
         self.bounties: set = set()                     # boss floors whose purple-gel bounty is already paid
         self.sacrifices = 0                            # slimes merged away, destroyed in the chamber or fused into a relic, ever
         self.sacrifices_tracked = True                 # False for a colony saved before the count existed: no Gentle Keeper badges
@@ -3648,10 +3649,14 @@ class Game:
                 self.delves[q]["floor"] = floor + 1
                 self.delves[q]["camped"] = 0
             self._xp("floor", config.KEEPER_XP["floor"] + floor // 5)
-            if floor == dungeon.MAX_FLOOR:
+            if floor == config.HEART_FLOOR and not self.descent_cleared:
                 self.descent_cleared = True
                 events.append("👑 THE PARCHED KING FALLS! The Dry Tide shudders and begins to recede - the Mother Gloop "
-                              "stirs. You have cleared the Hollow Descent.")
+                              "stirs. Below the throne a second stair opens: the Deep Hollow, fifty floors more.")
+            if floor == dungeon.MAX_FLOOR:
+                self.deep_cleared = True
+                events.append("🏺 THE DRY MOTHER CRUMBLES! The thirst at the heart of the Hollow is gone, and the Mother Gloop "
+                              "wakes. You have cleared the whole Descent.")
             if boss:
                 self.feast = f"the fall of the boss of floor {floor}"           # tonight's dinner is a feast (rituals.py)
                 events.append(f"🔓 The boss of floor {floor} is down. This is a checkpoint: the party may climb out "
@@ -4266,7 +4271,7 @@ class Game:
     # ---- persistence -----------------------------------------------------------
     def to_dict(self) -> dict:
         return dict(version=config.SAVE_VERSION, seed=self.seed, tick=self.tick_count,
-                    bounties=sorted(self.bounties), descent_cleared=self.descent_cleared, sacrifices=self.sacrifices,
+                    bounties=sorted(self.bounties), descent_cleared=self.descent_cleared, deep_cleared=self.deep_cleared, sacrifices=self.sacrifices,
                     sacrifices_tracked=self.sacrifices_tracked, milestones={str(k): v for k, v in self.milestones.items()}, custom_spells=spells.custom_records(),
                     buildings=self.buildings.to_dict(), best_floor=self.best_floor,
                     delves={str(k): v for k, v in self.delves.items()},
@@ -4358,6 +4363,7 @@ class Game:
         g.buildings.load(d.get("buildings"))
         g.best_floor = d.get("best_floor", 0)
         g.descent_cleared = d.get("descent_cleared", False)
+        g.deep_cleared = d.get("deep_cleared", False)
         g.intel = {int(k): v for k, v in d.get("intel", {}).items()}
         if d.get("version", 0) < 7:                          # v6 knew intel per 5-floor segment, progress globally
             seg_intel = g.intel

@@ -217,6 +217,11 @@ def build() -> list:
                      f"floor {f}: gold at {g} or fewer, silver at {s_}, bronze at {b}" for f, (g, s_, b) in sorted(c.GENTLE_FLOORS.items()))
                  + ". Your first gold earns the title 'the Gentle'. People > Keeper shows the medals and the count; the merge screens (Town > Merge & destroy and People > Council) show how "
                    "many more sacrifices the next medal allows."),
+            dict(name="The Deep Hollow (floors 51-100)", text=f"Below the Parched King's throne on floor {c.HEART_FLOOR} the Descent goes on for fifty more floors, "
+                 f"with ten more bosses. From there every floor is built for slimes {c.DEEP_LEVEL_STEP:g} levels stronger than the last (floor 100 for level "
+                 f"{int(c.HEART_FLOOR + c.DEEP_LEVEL_STEP * (100 - c.HEART_FLOOR))}, past the usual cap) and grows harder again by x{c.DEEP_GROWTH:g} a floor: "
+                 "exponential. Expect to need legendary slimes, good relics and, for the last floors, ego relics (a legendary wearing three grows to level "
+                 f"{c.EGO_LEVEL_CAP}). Clearing floor 100 ends the story."),
             dict(name="Hollow Descent", text="Permadeath. Floors in order; you may leave for free only after a boss floor (an emergency Retreat is the costed exception). Every slime must have "
                                              "cleared the floors above."),
             dict(name="Gloop Pit, Wayfarer's Rift, Starfall Quarry", text="Nobody dies. A knocked-out slime loses morale (never XP) and its relics are battered; in the Pit it also drops its gear. All three farming dungeons now and then (about 5% per foe) hand out a little extra gel, food, essence or scrap. The Pit (XP) is run by a full party, always fought automatically (no taking command); the Rift (relics) and the Quarry (ascension stones) take any 1-5 slimes. Each has its own sub-tab in Dungeons."),

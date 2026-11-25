@@ -2309,7 +2309,7 @@ const TOUR = {
     { target: '[data-act="party_fill"]', tab: 'parties', title: 'Fill it', text: 'Fill it with your best free slimes. A good mix of classes and slimes who like each other give the party synergy.',
       when: () => S.state.parties.some((p) => !p.full) && !S.state.parties.some((p) => p.full), done: () => S.state.parties.some((p) => p.full) },
     { target: 'nav.tabs [data-t="dungeons"]', title: 'The dungeons', text: 'Click the 🕳 Dungeons tab.', done: () => S.tab === 'dungeons' },
-    { target: '[data-act="enter_dungeon"]', tab: 'dungeons', sub: ['dungeons', 'descent'], title: 'The Hollow Descent', text: 'Fifty floors, a boss every five. Choose your party and click Enter — or press Next to look around first. The other dungeons (above) give XP, relics, stones and more.',
+    { target: '[data-act="enter_dungeon"]', tab: 'dungeons', sub: ['dungeons', 'descent'], title: 'The Hollow Descent', text: 'A hundred floors, a boss every five; past floor 50 it gets much harder. Choose your party and click Enter — or press Next to look around first. The other dungeons (above) give XP, relics, stones and more.',
       done: () => Object.keys(S.state.dungeon.delves).length > 0 },
     { target: '[data-act="delve_next"]', tab: 'dungeons', sub: ['dungeons', 'descent'], title: 'One floor at a time', text: 'Each floor is a fight; the report opens when it is over. Time inside runs faster than at home, so the party eats and tires faster too: camp to rest, and bring a hurt party home before it breaks.',
       when: () => Object.keys(S.state.dungeon.delves).length > 0 },

@@ -36,7 +36,7 @@ SECTIONS: List[Dict[str, object]] = [
         "Sparring (duels, and two parties fighting as teams) builds fighting styles, class proficiency and bonds, without risk.",
     ]),
     dict(title="Dungeons", icon="🕳", items=[
-        "Hollow Descent: 50 floors in order, permadeath, leave for free only after a boss floor. Scout floors for intel (and be "
+        "Hollow Descent: 100 floors in order (the Hollow to floor 50, then the far harder Deep Hollow), permadeath, leave for free only after a boss floor. Scout floors for intel (and be "
         "rescued if you overrun), camp (limited by floor and scouting), meet floor modifiers and wayside stops, call reinforcements, "
         "or pay for an emergency retreat. Every slime must have cleared the floor above to enter a floor.",
         "Gloop Pit: the XP farm (a new theme every day; knock-outs cost morale, never XP).",

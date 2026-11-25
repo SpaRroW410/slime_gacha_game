@@ -4,6 +4,7 @@ import random
 import sys
 import unittest
 from collections import Counter
+from dataclasses import replace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -102,10 +103,11 @@ class TestBestiary(unittest.TestCase):
         self.assertGreater(main.purple_chance, 0)
         self.assertLessEqual(pit.loot["white_gel"][1], main.loot["white_gel"][1])
 
-    def test_ten_unique_bosses_one_per_segment(self):
-        self.assertEqual(sorted(bestiary.BOSSES), list(range(5, 55, 5)))
-        self.assertEqual(len({b.key for b in bestiary.BOSSES.values()}), 10)
+    def test_twenty_unique_bosses_one_per_segment(self):
+        self.assertEqual(sorted(bestiary.BOSSES), list(range(5, 105, 5)))
+        self.assertEqual(len({b.key for b in bestiary.BOSSES.values()}), 20)
         self.assertEqual(bestiary.BOSSES[50].key, "parched_king")
+        self.assertEqual(bestiary.BOSSES[100].key, "dry_mother")
         for fl, b in bestiary.BOSSES.items():
             e = bestiary.build_boss(b)
             self.assertTrue(e.boss)
@@ -280,19 +282,48 @@ class TestFloors(unittest.TestCase):
         self.assertEqual(len(dungeon.floor_plan(1, 5, 10)), 5)           # boss + 4 escorts
         self.assertEqual(len(dungeon.floor_plan(1, 3, 15)), 15)
 
-    def test_nothing_below_floor_50(self):
+    def test_nothing_below_floor_100(self):
+        dungeon.floor_info(1, 51, 5)                              # the Deep Hollow is there now
         with self.assertRaises(ValueError):
-            dungeon.floor_info(1, 51, 5)
+            dungeon.floor_info(1, 101, 5)
         g = rich()
         pid = mk_party(g, strong=True)
         for s in g.party_members(pid):
-            s.progress = 50
-        self.assertNotIn(51, g.entry_options(pid))
-        self.assertEqual(g.entry_options(pid)[-1], 46)
-        g.enter_dungeon(pid, 46)
-        g.delves[pid]["floor"] = 51
+            s.progress = 100
+        self.assertNotIn(101, g.entry_options(pid))
+        self.assertEqual(g.entry_options(pid)[-1], 96)
+        g.enter_dungeon(pid, 96)
+        g.delves[pid]["floor"] = 101
         with self.assertRaises(InvalidAction):
             g.delve_next(pid)
+
+    def test_below_the_heart_the_floors_grow_exponentially(self):
+        self.assertEqual(bestiary.floor_level(50), 50)
+        self.assertEqual(bestiary.floor_level(100), 150)                # built for slimes past the usual cap
+        steps = [bestiary.growth(f + 1) / bestiary.growth(f) for f in (60, 75, 90)]
+        self.assertTrue(all(x > config.DEEP_GROWTH for x in steps))  # the exponential factor on top of stronger levels
+        self.assertGreater(bestiary.growth(100), 8 * bestiary.growth(50))
+
+    def test_the_dry_mother_on_floor_100_ends_the_descent(self):
+        g = rich(3)
+        pid = mk_party(g, strong=True)
+        for s in g.party_members(pid):
+            s.progress = 95
+        g.enter_dungeon(pid, 96)
+        real = dungeon.floor_info
+        weak = lambda seed, floor, size: replace(real(seed, floor, size), enemies=real(seed, 1, size).enemies)   # only the bookkeeping is tested
+        from unittest import mock
+        with mock.patch.object(dungeon, "floor_info", weak):
+            for _ in range(5):
+                for s in g.party_members(pid):                         # deep floors take long: keep them fed and rested
+                    s.needs.v.update(food=100.0, energy=100.0)
+                    s.hp = s.max_hp
+                rep = g.delve_next(pid)
+                self.assertTrue(rep.victory, rep.log[-5:])
+        self.assertTrue(g.deep_cleared)
+        self.assertEqual(g.best_floor, 100)
+        self.assertTrue(any("DRY MOTHER CRUMBLES" in l for l in rep.log))
+        self.assertTrue(Game.from_dict(g.to_dict()).deep_cleared)
 
     def test_clearing_the_final_boss_ends_the_descent(self):
         g = rich(3)
@@ -304,11 +335,11 @@ class TestFloors(unittest.TestCase):
             rep = g.delve_next(pid)
             self.assertTrue(rep.victory, rep.log[-5:])
         self.assertTrue(g.descent_cleared)
+        self.assertFalse(g.deep_cleared)
         self.assertEqual(g.best_floor, 50)
         self.assertTrue(any("PARCHED KING FALLS" in l for l in rep.log))
         self.assertTrue(g.can_leave(pid))
-        with self.assertRaises(InvalidAction):
-            g.delve_next(pid)
+        self.assertEqual(g.delves[pid]["floor"], 51)                    # the stair goes on into the Deep Hollow
         g.leave_dungeon(pid)
         self.assertTrue(Game.from_dict(g.to_dict()).descent_cleared)
 
@@ -334,9 +365,9 @@ class TestFloors(unittest.TestCase):
         g = rich()
         pid = mk_party(g, strong=True)
         for s in g.party_members(pid):
-            s.progress = 49
+            s.progress = 99
         with self.assertRaises(InvalidAction):
-            g.scout(pid, 50, 51, 20)
+            g.scout(pid, 100, 101, 20)
         est = g.scout_plan(pid, 41, 50)
         self.assertLess(est["safe"], config.SCOUT_MAX_HOURS)
         self.assertGreater(g.scout_plan(pid, 50, 50)["nominal"], g.scout_plan(pid, 1, 1)["nominal"] * 2)
@@ -404,7 +435,7 @@ class TestDailyPit(unittest.TestCase):
         s = Session()
         s.call("new_game", {"seed": 3})
         st = s.call("state")["state"]["dungeon"]
-        self.assertEqual(st["max_floor"], 50)
+        self.assertEqual(st["max_floor"], 100)
         self.assertIn("title", st["pit"])
         self.assertTrue(st["pit"]["terrain"]["effects"])
         before = st["pit"]["title"]

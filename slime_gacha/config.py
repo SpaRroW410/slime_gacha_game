@@ -166,6 +166,9 @@ GUARD_REDUCTION = 0.5
 # ---- Dungeons -----------------------------------------------------------------
 # Main dungeon ("The Hollow Descent"): floor after floor, brutal, permadeath, rare purple gel.
 MAIN_BOSS_EVERY = 5
+HEART_FLOOR = 50                 # the Parched King: the heart of the Hollow (the story's first ending)
+DEEP_LEVEL_STEP = 2.0            # below it, every floor is built for slimes this many levels stronger (floor 100 = level 150)
+DEEP_GROWTH = 1.03               # ... and grows this much harder again per floor: exponential (x4.4 by floor 100)
 MAIN_STAT_STEP = 0.15           # enemy stats +15% per floor (compounding on tier pools)
 MAIN_LOOT_STEP = 0.25           # loot ranges +25% per floor
 MAIN_PURPLE_STEP = 0.15         # purple-gel drop chance +15% (relative) per floor, capped
@@ -326,7 +329,8 @@ RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35   # t
 # ---- Gentle Keeper badges (achievements.py): a milestone floor of the Descent cleared while merging or destroying few slimes --------
 # floor -> most sacrifices (merges, chamber destroys, ego fusions, ever) for (gold, silver, bronze) when that floor is first cleared.
 # The game is meant to need sacrifices; clearing deep with few of them is the feat.
-GENTLE_FLOORS = {10: (0, 3, 8), 20: (2, 8, 20), 30: (5, 15, 35), 40: (8, 25, 55), 50: (12, 35, 80)}
+GENTLE_FLOORS = {10: (0, 3, 8), 20: (2, 8, 20), 30: (5, 15, 35), 40: (8, 25, 55), 50: (12, 35, 80),
+                 60: (16, 45, 100), 70: (20, 55, 120), 80: (25, 65, 140), 90: (30, 75, 160), 100: (35, 85, 180)}
 
 # ---- passive skills (passives.py) -------------------------------------------------------------------------------------------------
 HEARTH_HEAL = 0.25               # Hearth (fire mastered): the party mends this much more at each camp hour
