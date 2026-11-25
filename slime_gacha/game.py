@@ -1223,6 +1223,9 @@ class Game:
                 raise InvalidAction(f"{x.name} is away ({x.in_dungeon or x.state}); wait until they are home.")
         rep = self.battles.duel(v, s)
         self.vice_challenge = None
+        if rep.winner_slime is None:                          # a stalemate: the challenge fails, the post stays
+            self.social.shift_morale(s, -2)
+            return list(rep.log[-3:]) + [f"🤝 A draw: {v.name} keeps the post of Vice Keeper."]
         winner = rep.winner_slime
         loser = s if winner is v else v
         self.social.shift_morale(winner, 8)
@@ -1541,15 +1544,16 @@ class Game:
         rep = self.battles.team_spar(team_a, team_b, syn_a, syn_b)
         res.reports.append(rep)
         names = (self.parties.get(pid_a).name, self.parties.get(pid_b).name)
-        winner = 0 if rep.winner == "party" else 1
-        res.summary.append(f"{d.emoji} {names[winner]} beat {names[1 - winner]} in {rep.rounds} rounds")
+        winner = 0 if rep.winner == "party" else 1 if rep.winner == "foes" else None
+        res.summary.append(f"{d.emoji} {names[winner]} beat {names[1 - winner]} in {rep.rounds} rounds" if winner is not None
+                           else f"{d.emoji} {names[0]} and {names[1]} fight to a draw after {rep.rounds} rounds")
         for i, team in enumerate((team_a, team_b)):
             before = self.social.synergy(team)
             for x in range(len(team)):                    # teamwork: every pair in the party grows closer
                 for y in range(x + 1, len(team)):
                     self.social.add_bond(team[x], team[y], config.SPAR_PARTY_BOND)
             for s in team:
-                self._spar_reward(res, s, d, i == winner, cap)
+                self._spar_reward(res, s, d, None if winner is None else i == winner, cap)
             res.summary.append(f"   {names[i]}'s synergy {before - 1:+.1%} -> {self.social.synergy(team) - 1:+.1%}")
         events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train", bld.PARTY_ARENA, d.key)
         res.summary.extend("   " + e for e in events if "died" in e)
@@ -1596,11 +1600,16 @@ class Game:
         for a, b in pairs:
             rep = self.battles.duel(a, b)
             res.reports.append(rep)
-            win, lose = (a, b) if rep.winner == "party" else (b, a)
-            res.summary.append(f"{d.emoji} {win.name} beat {lose.name} in {rep.rounds} rounds "
-                               f"({lose.name} left at {lose.hp} HP)")
-            self._spar_reward(res, win, d, True, cap)
-            self._spar_reward(res, lose, d, False, cap)
+            if rep.winner is None:                            # a stalemate (two healers ...): a draw, both learn a little
+                res.summary.append(f"{d.emoji} {a.name} and {b.name} fight to a draw after {rep.rounds} rounds")
+                self._spar_reward(res, a, d, None, cap)
+                self._spar_reward(res, b, d, None, cap)
+            else:
+                win, lose = (a, b) if rep.winner == "party" else (b, a)
+                res.summary.append(f"{d.emoji} {win.name} beat {lose.name} in {rep.rounds} rounds "
+                                   f"({lose.name} left at {lose.hp} HP)")
+                self._spar_reward(res, win, d, True, cap)
+                self._spar_reward(res, lose, d, False, cap)
             self.social.add_bond(a, b, config.SPAR_BOND)
         events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train", arena, d.key)
         res.summary.extend("   " + e for e in events if "died" in e)

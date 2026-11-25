@@ -783,3 +783,43 @@ class TestFightSupplies(unittest.TestCase):
             g.battle_auto_turn()
         self.assertGreater(g.tick_count, t)                               # the camp took time even though the waves did not
         self.assertTrue(all(s.needs.get("energy") > 20 for s in members(g, pid)))
+
+
+class TestSparStalemate(unittest.TestCase):
+    """A spar in which nobody's health really moves for 10 rounds (two healers, two walls) ends in a draw."""
+    def test_two_fighters_that_barely_scratch_each_other_draw_after_ten_rounds(self):
+        import random as _r
+        from slime_gacha.battle import BattleSystem, Combatant
+        bs = BattleSystem(_r.Random(1))
+        walls = [Combatant(n, "🧱", side, dict(hp=1000, atk=1, defense=200, mag=1, spd=5), 1000.0, ["splat"]) for n, side in (("A", "party"), ("B", "foes"))]
+        for c in walls:
+            c.nonlethal = True
+        log = []
+        rounds, winner = bs._simulate(walls, log, config.DUEL_ROUND_CAP, config.SPAR_STALL_ROUNDS)
+        self.assertIsNone(winner)
+        self.assertEqual(rounds, config.SPAR_STALL_ROUNDS + 1)
+        self.assertTrue(any("neither side can break the other" in l for l in log))
+
+    def test_a_drawn_spar_rewards_both_and_names_no_winner(self):
+        from unittest import mock
+        from slime_gacha.battle import BattleReport
+        g = rich(243)
+        a = g.gacha.make_slime("rare", "medic", stars=3)
+        b = g.gacha.make_slime("rare", "medic", stars=3)
+        for s in (a, b):
+            g.roster[s.id] = s
+            s.hp = s.max_hp
+        draw = BattleReport(["🤝 draw"], None, 11)
+        draw.winner_slime = None
+        with mock.patch.object(g.battles, "duel", lambda x, y: draw):
+            res = g.spar(a.id, b.id, "magic")
+        self.assertTrue(any("draw" in l for l in res.summary))
+
+    def test_a_real_fight_is_not_cut_short(self):
+        g = rich(242)
+        a = g.gacha.make_slime("rare", "barbarian", stars=3)
+        b = g.gacha.make_slime("rare", "mage", stars=3)
+        for s in (a, b):
+            g.roster[s.id] = s
+            s.hp = s.max_hp
+        self.assertIsNotNone(g.battles.duel(a, b).winner)

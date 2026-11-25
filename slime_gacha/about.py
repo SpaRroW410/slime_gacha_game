@@ -66,8 +66,16 @@ SECTIONS: List[Dict[str, object]] = [
 
 # id, group, title, what it will do - keep in step with the open tasks in docs/ROADMAP.md § 2
 ROADMAP: List[Dict[str, object]] = [
-    dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
-         text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
+    dict(id=1, group="Milestone", title="Playtest and balance to floor 100", status="in progress",
+         text="A real play-through of the whole Descent (the Hollow to 50, the Deep Hollow to 100), then fix what it finds. The harness and report exist."),
+    dict(id=108, group="Combat resources", title="Stamina, mana and nature pools", status="proposed",
+         text="Physical skills spend stamina, spells and heals mana, elemental skills nature; pools refill a little each round, more when defending, and from potions and camps."),
+    dict(id=109, group="Combat resources", title="Action points for big skills", status="proposed",
+         text="Big area skills and heals need 3 banked action points, so they cannot open a fight and end it."),
+    dict(id=110, group="Combat resources", title="Fight AI and balance pass", status="proposed",
+         text="The AI plans with pools and action points; classes, floors and spars are retuned with the harnesses."),
+    dict(id=111, group="Combat resources", title="Arena and Guide for resources", status="proposed",
+         text="Bars and action-point pips on the cards, costs on the skill buttons, mana and nature draughts in the pack."),
     dict(id=48, group="Mobile", title="Mobile performance", status="planned",
          text="Faster turns, smaller replies, in-place updates, startup on low-end phones."),
     dict(id=49, group="Mobile", title="Capacitor shell", status="planned",

@@ -160,6 +160,8 @@ CRIT_CHANCE = 0.08
 CRIT_MULT = 1.5
 ROUND_CAP = 30
 DUEL_ROUND_CAP = 80            # sparring continues until somebody yields
+SPAR_STALL_ROUNDS = 10         # ... but if nobody's HP has moved for this many rounds (two healers, say), it is a draw
+SPAR_STALL_SHARE = 0.05        # 'moved' = by more than this share of max HP, net, over those rounds
 PARTY_SIZE = 5           # fixed party size: must be a multiple of 5 (5, 10, 15 ...)
 GUARD_REDUCTION = 0.5
 

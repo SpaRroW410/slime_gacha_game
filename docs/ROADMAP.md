@@ -31,9 +31,16 @@ As of 27 October 2026:
 
 ### Milestone
 
-- [~] **1. Floor-50 playtest and balance** — harness `tools/playtest.py` and report § 6 below are done; an AI bug that wasted opening turns on buffs is fixed.
+- [~] **1. Floor-50 playtest and balance (now to floor 100)** — harness `tools/playtest.py` and report § 6 below are done; an AI bug that wasted opening turns on buffs is fixed. The Deep Hollow (51-100) is tuned from simulations without gear only (task 93): it needs a geared playthrough too.
   Re-run on the current code (equal star levels, formations, one-day sessions): floor 50 needs level 57 / 50 / 41 / 31 / 25 for common / uncommon / rare / epic / legendary, ~130-186 real hours at x3; smoothness 0.132 (limit 0.22).
   *Done when:* the real descent to floor 50 has been played through (with gear, elements, scouting) and the follow-ups below are closed. Left: extend the harness (or a hand playthrough) to gear, relics, elements and potions.
+
+### Combat resources (proposed, waiting for the go-ahead) — stamina, mana, nature and action points
+
+- [ ] **108. Three resource pools** — every slime fights with Stamina (⚡ physical: attack-based skills), Mana (🔷 magic: spells, heals, buffs) and Nature (🍃 elemental: anything with an element; the pool grows with elemental mastery). Each skill costs its pool by power and reach (area and big heals cost the most); the basic attack and Defend are free. Pools refill a little every round, more on a Defend turn; potions refill them (stamina, plus new mana and nature draughts) and so does camping. A slime out of a pool falls back to its free moves. Replaces today's single stamina bar.  *Done when:* skills spend and refill pools in every fight (auto and by hand), saves keep them, and healers can no longer heal forever.
+- [ ] **109. Action points: big skills must be charged** — a slime starts a fight with 1 AP and gains 1 each turn (2 on a Defend turn), banking up to 3. Light skills cost 1 AP, heavy single-target skills 2, area skills, big heals and capstones 3; basic attack and Defend cost none. Explosive Brew, Fire Blob, Rampage and friends can no longer open a fight and end it: the earliest is turn 3, then every few turns.  *Done when:* AP is spent and banked in auto and manual fights, and a one-skill opening wipe no longer happens in the balance harness.
+- [ ] **110. The AI and the balance pass** — the fight AI plans with pools and AP (saves for a big skill, defends to recover, heals while it can); `tools/balance.py` and `tools/playtest.py` re-run and the curves (floors 1-100, classes, rarities, spars) retuned, monsters included.  *Done when:* no class is far from the pack, healer duels end (by win or the stalemate draw) and the Descent keeps its difficulty curve.
+- [ ] **111. The arena and the Guide for resources** — cards show ⚡ 🔷 🍃 bars and AP pips, skill buttons show their cost (greyed with the reason when short), the pack can carry mana and nature draughts, and the Guide explains it all.  *Done when:* checked by hand at desktop and phone sizes.
 
 ### Mobile (phase 2) — Capacitor route, from the QA and mobile planning report
 
@@ -165,6 +172,7 @@ As of 27 October 2026:
 - [x] **104. Supplies in fights led by hand** — hungry and tired party slimes show 🍖 / 😴; Feed (a packed dish, else a ration), Stamina potion (from stock: breath back now, energy up) and Camp (before the next wave, or after the floor in the Descent), none costing a turn.  *Done when:* met (played in Chromium).
 - [x] **105. Gentle Keeper limits leave room for ego fusions** — below floor 50 every limit also grows with the party size by the ego fusions an endgame party needs (3 per slot by floor 100): gold on floor 100 is 50, 65 or 80 for parties of 5, 10 or 15.  *Done when:* met.
 - [x] **106. Packs for the trip; forged relics are common** — a party packs before it enters the Descent or a wave trip: raw rations, cooked dishes (up to the Cold Storage allowance, several kinds) and potions, chosen in a Pack panel or packed by the game (best dishes first, rations for the trip, a stamina potion each). Packed items leave the stores and leftovers come home; inside nothing comes from the colony. Automatic fights eat and drink from the pack best first; in a fight you lead you hand out an item to one slime or to everyone who needs it (this replaces feeding from the colony). The Relicsmith forges only common relics.  *Done when:* met (packed, handed out and checked in Chromium: the colony's food stayed untouched).
+- [x] **107. Spar stalemates end in a draw** — a duel or a party spar in which nobody's HP has moved by more than 5% of its maximum over 10 rounds (two healers, two walls) stops as a draw: both get the loser's style XP, a drawn Vice Keeper challenge leaves the post where it is. A spar that is still moving keeps going to the round cap and is decided on points as before.  *Done when:* met.
 
 ### After floor 50 (art and sound)
 
@@ -441,7 +449,7 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
 
 ### M30 — The Deep Hollow (25 November 2026)
-- [x] Floors 51-100, exponentially harder (93); long wave grinds (94); ego ascension to 150 (95); more gear and relics in tiles and windows (96); spells named by class (97); manual fights on one screen, animated (98). Explosive Brew checked and left as it is: no stronger than the mage's Fire Blob. Wave rations and camping (99); gear to tier 5 and autonomous gear upkeep (100); grouped, animated skills and a finale (101). Buildings to level 10 and the Reliquary (102); Cold Storage (103); supplies in fights (104); deeper Gentle Keeper limits (105); packs for the trip and common forged relics (106).
+- [x] Floors 51-100, exponentially harder (93); long wave grinds (94); ego ascension to 150 (95); more gear and relics in tiles and windows (96); spells named by class (97); manual fights on one screen, animated (98). Explosive Brew checked and left as it is: no stronger than the mage's Fire Blob. Wave rations and camping (99); gear to tier 5 and autonomous gear upkeep (100); grouped, animated skills and a finale (101). Buildings to level 10 and the Reliquary (102); Cold Storage (103); supplies in fights (104); deeper Gentle Keeper limits (105); packs for the trip and common forged relics (106); spar stalemates end in a draw (107).
 
 ### M29 — Tidier screens (21 November 2026)
 - [x] One Relics screen and a gear-only Armory (89); training on the slime card, trainers in the Academy (90); parties fold to a summary (91); activity badges on slimes' heads (92)

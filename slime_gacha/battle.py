@@ -292,19 +292,21 @@ class BattleSystem:
         run.synergy = synergy
         return run
 
-    def _simulate(self, everyone, log, cap: int = config.ROUND_CAP):
-        """Round loop shared by battles and duels. Returns (rounds, winner)."""
-        gen = self._sim_gen(everyone, log, cap, None)
+    def _simulate(self, everyone, log, cap: int = config.ROUND_CAP, stall: int = 0):
+        """Round loop shared by battles and duels. Returns (rounds, winner). With `stall`, a fight in which no HP has
+        changed at the end of that many rounds in a row stops early with no winner (a stalemate)."""
+        gen = self._sim_gen(everyone, log, cap, None, stall)
         try:
             while True:
                 next(gen)                      # no BattleRun: nothing ever pauses
         except StopIteration as stop:
             return stop.value
 
-    def _sim_gen(self, everyone, log, cap: int, run: Optional["BattleRun"]):
+    def _sim_gen(self, everyone, log, cap: int, run: Optional["BattleRun"], stall: int = 0):
         """The round loop as a generator: it yields whenever `run` is in manual mode and a party slime must choose.
         The generator's return value is (rounds, winner)."""
         rounds = 0
+        history = []                                          # end-of-round HP of every fighter (stalemate check)
         self.delayed, self.last_hits, self.round = [], {}, 0
         self._everyone = everyone
         while rounds < cap and self._side_alive(everyone, "party") \
@@ -340,6 +342,14 @@ class BattleSystem:
                     rg = c.mods.get("regen", 0.0)
                     if rg and c.hp < c.max_hp:
                         c.hp = min(c.max_hp, c.hp + max(1, int(c.max_hp * rg)))
+            if stall:                                         # a stalemate: in `stall` rounds nobody has been worn down
+                fighters = [c for c in everyone if not c.minion]
+                history.append([c.hp for c in fighters])
+                if len(history) > stall:
+                    then = history[-1 - stall]
+                    if all(abs(c.hp - h) <= max(1.0, config.SPAR_STALL_SHARE * c.max_hp) for c, h in zip(fighters, then)):
+                        log.append(f"🤝 {stall} rounds and nobody's health has really moved: neither side can break the other.")
+                        return rounds, None
         if not self._side_alive(everyone, "foes"):
             winner = "party"
         elif not self._side_alive(everyone, "party"):
@@ -411,15 +421,15 @@ class BattleSystem:
             c.stamina_max = 0.0              # sparring is not tiring
         log = [f"🥊 Sparring match: {ca.emoji}{ca.name} vs {cb.emoji}{cb.name}"]
         self.terrain = None
-        rounds, winner = self._simulate([ca, cb], log, config.DUEL_ROUND_CAP)
-        if winner is None:                      # round cap: the healthier slime takes it on points
+        rounds, winner = self._simulate([ca, cb], log, config.DUEL_ROUND_CAP, config.SPAR_STALL_ROUNDS)
+        if winner is None and rounds >= config.DUEL_ROUND_CAP:     # round cap: the healthier slime takes it on points
             winner = "party" if ca.hp / ca.max_hp >= cb.hp / cb.max_hp else "foes"
-        log.append(f"🏅 {(ca if winner == 'party' else cb).name} wins the spar!")
+        log.append(f"🏅 {(ca if winner == 'party' else cb).name} wins the spar!" if winner else f"🤝 {ca.name} and {cb.name} call it a draw.")
         for s, c in ((a, ca), (b, cb)):
             s.hp = max(1, int(c.hp))
             s.needs.add("energy", -8)
         rep = BattleReport(log, winner, rounds)
-        rep.winner_slime = a if winner == "party" else b
+        rep.winner_slime = a if winner == "party" else b if winner == "foes" else None
         return rep
 
     def team_spar(self, party_a, party_b, syn_a: float = 1.0, syn_b: float = 1.0) -> "BattleReport":
@@ -432,11 +442,11 @@ class BattleSystem:
             c.stamina_max = 0.0
         log = ["🥊 Party spar: " + ", ".join(c.emoji + c.name for c in ca) + "  vs  " + ", ".join(c.emoji + c.name for c in cb)]
         self.terrain = None
-        rounds, winner = self._simulate(ca + cb, log, config.DUEL_ROUND_CAP)
-        if winner is None:                      # round cap: the healthier side takes it on points
+        rounds, winner = self._simulate(ca + cb, log, config.DUEL_ROUND_CAP, config.SPAR_STALL_ROUNDS)
+        if winner is None and rounds >= config.DUEL_ROUND_CAP:     # round cap: the healthier side takes it on points
             share = lambda cs: sum(c.hp for c in cs) / max(1.0, sum(c.max_hp for c in cs))
             winner = "party" if share(ca) >= share(cb) else "foes"
-        log.append(f"🏅 {'The first' if winner == 'party' else 'The second'} party wins the spar!")
+        log.append(f"🏅 {'The first' if winner == 'party' else 'The second'} party wins the spar!" if winner else "🤝 The two parties call it a draw.")
         for s, c in list(zip(party_a, ca)) + list(zip(party_b, cb)):
             s.hp = max(1, int(c.hp))
             s.needs.add("energy", -8)
