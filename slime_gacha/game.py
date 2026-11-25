@@ -145,6 +145,7 @@ class Game:
         self.mood_rng = random.Random(((seed or 0) ^ 0xE70) & 0xFFFFFFFF)   # feelings never disturb the main dice
         self.vault_peak = 0                            # relics: slimes leave 34% of the most ever held
         self.gear_peak: Dict[str, int] = {}
+        self.battle_end: Optional[dict] = None           # the last moment of a fight led by hand, for the arena's finale (never saved)
         self.stock_peak: Dict[str, int] = {}             # materials and gel: the most ever held (autonomy keeps 34% of it)
         self.forage = False                            # slimes with no party and nothing to do go foraging (a new web/CLI game turns it on)
         self.autonomy = True                           # slimes may use up to 66% of the stock by themselves
@@ -2260,6 +2261,8 @@ class Game:
             yield run
         if flow is not None:
             flow["run"] = None
+            if run.manual:                                   # a fight led by hand: the arena shows how it ended (display only)
+                self.battle_end = dict(run.view(), kind=flow["kind"], pid=flow.get("pid"), victory=bool(run.report and run.report.victory))
         return run.report
 
     def _run_battle(self, party, enemies, intel: float = 1.0, **opts) -> BattleReport:

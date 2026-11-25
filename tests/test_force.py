@@ -609,7 +609,7 @@ class TestArenaEvents(unittest.TestCase):
         ns = [e["n"] for e in seen]
         self.assertEqual(ns, sorted(ns))
         for e in seen:
-            self.assertIn(e["k"], ("hit", "spell", "drain", "heal", "guard", "poison", "dodge"))
+            self.assertIn(e["k"], ("hit", "spell", "drain", "heal", "guard", "poison", "dodge", "buff", "debuff", "summon"))
             self.assertTrue(0 <= e["a"] < len(units) + 4 and 0 <= e["t"] < len(units) + 4)   # summons may join the field
         ids = {u["sid"] for u in units if u["side"] == "party" and not u["minion"]}
         self.assertEqual(ids, set(g.parties.get(pid).members))
@@ -686,3 +686,25 @@ class TestAutonomyUpkeep(unittest.TestCase):
 def Game_tier(floor):
     from slime_gacha.game import Game
     return Game.floor_gear_tier(floor)
+
+
+class TestArenaFinaleAndSkillData(unittest.TestCase):
+    def test_a_fight_led_by_hand_leaves_its_last_view_once(self):
+        from slime_gacha.webapi import Session
+        se = Session()
+        se.new_game(9)
+        g = se.game
+        g.wallet.add("white_gel", 20000)
+        se.call("pull", dict(n=10, pay="white_gel"))
+        se.call("party_create", dict(name="P"))
+        pid = se.call("state", {})["state"]["parties"][0]["id"]
+        se.call("party_fill", dict(pid=pid))
+        se.call("enter_dungeon", dict(pid=pid))
+        r = se.call("delve_next", dict(pid=pid, manual=True))
+        self.assertTrue(r["state"]["battle"]["abilities"])
+        self.assertTrue(all("fx" in a and "desc" in a for a in r["state"]["battle"]["abilities"]))   # for grouping the skills
+        while r["state"]["battle"]:
+            r = se.call("battle_auto_turn", {})
+        end = r["state"]["battle_end"]
+        self.assertTrue(end and end["fx"] and "victory" in end)
+        self.assertIsNone(se.call("state", {})["state"]["battle_end"])                              # sent once

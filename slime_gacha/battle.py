@@ -720,7 +720,7 @@ def _damage_value(bs: BattleSystem, actor, ability, target):
     return max(1, int(raw)), crit, eff
 
 
-def _fxev(bs, everyone, actor, t, kind: str, element: str = "", crit: bool = False, amount: int = 0) -> None:
+def _fxev(bs, everyone, actor, t, kind: str, element: str = "", crit: bool = False, amount: int = 0, area: bool = False) -> None:
     """Record one action for the arena to animate (who, on whom, what kind, which element). Display only: the rules
     never read it. Kept short; each event carries a running number so the page plays only the new ones."""
     try:
@@ -731,7 +731,7 @@ def _fxev(bs, everyone, actor, t, kind: str, element: str = "", crit: bool = Fal
     ev = getattr(bs, "fx_events", None)
     if ev is None:
         ev = bs.fx_events = []
-    ev.append(dict(n=bs.fx_seq, a=a, t=b, k=kind, el=element or "", c=bool(crit), v=int(amount)))
+    ev.append(dict(n=bs.fx_seq, a=a, t=b, k=kind, el=element or "", c=bool(crit), v=int(amount), ar=bool(area)))
     del ev[:-24]
 
 
@@ -756,7 +756,8 @@ def _h_damage(bs, actor, ab, targets, everyone, log):
         dmg, crit, eff = _damage_value(bs, actor, hit_ab, t)
         t.hurt(dmg)
         bs.last_hits[id(t)] = bs.last_hits.get(id(t), 0) + dmg
-        _fxev(bs, everyone, actor, t, "spell" if hit_ab.element or hit_ab.stat == "mag" else "hit", hit_ab.element, crit, dmg)
+        _fxev(bs, everyone, actor, t, "spell" if hit_ab.element or hit_ab.stat == "mag" else "hit", hit_ab.element, crit, dmg,
+              ab.target.startswith("all_"))
         log.append(f"  {actor.emoji}{actor.name} uses {ab.name} on {t.name}: {dmg} dmg{' (CRIT!)' if crit else ''}{_eff_tag(eff)}"
                    f" [{max(0, int(t.hp))}/{int(t.max_hp)}]")
         ls = actor.mods.get("lifesteal", 0.0)
@@ -785,7 +786,7 @@ def _h_heal(bs, actor, ab, targets, everyone, log):
                          * _mastery_mult(actor, ab) * _style_attack(actor, ab) * _terrain_mult(bs, ab)))
         before = t.hp
         t.hp = min(t.max_hp, t.hp + amt)
-        _fxev(bs, everyone, actor, t, "heal", ab.element, False, int(t.hp - before))
+        _fxev(bs, everyone, actor, t, "heal", ab.element, False, int(t.hp - before), ab.target.startswith("all_"))
         log.append(f"  💚 {actor.name} uses {ab.name} on {t.name}: +{int(t.hp - before)} HP")
         extra = amt - (t.hp - before)
         if extra > 0 and fx.find(ab, "overheal"):
@@ -806,7 +807,7 @@ def _h_poison(bs, actor, ab, targets, everyone, log):
         if fx.find(ab, "stack") and t.poison[0] > 0:
             per += t.poison[1]
         t.poison = (ab.duration, per)
-        _fxev(bs, everyone, actor, t, "poison", ab.element)
+        _fxev(bs, everyone, actor, t, "poison", ab.element, area=ab.target.startswith("all_"))
         log.append(f"  🧪 {actor.name} uses {ab.name} on {t.name}: poisoned ({per}/turn for {ab.duration}).")
 
 
@@ -821,11 +822,14 @@ def _h_summon(bs, actor, ab, targets, everyone, log):
                              mag=0, spd=5), (mag * 2.2 * ab.power + 5) * share, ["splat"], "attack", 1.0,
                         None, minion=True)
         everyone.append(pal)
+        _fxev(bs, everyone, actor, pal, "summon")
     log.append(f"  {emoji} {actor.name} calls up {'a ' + mname if n == 1 else str(n) + ' ' + mname + 's'}!")
 
 
 def _h_utility(bs, actor, ab, targets, everyone, log):
     log.append(f"  ✨ {actor.emoji}{actor.name} uses {ab.name}.")
+    for t in targets or [actor]:                              # a blessing on friends, a hex on foes
+        _fxev(bs, everyone, actor, t, "buff" if t.side == actor.side else "debuff", ab.element, area=ab.target.startswith("all_"))
 
 
 KIND_HANDLERS: Dict[str, Callable] = {
@@ -948,7 +952,7 @@ class BattleRun:
             cd = actor.cooldowns.get(k, 0)
             cost = attributes.action_cost(a) if actor.stamina_max else 0
             out.append(dict(key=a.key, name=actor.spell_names.get(k, a.name), kind=a.kind, element=a.element, power=a.power,
-                            target=a.target, cooldown=cd, cost=cost,
+                            target=a.target, cooldown=cd, cost=cost, fx=sorted({f[0] for f in a.fx}), desc=a.description,
                             winded=bool(actor.stamina_max and actor.stamina < cost), ready=cd == 0,
                             eff=({i: round(c.matchup(a.element), 2) for i, c in foes}
                                  if a.element and a.target in ("enemy", "all_enemies") else {}),

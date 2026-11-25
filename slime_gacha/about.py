@@ -83,7 +83,7 @@ ROADMAP: List[Dict[str, object]] = [
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
 WHATS_NEW = dict(id="2026-11-25-deep-hollow",
-                 text="The Descent goes on to floor 100: the Deep Hollow, much harder below floor 50. Wave simulations can run up to 100 waves (they come home below a health line; waves you lead cost no time). A legendary wearing three ego relics grows to level 150. More relics and gear, shown as tiles: tap a relic for its upgrade path. Each class names its spells its own way, and manual fights fit the screen and are animated.")
+                 text="The Descent goes on to floor 100: the Deep Hollow, much harder below floor 50. Wave simulations can run up to 100 waves (they come home below a health line; waves you lead cost no time). A legendary wearing three ego relics grows to level 150. More relics and gear, shown as tiles: tap a relic for its upgrade path. Each class names its spells its own way. Manual fights fit the screen, group skills (single, area, debuff, buff, heal) and animate each kind; the fallen shrink away. Long wave trips take rations and camp. Gear now goes to tier 5, and with autonomy on slimes level their relics and merge spare gear.")
 
 
 def build() -> Dict[str, object]:

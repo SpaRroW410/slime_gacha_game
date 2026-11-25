@@ -271,6 +271,32 @@ main h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
 @keyframes floatup { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-22px); opacity: 0; } }
 @keyframes pop { from { transform: scale(0); } }
 @keyframes pulse { to { box-shadow: 0 0 10px 1px var(--bad); } }
+/* skills grouped by what they do, each group with its own colour */
+.arena .abil { display: flex; flex-direction: column; gap: 4px; }
+.arena .skgroup { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.arena .sklabel { font-size: 11px; font-weight: 700; min-width: 64px; color: var(--sk, var(--mute)); }
+.sk-single { --sk: var(--bad); } .sk-area { --sk: #f08a3c; } .sk-debuff { --sk: var(--purple); } .sk-buff { --sk: #e9b949; } .sk-heal { --sk: var(--good); }
+.arena .skgroup .btn { border-left: 3px solid var(--sk, var(--line)); }
+/* the fallen shrink to a slim strip at the bottom of their column; a revived one comes back full size */
+.arena .unit.dead { order: 1; padding: 2px 6px; gap: 0; opacity: .45; }
+.arena .unit.dead .bar, .arena .unit.dead .unum { display: none; }
+.arena .unit.dead .foefig, .arena .unit.dead .blob.xs { width: 18px; height: 18px; font-size: 12px; }
+.arena .unit.dead .uname { font-size: 11px; text-decoration: line-through; }
+.arena .unit.alive { transition: padding .2s; }
+/* more motion: buffs rise, hexes swirl purple, wards shine, summons pop in, area attacks sweep across */
+.arena .unit.empowered { animation: empower .7s ease-out; } .arena .unit.hexed { animation: hex .7s ease-out; }
+.arena .unit.warded { animation: ward .7s ease-out; } .arena .unit.arrive { animation: arrive .5s ease-out; }
+.arena .fxg.rise { animation: rise .7s ease-out forwards; } .arena .fxg.swirl { animation: swirl .7s ease-out forwards; }
+.arena .fxg.sparkle.late { animation-delay: .15s; opacity: 0; }
+.arena .fxg.sweep { width: 40px; border-radius: 40px; display: grid; place-items: center; font-size: 26px;
+  background: radial-gradient(ellipse at center, rgba(255, 170, 80, .35), transparent 70%); }
+@keyframes empower { 0% { box-shadow: 0 0 0 0 rgba(233, 185, 73, .9) inset; } 50% { box-shadow: 0 0 14px 2px rgba(233, 185, 73, .7); } }
+@keyframes hex { 0% { background: color-mix(in srgb, var(--purple) 40%, var(--card)); } }
+@keyframes ward { 0% { box-shadow: 0 0 0 3px var(--blue); } }
+@keyframes arrive { from { transform: scale(.3); opacity: 0; } }
+@keyframes rise { 0% { transform: translate(-50%, 0) scale(.6); opacity: 0; } 40% { opacity: 1; } 100% { transform: translate(-50%, -150%) scale(1.1); opacity: 0; } }
+@keyframes swirl { 0% { transform: translate(-50%, -50%) rotate(0) scale(.5); opacity: 0; } 40% { opacity: 1; } 100% { transform: translate(-50%, -50%) rotate(540deg) scale(1.4); opacity: 0; } }
+@media (max-width: 640px) { .arena .sklabel { min-width: 0; font-size: 10px; } .arena .abil { flex-direction: row; flex-wrap: wrap; gap: 4px 10px; } }
 @media (prefers-reduced-motion: reduce) { .arena .unit *, .arena .unit, .arena.quake, .arena .fxg { animation: none !important; } }
 /* phones: each side is one column (front row first), the two sides stand side by side */
 @media (max-width: 640px) {
@@ -447,3 +473,11 @@ details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px sol
 .pstep.now .pnum { border-color: var(--accent); color: var(--accent); }
 .pstep.now > div > b { color: var(--accent); }
 .pstep .row, .pstep > div > div { margin-top: 3px; }
+/* the end of a fight led by hand: its last blows play, then a banner, then the report */
+.arena .finale { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 6; display: grid; gap: 2px; padding: 14px 26px;
+  border-radius: 16px; border: 2px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-size: 1.5rem; font-weight: 800;
+  box-shadow: var(--shadow); cursor: pointer; animation: finalein .5s ease-out .6s both; }
+.arena .finale small { font-size: .72rem; font-weight: 400; color: var(--mute); }
+.arena .finale.won { border-color: #e9b949; } .arena .finale.lost { border-color: var(--bad); }
+@keyframes finalein { from { transform: translate(-50%, -50%) scale(.4); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .arena .finale { animation: none; } }

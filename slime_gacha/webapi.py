@@ -27,6 +27,12 @@ from .social import SocialEngine
 
 
 # ---- views -------------------------------------------------------------------------------------
+def _take_battle_end(g: Game):
+    """The last view of a fight just finished by hand, sent once so the arena can play its final blows."""
+    v, g.battle_end = getattr(g, "battle_end", None), None
+    return v
+
+
 def _train_style(g: Game, s, own: str):
     """The fighting style a slime away at the Training Grounds is working on: the spar's style, or its own field in a party drill."""
     if s.in_dungeon != "train":
@@ -306,6 +312,7 @@ def snapshot(g: Game) -> dict:
                         if c and c["challenger"] in g.roster else None)(g.vice_challenge),
         vice_hunt_max=config.VICE_HUNT_MAX_PARTIES,
         battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid")) if run else None),
+        battle_end=_take_battle_end(g),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
         potions=dict(stock=[dict(kind=k.split(':')[0], grade=int(k.split(':')[1]), n=n) for k, n in sorted(g.potions.items())],

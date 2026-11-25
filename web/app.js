@@ -353,8 +353,8 @@ function render() {
   renderNow();
   restoreView(app, view);
   TOUR.paint();
-  if (S.state && S.state.battle) requestAnimationFrame(() => {
-    ARENA.play(S.state.battle);
+  if (S.state && (S.state.battle || S.finale)) requestAnimationFrame(() => {
+    ARENA.play(S.state.battle || S.finale);
     const t = S.ui.pick && document.querySelector('.arena .unit.targetable');      // a big party: bring the first target into view
     if (t) t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   });
@@ -363,6 +363,12 @@ function renderNow() {
   const app = document.getElementById('app');
   if (!S.state) { app.innerHTML = welcome(); return; }
   if (S.state !== S._seen) { S._seen = S.state; S.stateAt = Date.now(); }   // the moment the timers were measured
+  const fin = S.state.battle_end;                     // a fight led by hand just ended: show its last blows before the report
+  if (fin && fin !== S._endSeen && !S.state.battle) {
+    S._endSeen = fin; S.finale = fin; clearTimeout(S.finaleT);
+    const steps = (fin.fx || []).filter((e) => e.n > ARENA.lastFx).length;
+    S.finaleT = setTimeout(() => { S.finale = null; render(); }, Math.max(1500, Math.min(3600, 900 + steps * 260)));
+  }
   if (S.state.reports && S.state.reports.length && !S.modal && !S.state.battle) {          // a party is back: its report opens by itself
     const r = S.state.reports[0];
     S.modal = { type: 'battle', battles: r.battles, title: `📜 ${r.title} — report`, summary: r.summary, report_id: r.id };
@@ -396,8 +402,8 @@ function renderNow() {
   ${clk.mode === 'turn' ? `<div class="timebar" role="group" aria-label="Pass time"><button data-act="wait" data-h="1">+1h</button><button data-act="wait" data-h="4">+4h</button><button data-act="wait" data-h="24">+1 day</button></div>` : ''}
   <section style="padding:0 16px 20px;max-width:1280px;margin:0 auto;width:100%"><details><summary class="mute">Event log</summary><div class="feed">${S.feed.map((l) => `<div>${esc(l)}</div>`).join('') || '<small>Nothing yet.</small>'}</div></details></section>
   ${S.sel && slimeById(S.sel) ? `<div class="scrim" data-act="closesel"></div>${drawer(slimeById(S.sel))}` : ''}
-  ${S.state.battle ? ARENA.render(S.state.battle) : ''}
-  ${S.modal ? modalHtml() : ''}`;
+  ${S.state.battle ? ARENA.render(S.state.battle) : S.finale ? ARENA.render(S.finale, true) : ''}
+  ${S.modal && !S.finale ? modalHtml() : ''}`;
   declutter();
   a11y(app);
   backTrap();
@@ -1915,6 +1921,15 @@ function giftPanel(pid) {
    an animated arena (sprites, tweens) can replace it later without touching the rules or the commands.
    Every unit has data-unit="<index>" and classes (.alive/.dead/.acting/.targetable) a stylesheet or canvas can hook. */
 const EL_EMOJI = { fire: '🔥', water: '💧', earth: '🪨', air: '🌪', light: '✨', dark: '🌑', lightning: '⚡', ice: '❄', steam: '♨', mud: '🟤', lava: '🌋', storm: '⛈' };
+/* Manual fights group a slime's skills by what they do: one foe, every foe, weaken foes, help friends, heal. */
+const SKILL_GROUPS = [['single', '🎯 Single'], ['area', '💥 Area'], ['debuff', '🌀 Debuff'], ['buff', '✨ Buff'], ['heal', '💚 Heal']];
+function skillGroup(a) {
+  const fx = a.fx || [], foe = a.target === 'enemy' || a.target === 'all_enemies';
+  if (a.kind === 'heal' || (!foe && (fx.includes('heal_lowest') || fx.includes('cleanse')))) return 'heal';
+  if (a.kind === 'poison' || (a.kind === 'utility' && foe)) return 'debuff';
+  if (a.kind === 'guard' || a.kind === 'summon' || a.kind === 'utility') return 'buff';
+  return a.target === 'all_enemies' ? 'area' : 'single';
+}
 const ARENA = {
   prev: {}, prevKey: '',
   /* Animation lives here too: a unit that lost HP since the last render flashes and floats a damage number, a healed one
@@ -1939,7 +1954,7 @@ const ARENA = {
       <div class="bar ${pct < 30 ? 'lvl-low' : pct < 60 ? 'lvl-mid' : 'lvl-ok'}"><i style="width:${pct}%"></i></div>
       <div class="unum"><span>${u.hp}/${u.max_hp}</span>${u.stamina != null ? `<span>⚡${u.stamina}</span>` : ''}<span class="ustat">${(u.status || []).map((x) => `<span>${esc(x)}</span>`).join('')}${u.guard ? '<span>🛡</span>' : ''}${u.poison ? `<span>☠${u.poison}</span>` : ''}${!u.alive ? '<span>💀</span>' : ''}${u.minion ? '<span>👻</span>' : ''}</span></div></div>`;
   },
-  render(b) {
+  render(b, finale = false) {
     const delta = this.track(b);
     const pick = S.ui.pick ? b.abilities.find((a) => a.key === S.ui.pick) : null;
     const tside = pick ? (pick.target === 'enemy' ? 'foes' : 'party') : null;
@@ -1948,19 +1963,22 @@ const ARENA = {
     const col = (side) => `<div class="rows ${side}">${side === 'party' ? half(side, 'back') + half(side, 'front') : half(side, 'front') + half(side, 'back')}</div>`;
     const order = b.order.map((i) => { const u = b.units[i]; return `<span class="ord ${u.side} ${i === b.current ? 'now' : ''}" title="${esc(u.name)}">${esc(u.emoji)}</span>`; }).join('');
     const w = b.waiting != null ? b.units[b.waiting] : null;
-    const abil = w ? b.abilities.map((a) => {
-      const tip = `${a.kind}${a.element ? ' · ' + a.element : ''} · power ${a.power}${a.cooldown ? ` · cooldown ${a.cooldown}` : ''}${a.cost ? ` · stamina ${a.cost}` : ''}`;
+    const btn = (a) => {
+      const tip = `${a.desc ? a.desc + ' · ' : ''}${a.kind}${a.element ? ' · ' + a.element : ''} · power ${a.power}${a.cooldown ? ` · cooldown ${a.cooldown}` : ''}${a.cost ? ` · stamina ${a.cost}` : ''}`;
       const eff = Object.values(a.eff || {});
       const hint = eff.length ? (eff.some((v) => v > 1) ? ' ▲' : eff.every((v) => v < 1) ? ' ▼' : '') : '';
-      return `<button class="btn small ${S.ui.pick === a.key ? 'primary' : ''}" data-act="battle_pick" data-key="${esc(a.key)}" ${a.ready ? '' : 'disabled'} title="${esc(tip)}">${a.element ? (EL_EMOJI[a.element] || '') + ' ' : ''}${esc(a.name)}${hint}${a.cooldown ? ` (${a.cooldown})` : ''}${a.winded ? ' 😮‍💨' : ''}</button>`;
-    }).join('') : '';
+      return `<button class="btn small sk-${skillGroup(a)} ${S.ui.pick === a.key ? 'primary' : ''}" data-act="battle_pick" data-key="${esc(a.key)}" ${a.ready ? '' : 'disabled'} title="${esc(tip)}">${a.element ? (EL_EMOJI[a.element] || '') + ' ' : ''}${esc(a.name)}${hint}${a.cooldown ? ` (${a.cooldown})` : ''}${a.winded ? ' 😮‍💨' : ''}</button>`;
+    };
+    const abil = w ? SKILL_GROUPS.map(([g, label]) => { const list = b.abilities.filter((a) => skillGroup(a) === g);
+      return list.length ? `<div class="skgroup"><span class="sklabel sk-${g}">${label}</span>${list.map(btn).join('')}</div>` : ''; }).join('') : '';
     const logOpen = !!S.ui.alog;
     const title = b.kind === 'pit' ? 'The Gloop Pit' : b.kind === 'delve' ? 'The Hollow Descent' : 'Wave simulation';
     return `<div class="scrim" style="z-index:70"></div><div class="arena-wrap"><div class="arena panel">
       <div class="ahead"><b>⚔ ${title} — round ${b.round}</b>${b.terrain ? `<span title="${esc(b.terrain.text)}">${chip(`${b.terrain.emoji} ${esc(b.terrain.name)}`, 'info')}</span>` : ''}</div>
       <div class="turns" title="Turn order this round">${order}</div>
       <div class="field"><div class="side party">${col('party')}</div><div class="vs">VS</div><div class="side foes">${col('foes')}</div></div>
-      <div class="cmd">${w ? `<div class="cmdline"><b>${esc(w.emoji)} ${esc(w.name)}</b> ${pick ? `→ tap a <b>${tside === 'foes' ? 'foe' : 'friend'}</b> for <b>${esc(pick.name)}</b> <button class="btn small" data-act="battle_cancel">cancel</button>` : '— choose an action'}</div>
+      ${finale ? `<button class="finale ${b.victory ? 'won' : 'lost'}" data-act="finale_skip" title="Continue to the report">${b.victory ? '🏆 Victory!' : '💀 Defeat'}<small>tap to continue</small></button>` : ''}
+      <div class="cmd" ${finale ? 'style="display:none"' : ''}>${w ? `<div class="cmdline"><b>${esc(w.emoji)} ${esc(w.name)}</b> ${pick ? `→ tap a <b>${tside === 'foes' ? 'foe' : 'friend'}</b> for <b>${esc(pick.name)}</b> <button class="btn small" data-act="battle_cancel">cancel</button>` : '— choose an action'}</div>
         <div class="abil">${abil}</div>` : '<div class="cmdline mute">The slimes are fighting on their own…</div>'}
         <div class="row cmdmore">${w ? '<button class="btn small" data-act="battle_auto_turn" title="Let the slime decide this one turn">⏩ Auto this turn</button>' : ''}
           <button class="btn small" data-act="battle_manual" data-on="0" title="Let the slimes finish this fight (and later Pit runs) on their own">🤖 Hand over to auto</button>
@@ -1987,24 +2005,44 @@ const ARENA = {
       return { el, x: r.left - o.left + r.width / 2, y: r.top - o.top + arena.scrollTop + r.height / 2 }; };
     const glyph = (txt, cls, x, y) => { const g = document.createElement('span'); g.className = 'fxg ' + cls; g.textContent = txt; g.style.left = x + 'px'; g.style.top = y + 'px'; layer.appendChild(g); return g; };
     const pulse = (el, cls, ms) => { if (!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); setTimeout(() => el.classList.remove(cls), ms); };
-    fresh.slice(-8).forEach((e, k) => setTimeout(() => {
-      const A = at(e.a), T = at(e.t);
-      if (!A || !T) return;
-      const elem = EL_EMOJI[e.el] || '', dir = A.x < T.x ? 'r' : 'l';
-      pulse(A.el, 'lunge-' + dir, 320);
+    /* one step per action: an area attack (same actor, same kind, all at once) plays as a single sweep */
+    const steps = [];
+    fresh.slice(-16).forEach((e) => { const last = steps[steps.length - 1];
+      if (e.ar && last && last[0].ar && last[0].a === e.a && last[0].k === e.k) last.push(e); else steps.push([e]); });
+    steps.slice(-8).forEach((group, k) => setTimeout(() => {
+      const e = group[0], A = at(e.a);
+      if (!A) return;
+      const elem = EL_EMOJI[e.el] || '', targets = group.map((g) => ({ g, T: at(g.t) })).filter((x) => x.T);
+      if (!targets.length) return;
+      const T0 = targets[0].T, dir = A.x < T0.x ? 'r' : 'l';
       const fly = (txt, from, to, then) => { const g = glyph(txt, 'proj', from.x, from.y);
         const anim = g.animate([{ transform: 'translate(-50%,-50%) scale(.6)', opacity: .9 }, { transform: `translate(calc(-50% + ${to.x - from.x}px), calc(-50% + ${to.y - from.y}px)) scale(1.25)`, opacity: 1 }], { duration: 260, easing: 'ease-in' });
         anim.onfinish = () => { g.remove(); then && then(); }; };
-      const burst = (txt, cls = 'burst') => { const g = glyph(txt, cls, T.x, T.y); setTimeout(() => g.remove(), 650); };
-      if (e.k === 'spell') fly(elem || '✨', A, T, () => { burst(elem || '💥'); pulse(T.el, 'shake', 400); });
-      else if (e.k === 'hit') setTimeout(() => { burst(e.c ? '💥' : '💢'); pulse(T.el, 'shake', 400); }, 140);
-      else if (e.k === 'drain') { burst('🩸'); fly('🩸', T, A); }
-      else if (e.k === 'poison') fly('🧪', A, T, () => burst('☠️', 'burst small'));
-      else if (e.k === 'heal') { burst('✨', 'sparkle'); pulse(T.el, 'glow', 600); }
-      else if (e.k === 'guard') burst('🛡️', 'pop');
-      else if (e.k === 'dodge') { pulse(T.el, 'dodge', 400); burst('miss', 'missword'); }
-      if (e.c) { pulse(arena, 'quake', 380); setTimeout(() => burst('CRIT!', 'critword'), 150); }
-    }, k * 230));
+      const burst = (T, txt, cls = 'burst') => { const g = glyph(txt, cls, T.x, T.y); setTimeout(() => g.remove(), 700); };
+      const sweep = (txt) => {                                    // an area attack rolls across the whole enemy side
+        const ys = targets.map((x) => x.T.y), xs = targets.map((x) => x.T.x);
+        const g = glyph(txt, 'sweep', Math.min(...xs), (Math.min(...ys) + Math.max(...ys)) / 2);
+        g.style.height = (Math.max(...ys) - Math.min(...ys) + 60) + 'px';
+        g.animate([{ transform: 'translate(-50%,-50%) scaleX(.3)', opacity: 0 }, { opacity: .9, offset: .3 }, { transform: `translate(calc(-50% + ${Math.max(...xs) - Math.min(...xs) + 40}px), -50%) scaleX(1)`, opacity: 0 }], { duration: 520, easing: 'ease-out' }).onfinish = () => g.remove();
+      };
+      if (e.k !== 'summon') pulse(A.el, 'lunge-' + dir, 320);
+      if (group.length > 1 && (e.k === 'spell' || e.k === 'hit' || e.k === 'poison')) {
+        sweep(e.k === 'poison' ? '☁️' : elem || '💨');
+        targets.forEach(({ g, T }, i) => setTimeout(() => { burst(T, e.k === 'poison' ? '☠️' : elem || (g.c ? '💥' : '💢'), e.k === 'poison' ? 'burst small' : 'burst'); pulse(T.el, e.k === 'poison' ? 'hexed' : 'shake', 400); }, 120 + i * 45));
+      } else targets.forEach(({ g, T }) => {
+        if (g.k === 'spell') fly(elem || '✨', A, T, () => { burst(T, elem || '💥'); pulse(T.el, 'shake', 400); });
+        else if (g.k === 'hit') setTimeout(() => { burst(T, g.c ? '💥' : '💢'); pulse(T.el, 'shake', 400); }, 140);
+        else if (g.k === 'drain') { burst(T, '🩸'); fly('🩸', T, A); }
+        else if (g.k === 'poison') fly('🧪', A, T, () => { burst(T, '☠️', 'burst small'); pulse(T.el, 'hexed', 700); });
+        else if (g.k === 'heal') { burst(T, '✨', 'sparkle'); burst(T, '💚', 'sparkle late'); pulse(T.el, 'glow', 600); }
+        else if (g.k === 'guard') { burst(T, '🛡️', 'pop'); pulse(T.el, 'warded', 700); }
+        else if (g.k === 'buff') { burst(T, '⬆️', 'rise'); pulse(T.el, 'empowered', 700); }
+        else if (g.k === 'debuff') { fly('🌀', A, T, () => { burst(T, '🌀', 'swirl'); pulse(T.el, 'hexed', 700); }); }
+        else if (g.k === 'summon') { burst(T, '💨', 'pop'); pulse(T.el, 'arrive', 600); }
+        else if (g.k === 'dodge') { pulse(T.el, 'dodge', 400); burst(T, 'miss', 'missword'); }
+      });
+      if (group.some((g) => g.c)) { pulse(arena, 'quake', 380); setTimeout(() => burst(T0, 'CRIT!', 'critword'), 150); }
+    }, k * 260));
   },
 };
 
@@ -2221,6 +2259,7 @@ const A = {
     if (!donor) return toast('Choose a relic to merge in.', true);
     confirmThen('Merge the chosen relic into this one? The relic you merge in is consumed for good.', () => act('merge_items', { target: num(d.uid), donor })); },
   gear_give: (d) => { const id = num(ui('gg_' + d.key)); return id ? act('equip', { id, key: d.key }) : toast('Nobody is free to wear it.', true); },
+  finale_skip: () => { clearTimeout(S.finaleT); S.finale = null; render(); },
   arena_log: () => { S.ui.alog = !S.ui.alog; render(); },
   relic_open: (d) => { S.modal = { type: 'relic', uid: num(d.uid) }; render(); },
   gear_open: (d) => { S.modal = { type: 'gear', key: d.key }; render(); },
