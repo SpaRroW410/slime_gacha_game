@@ -260,7 +260,7 @@ SACRIFICE_TARGET_PENALTY_MAX = 30
 # Rest Area: heals fast; capacity and speed depend on its level (see buildings.py)
 REST_ENERGY_GAIN = 10
 POWER_DISPLAY_MAX = 20000       # total power that shows as 999 on the roster (a square-root scale: weak slimes still read 001-050)
-REST_ENERGY = [26, 34, 42, 52, 64]      # energy per hour in the Rest Area by level (HP heals at the base sleeping rate)
+REST_ENERGY = [26, 34, 42, 52, 64, 70, 76, 82, 88, 96]      # energy per hour in the Rest Area by level (HP heals at the base sleeping rate)
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
 # Library / mastery
 TASK_MIN_ENERGY = 25
@@ -286,10 +286,11 @@ TRAINER_BONUS, TRAINER_BONUS_PER_LEVEL = 0.15, 0.03   # a trainer's proficiency 
 TRAINER_LESSON_GAIN, TRAINER_LESSON_OTHER = 0.15, 0.05  # a trainer's own proficiency gain per lesson given (teaching sharpens the teacher a little)
 CRAFT_SHIFTS, CRAFT_COST_SHARE = 4, 0.6       # a blacksmith forges every 4 shifts, at this share of the shop price
 CRAFT_RELIC_COST = {"scrap": 6, "white_gel": 15}
+RELIC_RARITY_LEVEL = {"uncommon": 3, "rare": 5, "epic": 8, "legendary": 10}   # Reliquary level needed to raise a relic to that rarity
 PANTRY_PER_LEVEL, HUNGRY_BELOW = 12, 50       # servings the pantry holds per Kitchen level; food need below which a slime counts as hungry
-HOSPITAL_BEDS = [2, 4, 6, 8, 10]                 # slimes the Hospital ward holds, by level
+HOSPITAL_BEDS = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]                 # slimes the Hospital ward holds, by level
 WARD_DOCTOR_BONUS, WARD_NO_DOCTOR_BONUS = 0.30, 0.05   # patients in the ward heal this much faster than in the Rest Area (with / without a doctor on duty)
-HOSPITAL_HEAL = [0.04, 0.06, 0.08, 0.10, 0.12]    # share of max HP a doctor heals every injured slime each hour, by Hospital level
+HOSPITAL_HEAL = [0.04, 0.06, 0.08, 0.10, 0.12, 0.13, 0.14, 0.15, 0.16, 0.18]    # share of max HP a doctor heals every injured slime each hour, by Hospital level
 LIBRARIAN_LORE_XP = 6.0         # mastery XP a round of cataloguing gives one attuned slime (x power)
 TRAINER_PUPILS, TRAINER_GAIN = 1, 3.0      # pupils per round (+1 per 4 levels); base class-proficiency gain
 MASTERY_MIN_STARS = 3           # elemental mastery unlocks at 3 stars, for ANY class
@@ -612,7 +613,7 @@ LIVE_SCALES = (1, 6, 60)         # speed presets multiplying both rates
 LIVE_CATCHUP_MAX_HOURS = 48      # offline progress is capped (game hours)
 
 # upgrades take game time when time passes for real (live / deferred turns); instant in the CLI and tests
-CONSTRUCTION_HOURS = [6, 12, 24, 36]            # building level 1->2 ... 4->5
+CONSTRUCTION_HOURS = [6, 12, 24, 36, 48, 60, 72, 96, 120]    # building level 1->2 ... 9->10
 HATCHERY_REFUND = 0.05                           # per Hatchery level above 1: share of the gel of a pull given back
 
 # Phoenix Feather: a consumable that lifts a slime that would die in battle back to its feet

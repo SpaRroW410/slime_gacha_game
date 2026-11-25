@@ -35,13 +35,13 @@ def register_gear(g: Gear) -> Gear:
     return GEAR.register(g, g.key)
 
 
-MAX_TIER = 5          # the Armory sells tiers 1-3; tiers 4 and 5 come only from merging (and the Deep Hollow)
+MAX_TIER = 5          # the Armory sells tier 4 from level 7 and tier 5 from level 9; merging and the Deep Hollow make them too
 
 
 def _g(key, name, emoji, slot, tier, stats):
     cost = {1: {"white_gel": 30}, 2: {"white_gel": 120, "essence": 10},
             3: {"white_gel": 400, "essence": 40, "purple_gel": 1},
-            4: {"white_gel": 1200, "essence": 120, "purple_gel": 3},           # a tier's worth (sell-back), never on sale
+            4: {"white_gel": 1200, "essence": 120, "purple_gel": 3},           # Armory level 7+
             5: {"white_gel": 3600, "essence": 360, "purple_gel": 9}}[tier]
     register_gear(Gear(key, name, emoji, slot, tier, stats, cost))
 

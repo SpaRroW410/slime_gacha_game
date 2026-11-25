@@ -131,7 +131,8 @@ class Game:
         self.ward: List[int] = []                      # slimes admitted to the Hospital ward (they are 'resting', in the ward)
         self.pantry: Dict[str, int] = {}               # cooked servings by recipe (jobs.py: chef and kitchen)
         self.recipe_pref = "auto"                      # the recipe the chef cooks ("auto" = the best one)
-        self.forge_progress, self.forge_next = 0, "weapon"   # the blacksmith's slow forging (jobs._craft)
+        self.forge_progress, self.forge_next = 0, "weapon"   # the blacksmith's slow forging of gear (jobs._craft)
+        self.relic_progress = 0.0                              # the relicsmith's slow forging of relics (jobs._relic_craft)
         self.stranded: List[dict] = []                 # overdue scouts waiting for a rescue party (see scout / rescue)
         self.next_stranded = 1
         self._owed = 0.0                               # hours the current session still has to pay (live mode)
@@ -2866,7 +2867,7 @@ class Game:
     def brew_for_post(self, brewer: Slime) -> List[str]:
         """The appointed brewer's shift: brew the basic or mixed potion the colony is shortest of, within its means
         (at most 66% of each ingredient stock, like slimes helping themselves)."""
-        lab = self.buildings.level("alchemy")
+        lab = min(5, self.buildings.level("alchemy"))
         wanted = []
         for s in self.slimes():
             wanted += list(self._LIKES.get(s.archetype, ()))
@@ -2884,7 +2885,7 @@ class Game:
     def _auto_brew(self, log: List[str]) -> None:
         """Once a day a free slime (magical ones first) brews a potion the colony is short of, spending at most 66%
         of each ingredient stock."""
-        lab = self.buildings.level("alchemy")
+        lab = min(5, self.buildings.level("alchemy"))
         free = [s for s in self.slimes() if not s.busy and s.state == "idle" and s.hp > 0]
         if not free:
             return
@@ -3018,13 +3019,13 @@ class Game:
         if not 1 <= grade <= 5:
             raise InvalidAction("Grade must be 1-5.")
         lab = self.buildings.level("alchemy")
-        if grade > lab:
-            raise InvalidAction(f"The Alchemy Lab is level {lab}: it brews up to grade {lab}.")
+        if grade > min(lab, 5):
+            raise InvalidAction(f"The Alchemy Lab is level {lab}: it brews up to grade {min(lab, 5)}.")
         c = potions.cost(kind, grade)
         self.wallet.spend_many(c)
         chance = potions.success_chance(s, grade, lab, kind)
         ok = self.rng.random() < chance
-        crit = ok and grade < 5 and grade + 1 <= lab and self.rng.random() < config.BREW_CRIT
+        crit = ok and grade < 5 and grade + 1 <= min(lab, 5) and self.rng.random() < config.BREW_CRIT
         if wait:
             self._occupy([s], potions.brew_hours(grade), "lab")
         pk = potions.KINDS[kind]
@@ -3185,7 +3186,7 @@ class Game:
             raise InvalidAction("Only a level-10 relic can ascend a star.")
         if it.stars >= config.MAX_STARS:
             raise InvalidAction("Already five stars - try raising its rarity.")
-        if self.buildings.level("armory") < it.stars:
+        if self.buildings.level("reliquary") < it.stars:
             raise InvalidAction(f"The Armory must be level {it.stars} to forge {it.stars + 1} stars.")
         self.wallet.spend_many(it.star_cost())
         it.stars += 1
@@ -3202,8 +3203,9 @@ class Game:
             raise InvalidAction("It is already legendary.")
         if it.stars < config.MAX_STARS or it.level < config.ITEM_MAX_LEVEL:
             raise InvalidAction("Rarity can be raised only at 5 stars and level 10.")
-        if self.buildings.level("armory") < 5:
-            raise InvalidAction("The Armory must be level 5 to raise a relic's rarity.")
+        need = config.RELIC_RARITY_LEVEL.get(up, 10)
+        if self.buildings.level("reliquary") < need:
+            raise InvalidAction(f"The Reliquary must be level {need} to raise a relic to {up} (it is {self.buildings.level('reliquary')}).")
         self.wallet.spend_many(it.rarity_cost())
         it.rarity = up
         if items_mod.wants_title(it):
@@ -4373,7 +4375,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, stock_peak=self.stock_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, relic_progress=self.relic_progress, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, stock_peak=self.stock_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3), shadow_tick=self.shadow_tick,
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -4456,6 +4458,8 @@ class Game:
             sysobj.wallet = g.wallet
         g.gacha.load(d.get("gacha", {}))
         g.buildings.load(d.get("buildings"))
+        if "reliquary" not in (d.get("buildings") or {}):         # saves from before the Reliquary: relic work happened at the Armory
+            g.buildings.levels["reliquary"] = g.buildings.level("armory")
         g.best_floor = d.get("best_floor", 0)
         g.descent_cleared = d.get("descent_cleared", False)
         g.deep_cleared = d.get("deep_cleared", False)
@@ -4539,6 +4543,7 @@ class Game:
         g.plans = {k: v for k, v in (d.get("plans") or {}).items() if k in jobs.JOBS}
         g.recipe_pref = d.get("recipe_pref", "auto")
         g.forge_progress, g.forge_next = d.get("forge_progress", 0), d.get("forge_next", "weapon")
+        g.relic_progress = d.get("relic_progress", 0.0)
         g.stranded = [e for e in d.get("stranded", []) if any(i in g.roster for i in e["ids"])]
         g.next_stranded = d.get("next_stranded", 1)
         g.journal = d.get("journal", [])

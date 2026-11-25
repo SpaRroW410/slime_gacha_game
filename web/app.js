@@ -1587,7 +1587,7 @@ const relicStat = (it) => Object.entries(it.stats || {}).map(([k, v]) => `+${v} 
 const findRelic = (uid) => { const st = S.state; const v = st.gear.vault.find((x) => x.uid === uid); if (v) return { it: v, holder: null };
   for (const x of st.slimes) for (const it of Object.values(x.items)) if (it.uid === uid) return { it, holder: x };
   return null; };
-const armoryLevel = () => (S.state.buildings.find((b) => b.key === 'armory') || {}).level || 0;
+const reliquaryLevel = () => (S.state.buildings.find((b) => b.key === 'reliquary') || {}).level || 0;
 /* One relic as a tile: its icon framed in its rarity, stars, level, wear and who holds it. Tap for its window. */
 function relicTile(it, holder = null) {
   const dur = it.durability === null ? null : Math.round(it.durability / it.max_durability * 100);
@@ -1601,18 +1601,19 @@ function relicTile(it, holder = null) {
 /* The road a relic travels: level 1-10, then a star (back to level 1), up to 5 stars, then a rarity, up to legendary,
    and at legendary 5★ it can take a soul (an ego relic). Each step says what it needs and what is missing. */
 function relicPath(it, free) {
-  const arm = armoryLevel(), up = { common: 'uncommon', uncommon: 'rare', rare: 'epic', epic: 'legendary' }[it.rarity];
+  const rel = reliquaryLevel(), up = { common: 'uncommon', uncommon: 'rare', rare: 'epic', epic: 'legendary' }[it.rarity];
+  const needR = (S.state.jobs.forge.rarity_levels || {})[up] || 10;
   const short = (cs) => Object.entries(cs || {}).filter(([k, v]) => (S.state.wallet[k] || 0) < v).map(([k, v]) => `${v - (S.state.wallet[k] || 0)} ${RES[k]?.[0] || k}`).join(' ');
   const btn = (c, label, cs, why) => { const lack = short(cs);
     return `<button class="btn small ${why || lack ? '' : 'primary'}" data-act="item_cmd" data-c="${c}" data-uid="${it.uid}" ${why || lack || !free ? 'disabled' : ''} title="${esc(why || '')}">${label}${cs ? ' · ' + cost(cs) : ''}</button>${lack && !why ? ` <small class="bad">short of ${lack}</small>` : ''}${!free ? ' <small class="mute">(its wearer is away)</small>' : ''}`; };
   const step = (n, label, done, now, body) => `<div class="pstep ${done ? 'done' : now ? 'now' : ''}"><span class="pnum">${done ? '✓' : n}</span><div><b>${label}</b>${body ? `<div>${body}</div>` : ''}</div></div>`;
   const lvlDone = it.level >= 10, starDone = it.stars >= 5, rarDone = !up;
-  const starWhy = arm < it.stars ? `The Armory must be level ${it.stars} (it is ${arm}): upgrade it in Town › Buildings.` : '';
-  const rarWhy = arm < 5 ? `The Armory must be level 5 (it is ${arm}).` : '';
+  const starWhy = rel < it.stars ? `The Reliquary must be level ${it.stars} (it is ${rel}): upgrade it in Town › Buildings.` : '';
+  const rarWhy = up && rel < needR ? `The Reliquary must be level ${needR} to make it ${up} (it is ${rel}).` : '';
   return `<div class="ppath">
     ${step(1, `Level ${it.level}/10`, lvlDone && starDone, !lvlDone, !lvlDone ? `${btn('level_item', '⬆ Level up', it.level_cost)} <small class="mute">materials of its own tier</small>` : '')}
-    ${step(2, `Stars ${it.stars}/5`, starDone, lvlDone && !starDone, lvlDone && !starDone ? `${btn('ascend_star', '🌟 Ascend a star', it.star_cost, starWhy)} <small class="mute">${starWhy ? '<b>' + esc(starWhy) + '</b>' : 'back to level 1, stronger'}</small>` : !starDone ? '<small class="mute">at level 10 (needs Armory level ≥ its stars)</small>' : '')}
-    ${step(3, up ? `Rarity: ${it.rarity} → ${up}` : 'Rarity: legendary', rarDone, starDone && lvlDone && !rarDone, starDone && lvlDone && up ? `${btn('ascend_rarity', '💎 Raise rarity', it.rarity_cost, rarWhy)} <small class="mute">${rarWhy ? '<b>' + esc(rarWhy) + '</b>' : 'adds a mod; keeps its stars and level'}</small>` : up ? '<small class="mute">at 5★ and level 10, with Armory level 5</small>' : '')}
+    ${step(2, `Stars ${it.stars}/5`, starDone, lvlDone && !starDone, lvlDone && !starDone ? `${btn('ascend_star', '🌟 Ascend a star', it.star_cost, starWhy)} <small class="mute">${starWhy ? '<b>' + esc(starWhy) + '</b>' : 'back to level 1, stronger'}</small>` : !starDone ? '<small class="mute">at level 10 (needs Reliquary level ≥ its stars)</small>' : '')}
+    ${step(3, up ? `Rarity: ${it.rarity} → ${up}` : 'Rarity: legendary', rarDone, starDone && lvlDone && !rarDone, starDone && lvlDone && up ? `${btn('ascend_rarity', '💎 Raise rarity', it.rarity_cost, rarWhy)} <small class="mute">${rarWhy ? '<b>' + esc(rarWhy) + '</b>' : 'adds a mod; keeps its stars and level'}</small>` : up ? `<small class="mute">at 5★ and level 10, with Reliquary level ${needR} for ${up}</small>` : '')}
     ${step(4, it.ego ? `Ego: soul of ${esc(it.ego.name)}` : 'Ego relic', !!it.ego, !it.ego && rarDone && starDone, !it.ego ? (rarDone && starDone ? `<button class="btn small danger" data-act="item_fuse" data-uid="${it.uid}">👁 Fuse a 5★ legendary slime into it…</button>` : '<small class="mute">a legendary 5★ relic can take the soul of a legendary 5★ slime. A legendary wearing three ego relics grows to level 150.</small>') : '<small class="mute">only 5★ legendary slimes may wield it</small>')}
   </div>`;
 }
@@ -1663,9 +1664,12 @@ function relicsView() {
         <label class="f">Sort <select data-ui="rl_sort" data-rerender="1">${opt({ rarity: 'Rarity', level: 'Level', worn_out: 'Most worn', name: 'Name' }, sort)}</select></label></div></div>
     <p class="mute">Relics come from the Wayfarer's Rift (and the blacksmith's forge). <b>Tap a relic</b> for its upgrade path (level → stars → rarity → ego), to equip it, merge another into it or break it down.${worn_out ? ` <b>${worn_out} relic${worn_out > 1 ? 's are' : ' is'} badly worn.</b>` : ''}</p>
     <div class="row">${Object.entries(a.materials || st.gear.materials).map(([k, v]) => chip(`${RES[k][0]} ${RES[k][1]}: ${v}`)).join('')}
-      ${info("Breaking a relic down gives materials of its tier (more, and a better tier, for higher level and stars). Levelling needs materials of the relic's own tier. Star ascension (at level 10) also needs an Armory level at least the current star count; raising rarity needs 5 stars, level 10 and Armory level 5.")}</div>
+      ${info("Breaking a relic down gives materials of its tier (more, and a better tier, for higher level and stars). Levelling needs materials of the relic's own tier. Star ascension (at level 10) also needs a Reliquary level at least the current star count; raising rarity needs 5 stars, level 10 and Reliquary level 3 (uncommon), 5 (rare), 8 (epic) or 10 (legendary).")}</div>
     ${list.length ? `<div class="rgrid">${list.map(({ it, s: h }) => relicTile(it, h)).join('')}</div>` : `<p class="mute">${all.length ? 'No relic matches.' : "No relics yet. Venture into the Wayfarer's Rift."}</p>`}
-    <div class="row"><button class="btn small" data-act="goto" data-t="dungeons" data-s="rift">🧭 To the Wayfarer's Rift</button></div></div>`;
+    <div class="row"><button class="btn small" data-act="goto" data-t="dungeons" data-s="rift">🧭 To the Wayfarer's Rift</button></div></div>
+  <details class="panel" style="margin-top:12px" data-keep="relicsmithOpen" ${ui('relicsmithOpen', false) ? 'open' : ''}><summary><b>🗝️ Reliquary & Relicsmith</b> <small class="mute">${chip(`level ${st.jobs.forge.reliquary}`, 'info')} ${chip(`rarity up to ${st.jobs.forge.rarity_max || '—'}`)} ${chip(`⚒️ relic ${st.jobs.forge.relic_progress}/${st.jobs.forge.shifts}`)}</small></summary>
+    <p class="mute">The Reliquary governs relic upgrades: a relic's next star needs it at least as high as the relic's stars; raising rarity needs level 3 (uncommon), 5 (rare), 8 (epic) or 10 (legendary). Upgrade it in Town › Buildings. An appointed <b>relicsmith</b> mends worn relics carried by slimes at home for free and slowly forges a new relic every ${st.jobs.forge.shifts} shifts' work (${esc(cost(st.jobs.forge.relic_cost))}).</p>
+    ${postPanel('relicsmith')}</details>`;
 }
 /* One spare gear piece: equip it, sell one back, merge identical pieces into the next tier. */
 function gearWindow(m) {
@@ -1707,7 +1711,7 @@ function armoryView() {
       ${spare ? `<div class="rgrid">${spare}</div>` : '<p class="mute">No spare gear. Buy some in the shop or find it in dungeons.</p>'}
       ${st.gear.pit_lost.length ? `<div class="warnbox">Left behind in the Pit: ${st.gear.pit_lost.map((k) => esc(defs[k]?.name || k)).join(', ')}. A later Pit victory may dig it up.</div>` : ''}</div></div>
   <details class="panel" style="margin-top:12px" data-keep="smithOpen" ${ui('smithOpen', false) ? 'open' : ''}><summary><b>🔨 Blacksmith</b> <small class="mute">${chip(`⚒️ forge ${fg.progress}/${fg.shifts}`, 'info')}</small></summary>
-    <p class="mute">An appointed blacksmith mends worn gear carried by slimes at home for free, and slowly forges: every ${fg.shifts} shifts a <b>${fg.next === 'weapon' ? 'weapon (the best tier the Armory sells, at ' + Math.round(fg.share * 100) + '% of the shop price)' : 'relic (' + esc(cost(fg.relic_cost)) + ')'}</b>, if the materials are there — alternating weapon and relic. With no materials the shift goes foraging.</p>
+    <p class="mute">An appointed blacksmith slowly forges gear: every ${fg.shifts} shifts' work a piece of <b>the best tier the Armory sells</b>, at ${Math.round(fg.share * 100)}% of the shop price, if the materials are there (a skilled smith gets there sooner). Relics are the Relicsmith's work, in Town › Relics. With no materials the shift goes foraging.</p>
     ${postPanel('blacksmith')}</details>`;
 }
 function riftAll() {

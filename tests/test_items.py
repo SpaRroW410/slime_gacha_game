@@ -112,14 +112,17 @@ class TestItems(unittest.TestCase):
         with self.assertRaises(InvalidAction):
             g.ascend_rarity(it.uid)                       # needs 5 stars, level 10
 
-    def test_star_ascension_needs_the_armory(self):
+    def test_star_ascension_needs_the_reliquary(self):
         g = mk()
         it = items.Item(50, "iron_sword", stars=2, level=10)
         g.vault[50] = it
         g.wallet.add_many({"scrap": 500, "alloy": 50})
         with self.assertRaises(InvalidAction):
             g.ascend_star(50)
-        g.buildings.levels["armory"] = 2
+        g.buildings.levels["armory"] = 10                            # the Armory no longer governs relics
+        with self.assertRaises(InvalidAction):
+            g.ascend_star(50)
+        g.buildings.levels["reliquary"] = 2
         g.ascend_star(50)
         self.assertEqual(it.stars, 3)
 
@@ -127,8 +130,11 @@ class TestItems(unittest.TestCase):
         g = mk()
         it = items.Item(60, "iron_sword", "common", 5, 10)
         g.vault[60] = it
-        g.buildings.levels["armory"] = 5
         g.wallet.add_many({"scrap": 400, "alloy": 100, "purple_gel": 5, "essence": 50})
+        g.buildings.levels["reliquary"] = 2
+        with self.assertRaises(InvalidAction):                       # uncommon needs Reliquary level 3
+            g.ascend_rarity(60)
+        g.buildings.levels["reliquary"] = 3
         g.ascend_rarity(60)
         self.assertEqual(it.rarity, "uncommon")
         self.assertEqual(len(it.mods), 1)

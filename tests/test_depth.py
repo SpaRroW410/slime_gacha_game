@@ -341,7 +341,7 @@ class TestWeapons(unittest.TestCase):
         g = mk()
         it = items.Item(5, "iron_sword", "uncommon", 5, 10)
         g.vault[5] = it
-        g.buildings.levels["armory"] = 5
+        g.buildings.levels["reliquary"] = 5                         # rare needs Reliquary level 5
         g.wallet.add_many({"alloy": 400, "crystal": 400, "purple_gel": 10, "essence": 100})
         g.ascend_rarity(5)
         self.assertEqual(it.rarity, "rare")

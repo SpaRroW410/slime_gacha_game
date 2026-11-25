@@ -122,7 +122,8 @@ register_passive(Passive("bedrock", "Bedrock", "🪨", "element",
 # ---- trades: the top level in a trade, while it is the slime's post (or any time: the level is kept) ---------------------------------
 _TRADE_DESC = dict(
     chef=("Gourmet", "🍳", "Its dishes make {} more servings."),
-    blacksmith=("Master Smith", "🔨", "It mends {} more gear each shift."),
+    blacksmith=("Master Smith", "🔨", "Its forge works {} faster."),
+    relicsmith=("Master Relicsmith", "🗝️", "It mends {} more relics each shift and forges them faster."),
     doctor=("Healing Touch", "🩺", "Its patients heal {} faster."),
     librarian=("Archivist", "📚", "Its lore gives {} more mastery."))
 for _key, (_name, _emoji, _desc) in _TRADE_DESC.items():

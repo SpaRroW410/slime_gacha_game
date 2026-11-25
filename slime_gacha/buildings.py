@@ -36,9 +36,12 @@ def register_building(b: Building) -> Building:
     return BUILDINGS.register(b, b.key)
 
 
+MAX_LEVEL = 10                                   # every building climbs to level 10 (levels 6-10 grow at half the early pace)
+
+
 def _costs(white: int, essence: int, purple_from: int = 4) -> List[Dict[str, int]]:
     out = []
-    for lvl in range(1, 5):                      # upgrades 1->2 ... 4->5
+    for lvl in range(1, MAX_LEVEL):              # upgrades 1->2 ... 9->10
         c = {"white_gel": int(white * lvl ** 1.7)}
         if lvl >= 2:
             c["essence"] = int(essence * lvl ** 1.5)
@@ -48,41 +51,44 @@ def _costs(white: int, essence: int, purple_from: int = 4) -> List[Dict[str, int
     return out
 
 
-register_building(Building("rest_area", "Rest Area", "🛏️", 5,
+register_building(Building("rest_area", "Rest Area", "🛏️", MAX_LEVEL,
                            "A warm pond where wounded slimes soak back to full health.", _costs(60, 10)))
-register_building(Building("training_grounds", "Training Grounds", "🥋", 5,
+register_building(Building("training_grounds", "Training Grounds", "🥋", MAX_LEVEL,
                            "Arenas for sparring. Higher levels teach deeper fighting styles.", _costs(80, 12)))
-register_building(Building("library", "Library", "📚", 5,
+register_building(Building("library", "Library", "📚", MAX_LEVEL,
                            "Spells, elements and the Restricted Section.", _costs(100, 15)))
-register_building(Building("barracks", "Barracks", "🏕️", 5,
+register_building(Building("barracks", "Barracks", "🏕️", MAX_LEVEL,
                            "Bunks, songs and a very shared fridge: morale, bonds and party synergy.", _costs(90, 10)))
 
-register_building(Building("hatchery", "Hatchery", "🥚", 5,
+register_building(Building("hatchery", "Hatchery", "🥚", MAX_LEVEL,
                            "Where new slimes hatch: each level above 1 hands back a share of the gel you spend on pulls.", _costs(95, 12)))
-register_building(Building("armory", "Armory", "🛠️", 5,
+register_building(Building("armory", "Armory", "🛠️", MAX_LEVEL,
                            "Forges gear. Higher levels stock better equipment tiers.", _costs(70, 10)))
+register_building(Building("reliquary", "Reliquary", "🗝️", MAX_LEVEL,
+                           "Where relics are mended, ascended and reforged. A relic's next star needs the Reliquary at least as high as its stars; "
+                           "raising its rarity needs level 3 (uncommon), 5 (rare), 8 (epic) or 10 (legendary).", _costs(80, 12)))
 
-register_building(Building("chamber", "Destruction Chamber", "🔥", 5,
+register_building(Building("chamber", "Destruction Chamber", "🔥", MAX_LEVEL,
                            "Breaks slimes down into gel and ascension stones. Higher levels yield more.", _costs(90, 12)))
 
-register_building(Building("alchemy", "Alchemy Lab", "⚗️", 5,
+register_building(Building("alchemy", "Alchemy Lab", "⚗️", MAX_LEVEL,
                            "Slimes brew potions here. The lab level caps the potion grade (1-5).", _costs(85, 12)))
 
-register_building(Building("hospital", "Hospital", "🏥", 5,
+register_building(Building("hospital", "Hospital", "🏥", MAX_LEVEL,
                            "Wards for the injured: a medic doctor heals everyone hurt at home. Level sets the places and the healing.", _costs(80, 12)))
-register_building(Building("kitchen", "Kitchen", "🍳", 5,
+register_building(Building("kitchen", "Kitchen", "🍳", MAX_LEVEL,
                            "A warm hearth where chefs cook: places for chefs and better meals.", _costs(75, 10)))
 
 # Training and sparring facilities: each has its own building, and its level sets how many slimes can use it at once.
-register_building(Building("blade_yard", "Blade Yard", "⚔️", 5, "Drill yard for sword classes: a bigger yard trains more slimes at once.", _costs(70, 10)))
-register_building(Building("archery_range", "Archery Range", "🏹", 5, "Drill yard for rangers: a bigger range trains more slimes at once.", _costs(70, 10)))
-register_building(Building("mana_pool", "Mana Pool", "🔮", 5, "Drill pool for casters: a bigger pool trains more slimes at once.", _costs(70, 10)))
-register_building(Building("party_yard", "Party Training Yard", "🛡️", 5, "A training yard for a whole party: everyone drills in their own field side by side, and the party grows closer. Each level holds one more party. Costs more than the single yards.",
+register_building(Building("blade_yard", "Blade Yard", "⚔️", MAX_LEVEL, "Drill yard for sword classes: a bigger yard trains more slimes at once.", _costs(70, 10)))
+register_building(Building("archery_range", "Archery Range", "🏹", MAX_LEVEL, "Drill yard for rangers: a bigger range trains more slimes at once.", _costs(70, 10)))
+register_building(Building("mana_pool", "Mana Pool", "🔮", MAX_LEVEL, "Drill pool for casters: a bigger pool trains more slimes at once.", _costs(70, 10)))
+register_building(Building("party_yard", "Party Training Yard", "🛡️", MAX_LEVEL, "A training yard for a whole party: everyone drills in their own field side by side, and the party grows closer. Each level holds one more party. Costs more than the single yards.",
                            _costs(160, 25, purple_from=4)))
-register_building(Building("spar_sword", "Sword Arena", "🗡️", 5, "Duelling ring for the sword style: a bigger ring holds more duels at once.", _costs(90, 12)))
-register_building(Building("spar_archery", "Archery Arena", "🎯", 5, "Duelling ring for the archery style: a bigger ring holds more duels at once.", _costs(90, 12)))
-register_building(Building("spar_magic", "Spell Arena", "🪄", 5, "Duelling ring for the magic style: a bigger ring holds more duels at once.", _costs(90, 12)))
-register_building(Building("spar_party", "Party Arena", "🏟️", 5, "A grand arena where whole parties spar as teams: each level holds one more team match at once. Costly to build.",
+register_building(Building("spar_sword", "Sword Arena", "🗡️", MAX_LEVEL, "Duelling ring for the sword style: a bigger ring holds more duels at once.", _costs(90, 12)))
+register_building(Building("spar_archery", "Archery Arena", "🎯", MAX_LEVEL, "Duelling ring for the archery style: a bigger ring holds more duels at once.", _costs(90, 12)))
+register_building(Building("spar_magic", "Spell Arena", "🪄", MAX_LEVEL, "Duelling ring for the magic style: a bigger ring holds more duels at once.", _costs(90, 12)))
+register_building(Building("spar_party", "Party Arena", "🏟️", MAX_LEVEL, "A grand arena where whole parties spar as teams: each level holds one more team match at once. Costly to build.",
                            _costs(260, 40, purple_from=3)))
 
 # which building serves which discipline (sword / archery / magic) for drills and for duels; party sparring has its own
@@ -92,9 +98,15 @@ PARTY_ARENA = "spar_party"
 PARTY_YARD = "party_yard"          # a fourth training yard: a whole party trains side by side, everyone for themselves
 FACILITIES = list(DRILL_YARDS.values()) + [PARTY_YARD] + list(SPAR_ARENAS.values()) + [PARTY_ARENA]
 
-JOB_HOSTS = {"kitchen": "Chef", "armory": "Blacksmith", "library": "Librarian", "training_grounds": "Trainers", "alchemy": "Brewer", "hospital": "Doctor"}
+JOB_HOSTS = {"kitchen": "Chef", "armory": "Blacksmith", "reliquary": "Relicsmith", "library": "Librarian", "training_grounds": "Trainers", "alchemy": "Brewer", "hospital": "Doctor"}
 
-REST_HEAL = [config.SLEEP_HP_REGEN] * 5            # HP heals at the base sleeping rate at every level (energy is what the Rest Area improves)
+REST_HEAL = [config.SLEEP_HP_REGEN] * MAX_LEVEL            # HP heals at the base sleeping rate at every level (energy is what the Rest Area improves)
+
+
+def _taper(lv: int) -> float:
+    """Steps above level 1, counting levels 6-10 as half steps (so the late levels add less than the early ones)."""
+    lv = max(1, int(lv))
+    return min(lv - 1, 4) + 0.5 * max(0, lv - 5)
 
 
 class BuildingManager:
@@ -123,8 +135,8 @@ class BuildingManager:
     def build_hours(self, key: str) -> int:
         return config.CONSTRUCTION_HOURS[self.level(key) - 1]
 
-    def hatch_refund(self) -> float:
-        return config.HATCHERY_REFUND * (self.level("hatchery") - 1)
+    def hatch_refund(self, lv: int = None) -> float:
+        return config.HATCHERY_REFUND * _taper(lv or self.level("hatchery"))
 
     def upgrade(self, key: str) -> str:
         b = BUILDINGS.get(key)
@@ -146,8 +158,8 @@ class BuildingManager:
                                 f"{config.MAX_SPELLS + self.extra_spell_slots(lv)} spell slots"
                                 f"{', Restricted Section open' if self.tier3_open(lv) else ''}"),
             "chamber": lambda: f"destroyed slimes yield x{ascension.chamber_factor(lv):.1f}",
-            "alchemy": lambda: f"brews potions up to grade {lv}",
-            "hatchery": lambda: f"{int(config.HATCHERY_REFUND * (lv - 1) * 100)}% of the gel of every pull comes back",
+            "alchemy": lambda: f"brews potions up to grade {min(lv, 5)}" + (f", better odds (+{(lv - 5) * 5}%)" if lv > 5 else ""),
+            "hatchery": lambda: f"{round(self.hatch_refund(lv) * 100, 1):g}% of the gel of every pull comes back",
             **{k: (lambda lv=lv: f"trains {2 * lv} slimes at once") for k in DRILL_YARDS.values()},
             **{k: (lambda lv=lv: f"{lv} duel{'s' if lv > 1 else ''} at once ({2 * lv} slimes)") for k in SPAR_ARENAS.values()},
             PARTY_YARD: lambda: f"trains {lv} part{'ies' if lv > 1 else 'y'} at once",
@@ -155,6 +167,7 @@ class BuildingManager:
             "kitchen": lambda: f"pantry holds {config.PANTRY_PER_LEVEL * lv} servings",
             "hospital": lambda: f"{config.HOSPITAL_BEDS[lv - 1]} ward beds (patients heal +{int(config.WARD_NO_DOCTOR_BONUS * 100)}%, +{int(config.WARD_DOCTOR_BONUS * 100)}% with a doctor); a doctor heals the injured at home {int(config.HOSPITAL_HEAL[lv - 1] * 100)}% HP/hour",
             "armory": lambda: f"sells gear up to tier {self.gear_tier(lv)}",
+            "reliquary": lambda: f"relics ascend to {min(5, lv + 1)} stars, rarity up to {self.relic_rarity_max(lv) or 'none yet (level 3: uncommon)'}",
             "barracks": lambda: (f"morale +{self.morale_target_bonus(lv)}, drift {self.morale_drift(lv):.2f}/h, "
                                  f"bonds x{self.bond_mult(lv):.2f}, synergy x{self.synergy_mult(lv):.2f}"),
         }.get(key, lambda: BUILDINGS.get(key).description)()
@@ -199,20 +212,28 @@ class BuildingManager:
 
     # ---- Barracks ------------------------------------------------------------------------
     def morale_target_bonus(self, lv: int = None) -> int:
-        return 2 * (lv or self.level("barracks"))
+        return int(2 + 2 * _taper(lv or self.level("barracks")))
 
     def morale_drift(self, lv: int = None) -> float:
         return config.MORALE_DRIFT + 0.02 * ((lv or self.level("barracks")) - 1)
 
     def bond_mult(self, lv: int = None) -> float:
-        return 1 + 0.25 * ((lv or self.level("barracks")) - 1)
+        return 1 + 0.25 * _taper(lv or self.level("barracks"))
 
     def synergy_mult(self, lv: int = None) -> float:
-        return 1 + 0.2 * ((lv or self.level("barracks")) - 1)
+        return 1 + 0.2 * _taper(lv or self.level("barracks"))
 
     # ---- Armory ----------------------------------------------------------------------------
     def gear_tier(self, lv: int = None) -> int:
-        return min(3, 1 + ((lv or self.level("armory")) - 1) // 2)
+        """Levels 1-2 sell tier 1, 3-4 tier 2, 5-6 tier 3, 7-8 tier 4 and 9-10 tier 5."""
+        return min(5, 1 + ((lv or self.level("armory")) - 1) // 2)
+
+    # ---- Reliquary ----------------------------------------------------------------------------
+    def relic_rarity_max(self, lv: int = None) -> str:
+        """The highest rarity a relic can be raised to at this Reliquary level ('' = none yet)."""
+        lv = lv or self.level("reliquary")
+        ok = [r for r, need in config.RELIC_RARITY_LEVEL.items() if lv >= need]
+        return ok[-1] if ok else ""
 
     # ---- persistence ---------------------------------------------------------------------
     def to_dict(self) -> Dict[str, int]:

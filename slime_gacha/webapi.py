@@ -259,7 +259,9 @@ def _jobs_view(g: Game) -> dict:
         hospital=dict(injured=len(hurt), wounded=len(wounded), names=[s.name for s in sorted(hurt, key=lambda s: s.hp / s.max_hp)[:8]],
                       rate=round(config.HOSPITAL_HEAL[g.buildings.level("hospital") - 1] * 100), on_duty=bool(jobs_mod.holder(g, "doctor")),
                       beds=config.HOSPITAL_BEDS[g.buildings.level("hospital") - 1], used=g.ward_count()),
-        forge=dict(progress=g.forge_progress, shifts=config.CRAFT_SHIFTS, next=g.forge_next, relic_cost=dict(config.CRAFT_RELIC_COST),
+        forge=dict(progress=int(g.forge_progress), shifts=config.CRAFT_SHIFTS, next="weapon", relic_cost=dict(config.CRAFT_RELIC_COST),
+                   relic_progress=int(g.relic_progress), reliquary=g.buildings.level("reliquary"),
+                   rarity_max=g.buildings.relic_rarity_max(), rarity_levels=dict(config.RELIC_RARITY_LEVEL),
                    share=config.CRAFT_COST_SHARE),
     )
 
