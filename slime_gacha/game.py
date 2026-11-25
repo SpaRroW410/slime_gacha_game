@@ -2155,9 +2155,10 @@ class Game:
                    config.COLD_PACK_PER_LEVEL * self.buildings.level("cold_storage")]
         for w in range(waves):
             members = [s for s in party if s.id in self.roster]
-            if w and not self._by_hand():                             # between waves: eat, and rest if needed
+            camp_now = bool(self.flow and self.flow.pop("camp_next", False))   # asked for by hand (battle_camp_next)
+            if w and (not self._by_hand() or camp_now):              # between waves: eat, and rest if needed
                 self._wave_meals(members, rations)
-                if self._needs_camp(members):
+                if camp_now or self._needs_camp(members):
                     h = self._camp(members, 24)
                     camped += h
                     self._wave_meals(members, rations)
@@ -2331,6 +2332,65 @@ class Game:
         if run is not None:
             run.set_manual(manual)
         return self._pump()
+
+    # ---- supplies in a fight led by hand: the party eats from its packs and drinks from the colony's potions -------------
+    def _fight_party(self) -> List[Slime]:
+        run = self.battle_run()
+        if run is None:
+            raise InvalidAction("There is no fight going on.")
+        return [s for s in run.party if s.id in self.roster and s.alive]
+
+    def battle_feed(self) -> List[str]:
+        """Every hungry member eats: a cooked dish from the pantry first (as the Cold Storage lets them carry), else a
+        ration of raw food from the stores. Costs no turn."""
+        out = []
+        for s in self._fight_party():
+            if s.needs.get("food") >= config.HUNGRY_BELOW:
+                continue
+            if self.needs.meal_hook and self.needs.meal_hook(s):
+                out.append(f"🍽 {s.name} eats a cooked dish from the packs.")
+            elif self.wallet.get("food") >= 1:
+                self.wallet.spend("food", 1)
+                s.needs.add("food", config.FOOD_NUTRITION)
+                out.append(f"🍖 {s.name} eats a ration.")
+            else:
+                out.append("🍖 There is no food left to send.")
+                break
+        if not out:
+            raise InvalidAction("Nobody in the party is hungry.")
+        return out
+
+    def battle_tonic(self) -> List[str]:
+        """Every tired member drinks a stamina potion from the stock (the humblest grade first): its breath comes back in this
+        fight and its energy rises. Costs no turn."""
+        run, out = self.battle_run(), []
+        for s in self._fight_party():
+            if s.needs.get("energy") >= config.HUNGRY_BELOW:
+                continue
+            grades = sorted(int(k.split(":")[1]) for k, n in self.potions.items() if k.split(":")[0] == "stamina" and n > 0)
+            if not grades:
+                out.append("🧃 No stamina potions left: brew some in the Alchemy Lab, or buy one with purple gel (Commander's gifts).")
+                break
+            g = grades[0]
+            k = potions.key("stamina", g)
+            self.potions[k] -= 1
+            if not self.potions[k]:
+                del self.potions[k]
+            out.append(self._drink(s, "stamina", g))
+            for c in run.everyone:
+                if c.source is s and c.stamina_max:
+                    c.stamina = c.stamina_max                  # second wind in this very fight
+        if not out:
+            raise InvalidAction("Nobody in the party is tired.")
+        return out
+
+    def battle_camp_next(self, on: bool) -> str:
+        """Ask the party to camp before its next wave (wave simulation), even when you lead it by hand; it rests until the
+        hurt are mended and the tired have slept, which costs time."""
+        if self.flow is None:
+            raise InvalidAction("There is no fight going on.")
+        self.flow["camp_next"] = bool(on)
+        return "⛺ The party will camp before the next wave." if on else "⛺ No camp before the next wave."
 
     def abandon_battle(self) -> None:
         """Drop a battle nobody will finish (a session restore): no HP was written, so nothing happened."""
@@ -3066,6 +3126,7 @@ class Game:
         pk = potions.KINDS[kind]
         if kind == "stamina":
             s.stamina_frac = min(1.0, s.stamina_frac + 0.25)
+            s.needs.add("energy", config.STAMINA_POTION_ENERGY * grade)      # it wakes a tired slime up too
         elif kind == "vigor":
             s.hp += int(s.max_hp * potions.bonus(grade) / (1 + potions.bonus(grade)))
         return (f"{pk.emoji} {s.name} drinks a grade {grade} {pk.name}: {pk.effect} "

@@ -364,6 +364,10 @@ function renderNow() {
   if (!S.state) { app.innerHTML = welcome(); return; }
   if (S.state !== S._seen) { S._seen = S.state; S.stateAt = Date.now(); }   // the moment the timers were measured
   const fin = S.state.battle_end;                     // a fight led by hand just ended: show its last blows before the report
+  if (fin && fin !== S._endSeen && !S.state.battle && fin.kind === 'delve' && S.ui.campAfter && fin.victory) {
+    const pid = S.ui.campPid || fin.pid; S.ui.campAfter = false;              // the party asked to camp after this floor
+    setTimeout(() => act('delve_camp', { pid, hours: num(ui('camp_h', 6), 6) }), 50);
+  }
   if (fin && fin !== S._endSeen && !S.state.battle) {
     S._endSeen = fin; S.finale = fin; clearTimeout(S.finaleT);
     const steps = (fin.fx || []).filter((e) => e.n > ARENA.lastFx).length;
@@ -1925,6 +1929,20 @@ function giftPanel(pid) {
    an animated arena (sprites, tweens) can replace it later without touching the rules or the commands.
    Every unit has data-unit="<index>" and classes (.alive/.dead/.acting/.targetable) a stylesheet or canvas can hook. */
 const EL_EMOJI = { fire: '🔥', water: '💧', earth: '🪨', air: '🌪', light: '✨', dark: '🌑', lightning: '⚡', ice: '❄', steam: '♨', mud: '🟤', lava: '🌋', storm: '⛈' };
+/* Supplies in a fight you lead: feed the hungry (a packed dish, else a ration), a stamina potion for the tired (it also
+   wakes them up), and a camp before the next wave (wave simulation) or after this floor (Descent). None of it costs a turn. */
+function supplyRow(b) {
+  const party = b.units.filter((u) => u.side === 'party' && u.alive && !u.minion);
+  const hungry = party.filter((u) => u.food != null && u.food < 50).length, tired = party.filter((u) => u.energy != null && u.energy < 50).length;
+  const warn = party.filter((u) => u.hungry || u.tired).length;
+  const pots = (S.state.potions.stock || []).filter((p) => p.kind === 'stamina').reduce((a, p) => a + p.n, 0);
+  const camp = b.kind === 'skirmish' || b.kind === 'delve', campOn = b.kind === 'skirmish' ? !!b.camp_next : !!S.ui.campAfter;
+  if (!camp && !hungry && !tired) return '';
+  return `<div class="row supplies">${warn ? `<small class="bad">⚠ ${warn} need${warn === 1 ? 's' : ''} looking after</small>` : '<small class="mute">Supplies:</small>'}
+    <button class="btn small" data-act="battle_feed" ${hungry ? '' : 'disabled'} title="Every hungry member eats: a cooked dish from the packs first, else a ration of food">🍖 Feed${hungry ? ` (${hungry})` : ''}</button>
+    <button class="btn small" data-act="battle_tonic" ${tired && pots ? '' : 'disabled'} title="Every tired member drinks a stamina potion from your stock: breath back now, energy up">🧃 Stamina potion${tired ? ` (${tired})` : ''} · ${pots} in stock</button>
+    ${camp ? `<button class="btn small ${campOn ? 'primary' : ''}" data-act="battle_camp" title="${b.kind === 'delve' ? 'Once this floor is won, the party camps to sleep and heal (it takes time, and ambushes can strike)' : 'Before the next wave the party camps until the hurt are mended and the tired have slept (it takes time)'}">⛺ ${campOn ? '✓ ' : ''}Camp ${b.kind === 'delve' ? 'after this floor' : 'before the next wave'}</button>` : ''}</div>`;
+}
 /* Manual fights group a slime's skills by what they do: one foe, every foe, weaken foes, help friends, heal. */
 const SKILL_GROUPS = [['single', '🎯 Single'], ['area', '💥 Area'], ['debuff', '🌀 Debuff'], ['buff', '✨ Buff'], ['heal', '💚 Heal']];
 function skillGroup(a) {
@@ -1956,7 +1974,7 @@ const ARENA = {
       ${d ? `<span class="float ${d < 0 ? 'dmg' : 'heal'}">${d > 0 ? '+' : ''}${d}</span>` : ''}
       <div class="uhead">${fig}<span class="uname">${esc(u.name)}</span>${u.element ? `<small class="uel">${EL_EMOJI[u.element] || esc(u.element)}</small>` : ''}<small class="urow">${u.row === 'back' ? '⬅' : '▶'}</small></div>
       <div class="bar ${pct < 30 ? 'lvl-low' : pct < 60 ? 'lvl-mid' : 'lvl-ok'}"><i style="width:${pct}%"></i></div>
-      <div class="unum"><span>${u.hp}/${u.max_hp}</span>${u.stamina != null ? `<span>⚡${u.stamina}</span>` : ''}<span class="ustat">${(u.status || []).map((x) => `<span>${esc(x)}</span>`).join('')}${u.guard ? '<span>🛡</span>' : ''}${u.poison ? `<span>☠${u.poison}</span>` : ''}${!u.alive ? '<span>💀</span>' : ''}${u.minion ? '<span>👻</span>' : ''}</span></div></div>`;
+      <div class="unum"><span>${u.hp}/${u.max_hp}</span>${u.stamina != null ? `<span>⚡${u.stamina}</span>` : ''}<span class="ustat">${(u.status || []).map((x) => `<span>${esc(x)}</span>`).join('')}${u.guard ? '<span>🛡</span>' : ''}${u.poison ? `<span>☠${u.poison}</span>` : ''}${!u.alive ? '<span>💀</span>' : ''}${u.minion ? '<span>👻</span>' : ''}${u.alive && u.hungry ? `<span class="warnb" title="Hungry: food ${u.food}%">🍖</span>` : ''}${u.alive && u.tired ? `<span class="warnb" title="Tired: energy ${u.energy}%">😴</span>` : ''}</span></div></div>`;
   },
   render(b, finale = false) {
     const delta = this.track(b);
@@ -1987,6 +2005,7 @@ const ARENA = {
         <div class="row cmdmore">${w ? '<button class="btn small" data-act="battle_auto_turn" title="Let the slime decide this one turn">⏩ Auto this turn</button>' : ''}
           <button class="btn small" data-act="battle_manual" data-on="0" title="Let the slimes finish this fight (and later Pit runs) on their own">🤖 Hand over to auto</button>
           <button class="btn small" data-act="arena_log" title="Show more or less of the fight log">📜 ${logOpen ? 'Less' : 'More'} log</button></div>
+        ${supplyRow(b)}
         ${b.pid && (b.kind === 'skirmish' || b.kind === 'delve') ? `<details class="agift" data-keep="agift" ${ui('agift', false) ? 'open' : ''}><summary class="mute">🎁 Help from home</summary>${giftPanel(b.pid)}</details>` : ''}
         <div class="log arena-log ${logOpen ? 'open' : ''}">${logHtml(b.log.slice(logOpen ? -40 : -4))}</div></div>
       <div class="fxlayer" aria-hidden="true"></div></div></div>`;
@@ -2263,6 +2282,11 @@ const A = {
     if (!donor) return toast('Choose a relic to merge in.', true);
     confirmThen('Merge the chosen relic into this one? The relic you merge in is consumed for good.', () => act('merge_items', { target: num(d.uid), donor })); },
   gear_give: (d) => { const id = num(ui('gg_' + d.key)); return id ? act('equip', { id, key: d.key }) : toast('Nobody is free to wear it.', true); },
+  battle_feed: () => act('battle_feed', {}, { noBattle: true }),
+  battle_tonic: () => act('battle_tonic', {}, { noBattle: true }),
+  battle_camp: () => { const b = S.state.battle;
+    if (b && b.kind === 'skirmish') return act('battle_camp_next', { on: !b.camp_next }, { noBattle: true });
+    S.ui.campAfter = !S.ui.campAfter; S.ui.campPid = b?.pid; render(); },
   finale_skip: () => { clearTimeout(S.finaleT); S.finale = null; render(); },
   arena_log: () => { S.ui.alog = !S.ui.alog; render(); },
   relic_open: (d) => { S.modal = { type: 'relic', uid: num(d.uid) }; render(); },

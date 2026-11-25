@@ -735,6 +735,12 @@ def _fxev(bs, everyone, actor, t, kind: str, element: str = "", crit: bool = Fal
     del ev[:-24]
 
 
+def _needs_flags(s) -> dict:
+    """A party slime's food and energy for the arena: a warning when either is low."""
+    food, energy = s.needs.get("food"), s.needs.get("energy")
+    return dict(food=int(food), energy=int(energy), hungry=food < config.FIGHT_WARN_BELOW, tired=energy < config.FIGHT_WARN_BELOW)
+
+
 def _eff_tag(eff: float) -> str:
     return " (WEAK!)" if eff > 1 else " (resisted)" if eff < 1 else ""
 
@@ -993,7 +999,8 @@ class BattleRun:
                     poison=c.poison[0] if c.poison[0] > 0 else 0,
                     stamina=int(c.stamina) if c.stamina_max else None, stamina_max=int(c.stamina_max) or None,
                     winded=c.winded, status=fx.statuses(c), row=c.row,
-                    sid=(getattr(c.source, "id", None) if c.side == "party" and not c.minion and hasattr(c.source, "archetype") else None))
+                    sid=(getattr(c.source, "id", None) if c.side == "party" and not c.minion and hasattr(c.source, "archetype") else None),
+                    **(_needs_flags(c.source) if c.side == "party" and not c.minion and hasattr(c.source, "needs") else {}))
 
     def view(self, tail: int = 40) -> dict:
         t = self.terrain

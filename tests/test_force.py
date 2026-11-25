@@ -708,3 +708,48 @@ class TestArenaFinaleAndSkillData(unittest.TestCase):
         end = r["state"]["battle_end"]
         self.assertTrue(end and end["fx"] and "victory" in end)
         self.assertIsNone(se.call("state", {})["state"]["battle_end"])                              # sent once
+
+
+class TestFightSupplies(unittest.TestCase):
+    """In a fight led by hand the party can eat, drink a stamina potion (which wakes it up) and ask to camp."""
+    def _fight(self):
+        g = rich(231)
+        pid = party(g, strong=True)
+        g.potions["stamina:1"] = 2
+        g.enter_dungeon(pid)
+        for s in members(g, pid):
+            s.needs.set("food", 30)
+            s.needs.set("energy", 32)
+        g.delve_next(pid, manual=True)
+        self.assertIsNotNone(g.battle_run())
+        return g, pid
+
+    def test_the_arena_warns_and_the_party_eats_and_drinks(self):
+        g, pid = self._fight()
+        u = [x for x in g.battle_run().view()["units"] if x["side"] == "party"][0]
+        self.assertTrue(u["hungry"] and u["tired"])
+        food = g.wallet.get("food")
+        out = g.battle_feed()
+        self.assertTrue(out)
+        self.assertLess(g.wallet.get("food"), food)
+        self.assertTrue(all(s.needs.get("food") > 30 for s in members(g, pid)))
+        out = g.battle_tonic()
+        self.assertEqual(sum(1 for l in out if "drinks" in l), 2)       # two potions in stock
+        self.assertTrue(any("No stamina potions left" in l for l in out))
+        self.assertNotIn("stamina:1", g.potions)
+        self.assertGreater(max(s.needs.get("energy") for s in members(g, pid)), 32)
+        with self.assertRaises(InvalidAction):
+            g.battle_feed()                                               # nobody is hungry now
+
+    def test_a_wave_trip_led_by_hand_camps_when_asked(self):
+        g = rich(232)
+        pid = party(g, strong=True)
+        g.battle(pid, waves=3, lo=1, hi=1, manual=True, stop_hp=0)
+        for s in members(g, pid):
+            s.needs.set("energy", 20)                                     # worn out after the first wave
+        g.battle_camp_next(True)
+        t = g.tick_count
+        while g.battle_run() is not None:
+            g.battle_auto_turn()
+        self.assertGreater(g.tick_count, t)                               # the camp took time even though the waves did not
+        self.assertTrue(all(s.needs.get("energy") > 20 for s in members(g, pid)))

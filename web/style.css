@@ -481,3 +481,8 @@ details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px sol
 .arena .finale.won { border-color: #e9b949; } .arena .finale.lost { border-color: var(--bad); }
 @keyframes finalein { from { transform: translate(-50%, -50%) scale(.4); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .arena .finale { animation: none; } }
+/* supplies in a fight: warnings on the cards and a row of free actions */
+.arena .warnb { animation: warnpulse 1.4s ease-in-out infinite; }
+@keyframes warnpulse { 50% { transform: scale(1.25); } }
+.arena .supplies { gap: 6px; align-items: center; }
+@media (prefers-reduced-motion: reduce) { .arena .warnb { animation: none; } }

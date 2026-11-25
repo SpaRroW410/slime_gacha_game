@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-25-deep-hollow",
-                 text="The Descent goes on to floor 100: the Deep Hollow, much harder below floor 50. Wave simulations can run up to 100 waves (they come home below a health line; waves you lead cost no time). A legendary wearing three ego relics grows to level 150. More relics and gear, shown as tiles: tap a relic for its upgrade path. Each class names its spells its own way. Manual fights fit the screen, group skills (single, area, debuff, buff, heal) and animate each kind; the fallen shrink away. Long wave trips take rations and camp. Gear now goes to tier 5, and with autonomy on slimes level their relics and merge spare gear.")
+WHATS_NEW = dict(id="2026-11-26-buildings-ten",
+                 text="Buildings now climb to level 10. A new Reliquary governs relic stars and rarity (rare at level 5, legendary at 10), with a Relicsmith who mends and forges relics; the Blacksmith forges gear. A Cold Storage keeps cooked dishes for trips and unlocks finer dishes. In fights you lead, hungry and tired slimes are flagged and you can feed them, give a stamina potion or ask them to camp. Gentle Keeper medals below floor 50 now allow for ego fusions.")
 
 
 def build() -> Dict[str, object]:

@@ -313,7 +313,7 @@ def snapshot(g: Game) -> dict:
         vice_challenge=(lambda c: dict(id=c["challenger"], name=g.roster[c["challenger"]].name)
                         if c and c["challenger"] in g.roster else None)(g.vice_challenge),
         vice_hunt_max=config.VICE_HUNT_MAX_PARTIES,
-        battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid")) if run else None),
+        battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid"), camp_next=bool(g.flow.get("camp_next"))) if run else None),
         battle_end=_take_battle_end(g),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
@@ -1152,6 +1152,21 @@ def _battle_auto_turn(g, a):
     return _flow_result(g, kind, g.battle_auto_turn())
 
 
+@command("battle_feed")
+def _battle_feed(g, a):
+    return g.battle_feed(), {}
+
+
+@command("battle_tonic")
+def _battle_tonic(g, a):
+    return g.battle_tonic(), {}
+
+
+@command("battle_camp_next")
+def _battle_camp_next(g, a):
+    return _msg(g.battle_camp_next(bool(a.get("on", True))))
+
+
 @command("battle_manual")
 def _battle_manual(g, a):
     kind = g.flow["kind"] if g.flow else None
@@ -1199,7 +1214,7 @@ SESSION_TITLES = dict(send_groups="Expeditions", grind="The Gloop Pit", adventur
 
 
 # ---- session -----------------------------------------------------------------------------------------------
-BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift"}
+BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift", "battle_feed", "battle_tonic", "battle_camp_next"}
 
 
 class Session:
