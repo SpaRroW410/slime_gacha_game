@@ -613,3 +613,76 @@ class TestArenaEvents(unittest.TestCase):
             self.assertTrue(0 <= e["a"] < len(units) + 4 and 0 <= e["t"] < len(units) + 4)   # summons may join the field
         ids = {u["sid"] for u in units if u["side"] == "party" and not u["minion"]}
         self.assertEqual(ids, set(g.parties.get(pid).members))
+
+
+class TestWaveRations(unittest.TestCase):
+    """A long wave trip eats rations (at most 66% of the food stores), camps to rest, and comes home when the rations run out."""
+    def _trip(self, food, waves=100):
+        g = rich(5)
+        pid = party(g, strong=True)
+        g.needs.auto_care = False
+        g.wallet.spend("food", g.wallet.get("food"))
+        g.wallet.add("food", food)
+        n = len(g.roster)
+        r = g.battle(pid, waves=waves, lo=1, hi=3, stop_hp=0)
+        return g, r, n
+
+    def test_a_well_fed_party_finishes_a_hundred_waves_alive(self):
+        g, r, n = self._trip(300)
+        self.assertEqual(sum(1 for l in r.log if l.startswith("🌊 Wave")), 100)
+        self.assertEqual(len(g.roster), n)
+        self.assertLess(g.wallet.get("food"), 300)
+        self.assertTrue(any("rations eaten" in l and "camped" in l for l in r.log))
+
+    def test_it_packs_at_most_two_thirds_of_the_food_and_comes_home_hungry(self):
+        g, r, n = self._trip(10)
+        self.assertGreaterEqual(g.wallet.get("food"), 10 - int(10 * g.share))
+        self.assertTrue(any("rations are gone" in l for l in r.log))
+        self.assertEqual(len(g.roster), n)
+
+
+class TestAutonomyUpkeep(unittest.TestCase):
+    """With autonomy on, slimes merge spare gear, level the relics they wear and take better gear, always leaving 34%."""
+    def test_spare_gear_is_merged_when_three_are_within_two_thirds(self):
+        g = rich(221)
+        g.autonomy = True
+        for _ in range(5):
+            g.inventory.add("wooden_club")
+        log = []
+        g._auto_merge_gear(log)
+        self.assertEqual(g.inventory.items.get("wooden_club", 0), 2)
+        self.assertTrue(any("merge spare gear" in l for l in log))
+        self.assertEqual(sum(1 for k, n in g.inventory.items.items() if n and __import__("slime_gacha").equipment.GEAR.get(k).tier == 2), 1)
+        log = []
+        g._auto_merge_gear(log)                                   # only two left: 3 > 66% of 2, nothing happens
+        self.assertFalse(log)
+
+    def test_the_tier_ladder_reaches_five(self):
+        from slime_gacha import equipment
+        for slot in ("weapon", "armor", "charm"):
+            self.assertEqual(sorted({x.tier for x in equipment.GEAR if x.slot == slot}), [1, 2, 3, 4, 5], slot)
+        self.assertEqual(Game_tier(30), 3)
+        self.assertEqual(Game_tier(60), 4)
+        self.assertEqual(Game_tier(90), 5)
+
+    def test_worn_relics_level_up_within_the_rule(self):
+        from slime_gacha import items as items_mod
+        g = rich(222)
+        g.autonomy = True
+        s = g.gacha.make_slime("rare", "barbarian", stars=3)
+        g.roster[s.id] = s
+        it = items_mod.roll_item(g.rng, 777, False, "common")
+        it.level = 1
+        s.items[it.slot] = it
+        g.wallet.spend("scrap", g.wallet.get("scrap"))
+        g.wallet.add("scrap", 100)
+        log = []
+        for _ in range(30):
+            g._auto_level_relics(s, log)
+        self.assertGreater(it.level, 1)
+        self.assertGreaterEqual(g.wallet.get("scrap"), 34)         # 34% of the most ever held stays untouched
+
+
+def Game_tier(floor):
+    from slime_gacha.game import Game
+    return Game.floor_gear_tier(floor)

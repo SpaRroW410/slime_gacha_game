@@ -145,6 +145,7 @@ class Game:
         self.mood_rng = random.Random(((seed or 0) ^ 0xE70) & 0xFFFFFFFF)   # feelings never disturb the main dice
         self.vault_peak = 0                            # relics: slimes leave 34% of the most ever held
         self.gear_peak: Dict[str, int] = {}
+        self.stock_peak: Dict[str, int] = {}             # materials and gel: the most ever held (autonomy keeps 34% of it)
         self.forage = False                            # slimes with no party and nothing to do go foraging (a new web/CLI game turns it on)
         self.autonomy = True                           # slimes may use up to 66% of the stock by themselves
         self.vice: Optional[int] = None                # id of the Vice Keeper, if one is appointed
@@ -2142,13 +2143,39 @@ class Game:
         return report
 
     def _wave_rounds(self, party, tier, lo, hi, waves, total_xp, won, log, stop_hp: int = 0):
+        """The waves of one trip. A trip lives like a farming session: the waves the slimes fight on their own cost their
+        hours (needs included), hungry members eat (a cooked dish, else a ration from the packed food: at most 66% of the
+        stores), and the party camps when tired, hurt or winded. It comes home early below the health line, when the rations
+        are gone and someone is hungry, or when someone is too worn out to go on. Waves led by hand cost no time at all."""
         report = None
-        auto_waves, home_early = 0, ""
+        auto_waves, home_early, camped = 0, "", 0
+        rations = [int(self.wallet.get("food") * self.share), 0]      # [packed, eaten]
         for w in range(waves):
+            members = [s for s in party if s.id in self.roster]
+            if w and not self._by_hand():                             # between waves: eat, and rest if needed
+                self._wave_meals(members, rations)
+                if self._needs_camp(members):
+                    h = self._camp(members, 24)
+                    camped += h
+                    self._wave_meals(members, rations)
+                hungry = [s.name for s in members if s.needs.get("food") < config.AUTO_EAT_BELOW / 2]
+                if hungry and rations[0] <= 0:
+                    home_early = (f"🍖 The rations are gone and {', '.join(hungry[:3])} {'is' if len(hungry) == 1 else 'are'} hungry: "
+                                  f"the party comes home after wave {w} of {waves}.")
+                    break
+                if (why := self._field_unfit(members)):
+                    home_early = f"🏠 {why}: the party comes home after wave {w} of {waves}."
+                    break
+                for s in members:
+                    if s.state in ("sleeping", "resting"):
+                        s.state = "idle"
             enemies = self.wave_enemies(tier, lo, hi)
             report = yield from self._battle_gen(party, enemies, permadeath=False, split_xp=True, xp_mult=config.WAVE_XP_MULT, loot=False)
             if not self._by_hand():                                 # a wave you led yourself costs no waiting
                 auto_waves += 1
+                ev = self._spend(config.WAVE_TICKS, "wave")
+                self._field_hours([s for s in party if s.id in self.roster], config.WAVE_TICKS, False, ev)
+                self.journal.extend(ev)
             self._after_battle(party, report, scale=0.5, wear=False)     # morale and feelings react; gear is not worn by a drill
             total_xp += report.xp
             log.extend([f"🌊 Wave {w + 1}/{waves}"] + report.log if waves > 1 else report.log)
@@ -2178,9 +2205,10 @@ class Game:
             for b in party[i + 1:]:
                 self.social.add_bond(a, b, config.WAVE_BOND * won)
         report.log.append(f"🧪 Simulation over ({won}/{waves} waves won): nobody is hurt for real - {total_xp} XP and battle proficiency gained.")
-        if auto_waves:
-            events.extend(self._spend(config.WAVE_TICKS * auto_waves, "wave"))
-        elif won:
+        if rations[1] or camped:
+            report.log.append(f"🎒 On the way: {rations[1]} ration{'s' if rations[1] != 1 else ''} eaten from the stores"
+                              + (f", {camped}h camped to rest" if camped else "") + ".")
+        if not auto_waves and won:
             events.append("   ⏱ You led these waves yourself: no waiting, the party is home.")
         report.log.extend(events)
         self.journal.extend(events)
@@ -2417,10 +2445,20 @@ class Game:
             raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
         return self.inventory.unequip(s, slot)
 
+    @staticmethod
+    def floor_gear_tier(floor: int) -> int:
+        """The tier of gear a Descent floor drops: 1-3 down to floor 50 (as before), tier 4 in the upper Deep Hollow
+        (51-75) and tier 5 at the bottom (76-100)."""
+        if floor > config.HEART_FLOOR + 25:
+            return 5
+        if floor > config.HEART_FLOOR:
+            return 4
+        return min(3, 1 + (floor - 1) // config.MAIN_BOSS_EVERY)
+
     def _gear_drop(self, tier: int, chance: float, log: List[str], guaranteed: bool = False) -> None:
         if not guaranteed and self.rng.random() >= chance:
             return
-        pool = [g for g in equipment.GEAR if g.tier == max(1, min(3, tier))]
+        pool = [g for g in equipment.GEAR if g.tier == max(1, min(equipment.MAX_TIER, tier))]
         if pool:
             g = self.rng.choice(pool)
             self.inventory.add(g.key)
@@ -2815,10 +2853,11 @@ class Game:
             if best and best_sc > cur_score * 1.25 and (cur is not None or self._relic_free()):
                 log.append("🎒 " + self.equip_item(s.id, best.uid).splitlines()[0])
                 continue
-            if not cur and not legacy:                          # plain armory gear for an empty slot
-                keys = [k for k in self.inventory.items if equipment.GEAR.get(k).slot == slot and self._gear_free(k)]
-                if keys:
-                    k = max(keys, key=lambda k: sum(equipment.GEAR.get(k).stats.values()))
+            worth = lambda k: sum(equipment.GEAR.get(k).stats.values())
+            keys = [k for k in self.inventory.items if self.inventory.items[k] > 0 and equipment.GEAR.get(k).slot == slot and self._gear_free(k)]
+            if keys:                                            # plain armory gear: fill the slot or take clearly better gear
+                k = max(keys, key=worth)
+                if not legacy or worth(k) > worth(legacy) * 1.15:
                     log.append("🎒 " + self.inventory.equip(s, k))
 
     def brew_for_post(self, brewer: Slime) -> List[str]:
@@ -2873,6 +2912,41 @@ class Game:
                 if self._auto_drink(s, kind, log):
                     n += 1
 
+    def _stock_free(self, cost: Dict[str, int]) -> bool:
+        """May the slimes spend this by themselves? Only while at least 34% of the most ever held of each stock remains
+        afterwards (the same rule as potions, relics and gear)."""
+        for k, v in cost.items():
+            have = self.wallet.get(k)
+            self.stock_peak[k] = peak = max(self.stock_peak.get(k, 0), have)
+            if have - v < math.ceil(peak * (1 - self.share)):
+                return False
+        return True
+
+    def _auto_merge_gear(self, log: List[str]) -> None:
+        """Spare gear is merged up a tier when the three pieces are within 66% of the spares of that kind (gear in use is
+        never touched); the new piece keeps the old one's leaning (strength, magic, speed ...)."""
+        n = config.GEAR_MERGE_COUNT
+        for key in sorted(self.inventory.items, key=lambda k: equipment.GEAR.get(k).tier):
+            have = self.inventory.items.get(key, 0)
+            g = equipment.GEAR.get(key)
+            ups = [u for u in equipment.GEAR if u.slot == g.slot and u.tier == g.tier + 1]
+            if not ups or have < n or n > have * self.share:
+                continue
+            up = max(ups, key=lambda u: (len(set(u.stats) & set(g.stats)), sum(u.stats.get(k, 0) for k in g.stats)))
+            log.append("🛠️ The slimes merge spare gear by themselves: " + self.merge_gear(key, up.key))
+
+    def _auto_level_relics(self, s: Slime, log: List[str]) -> None:
+        """A slime levels the relics it wears (one level an hour) with materials it may take: 66% of the stocks."""
+        for it in list(s.items.values()):
+            if it.level >= config.ITEM_MAX_LEVEL or it.broken:
+                continue
+            cost = it.level_cost()
+            if self._stock_free(cost):
+                self.wallet.spend_many(cost)
+                it.level += 1
+                log.append(f"⬆ {s.name} levels {it.label()} by itself.")
+                return
+
     def _autonomy_tick(self, log: List[str]) -> None:
         """Hourly: tired slimes drink stamina potions, hurt ones vigor, worn gear gets mended - all unasked."""
         if not self.autonomy:
@@ -2886,8 +2960,10 @@ class Game:
                 self._auto_drink(s, "vigor", log)
             self._auto_repair(s, log)
             self._auto_equip(s, log)
+            self._auto_level_relics(s, log)
         if self.tick_count % 24 == config.AUTONOMY_BREW_HOUR:
             self._auto_brew(log)
+            self._auto_merge_gear(log)
 
     def _auto_repair(self, s: Slime, log: List[str]) -> None:
         for it in list(s.items.values()):
@@ -2922,7 +2998,7 @@ class Game:
 
     def set_autonomy(self, on: bool) -> str:
         self.autonomy = bool(on)
-        return "Slimes will help themselves to up to 66% of potions, relics, gear and materials - and brew on their own." if on else \
+        return "Slimes will help themselves to up to 66% of potions, relics, gear and materials: they dress, level their relics, merge spare gear and brew on their own." if on else \
             "Slimes will wait for your orders."
 
     def potion_count(self, kind: str, grade: int) -> int:
@@ -3637,7 +3713,7 @@ class Game:
             for s in survivors:
                 s.progress = max(s.progress, floor)         # they have now visited this floor
                 outlook.bump(s, "delve")
-            self._gear_drop(1 + (floor - 1) // config.MAIN_BOSS_EVERY, config.GEAR_DROP_MAIN, events, boss)
+            self._gear_drop(self.floor_gear_tier(floor), config.GEAR_DROP_MAIN, events, boss)
             if boss:                                           # a guardian's hoard holds ascension stones
                 n = self.rng.randint(3, 6) * (1 + (floor - 1) // config.MAIN_BOSS_EVERY)
                 self.wallet.add("stone_common", n)
@@ -4155,7 +4231,7 @@ class Game:
         k = s.in_dungeon
         if not k:
             return False
-        if k in ("grind", "adventure", "quarry"):
+        if k in ("grind", "adventure", "quarry", "wave"):            # a wave trip pays its own hours too (_wave_rounds)
             return True
         p = places.PLACES.get(k)
         return bool(p and p.kind == "expedition")
@@ -4169,6 +4245,22 @@ class Game:
                 if s.id in self.roster and s.alive:
                     self.needs.field_hour(s, asleep, out, scale)
         self._reap(out)
+
+    def _wave_meals(self, members, rations) -> None:
+        """Hungry members of a wave trip eat: a cooked dish from the pantry first, else one of the packed rations
+        (rations = [left, eaten]; the trip packs at most 66% of the food stores)."""
+        for s in members:
+            n = 0
+            while s.id in self.roster and s.needs.get("food") < config.AUTO_EAT_BELOW and n < 3:
+                n += 1
+                if self.needs.meal_hook and self.needs.meal_hook(s):
+                    continue
+                if rations[0] < 1 or self.wallet.get("food") < 1:
+                    break
+                self.wallet.spend("food", 1)
+                rations[0] -= 1
+                rations[1] += 1
+                s.needs.add("food", config.FOOD_NUTRITION)
 
     def _field_meals(self, members) -> None:
         """Hungry members of a session eat: a cooked meal from the pantry first, else field rations from the stores."""
@@ -4278,7 +4370,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, stock_peak=self.stock_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3), shadow_tick=self.shadow_tick,
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -4390,6 +4482,7 @@ class Game:
         g._apply_keeper()
         g.vault_peak = d.get("vault_peak", 0)
         g.gear_peak = dict(d.get("gear_peak", {}))
+        g.stock_peak = dict(d.get("stock_peak", {}))
         g.mood_rng = random.Random((((g.seed or 0) ^ 0xE70) + d.get("tick", 0)) & 0xFFFFFFFF)
         if g.wallet.get("herb"):                              # v10 saves had one kind of herb: share it out
             n = g.wallet.get("herb")

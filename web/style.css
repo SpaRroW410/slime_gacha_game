@@ -434,7 +434,7 @@ details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px sol
 .ricon .gcount { position: absolute; right: -8px; bottom: -6px; font-style: normal; font-size: .68rem; font-weight: 700; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0 4px; }
 .r-common { --rc: #9aa8a1; } .r-uncommon { --rc: var(--good); } .r-rare { --rc: var(--blue); } .r-epic { --rc: var(--purple); } .r-legendary { --rc: #ffd45a; }
 .rtile.ego { box-shadow: 0 0 0 1px #ffd45a inset, 0 0 12px rgba(255, 212, 90, .35); }
-.t1 { --rc: #9aa8a1; } .t2 { --rc: var(--blue); } .t3 { --rc: #ffd45a; }
+.t1 { --rc: #9aa8a1; } .t2 { --rc: var(--blue); } .t3 { --rc: var(--purple); } .t4 { --rc: #ffd45a; } .t5 { --rc: #ff6fb1; }
 .tierb { display: inline-block; padding: 0 5px; border-radius: 6px; border: 1px solid var(--rc); color: var(--rc); font-size: .68rem; font-weight: 700; }
 .shoplist { display: flex; flex-direction: column; gap: 6px; }
 .shoprow { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--line); }

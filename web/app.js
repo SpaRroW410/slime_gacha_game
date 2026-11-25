@@ -1109,7 +1109,7 @@ function sessionNote(runs, ticks, maxRuns, what = 'run', kind = 'adventure') {
   const lobby = Math.max(1, Math.ceil(hours / (S.state.clock.dilation?.[kind] || 1) - 1e-9));
   const live = S.state.clock.mode === 'live' ? ` (about ${Math.max(1, Math.round(lobby / (S.state.clock.rate_now || S.state.clock.lobby_rate) * 60))} real minutes at the current speed)` : '';
   const cut = num(runs, 1) > maxRuns ? ` <b>Limited to ${maxRuns} ${what}s: a session is one day at most.</b>` : '';
-  if (kind === 'wave') return `<small class="mute" style="display:block">⏱ ${n} wave${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here${lobby >= 24 ? `, ${(lobby / 24).toFixed(1)} days` : ''})${live}, at most: they come home early when a wave is lost or someone drops below the health line, and waves you lead yourself cost no time. The report arrives when they are back.</small>`;
+  if (kind === 'wave') return `<small class="mute" style="display:block">⏱ ${n} wave${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here${lobby >= 24 ? `, ${(lobby / 24).toFixed(1)} days` : ''})${live}, at most, plus camping: they come home early when a wave is lost, someone drops below the health line, or the rations run out. They pack up to 66% of the food (🍖 ${Math.floor(S.state.wallet.food * 0.66)} now) and camp when tired. Waves you lead yourself cost no time. The report arrives when they are back.</small>`;
   return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here)${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h inside (earlier if the whole party is knocked out). The report and the haul arrive when it is back.${cut}</small>`;
 }
 /* Which party (or group of slimes) is away and how long it has left. */
@@ -1846,7 +1846,7 @@ function townAll() {
     <small class="mute">Grades: ${st.potions.grades.map((g) => `${g.grade}: +${Math.round(g.bonus * 100)}% for ${g.hours}h`).join(' · ')}</small>
     <div class="row">${st.potions.stock.map((p) => chip(`${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}`, 'info')).join('') || '<small class="mute">No potions yet.</small>'}</div>
     <div class="row"><button class="btn small ${st.potions.autonomy ? 'primary' : ''}" data-act="autonomy">🤖 Slime autonomy: ${st.potions.autonomy ? 'on' : 'off'}</button>
-      <small class="mute">When on, slimes help themselves to up to ${Math.round(st.potions.autonomy_share * 100)}% of your stocks without asking: they drink potions (tired ones stamina, hurt ones vigor, class-suited ones before a trip), mend worn gear, dress themselves from the relic vault and armory, and brew potions the colony is short of — the rest is yours.</small></div></div>`;
+      <small class="mute">When on, slimes help themselves to up to ${Math.round(st.potions.autonomy_share * 100)}% of your stocks without asking: they drink potions (tired ones stamina, hurt ones vigor, class-suited ones before a trip), mend worn gear, dress themselves from the relic vault and armory (taking clearly better gear too), level the relics they wear, merge spare gear up a tier, and brew potions the colony is short of — at least 34% of the most you ever held is always left for you.</small></div></div>`;
 }
 
 /* ---------------------------------------------------------------- council */
