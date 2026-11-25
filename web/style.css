@@ -375,3 +375,35 @@ details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px sol
 .blob .actb.duo .ab-sub { font-size: .92em; }
 .blob .actb.duo svg { width: 13px; height: 13px; }
 .blob.big .actb.duo svg { width: 18px; height: 18px; }
+/* Relics and gear as tiles: the icon framed in its rarity (relics) or tier (gear); tap for its window. */
+.rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.rtile { --rc: var(--line); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 6px 8px; text-align: center; cursor: pointer;
+  background: var(--card); color: inherit; font: inherit; border: 1px solid var(--line); border-top: 3px solid var(--rc); border-radius: 12px; }
+.rtile:hover, .rtile:focus-visible { background: var(--card2); }
+.rtile .rname { font-size: .85rem; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rtile .rstars { font-size: .72rem; color: #e9b949; }
+.rtile .rstars .mute { color: var(--line); }
+.rtile .rmeta { font-size: .7rem; color: var(--mute); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rtile .rdur { width: 80%; height: 4px; border-radius: 2px; background: var(--card2); overflow: hidden; }
+.rtile .rdur i { display: block; height: 100%; background: var(--good); }
+.rtile .rdur.warn i { background: var(--warn); } .rtile .rdur.bad i { background: var(--bad); }
+.ricon { --rc: var(--line); position: relative; display: grid; place-items: center; width: 46px; height: 46px; font-size: 1.6rem; border-radius: 12px;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--rc) 28%, transparent), transparent 70%); border: 2px solid var(--rc); }
+.ricon.big { width: 56px; height: 56px; font-size: 2rem; } .ricon.sm { width: 34px; height: 34px; font-size: 1.15rem; border-radius: 9px; }
+.ricon .egob { position: absolute; right: -6px; top: -6px; font-style: normal; font-size: .8rem; }
+.ricon .gcount { position: absolute; right: -8px; bottom: -6px; font-style: normal; font-size: .68rem; font-weight: 700; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0 4px; }
+.r-common { --rc: #9aa8a1; } .r-uncommon { --rc: var(--good); } .r-rare { --rc: var(--blue); } .r-epic { --rc: var(--purple); } .r-legendary { --rc: #ffd45a; }
+.rtile.ego { box-shadow: 0 0 0 1px #ffd45a inset, 0 0 12px rgba(255, 212, 90, .35); }
+.t1 { --rc: #9aa8a1; } .t2 { --rc: var(--blue); } .t3 { --rc: #ffd45a; }
+.tierb { display: inline-block; padding: 0 5px; border-radius: 6px; border: 1px solid var(--rc); color: var(--rc); font-size: .68rem; font-weight: 700; }
+.shoplist { display: flex; flex-direction: column; gap: 6px; }
+.shoprow { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+/* A relic's upgrade path: four steps, done / now / later. */
+.ppath { display: flex; flex-direction: column; gap: 8px; }
+.pstep { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; opacity: .6; }
+.pstep.now, .pstep.done { opacity: 1; }
+.pstep .pnum { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); font-size: .78rem; font-weight: 700; }
+.pstep.done .pnum { background: var(--good); border-color: var(--good); color: var(--bg); }
+.pstep.now .pnum { border-color: var(--accent); color: var(--accent); }
+.pstep.now > div > b { color: var(--accent); }
+.pstep .row, .pstep > div > div { margin-top: 3px; }

@@ -152,7 +152,15 @@ class Slime:
 
     @property
     def level_cap(self) -> int:
-        return config.LEVEL_CAPS[min(self.stage, len(config.LEVEL_CAPS) - 1)]
+        cap = config.LEVEL_CAPS[min(self.stage, len(config.LEVEL_CAPS) - 1)]
+        return config.EGO_LEVEL_CAP if cap == config.LEVEL_CAPS[-1] and self.ego_ascended else cap
+
+    @property
+    def ego_ascended(self) -> bool:
+        """A legendary wearing an ego relic in every slot may grow past the usual cap (to EGO_LEVEL_CAP)."""
+        items = getattr(self, "items", {}) or {}
+        return (self.rarity == "legendary" and len(items) >= len(config.EGO_SLOTS)
+                and all(items.get(sl) is not None and items[sl].ego for sl in config.EGO_SLOTS))
 
     def core_stats(self) -> Dict[str, float]:
         """Class x level x rarity x star x stage x variance - no gear, relics or merge bonus."""

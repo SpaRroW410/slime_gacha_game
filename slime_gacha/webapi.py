@@ -372,7 +372,7 @@ def snapshot(g: Game) -> dict:
                                    members=[m.id for m in g._members_in("main", pid)])
                     for pid, d in g.delves.items()},
             session=dict(max_hours=config.SESSION_MAX_HOURS, grind_ticks=config.GRIND_TICKS, grind_runs=config.GRIND_MAX_RUNS,
-                         adv_ticks=config.ADV_TICKS, adv_runs=config.ADV_MAX_RUNS, wave_ticks=config.WAVE_TICKS, wave_max=config.WAVE_MAX_WAVES),
+                         adv_ticks=config.ADV_TICKS, adv_runs=config.ADV_MAX_RUNS, wave_ticks=config.WAVE_TICKS, wave_max=config.WAVE_MAX_WAVES, wave_level=config.WAVE_MAX_LEVEL, wave_stop=config.WAVE_STOP_HP),
             grind_depths=config.GRIND_DEPTHS, scout_hours=[config.SCOUT_MIN_HOURS, config.SCOUT_MAX_HOURS],
             scout_max_floors=config.SCOUT_MAX_FLOORS, scout_food=config.SCOUT_FOOD_PER_HOUR,
             rescue_tailwind=dict(each=config.RESCUE_TAILWIND_SPEED, max=config.RESCUE_TAILWIND_MAX),
@@ -1180,7 +1180,7 @@ def _grind(g, a):
 @command("skirmish")
 def _skirmish(g, a):
     return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a), a.get("lo") and _i(a, "lo"), a.get("hi") and _i(a, "hi"), _i(a, "waves", 1),
-                                                bool(a.get("recall"))))
+                                                bool(a.get("recall")), None if a.get("stop_hp") is None else _i(a, "stop_hp")))
 
 
 SESSION_TITLES = dict(send_groups="Expeditions", grind="The Gloop Pit", adventure="The Wayfarer's Rift", quarry="The Starfall Quarry", explore="An expedition", skirmish="Wave simulation",

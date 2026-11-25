@@ -721,6 +721,8 @@ function dFight(s, { st, free }) {
       <button class="btn small ${s.ascend.next_rarity && s.ascend.rarity_ready && st.wallet.white_gel >= s.ascend.rarity_cost ? 'primary' : ''}" data-act="slime_rarity" ${free && s.ascend.next_rarity && s.ascend.rarity_ready && st.wallet.white_gel >= s.ascend.rarity_cost ? '' : 'disabled'} title="Needs level ${s.ascend.rarity_level} and 5 stars">✨ ${s.ascend.next_rarity ? `to ${s.ascend.next_rarity} · ${s.ascend.rarity_cost} ⚪${s.ascend.rarity_ready ? '' : ` · Lv${s.ascend.rarity_level} & 5★`}` : 'Legendary'}</button>
       <button class="btn small ${s.ascend.star_cost && s.level >= s.ascend.star_level && st.ascension.total >= s.ascend.star_cost ? 'primary' : ''}" data-act="slime_star" ${free && s.ascend.star_cost && s.level >= s.ascend.star_level && st.ascension.total >= s.ascend.star_cost ? '' : 'disabled'} title="${s.ascend.star_cost ? `Needs level ${s.ascend.star_level} and ${s.ascend.star_cost} stones` : ''}">🌟 ${s.ascend.star_cost ? `to ${s.stars + 1}★ · Lv${s.ascend.star_level} · ${s.ascend.star_cost} 💎` : 'Max stars'}</button>
       <button class="btn small danger" data-act="destroy_slime" data-id="${s.id}" data-n="${esc(s.name)}" data-y="${esc(cost(s.ascend.chamber))}" ${free ? '' : 'disabled'}>🔥 Destroy</button></div>
+      ${s.rarity === 'legendary' && s.stage >= 2 ? (() => { const egos = Object.values(s.items).filter((it) => it.ego).length;
+        return `<small class="${s.level_cap > 100 ? '' : 'mute'}" style="display:block">${s.level_cap > 100 ? `👁️ Ego-ascended: wearing an ego relic in every slot lets ${esc(s.name)} grow to level ${s.level_cap}.` : `🔒 Level 150: wear an ego relic in all three slots (${egos}/3). Ego relics are fused in Town › Relics.`}</small>`; })() : ''}
       ${Object.keys(s.merge_bonus).length ? `<small class="mute">Merged-in stats: ${Object.entries(s.merge_bonus).filter(([, v]) => v).map(([k, v]) => `+${v} ${k}`).join(' ')}</small>` : ''}`)}
     ${sect('Class &amp; progress', 'Specialization turns cross-training into a hybrid class. Outlook forms from what the slime does most.', `<p>${s.spec ? `${s.spec.emoji} <b>${esc(s.spec.name)}</b> <small class="mute">(${esc(s.class_name)} + ${esc(s.spec.disc)})</small>` : `<b>${esc(s.class_name)}</b>`} · Descent: <b>floor ${s.progress}</b></p>
       <p>${s.outlook ? `${s.outlook.emoji} <b>${esc(s.outlook.name)}</b> <small class="mute">${esc(s.outlook.perk)}</small>` : '<span class="mute">Outlook undecided.</span>'}</p>
@@ -1072,10 +1074,13 @@ function dungeonsAll() {
         <button class="btn primary" data-act="grind">Commit</button></div>
       ${sessionNote(runs, d.session.grind_ticks, d.session.grind_runs, 'run', 'grind')}
       <small class="mute">Depth 3 = enemies at your party's average level; 1 is easier, 5 is harder and pays more XP. A <b>lure</b> (${d.pit.lure_cost} 🟣 per run) draws richer prey: <b>×${d.pit.lure_xp} XP</b> and <b>×${d.pit.lure_gear} chance of gear</b>; it stops when the purple gel runs out.</small></div>`;
-  const wave = `<div class="panel stack"><h2>🧪 Wave simulation ${info('A training drill, not a real fight: a full party at home fights waves of monsters whose level lies between the minimum and maximum you set (1-50), and nobody can die. Each wave takes 2 hours. The XP is fixed by the monsters and their level (deeper monsters pay more, no luck or rarity involved, split between the members); there is no loot. It also trains battle (class) proficiency and builds teamwork. If the party loses a wave the simulation stops. You can take command of every turn, like any other fight.')}</h2>
-      <p class="mute">A full party fights a <b>wave of monsters</b> as a simulation: <b>nobody dies</b>, no loot. Pick the <b>monster level range</b> and the <b>number of waves</b>; the XP is fixed by the monsters and their level.</p>
-      <div class="row">${partyOptions('kpid')}<label>Min lvl <input type="number" data-ui="wlo" min="1" max="50" value="${num(ui('wlo', 1), 1)}" style="width:4.5em"></label><label>Max lvl <input type="number" data-ui="whi" min="1" max="50" value="${num(ui('whi', 5), 5)}" style="width:4.5em"></label><label>Waves <input type="number" data-ui="waves" data-rerender="1" min="1" max="5" value="${num(ui('waves', 1), 1)}" style="width:3.5em"></label><button class="btn primary" data-act="skirmish">Run the simulation</button>${cmdToggle()}</div>
-      ${sessionNote(ui('waves', 1), st.dungeon.session.wave_ticks, st.dungeon.session.wave_max, 'wave', 'wave')}</div>`;
+  const ws = st.dungeon.session, wl = ws.wave_level, stopHp = num(ui('wstop', ws.wave_stop), ws.wave_stop);
+  const wave = `<div class="panel stack"><h2>🧪 Wave simulation ${info(`A training drill, not a real fight: a full party at home fights waves of monsters whose level lies between the minimum and maximum you set (1-${wl}, past the slimes' own cap), and nobody can die. Each wave takes ${ws.wave_ticks} dungeon hours; waves you lead yourself (Take command) cost no time at all. Send them for up to ${ws.wave_max} waves - days of grinding - and they come home early once someone ends a wave below the health line you choose, or when a wave is lost. The XP is fixed by the monsters and their level (deeper monsters pay more, no luck or rarity involved, split between the members); there is no loot. It also trains battle (class) proficiency and builds teamwork.`)}</h2>
+      <p class="mute">A full party fights <b>waves of monsters</b> as a simulation: <b>nobody dies</b>, no loot. Pick the <b>monster level range</b> (up to ${wl}) and up to <b>${ws.wave_max} waves</b> for a long grind; they come home early below the <b>health line</b>.</p>
+      <div class="row">${partyOptions('kpid')}<label>Min lvl <input type="number" data-ui="wlo" min="1" max="${wl}" value="${num(ui('wlo', 1), 1)}" style="width:4.5em"></label><label>Max lvl <input type="number" data-ui="whi" min="1" max="${wl}" value="${num(ui('whi', 5), 5)}" style="width:4.5em"></label><label>Waves <input type="number" data-ui="waves" data-rerender="1" min="1" max="${ws.wave_max}" value="${num(ui('waves', 1), 1)}" style="width:4.5em"></label>
+        <label title="The party comes home once a member ends a wave below this share of its health">Home below <select data-ui="wstop">${[0, 10, 20, 30, 40, 50, 60].map((x) => `<option value="${x}" ${x === stopHp ? 'selected' : ''}>${x ? x + '% HP' : 'never (fight on)'}</option>`).join('')}</select></label>
+        <button class="btn primary" data-act="skirmish">Run the simulation</button>${cmdToggle()}</div>
+      ${sessionNote(ui('waves', 1), ws.wave_ticks, ws.wave_max, 'wave', 'wave')}</div>`;
   return { descent, stranded, scouting, pit, wave };
 }
 
@@ -1098,6 +1103,7 @@ function sessionNote(runs, ticks, maxRuns, what = 'run', kind = 'adventure') {
   const lobby = Math.max(1, Math.ceil(hours / (S.state.clock.dilation?.[kind] || 1) - 1e-9));
   const live = S.state.clock.mode === 'live' ? ` (about ${Math.max(1, Math.round(lobby / (S.state.clock.rate_now || S.state.clock.lobby_rate) * 60))} real minutes at the current speed)` : '';
   const cut = num(runs, 1) > maxRuns ? ` <b>Limited to ${maxRuns} ${what}s: a session is one day at most.</b>` : '';
+  if (kind === 'wave') return `<small class="mute" style="display:block">⏱ ${n} wave${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here${lobby >= 24 ? `, ${(lobby / 24).toFixed(1)} days` : ''})${live}, at most: they come home early when a wave is lost or someone drops below the health line, and waves you lead yourself cost no time. The report arrives when they are back.</small>`;
   return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here)${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h inside (earlier if the whole party is knocked out). The report and the haul arrive when it is back.${cut}</small>`;
 }
 /* Which party (or group of slimes) is away and how long it has left. */
@@ -1565,10 +1571,43 @@ function academyAll() {
 const RARITY_CLS = { common: '', uncommon: 'uncommon', rare: 'rare', epic: 'epic', legendary: 'legendary' };
 const RAR_N = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
 const relicStat = (it) => Object.entries(it.stats || {}).map(([k, v]) => `+${v} ${k}`).join(' ');
-/* One relic as a single line (worn or in the vault); tap it for everything that can be done with it. */
-function relicRow(it, holder = null) {
-  const st = S.state, free = holder ? !holder.busy : true, key = 'rel_' + it.uid;
-  const act_ = (c, label, cs) => `<button class="btn small" data-act="item_cmd" data-c="${c}" data-uid="${it.uid}" ${(cs && !affordable(cs)) || !free ? 'disabled' : ''}>${label}${cs ? ' · ' + cost(cs) : ''}</button>`;
+/* Where a relic is: in the vault or worn (and by whom). */
+const findRelic = (uid) => { const st = S.state; const v = st.gear.vault.find((x) => x.uid === uid); if (v) return { it: v, holder: null };
+  for (const x of st.slimes) for (const it of Object.values(x.items)) if (it.uid === uid) return { it, holder: x };
+  return null; };
+const armoryLevel = () => (S.state.buildings.find((b) => b.key === 'armory') || {}).level || 0;
+/* One relic as a tile: its icon framed in its rarity, stars, level, wear and who holds it. Tap for its window. */
+function relicTile(it, holder = null) {
+  const dur = it.durability === null ? null : Math.round(it.durability / it.max_durability * 100);
+  return `<button class="rtile r-${it.rarity}${it.ego ? ' ego' : ''}" data-act="relic_open" data-uid="${it.uid}" title="${esc(it.name)} · ${it.rarity} ${it.stars}★ Lv${it.level} · ${esc(relicStat(it))}">
+    <span class="ricon">${it.emoji}${it.ego ? '<i class="egob">👁️</i>' : ''}</span>
+    <b class="rname">${esc(it.name)}</b>
+    <span class="rstars">${'★'.repeat(it.stars)}<span class="mute">${'★'.repeat(5 - it.stars)}</span> · Lv${it.level}</span>
+    <small class="rmeta">${it.slot} · ${holder ? `on ${esc(holder.name)}` : 'vault'}</small>
+    ${dur === null ? '' : `<span class="rdur ${dur < 30 ? 'bad' : dur < 70 ? 'warn' : ''}"><i style="width:${dur}%"></i></span>`}</button>`;
+}
+/* The road a relic travels: level 1-10, then a star (back to level 1), up to 5 stars, then a rarity, up to legendary,
+   and at legendary 5★ it can take a soul (an ego relic). Each step says what it needs and what is missing. */
+function relicPath(it, free) {
+  const arm = armoryLevel(), up = { common: 'uncommon', uncommon: 'rare', rare: 'epic', epic: 'legendary' }[it.rarity];
+  const short = (cs) => Object.entries(cs || {}).filter(([k, v]) => (S.state.wallet[k] || 0) < v).map(([k, v]) => `${v - (S.state.wallet[k] || 0)} ${RES[k]?.[0] || k}`).join(' ');
+  const btn = (c, label, cs, why) => { const lack = short(cs);
+    return `<button class="btn small ${why || lack ? '' : 'primary'}" data-act="item_cmd" data-c="${c}" data-uid="${it.uid}" ${why || lack || !free ? 'disabled' : ''} title="${esc(why || '')}">${label}${cs ? ' · ' + cost(cs) : ''}</button>${lack && !why ? ` <small class="bad">short of ${lack}</small>` : ''}${!free ? ' <small class="mute">(its wearer is away)</small>' : ''}`; };
+  const step = (n, label, done, now, body) => `<div class="pstep ${done ? 'done' : now ? 'now' : ''}"><span class="pnum">${done ? '✓' : n}</span><div><b>${label}</b>${body ? `<div>${body}</div>` : ''}</div></div>`;
+  const lvlDone = it.level >= 10, starDone = it.stars >= 5, rarDone = !up;
+  const starWhy = arm < it.stars ? `The Armory must be level ${it.stars} (it is ${arm}): upgrade it in Town › Buildings.` : '';
+  const rarWhy = arm < 5 ? `The Armory must be level 5 (it is ${arm}).` : '';
+  return `<div class="ppath">
+    ${step(1, `Level ${it.level}/10`, lvlDone && starDone, !lvlDone, !lvlDone ? `${btn('level_item', '⬆ Level up', it.level_cost)} <small class="mute">materials of its own tier</small>` : '')}
+    ${step(2, `Stars ${it.stars}/5`, starDone, lvlDone && !starDone, lvlDone && !starDone ? `${btn('ascend_star', '🌟 Ascend a star', it.star_cost, starWhy)} <small class="mute">${starWhy ? '<b>' + esc(starWhy) + '</b>' : 'back to level 1, stronger'}</small>` : !starDone ? '<small class="mute">at level 10 (needs Armory level ≥ its stars)</small>' : '')}
+    ${step(3, up ? `Rarity: ${it.rarity} → ${up}` : 'Rarity: legendary', rarDone, starDone && lvlDone && !rarDone, starDone && lvlDone && up ? `${btn('ascend_rarity', '💎 Raise rarity', it.rarity_cost, rarWhy)} <small class="mute">${rarWhy ? '<b>' + esc(rarWhy) + '</b>' : 'adds a mod; keeps its stars and level'}</small>` : up ? '<small class="mute">at 5★ and level 10, with Armory level 5</small>' : '')}
+    ${step(4, it.ego ? `Ego: soul of ${esc(it.ego.name)}` : 'Ego relic', !!it.ego, !it.ego && rarDone && starDone, !it.ego ? (rarDone && starDone ? `<button class="btn small danger" data-act="item_fuse" data-uid="${it.uid}">👁 Fuse a 5★ legendary slime into it…</button>` : '<small class="mute">a legendary 5★ relic can take the soul of a legendary 5★ slime. A legendary wearing three ego relics grows to level 150.</small>') : '<small class="mute">only 5★ legendary slimes may wield it</small>')}
+  </div>`;
+}
+function relicWindow(m) {
+  const st = S.state, f = findRelic(m.uid);
+  if (!f) { S.modal = null; return ''; }
+  const { it, holder } = f, free = holder ? !holder.busy : true;
   const dur = it.durability === null ? null : Math.round(it.durability / it.max_durability * 100);
   let equip = '';
   if (!holder) {
@@ -1577,22 +1616,21 @@ function relicRow(it, holder = null) {
     let cur = num(ui('ie_' + it.uid, cands[0]?.id));
     if (!cands.some((x) => x.id === cur)) cur = cands[0]?.id;
     S.ui['ie_' + it.uid] = cur;
-    equip = cands.length ? `<select data-ui="ie_${it.uid}">${cands.map((x) => `<option value="${x.id}" ${x.id === cur ? 'selected' : ''}>${fit(x) ? '✓ ' : ''}${esc(x.name)} (${esc(x.class_name)})${x.items[it.slot] ? ' · swaps ' + esc(x.items[it.slot].name) : ''}</option>`).join('')}</select><button class="btn small primary" data-act="item_equip" data-uid="${it.uid}">Equip</button>`
-      : '<small class="mute">Nobody is free to wear it.</small>';
+    equip = cands.length ? `<div class="row"><select data-ui="ie_${it.uid}">${cands.map((x) => `<option value="${x.id}" ${x.id === cur ? 'selected' : ''}>${fit(x) ? '✓ ' : ''}${esc(x.name)} (${esc(x.class_name)})${x.items[it.slot] ? ' · swaps ' + esc(x.items[it.slot].name) : ''}</option>`).join('')}</select><button class="btn small primary" data-act="item_equip" data-uid="${it.uid}">Equip</button></div>` : '<small class="mute">Nobody is free to wear it.</small>';
   }
   const donors = holder || it.ego ? [] : st.gear.vault.filter((x) => x.uid !== it.uid && x.slot === it.slot && !x.ego);
-  return `<details class="relic panel flat" data-keep="${key}" ${ui(key, false) ? 'open' : ''}><summary><span class="row between" style="display:inline-flex;width:calc(100% - 20px)">
-      <span>${it.emoji} <b>${esc(it.name)}</b> ${chip(it.rarity, RARITY_CLS[it.rarity])} ${stars(it.stars)} Lv${it.level} <small class="mute">${it.slot} · ${relicStat(it)}</small></span>
-      <span class="row" style="gap:4px">${holder ? chip(`${esc(holder.name)}${it.compat !== null ? ' · 💞' + it.compat + '%' : ''}`, 'info') : chip('vault')}${dur === null ? '' : chip(`🛡 ${dur}%`, dur < 30 ? 'bad' : dur < 70 ? 'warn' : '')}</span></span></summary>
-    <div class="stack" style="margin-top:6px">
-      ${it.mods.length ? `<div>${it.mods.map((m) => chip(esc(m), 'info')).join(' ')}</div>` : ''}
-      ${it.ego ? `<small class="mute">👁️ Soul of ${esc(it.ego.name)} (Lv${it.ego.level}) — only 5★ legendaries may wield it.</small>` : `<small class="mute">${it.family ? it.family + ' · ' : ''}made for: ${it.fits.join(', ')}</small>`}
-      ${dur === null ? '<small class="mute">Unbreakable.</small>' : bar(it.durability, it.max_durability, dur < 30 ? 'bad' : '', 'Durability', `${it.durability}/${it.max_durability}`)}
-      <div class="row">${equip}${holder ? `<button class="btn small" data-act="item_unequip" data-id="${holder.id}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Take off ${esc(holder.name)}</button>` : ''}</div>
-      <div class="row">${it.level_cost ? act_('level_item', '⬆ Level', it.level_cost) : ''}${it.star_cost ? act_('ascend_star', '🌟 Ascend ★', it.star_cost) : ''}${it.rarity_cost ? act_('ascend_rarity', '💎 Raise rarity', it.rarity_cost) : ''}${it.repair_cost ? act_('repair_item', '🛠 Repair', { white_gel: it.repair_cost }) : ''}</div>
-      ${donors.length ? `<div class="row"><small class="mute">Feed another ${it.slot} relic into it (levels it, mends it, may pass on a mod):</small><select data-ui="rd_${it.uid}">${donors.map((x) => `<option value="${x.uid}">${x.emoji} ${esc(x.name)} · ${x.rarity} ${x.stars}★ Lv${x.level}</option>`).join('')}</select><button class="btn small danger" data-act="relic_feed" data-uid="${it.uid}">🫧 Merge in</button></div>` : ''}
-      <div class="row">${it.salvage && !holder ? `<button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${it.uid}" data-ask="Break this relic down for ${esc(cost(it.salvage))}? It is gone for good.">🔨 Break down → ${cost(it.salvage)}</button>` : ''}
-        ${!it.ego && it.rarity === 'legendary' && it.stars === 5 ? `<button class="btn small danger" data-act="item_fuse" data-uid="${it.uid}">👁 Fuse ego…</button>` : ''}</div></div></details>`;
+  return `<div class="scrim" style="z-index:55" data-act="closemodal"></div><div class="modal relicwin" style="width:min(560px,96vw)">
+    <header><div class="row" style="gap:10px"><span class="ricon big r-${it.rarity}">${it.emoji}</span><div><h3 style="margin:0">${esc(it.name)}</h3>
+      <div class="row" style="gap:4px">${chip(it.rarity, RARITY_CLS[it.rarity])}${stars(it.stars)} <small class="mute">Lv${it.level} · ${it.slot}${it.family ? ' · ' + it.family : ''}</small></div></div></div><button class="btn small" data-act="closemodal">✕</button></header>
+    <div class="body stack">
+      <div class="row" style="gap:6px">${Object.entries(it.stats).map(([k, v]) => chip(`+${v} ${k}`)).join('')}${it.mods.map((md) => chip(esc(md), 'info')).join('')}</div>
+      <small class="mute">${it.ego ? `👁️ Soul of ${esc(it.ego.name)} (Lv${it.ego.level}).` : `Made for: ${it.fits.join(', ')}.`} ${holder ? `Worn by <b>${esc(holder.name)}</b>${it.compat !== null ? ` (💞 ${it.compat}% compatible)` : ''}.` : 'In the vault.'}</small>
+      ${dur === null ? '<small class="mute">Unbreakable.</small>' : `<div class="row" style="gap:8px"><span style="flex:1">${bar(it.durability, it.max_durability, dur < 30 ? 'bad' : '', 'Durability', `${it.durability}/${it.max_durability}`)}</span>${it.repair_cost ? `<button class="btn small" data-act="item_cmd" data-c="repair_item" data-uid="${it.uid}" ${free && affordable({ white_gel: it.repair_cost }) ? '' : 'disabled'}>🛠 Repair · ${cost({ white_gel: it.repair_cost })}</button>` : ''}</div>`}
+      <h4 style="margin:6px 0 0">Upgrade path</h4>${relicPath(it, free)}
+      <h4 style="margin:6px 0 0">${holder ? 'Worn' : 'Equip'}</h4>${holder ? `<div class="row"><button class="btn small" data-act="item_unequip" data-id="${holder.id}" data-slot="${it.slot}" ${free ? '' : 'disabled'}>Take it off ${esc(holder.name)}</button></div>` : equip}
+      ${donors.length ? `<h4 style="margin:6px 0 0">Merge another into it</h4><div class="row"><select data-ui="rd_${it.uid}">${donors.map((x) => `<option value="${x.uid}">${x.emoji} ${esc(x.name)} · ${x.rarity} ${x.stars}★ Lv${x.level}</option>`).join('')}</select><button class="btn small danger" data-act="relic_feed" data-uid="${it.uid}">🫧 Merge in</button></div><small class="mute">The relic merged in is used up; this one gains levels, is mended and may take a mod.</small>` : ''}
+    </div>
+    <footer>${it.salvage && !holder ? `<button class="btn small danger" data-act="item_cmd" data-c="salvage_item" data-uid="${it.uid}" data-ask="Break this relic down for ${esc(cost(it.salvage))}? It is gone for good.">🔨 Break down → ${cost(it.salvage)}</button>` : ''}<button class="btn" data-act="closemodal">Close</button></footer></div>`;
 }
 /* Town > Relics: every relic, in the vault and worn, as one filterable list. */
 function relicsView() {
@@ -1607,15 +1645,36 @@ function relicsView() {
   const list = all.filter(({ it, s: h }) => (where === 'all' || (where === 'vault') === !h) && (slot === 'all' || it.slot === slot)).sort(sorters[sort] || sorters.rarity);
   const opt = (o, cur) => Object.entries(o).map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('');
   const worn_out = all.filter(({ it }) => it.durability !== null && it.durability < it.max_durability * 0.3).length;
-  return `<div class="panel stack"><div class="row between"><h2>🗡️ Relics <small class="mute">${st.gear.vault.length} in the vault · ${worn.length} worn</small></h2>
+  return `<div class="panel stack"><div class="row between"><h2>🗡️ Relics &nbsp;<small class="mute">${st.gear.vault.length} in the vault · ${worn.length} worn</small></h2>
       <div class="row"><label class="f">Show <select data-ui="rl_where" data-rerender="1">${opt({ all: 'All', vault: 'In the vault', worn: 'Worn' }, where)}</select></label>
         <label class="f">Slot <select data-ui="rl_slot" data-rerender="1">${opt({ all: 'Any', weapon: 'Weapon', armor: 'Armor', charm: 'Charm' }, slot)}</select></label>
         <label class="f">Sort <select data-ui="rl_sort" data-rerender="1">${opt({ rarity: 'Rarity', level: 'Level', worn_out: 'Most worn', name: 'Name' }, sort)}</select></label></div></div>
-    <p class="mute">Relics come from the Wayfarer's Rift (and the blacksmith's forge). Tap one for what you can do with it: equip it, level it, ascend it, repair it, merge another relic into it, or break it down for materials. ✓ marks the slimes it was made for.${worn_out ? ` <b>${worn_out} relic${worn_out > 1 ? 's are' : ' is'} badly worn.</b>` : ''}</p>
+    <p class="mute">Relics come from the Wayfarer's Rift (and the blacksmith's forge). <b>Tap a relic</b> for its upgrade path (level → stars → rarity → ego), to equip it, merge another into it or break it down.${worn_out ? ` <b>${worn_out} relic${worn_out > 1 ? 's are' : ' is'} badly worn.</b>` : ''}</p>
     <div class="row">${Object.entries(a.materials || st.gear.materials).map(([k, v]) => chip(`${RES[k][0]} ${RES[k][1]}: ${v}`)).join('')}
       ${info("Breaking a relic down gives materials of its tier (more, and a better tier, for higher level and stars). Levelling needs materials of the relic's own tier. Star ascension (at level 10) also needs an Armory level at least the current star count; raising rarity needs 5 stars, level 10 and Armory level 5.")}</div>
-    <div class="stack" style="gap:6px">${list.map(({ it, s: h }) => relicRow(it, h)).join('') || `<p class="mute">${all.length ? 'No relic matches.' : "No relics yet. Venture into the Wayfarer's Rift."}</p>`}</div>
+    ${list.length ? `<div class="rgrid">${list.map(({ it, s: h }) => relicTile(it, h)).join('')}</div>` : `<p class="mute">${all.length ? 'No relic matches.' : "No relics yet. Venture into the Wayfarer's Rift."}</p>`}
     <div class="row"><button class="btn small" data-act="goto" data-t="dungeons" data-s="rift">🧭 To the Wayfarer's Rift</button></div></div>`;
+}
+/* One spare gear piece: equip it, sell one back, merge identical pieces into the next tier. */
+function gearWindow(m) {
+  const st = S.state, gf = st.gift, k = m.key, n = st.gear.inventory[k] || 0;
+  const defs = Object.fromEntries(st.gear.all.map((x) => [x.key, x])), x = defs[k];
+  if (!x || !n) { S.modal = null; return ''; }
+  const free = st.slimes.filter((y) => !y.busy);
+  let to = num(ui('gg_' + k, free[0]?.id));
+  if (!free.some((y) => y.id === to)) to = free[0]?.id;
+  S.ui['gg_' + k] = to;
+  const ups = st.gear.all.filter((y) => y.slot === x.slot && y.tier === x.tier + 1);
+  const back = cost(Object.fromEntries(Object.entries(x.cost).map(([c, v]) => [c, Math.max(1, Math.floor(v * gf.scrap))])));
+  const sets = st.gear.sets.filter((z) => z.pieces.includes(k));
+  return `<div class="scrim" style="z-index:55" data-act="closemodal"></div><div class="modal" style="width:min(480px,96vw)">
+    <header><div class="row" style="gap:10px"><span class="ricon big t${x.tier}">${x.emoji}</span><div><h3 style="margin:0">${esc(x.name)} <small class="mute">×${n}</small></h3><small class="mute">tier ${x.tier} ${x.slot} · ${esc(relicStat(x))}</small></div></div><button class="btn small" data-act="closemodal">✕</button></header>
+    <div class="body stack">
+      ${sets.length ? `<small class="mute">Part of ${sets.map((z) => `${z.emoji} <b>${esc(z.name)}</b>`).join(', ')}: wear two or three pieces of a set for a bonus.</small>` : ''}
+      <h4 style="margin:0">Equip</h4>${free.length ? `<div class="row"><select data-ui="gg_${k}">${free.map((y) => `<option value="${y.id}" ${y.id === to ? 'selected' : ''}>${esc(y.name)} (${esc(y.class_name)})${y.gear[x.slot] ? ' · swaps ' + esc(defs[y.gear[x.slot]]?.name || '') : ''}</option>`).join('')}</select><button class="btn small primary" data-act="gear_give" data-key="${k}">Equip</button></div>` : '<small class="mute">Nobody is free to wear it.</small>'}
+      <h4 style="margin:0">Merge up</h4>${ups.length ? `<div class="row">${ups.map((u) => `<button class="btn small" data-act="merge_gear" data-key="${k}" data-into="${u.key}" data-c="${gf.merge_gear}" data-n="${esc(x.name)}" data-in_n="${esc(u.name)}" ${n >= gf.merge_gear ? '' : 'disabled'}>🫧 ${gf.merge_gear} → ${u.emoji} ${esc(u.name)}</button>`).join('')}</div><small class="mute">${n >= gf.merge_gear ? '' : `You need ${gf.merge_gear} of them (you have ${n}).`}</small>` : '<small class="mute">Top tier: nothing to merge into.</small>'}
+    </div>
+    <footer><button class="btn small danger" data-act="scrap_gear" data-key="${k}" data-n="${esc(x.name)}" data-y="${esc(back)}">💰 Sell back one · ${esc(back)}</button><button class="btn" data-act="closemodal">Close</button></footer></div>`;
 }
 /* Town > Armory: the gear shop, the spare gear (give, sell back, merge) and the blacksmith. */
 function armoryView() {
@@ -1624,23 +1683,16 @@ function armoryView() {
   const inv = Object.entries(st.gear.inventory).filter(([k, n]) => n > 0 && defs[k]);
   const free = st.slimes.filter((x) => !x.busy);
   const spare = inv.map(([k, n]) => { const x = defs[k];
-    const ups = st.gear.all.filter((y) => y.slot === x.slot && y.tier === x.tier + 1);
-    const back = cost(Object.fromEntries(Object.entries(x.cost).map(([c, v]) => [c, Math.max(1, Math.floor(v * gf.scrap))])));
-    let to = num(ui('gg_' + k, free[0]?.id));
-    if (!free.some((y) => y.id === to)) to = free[0]?.id;
-    S.ui['gg_' + k] = to;
-    return `<div class="panel flat stack"><div class="row between"><span>${x.emoji} <b>${esc(x.name)}</b> ×${n} <small class="mute">T${x.tier} ${x.slot} · ${relicStat(x)}</small></span>
-        <button class="btn small danger" data-act="scrap_gear" data-key="${k}" data-n="${esc(x.name)}" data-y="${esc(back)}">💰 Sell back one · ${esc(back)}</button></div>
-      <div class="row">${free.length ? `<select data-ui="gg_${k}">${free.map((y) => `<option value="${y.id}" ${y.id === to ? 'selected' : ''}>${esc(y.name)} (${esc(y.class_name)})${y.gear[x.slot] ? ' · swaps ' + esc(defs[y.gear[x.slot]]?.name || '') : ''}</option>`).join('')}</select><button class="btn small primary" data-act="gear_give" data-key="${k}">Equip</button>` : '<small class="mute">nobody is free to wear it</small>'}
-        ${ups.map((u) => `<button class="btn small" data-act="merge_gear" data-key="${k}" data-into="${u.key}" data-c="${gf.merge_gear}" data-n="${esc(x.name)}" data-in_n="${esc(u.name)}" ${n >= gf.merge_gear ? '' : 'disabled'} title="Merge ${gf.merge_gear} identical pieces into one of the next tier">🫧 ${gf.merge_gear} → ${u.emoji} ${esc(u.name)}</button>`).join('') || '<small class="mute">top tier</small>'}</div></div>`; }).join('');
+    return `<button class="rtile gtile t${x.tier}" data-act="gear_open" data-key="${k}" title="${esc(x.name)} · tier ${x.tier} ${x.slot} · ${esc(relicStat(x))}">
+      <span class="ricon">${x.emoji}<i class="gcount">×${n}</i></span><b class="rname">${esc(x.name)}</b><span class="rstars">tier ${x.tier} · ${x.slot}</span><small class="rmeta">${esc(relicStat(x))}</small></button>`; }).join('');
   return `<div class="grid cols2">
     <div class="panel stack"><h2>🛠️ Armory shop ${info('Gear is usable by any class. The Armory level limits which tier it sells. Gear also drops in dungeons — but a fallen slime\'s gear can be lost.')}</h2>
-      <table><tbody>${st.gear.shop.map((g) => `<tr><td>${g.emoji} <b>${esc(g.name)}</b><br><small class="mute">T${g.tier} ${g.slot} · ${relicStat(g)}</small></td><td>${cost(g.cost)}</td>
-        <td><button class="btn small" data-act="buy_gear" data-key="${g.key}" ${affordable(g.cost) ? '' : 'disabled'}>Buy</button></td></tr>`).join('')}</tbody></table>
+      ${['weapon', 'armor', 'charm'].map((sl) => { const rows = st.gear.shop.filter((g) => g.slot === sl); return rows.length ? `<h4 style="margin:4px 0 0">${{ weapon: '⚔️ Weapons', armor: '🛡️ Armor', charm: '✨ Charms' }[sl]}</h4>
+        <div class="shoplist">${rows.map((g) => `<div class="shoprow"><span class="ricon sm t${g.tier}">${g.emoji}</span><span><b>${esc(g.name)}</b> <small class="tierb t${g.tier}">T${g.tier}</small><br><small class="mute">${relicStat(g)}${st.gear.inventory[g.key] ? ` · you have ${st.gear.inventory[g.key]}` : ''}</small></span><button class="btn small" data-act="buy_gear" data-key="${g.key}" ${affordable(g.cost) ? '' : 'disabled'}>Buy · ${cost(g.cost)}</button></div>`).join('')}</div>` : ''; }).join('')}
       <details><summary>🧩 Gear sets</summary><div class="stack">${st.gear.sets.map((x) => `<small>${x.emoji} <b>${esc(x.name)}</b>: ${x.pieces.map((k) => esc(defs[k]?.name || k)).join(', ')}<br><span class="mute">2 pieces: ${relicStat(x.bonus[2])} · 3 pieces: ${relicStat(x.bonus[3])}</span></small>`).join('')}</div></details></div>
     <div class="panel stack"><h2>🎒 Spare gear <small class="mute">(not worn)</small></h2>
-      <p class="mute">Equip a piece on a slime, <b>sell one back</b> for ${Math.round(gf.scrap * 100)}% of its price, or <b>merge</b> ${gf.merge_gear} identical pieces into one of the next tier.</p>
-      ${spare || '<p class="mute">No spare gear. Buy some in the shop or find it in dungeons.</p>'}
+      <p class="mute"><b>Tap a piece</b> to equip it on a slime, <b>sell one back</b> for ${Math.round(gf.scrap * 100)}% of its price, or <b>merge</b> ${gf.merge_gear} identical pieces into one of the next tier.</p>
+      ${spare ? `<div class="rgrid">${spare}</div>` : '<p class="mute">No spare gear. Buy some in the shop or find it in dungeons.</p>'}
       ${st.gear.pit_lost.length ? `<div class="warnbox">Left behind in the Pit: ${st.gear.pit_lost.map((k) => esc(defs[k]?.name || k)).join(', ')}. A later Pit victory may dig it up.</div>` : ''}</div></div>
   <details class="panel" style="margin-top:12px" data-keep="smithOpen" ${ui('smithOpen', false) ? 'open' : ''}><summary><b>🔨 Blacksmith</b> <small class="mute">${chip(`⚒️ forge ${fg.progress}/${fg.shifts}`, 'info')}</small></summary>
     <p class="mute">An appointed blacksmith mends worn gear carried by slimes at home for free, and slowly forges: every ${fg.shifts} shifts a <b>${fg.next === 'weapon' ? 'weapon (the best tier the Armory sells, at ' + Math.round(fg.share * 100) + '% of the shop price)' : 'relic (' + esc(cost(fg.relic_cost)) + ')'}</b>, if the materials are there — alternating weapon and relic. With no materials the shift goes foraging.</p>
@@ -1933,6 +1985,8 @@ function modalHtml() {
       <div class="log">${logHtml(b.log)}</div></div>
       <footer>${m.battles.length > 1 ? `<button class="btn" data-act="battle_nav" data-d="-1">◀</button><button class="btn" data-act="battle_nav" data-d="1">▶</button>` : ''}<button class="btn primary" data-act="closemodal">Close</button></footer></div>`;
   }
+  if (m.type === 'relic') return relicWindow(m);
+  if (m.type === 'gear') return gearWindow(m);
   if (m.type === 'menu') {
     return `<div class="scrim" style="z-index:55" data-act="closemodal"></div><div class="modal" style="width:min(420px,94vw)"><header><h3 style="margin:0">Menu</h3><button class="btn small" data-act="closemodal">✕</button></header>
       <div class="body stack">
@@ -2109,8 +2163,8 @@ const A = {
     const busy = busyMembers(pid);
     confirmThen(`${busy.length ? pullNote(busy) : ''}Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose morale and drop their gear (no XP is lost).`, () => act('grind', { pid, depth, runs, recall: busyMembers(pid).length > 0, lure: !!ui('pit_lure', false) }, { slow: true, title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
-    const lo = Math.max(1, Math.min(50, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(50, num(ui('whi', 5), 5)));
-    const busy = busyMembers(pid), go = () => act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(5, num(ui('waves', 1), 1))), manual: manualOn(), recall: busy.length > 0 }, { title: 'Wave simulation' });
+    const ws = S.state.dungeon.session, lo = Math.max(1, Math.min(ws.wave_level, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(ws.wave_level, num(ui('whi', 5), 5)));
+    const busy = busyMembers(pid), go = () => act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(ws.wave_max, num(ui('waves', 1), 1))), stop_hp: num(ui('wstop', ws.wave_stop), ws.wave_stop), manual: manualOn(), recall: busy.length > 0 }, { title: 'Wave simulation' });
     return busy.length ? confirmThen(`${pullNote(busy)}Run the wave simulation?`, go) : go(); },
   party_train: () => { const pid = num(S.ui.ptpid); if (!pid) return toast('You need a full party at home.', true); act('party_train', { pid, tier: num(ui('dtier', 1), 1) }, { slow: true }); },
   drill_me: () => act('drill', { id: S.sel, discipline: ui('my_disc'), tier: num(ui('dtier', 1), 1) }),
@@ -2121,6 +2175,8 @@ const A = {
     if (!donor) return toast('Choose a relic to merge in.', true);
     confirmThen('Merge the chosen relic into this one? The relic you merge in is consumed for good.', () => act('merge_items', { target: num(d.uid), donor })); },
   gear_give: (d) => { const id = num(ui('gg_' + d.key)); return id ? act('equip', { id, key: d.key }) : toast('Nobody is free to wear it.', true); },
+  relic_open: (d) => { S.modal = { type: 'relic', uid: num(d.uid) }; render(); },
+  gear_open: (d) => { S.modal = { type: 'gear', key: d.key }; render(); },
   goto: (d) => { S.tab = d.t; if (d.s) S.sub[d.t] = d.s; S.sel = null; S.modal = null; S.nextScroll = 0; render(); },
   spar_parties: () => { const pid = num(S.ui.sppid), other = num(S.ui.sppid2); if (!pid || !other) return toast('You need two full parties at home.', true);
     act('spar_parties', { pid, other, discipline: ui('pstyle', 'sword') }, { title: 'Party spar', slow: true }); },

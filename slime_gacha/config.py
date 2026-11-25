@@ -100,6 +100,8 @@ PEACEMAKER_CHANCE = 0.5           # once a day, a friend of both at home tries t
 
 # ---- Growth ---------------------------------------------------------------
 LEVEL_CAPS = [10, 30, 100]          # per evolution stage
+EGO_LEVEL_CAP = 150                 # ... and a legendary wearing an ego relic in every slot grows on to this level
+EGO_SLOTS = ("weapon", "armor", "charm")
 STAGE_STAT_MULT = [1.0, 1.5, 2.1]
 EVOLVE_ESSENCE_BASE = 50            # * (stage + 1)
 MERGE_XP_RATIO = 1.0              # a merge hands over the XP the donor collected (no more, no less)
@@ -110,7 +112,7 @@ SOFT_LEVEL = 50                     # above this level each level adds only SOFT
 SOFT_LEVEL_RATE = 0.6
 
 def stat_level(level: float) -> float:
-    """The level stats are computed from: linear to 50, then diminishing (level 100 counts as 80)."""
+    """The level stats are computed from: linear to 50, then diminishing (level 100 counts as 80, 150 as 110)."""
     return level if level <= SOFT_LEVEL else SOFT_LEVEL + (level - SOFT_LEVEL) * SOFT_LEVEL_RATE
 
 PIT_RUNS_PER_LEVEL = 3.5          # Pit runs a COMMON party needs per level (rarer slimes need more, see pit_xp_per_run)
@@ -190,7 +192,8 @@ SPAR_DUMMY_MULT = 0.5           # odd slime out trains on a dummy at half rate (
 SPAR_MIN_HP = 0.4
 SPAR_BOND = 3
 WAVE_PROF, WAVE_BOND, WAVE_TICKS = 2.0, 1.0, 2
-WAVE_MAX_LEVEL, WAVE_MAX_WAVES, WAVE_XP_MULT = 50, 5, 1.0   # wave simulation: top monster level, most waves, XP vs the monsters' worth   # wave simulation: class proficiency per member (x(1+0.5 per tier above 1)), bond per pair, hours
+WAVE_MAX_LEVEL, WAVE_MAX_WAVES, WAVE_XP_MULT = 150, 100, 1.0   # wave simulation: top monster level (past the slimes' own cap), most waves in one trip, XP vs the monsters' worth
+WAVE_STOP_HP = 30               # default safety line: the party comes home once a member ends a wave below this % of its HP (0 = fight on)   # wave simulation: class proficiency per member (x(1+0.5 per tier above 1)), bond per pair, hours
 # A TROUBLEMAKER (merging or destroying it costs no morale and no sacrifice stress): a slime that came to blows with more
 # different slimes in the last NUISANCE_DAYS days than NUISANCE_SHARE of the colony (rounded down, never under NUISANCE_MIN),
 # or one most of the colony dislikes. A slime that was only snapped at does not count the fight against it.
@@ -430,7 +433,8 @@ ITEM_SALVAGE_BASE = 2
 ITEM_ASCEND_STAR = 15            # materials of the item's own tier = this x current star ...
 ITEM_ASCEND_RARITY = 150         # ... and for a rarity step
 ITEM_MOD_RANGE = {"crit_rate": (0.03, 0.06), "crit_dmg": (0.10, 0.25), "elem_dmg": (0.08, 0.18),
-                  "lifesteal": (0.03, 0.08)}
+                  "lifesteal": (0.03, 0.08), "evasion": (0.02, 0.05), "guard": (0.03, 0.06), "regen": (0.008, 0.015),
+                  "resist": (0.04, 0.08), "spell_power": (0.05, 0.12)}
 ITEM_COMPAT_MIN, ITEM_COMPAT_MAX = 0.85, 1.15    # stat multiplier from slime <-> item compatibility
 EGO_BASE_MULT = 1.5              # an ego relic is a 5-star legendary fused with a 5-star legendary slime
 EGO_LEVEL_MULT = 0.02            # + 2% per level of the sacrificed slime

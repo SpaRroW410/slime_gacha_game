@@ -24,7 +24,8 @@ SLOTS = ("weapon", "armor", "charm")
 MOD_KINDS = tuple(config.ITEM_MOD_RANGE)
 ELEMENTS = ("fire", "water", "earth", "wind")
 MOD_LABEL = {"crit_rate": "Crit rate", "crit_dmg": "Crit damage", "elem_dmg": "Elemental damage",
-             "lifesteal": "Lifesteal"}
+             "lifesteal": "Lifesteal", "evasion": "Evasion", "guard": "Guard", "regen": "Regeneration (per turn)",
+             "resist": "Magic resistance", "spell_power": "Spell power"}
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,26 @@ for _b in [
     Base("lucky_fang", "Lucky Fang", "🦷", "charm", dict(atk=2, spd=2), ("rogue", "ranger", "barbarian")),
     Base("mana_bead", "Mana Bead", "🔮", "charm", dict(mag=3, hp=4), ("mage", "necromancer", "medic")),
     Base("heartroot", "Heartroot", "🌱", "charm", dict(hp=14, defense=1), ("medic", "barbarian")),
+    # every class has a weapon, an armor and a charm made for it
+    Base("knights_longsword", "Knight's Longsword", "🗡️", "weapon", dict(atk=6, defense=2), ("paladin", "barbarian"), "sword"),
+    Base("templar_maul", "Templar Maul", "🔨", "weapon", dict(atk=6, hp=6), ("paladin",), "hammer"),
+    Base("shadow_kris", "Shadow Kris", "🔪", "weapon", dict(atk=5, spd=3), ("rogue", "bard"), "dagger"),
+    Base("thornwood_longbow", "Thornwood Longbow", "🏹", "weapon", dict(atk=5, spd=2, hp=2), ("ranger", "druid"), "bow"),
+    Base("druids_crook", "Druid's Crook", "🪵", "weapon", dict(mag=4, hp=5), ("druid", "bard"), "staff"),
+    Base("minstrels_baton", "Minstrel's Baton", "🎼", "weapon", dict(mag=4, spd=3), ("bard",), "staff"),
+    Base("alchemists_codex", "Alchemist's Codex", "📕", "weapon", dict(mag=5, spd=1), ("alchemist", "mage"), "tome"),
+    Base("tower_plate", "Bulwark Cuirass", "🛡️", "armor", dict(defense=7, hp=4), ("paladin", "barbarian")),
+    Base("wayfinder_cloak", "Wayfinder Cloak", "🧣", "armor", dict(defense=2, spd=3, hp=5), ("ranger", "rogue", "druid")),
+    Base("minstrels_doublet", "Minstrel's Doublet", "🎽", "armor", dict(defense=2, mag=2, spd=1, hp=6), ("bard",)),
+    Base("stained_apron", "Stained Apron", "🥼", "armor", dict(defense=3, mag=2, hp=6), ("alchemist", "medic")),
+    Base("bark_mail", "Barkskin Hauberk", "🌳", "armor", dict(defense=4, hp=8), ("druid",)),
+    Base("bone_mantle", "Ossuary Shroud", "🦴", "armor", dict(defense=2, mag=3, hp=5), ("necromancer",)),
+    Base("holy_sigil", "Holy Sigil", "📿", "charm", dict(defense=2, hp=8), ("paladin", "medic")),
+    Base("songbird_locket", "Songbird Locket", "🐦", "charm", dict(mag=2, spd=3), ("bard",)),
+    Base("philosophers_pebble", "Philosopher's Stone", "🧿", "charm", dict(mag=3, atk=1, hp=3), ("alchemist",)),
+    Base("acorn_totem", "Acorn Totem", "🌰", "charm", dict(hp=10, mag=1), ("druid",)),
+    Base("skull_fetish", "Skull Fetish", "💀", "charm", dict(mag=3, spd=1), ("necromancer",)),
+    Base("hawk_feather", "Hawk Feather", "🪶", "charm", dict(atk=2, spd=3), ("ranger",)),
 ]:
     register_base(_b)
 
@@ -303,7 +324,7 @@ def battle_mods(slime) -> dict:
             if m["kind"] == "elem_dmg":
                 out["elem"][m["element"]] = out["elem"].get(m["element"], 0.0) + v
             else:
-                out[m["kind"]] += v
+                out[m["kind"]] = out.get(m["kind"], 0.0) + v
     return out
 
 

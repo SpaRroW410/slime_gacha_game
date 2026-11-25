@@ -2103,13 +2103,15 @@ class Game:
 
     # ---- battle -----------------------------------------------------------------
     def battle(self, pid: int, tier: int = 1, manual: bool = False, lo: Optional[int] = None, hi: Optional[int] = None,
-               waves: int = 1, recall: bool = False):
+               waves: int = 1, recall: bool = False, stop_hp: Optional[int] = None):
         """The wave simulation: a full party fights `waves` waves of monsters (one per party slot) as a drill. Nobody dies
-        and there is no loot. Monsters are of a level between `lo` and `hi` (a floor-equivalent, 1-50); the XP is fixed by
+        and there is no loot. Monsters are of a level between `lo` and `hi` (1-WAVE_MAX_LEVEL); the XP is fixed by
         the monsters and their level (no randomness, no rarity factor). Without lo/hi it uses the monsters of `tier` (4 is a
         boss). It also trains battle proficiency and teamwork. With manual=True it pauses for orders (returns None until
-        it ends)."""
-        return self._play(self._skirmish_gen(pid, tier, lo, hi, waves, recall), "skirmish", manual, pid)
+        it ends). A long trip (up to WAVE_MAX_WAVES) comes home early once a member ends a wave below `stop_hp`% of its HP;
+        only the waves the slimes fought on their own cost time - those you led by hand need no waiting."""
+        stop = config.WAVE_STOP_HP if stop_hp is None else max(0, min(95, int(stop_hp)))
+        return self._play(self._skirmish_gen(pid, tier, lo, hi, waves, recall, stop), "skirmish", manual, pid)
 
     def wave_enemies(self, tier: int, lo: Optional[int], hi: Optional[int]):
         if lo is None and hi is None:
@@ -2124,7 +2126,7 @@ class Game:
         return out
 
     def _skirmish_gen(self, pid: int, tier: int, lo: Optional[int] = None, hi: Optional[int] = None, waves: int = 1,
-                      recall: bool = False):
+                      recall: bool = False, stop_hp: int = 0):
         self._require_full(pid)
         waves = max(1, min(config.WAVE_MAX_WAVES, int(waves)))
         party = self._ready_party(pid, recall)
@@ -2133,16 +2135,19 @@ class Game:
         self._owed = 0.0
         self._set_flag(party, "wave")
         try:
-            report = yield from self._wave_rounds(party, tier, lo, hi, waves, total_xp, won, log)
+            report = yield from self._wave_rounds(party, tier, lo, hi, waves, total_xp, won, log, stop_hp)
         finally:
             self._release(party)
         return report
 
-    def _wave_rounds(self, party, tier, lo, hi, waves, total_xp, won, log):
+    def _wave_rounds(self, party, tier, lo, hi, waves, total_xp, won, log, stop_hp: int = 0):
         report = None
+        auto_waves, home_early = 0, ""
         for w in range(waves):
             enemies = self.wave_enemies(tier, lo, hi)
             report = yield from self._battle_gen(party, enemies, permadeath=False, split_xp=True, xp_mult=config.WAVE_XP_MULT, loot=False)
+            if not self._by_hand():                                 # a wave you led yourself costs no waiting
+                auto_waves += 1
             self._after_battle(party, report, scale=0.5, wear=False)     # morale and feelings react; gear is not worn by a drill
             total_xp += report.xp
             log.extend([f"🌊 Wave {w + 1}/{waves}"] + report.log if waves > 1 else report.log)
@@ -2152,6 +2157,13 @@ class Game:
             if not report.victory:
                 break
             won += 1
+            low = [s for s in party if s.id in self.roster and s.hp < s.max_hp * stop_hp / 100]
+            if stop_hp and low and w + 1 < waves:
+                home_early = (f"🏠 {', '.join(s.name for s in low[:3])} {'is' if len(low) == 1 else 'are'} below {stop_hp}% health: "
+                              f"the party comes home after wave {w + 1} of {waves}.")
+                break
+        if home_early:
+            log.append(home_early)
         report.log = log
         report.xp = total_xp
         events: List[str] = []
@@ -2165,7 +2177,10 @@ class Game:
             for b in party[i + 1:]:
                 self.social.add_bond(a, b, config.WAVE_BOND * won)
         report.log.append(f"🧪 Simulation over ({won}/{waves} waves won): nobody is hurt for real - {total_xp} XP and battle proficiency gained.")
-        events.extend(self._spend(config.WAVE_TICKS * waves, "wave"))
+        if auto_waves:
+            events.extend(self._spend(config.WAVE_TICKS * auto_waves, "wave"))
+        elif won:
+            events.append("   ⏱ You led these waves yourself: no waiting, the party is home.")
         report.log.extend(events)
         self.journal.extend(events)
         return report

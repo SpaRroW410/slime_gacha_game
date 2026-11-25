@@ -468,3 +468,88 @@ class TestWaveSimulationCallBack(unittest.TestCase):
         r = g.battle(pid, 1, recall=True)
         self.assertIsNotNone(r)
         self.assertLess(m.morale, 100)
+
+
+class TestLongWaveGrinds(unittest.TestCase):
+    """The wave simulation runs up to 100 waves against monsters past level 100, comes home early below a health line,
+    and charges time only for the waves the slimes fought on their own."""
+    def setUp(self):
+        self.g = rich(171)
+        self.pid = party(self.g, strong=True)
+
+    def test_limits_reach_a_hundred_waves_and_level_one_fifty(self):
+        self.assertEqual(config.WAVE_MAX_WAVES, 100)
+        self.assertEqual(config.WAVE_MAX_LEVEL, 150)
+        foes = self.g.wave_enemies(1, 140, 150)
+        self.assertTrue(foes)
+        weak = self.g.wave_enemies(1, 10, 10)
+        self.assertGreater(min(e.stats["hp"] for e in foes), max(e.stats["hp"] for e in weak))
+
+    def test_a_long_grind_comes_home_below_the_health_line(self):
+        m = members(self.g, self.pid)[0]
+        m.hp = m.max_hp // 2                                      # already below the line: home after the first wave
+        r = self.g.battle(self.pid, waves=100, lo=1, hi=1, stop_hp=60)
+        self.assertEqual(sum(1 for l in r.log if l.startswith("🌊 Wave")), 1)
+        self.assertTrue(any("comes home after wave 1 of 100" in l for l in r.log))
+
+    def test_with_no_line_a_strong_party_fights_every_wave(self):
+        r = self.g.battle(self.pid, waves=12, lo=1, hi=1, stop_hp=0)
+        self.assertEqual(sum(1 for l in r.log if l.startswith("🌊 Wave")), 12)
+
+    def test_waves_led_by_hand_cost_no_time(self):
+        g, pid = self.g, self.pid
+        t = g.tick_count
+        g.battle(pid, waves=1, lo=1, hi=1, manual=True)
+        while g.battle_run() is not None:
+            g.battle_auto_turn()
+        self.assertEqual(g.tick_count, t)
+        self.assertTrue(all(not s.in_dungeon for s in members(g, pid)))
+
+    def test_automatic_waves_cost_their_hours(self):
+        g, pid = self.g, self.pid
+        t = g.tick_count
+        g.battle(pid, waves=2, lo=1, hi=1, stop_hp=0)
+        self.assertGreater(g.tick_count, t)
+
+
+class TestEgoAscension(unittest.TestCase):
+    """The usual level cap is 100; a legendary wearing an ego relic in every slot grows on to 150."""
+    def test_three_ego_relics_on_a_legendary_lift_the_cap(self):
+        from slime_gacha import items as items_mod
+        g = rich(181)
+        s = g.gacha.make_slime("legendary", "barbarian", stars=5)
+        g.roster[s.id] = s
+        s.stage = len(config.LEVEL_CAPS) - 1
+        self.assertEqual(s.level_cap, 100)
+        for i, sl in enumerate(config.EGO_SLOTS):
+            it = next(x for x in (items_mod.roll_item(g.rng, 900 + n, False, "legendary") for n in range(200)) if x.slot == sl)
+            it.ego = dict(name=f"Soul {i}", level=50, archetype="barbarian")
+            s.items[sl] = it
+            self.assertEqual(s.level_cap, 150 if i == len(config.EGO_SLOTS) - 1 else 100)
+        s.rarity = "epic"
+        self.assertEqual(s.level_cap, 100)                    # only a legendary
+        s.rarity = "legendary"
+        s.stage = 1
+        self.assertEqual(s.level_cap, config.LEVEL_CAPS[1])     # only at the last evolution stage
+
+
+class TestRelicVariety(unittest.TestCase):
+    def test_every_class_has_a_weapon_an_armor_and_a_charm_made_for_it(self):
+        from slime_gacha import items as items_mod
+        from slime_gacha.archetypes import all_archetypes
+        for a in all_archetypes():
+            slots = {b.slot for b in items_mod.BASES if a.key in b.fits}
+            self.assertEqual(slots, set(items_mod.SLOTS), a.key)
+
+    def test_the_new_mod_kinds_reach_the_battle(self):
+        from slime_gacha import items as items_mod
+        g = rich(191)
+        s = g.gacha.make_slime("rare", "mage", stars=3)
+        g.roster[s.id] = s
+        it = items_mod.roll_item(g.rng, 991, False, "common")
+        it.mods = [dict(kind=k, value=0.05) for k in ("evasion", "guard", "regen", "resist", "spell_power")]
+        s.items[it.slot] = it
+        mods = items_mod.battle_mods(s)
+        for k in ("evasion", "guard", "regen", "resist", "spell_power"):
+            self.assertGreater(mods.get(k, 0), 0, k)
+        self.assertTrue(all(it.mod_text(m) for m in it.mods))

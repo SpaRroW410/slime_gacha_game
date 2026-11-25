@@ -54,6 +54,16 @@ _g("obsidian_plate", "Obsidian Plate", "⚫", "armor", 3, dict(defense=8, hp=30)
 _g("lucky_pebble", "River Pebble", "🪨", "charm", 1, dict(spd=1, hp=4))
 _g("moss_charm", "Moss Charm", "🍀", "charm", 2, dict(hp=10, mag=2, atk=2))
 _g("heart_shard", "Dawn Shard", "💜", "charm", 3, dict(atk=3, mag=3, defense=3, spd=3, hp=10))
+_g("sling", "Leather Sling", "🪃", "weapon", 1, dict(atk=1, spd=3))
+_g("cloth_robe", "Cloth Tunic", "👚", "armor", 1, dict(defense=1, mag=2, hp=4))
+_g("bone_charm", "Bone Charm", "🦴", "charm", 1, dict(atk=1, mag=1, hp=2))
+_g("composite_bow", "Composite Bow", "🎯", "weapon", 2, dict(atk=4, spd=3))
+_g("scout_leathers", "Scout Leathers", "🥾", "armor", 2, dict(defense=3, spd=2, hp=10))
+_g("silk_robe", "Silk Vestment", "🧵", "armor", 2, dict(defense=2, mag=3, hp=10))
+_g("ember_locket", "Ember Pendant", "🔥", "charm", 2, dict(atk=2, mag=2, spd=1, hp=4))
+_g("sunfire_bow", "Sunfire Bow", "🌅", "weapon", 3, dict(atk=8, spd=5))
+_g("archmage_mantle", "Archmage Mantle", "🌌", "armor", 3, dict(defense=5, mag=6, hp=22))
+_g("phoenix_plume", "Phoenix Plume", "🪽", "charm", 3, dict(hp=20, spd=2, defense=2))
 
 
 # Matching sets: wear two or three pieces of one set for a bonus (flat stats, on top of the pieces).
@@ -66,6 +76,10 @@ GEAR_SETS = {
                   bonus={2: dict(atk=2, hp=8), 3: dict(atk=4, defense=3, hp=20)}),
     "arcane": dict(name="Arcane Weave", emoji="🔮", pieces=("crystal_staff", "gel_mail", "moss_charm"),
                    bonus={2: dict(mag=3, hp=6), 3: dict(mag=6, defense=2, hp=16)}),
+    "novice": dict(name="Novice Robes", emoji="📜", pieces=("apprentice_wand", "cloth_robe", "bone_charm"),
+                   bonus={2: dict(mag=2, hp=4), 3: dict(mag=4, spd=1, hp=10)}),
+    "wayfarer": dict(name="Wayfarer Kit", emoji="🧭", pieces=("composite_bow", "scout_leathers", "ember_locket"),
+                     bonus={2: dict(atk=2, spd=2), 3: dict(atk=4, spd=3, hp=14)}),
     "royal": dict(name="Royal Regalia", emoji="👑", pieces=("kings_edge", "storm_staff", "obsidian_plate", "heart_shard"),
                   bonus={2: dict(atk=3, mag=3, hp=15), 3: dict(atk=6, mag=6, defense=5, hp=40)}),
 }
