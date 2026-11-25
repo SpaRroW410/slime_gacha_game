@@ -124,6 +124,7 @@ class Combatant:
     nonlethal: bool = False         # sparring: reaching 1 HP means yielding, not dying
     yielded: bool = False
     mods: Dict[str, object] = field(default_factory=dict)   # relic + star mods: crit_rate, crit_dmg, lifesteal, elem, evasion, guard, regen, spell_power, resist
+    spell_names: Dict[str, str] = field(default_factory=dict)   # slimes only: its own names for its spells (spells.class_name)
     stamina: float = 0.0            # slimes only: current stamina, max, and breath caught per round (attributes.py)
     stamina_max: float = 0.0
     sta_regen: float = 0.0
@@ -234,7 +235,7 @@ class BattleSystem:
                          hybrid=frozenset(attributes.hybrid_keys(s)),
                          style=sparring.style_levels(s), morale=s.morale, mods=_merge_mods(_merge_mods(_merge_mods(items_mod.battle_mods(s), attributes.battle_mods(s)), emods), getattr(s, "passive_mods", {})),
                          stamina=s.stamina, stamina_max=s.max_stamina, sta_regen=attributes.regen_per_round(s),
-                         row=(s.row if s.row in ("front", "back") else default_row(s)))
+                         row=(s.row if s.row in ("front", "back") else default_row(s)), spell_names=spells.names_for(s))
 
     @staticmethod
     def from_enemy(e: Enemy) -> Combatant:
@@ -505,6 +506,8 @@ class BattleSystem:
         sc = actor.cap_scale.get(ability.key) or (actor.cap_scale.get(orig_key) if orig_key in actor.cap_scale else None)
         if sc:
             ability = fx.scale(ability, sc)
+        if orig_key in actor.spell_names:
+            ability = replace(ability, name=actor.spell_names[orig_key])
         if ability.element and ability.tier >= 2:
             ability = spells.mutate(ability, elements.effective_mastery(actor.mastery, ability.element))
         actor.last_ability = ability.key
@@ -922,7 +925,7 @@ class BattleRun:
             a = get_ability(k)
             cd = actor.cooldowns.get(k, 0)
             cost = attributes.action_cost(a) if actor.stamina_max else 0
-            out.append(dict(key=a.key, name=a.name, kind=a.kind, element=a.element, power=a.power,
+            out.append(dict(key=a.key, name=actor.spell_names.get(k, a.name), kind=a.kind, element=a.element, power=a.power,
                             target=a.target, cooldown=cd, cost=cost,
                             winded=bool(actor.stamina_max and actor.stamina < cost), ready=cd == 0,
                             eff=({i: round(c.matchup(a.element), 2) for i, c in foes}

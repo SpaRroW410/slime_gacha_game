@@ -770,7 +770,8 @@ function dTrain(s, { st }) {
     return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${Math.max(s.mastery_cap, lv)}</b>` : '<span class="mute">not attuned</span>'}</span>
       <button class="btn small" data-act="study" data-el="${b}" ${ok && s.can_master && (lv === undefined ? s.attuned.length < s.element_slots : lv < s.mastery_cap) ? '' : 'disabled'}>Study · ${cost(st.library.study_cost)} · 4h</button></div>`;
   };
-  const lib = st.library, nameOf = (k) => st.spell_defs[k]?.name || k;
+  const lib = st.library, nameOf = (k) => (s.spell_names || {})[k] || st.spell_defs[k]?.name || k;   // its own class's name for the spell
+  const ownName = (a) => (lib.style_names?.[s.spell_style] || {})[a.key] || a.name;
   /* What stops it learning a spell (the same checks the Library makes), so the list can grey those out and say why. */
   const blocker = (a) => {
     const comps = st.elements.list.find((e) => e.key === a.element)?.components || [a.element];
@@ -785,7 +786,7 @@ function dTrain(s, { st }) {
   const elems = s.can_master || s.attuned.length ? `<p class="mute">Attuned ${s.attuned.length}/${s.element_slots} · cap L${s.mastery_cap}${s.mastery_paused ? ` · ⏸ mastery cannot grow until it has ${s.mastery_paused}★ again (what it earned still works)` : ''}</p>
       <div class="stack">${st.elements.basics.map(el).join('')}</div>
       <p>Spells (${s.spells.length}/${lib.slots}): ${s.spells.map((k) => `${badge(esc(nameOf(k)) + ((s.spell_stage || {})[k] ? ' ' + '✦'.repeat(s.spell_stage[k]) : ''), 'info')} <button class="btn small" data-act="forget" data-id="${s.id}" data-spell="${k}" title="Forget it to free a slot">✕</button>`).join(' ') || '<span class="mute">none</span>'}</p>
-      ${learnable.length ? `<div class="row"><select data-ui="my_learn">${learnable.map((a) => `<option value="${a.key}" ${a.key === S.ui.my_learn ? 'selected' : ''} ${a.why ? 'disabled' : ''}>${elName(a.element)} ${esc(a.name)} · T${a.tier} · ${a.why ? `(${esc(a.why)})` : esc(cost(lib.learn_cost[a.tier]))}</option>`).join('')}</select>
+      ${learnable.length ? `<div class="row"><select data-ui="my_learn">${learnable.map((a) => `<option value="${a.key}" ${a.key === S.ui.my_learn ? 'selected' : ''} ${a.why ? 'disabled' : ''}>${elName(a.element)} ${esc(ownName(a))} · T${a.tier} · ${a.why ? `(${esc(a.why)})` : esc(cost(lib.learn_cost[a.tier]))}</option>`).join('')}</select>
         <button class="btn small" data-act="learn_me" ${ok && S.ui.my_learn && s.spells.length < lib.slots ? '' : 'disabled'}>📚 Learn</button></div>
         ${S.ui.my_learn ? '' : '<small class="mute">No spell is ready yet: study an element first (each spell needs its elements attuned and some mastery).</small>'}` : ''}
       ${mutationNotes(s)}`
@@ -1502,7 +1503,7 @@ function academyAll() {
   const away = st.slimes.filter((s) => !avail(s)).length;
   const known = ls ? ls.spells : [];
   const ra = ui('res_a', known[0]), rb = ui('res_b', known[1]);
-  const nameOf = (k) => st.spell_defs[k]?.name || k;
+  const nameOf = (k) => (ls?.spell_names || {})[k] || st.spell_defs[k]?.name || k;
   const tg = st.buildings.find((b) => b.key === 'training_grounds');
   const tiers = st.drill.tiers;
   const tier = Math.min(num(ui('dtier', 1), 1), tiers.filter((t) => t.unlocked).length) || 1;

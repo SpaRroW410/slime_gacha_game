@@ -316,7 +316,7 @@ class TestBattleMagic(Cleanup):
         bs = BattleSystem(random.Random(seed))
         rep = bs.run([s], [foe])
         dmg = [int(l.split(": ")[1].split(" dmg")[0]) for l in rep.log if f"uses" in l and "dmg" in l
-               and get_ability(spell_key).name in l]
+               and spells.class_name(get_ability(spell_key), s.archetype) in l]       # the caster's own name for the spell
         return s, rep, dmg
 
     def test_advantage_beats_resist(self):

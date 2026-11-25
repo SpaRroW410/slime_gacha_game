@@ -553,3 +553,38 @@ class TestRelicVariety(unittest.TestCase):
         for k in ("evasion", "guard", "regen", "resist", "spell_power"):
             self.assertGreater(mods.get(k, 0), 0, k)
         self.assertTrue(all(it.mod_text(m) for m in it.mods))
+
+
+class TestSpellNamesByClass(unittest.TestCase):
+    """The Library sells one spell; a barbarian calls Ember 'Fire Blaze', a ranger 'Fire Arrow', a mage 'Ember'."""
+    def test_names_follow_the_class(self):
+        from slime_gacha import spells
+        from slime_gacha.abilities import get_ability
+        ember = get_ability("ember")
+        self.assertEqual(spells.class_name(ember, "barbarian"), "Fire Blaze")
+        self.assertEqual(spells.class_name(ember, "ranger"), "Fire Arrow")
+        self.assertEqual(spells.class_name(ember, "bard"), "Burning Ballad")
+        self.assertEqual(spells.class_name(ember, "mage"), "Ember")
+        for style, names in spells.STYLE_NAMES.items():                 # every tier-1 spell has a name in every style
+            self.assertEqual(set(names), {a.key for a in spells.base_spells()}, style)
+
+    def test_fused_spells_keep_a_keepers_name_but_rename_an_automatic_one(self):
+        from slime_gacha import spells
+        from slime_gacha.abilities import get_ability
+        auto = spells.design_fusion(get_ability("ember"), get_ability("gust"))
+        named = spells.design_fusion(get_ability("ember"), get_ability("gust"), name="Zappo")
+        self.assertNotEqual(spells.class_name(auto, "barbarian"), auto.name)
+        self.assertTrue(spells.class_name(auto, "barbarian").endswith("Strike"))
+        self.assertEqual(spells.class_name(named, "barbarian"), "Zappo")
+        self.assertEqual(spells.class_name(auto, "mage"), auto.name)
+
+    def test_a_barbarian_casts_fire_blaze_in_battle(self):
+        from slime_gacha.battle import BattleSystem
+        g = rich(201)
+        s = g.gacha.make_slime("rare", "barbarian", stars=3)
+        g.roster[s.id] = s
+        s.attuned, s.spells = ["fire"], ["ember"]
+        c = BattleSystem.from_slime(s)
+        self.assertEqual(c.spell_names, {"ember": "Fire Blaze"})
+        from slime_gacha.webapi import slime_view
+        self.assertIn("Fire Blaze", [a["name"] for a in slime_view(g, s)["abilities"]])

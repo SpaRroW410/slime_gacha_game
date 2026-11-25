@@ -34,6 +34,11 @@ def _elements_section() -> dict:
              "its mastery. Attuned or native elements are immune to a terrain's hazard of that element."),
         dict(name="Spells", text=f"Learn spells in the Library (tier 1-3, costs rise with tier). A slime keeps {c.MAX_SPELLS} spells (more "
              "with Library levels). The Restricted Section (tier 3) opens at Library level 3."),
+        dict(name="Each class names its spells", text="The Library sells one spell; each class casts it in its own way and calls it by its own name. "
+             "Ember is a mage's flick of fire, a barbarian's Fire Blaze (its weapon set alight), a ranger's Fire Arrow, a bard's Burning Ballad and a "
+             "druid's Wildfire Seed. Barbarians, paladins and rogues use blade names, rangers bow names, bards song names, druids nature names; "
+             "mages, medics, necromancers and alchemists keep the Library's. Fused spells you named yourself keep your name. Only the name changes: "
+             "a spell's power, element and forms are its own (non-casters swing it with their attack, casters with their magic)."),
         dict(name="Spell lab", text="Fuse two learned spells of different elements into a brand-new spell. It costs essence, takes hours, can "
              "fizzle and backfire (never fatal), and discovered spells join the Library for everyone."),
     ] + rec)
