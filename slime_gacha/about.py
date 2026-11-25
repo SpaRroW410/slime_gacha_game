@@ -82,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-21-head-badges",
-                 text="Every slime now wears a small badge on its head saying what it is doing: a chef's hat for the chef, the emblem of its post, the dungeon it is in, a book with the sword, bow, orb or element it is training or studying, a basket beside the post's sign when a worker is out foraging, resting or asleep. In the Parties tab, tap a face to open that slime; an opened party lists its members as rows instead of repeating the faces.")
+WHATS_NEW = dict(id="2026-11-25-deep-hollow",
+                 text="The Descent goes on to floor 100: the Deep Hollow, much harder below floor 50. Wave simulations can run up to 100 waves (they come home below a health line; waves you lead cost no time). A legendary wearing three ego relics grows to level 150. More relics and gear, shown as tiles: tap a relic for its upgrade path. Each class names its spells its own way, and manual fights fit the screen and are animated.")
 
 
 def build() -> Dict[str, object]:
