@@ -494,13 +494,23 @@ class TestColdStorage(unittest.TestCase):
         g.buildings.levels["cold_storage"] = 4
         self.assertEqual(jobs.pick_recipe(g, chef).key, "banquet")
         self.assertEqual(jobs.pantry_cap(g), config.PANTRY_PER_LEVEL + 4 * config.COLD_SERVINGS_PER_LEVEL)
-        g.pantry["banquet"] = 2
+        g.pantry["banquet"] = 20
+        taken = g._take_pack({"dish:banquet": 50, "food": 2}, 5, 24)
+        self.assertEqual(taken["dish:banquet"], g.pack_allowance())     # only as many dishes as the Cold Storage lets travel
         s = slime(g)
         s.needs.set("food", 10)
-        rations = [5, 0, 1]                                          # one dish allowed on this trip
-        g._wave_meals([s], rations)
-        self.assertEqual(g.pantry.get("banquet"), 1)                 # ate the dish first ...
-        s.needs.set("food", 10)
-        g._wave_meals([s], rations)
-        self.assertEqual(g.pantry.get("banquet"), 1)                 # ... then raw rations once the allowance is used
-        self.assertGreater(rations[1], 0)
+        g._pack_auto(taken, [s])
+        self.assertEqual(taken["dish:banquet"], g.pack_allowance() - 1) # the most nourishing food first
+        self.assertEqual(taken["food"], 2)
+
+
+class TestForgedRelicsAreCommon(unittest.TestCase):
+    def test_the_relicsmith_forges_only_common_relics(self):
+        g = quiet(rich(311))
+        g.wallet.add("scrap", 500)
+        smith = slime(g, "paladin")
+        for _ in range(12):
+            g.relic_progress = config.CRAFT_SHIFTS
+            jobs._relic_craft(g, smith, [])
+        self.assertTrue(g.vault)
+        self.assertEqual({it.rarity for it in g.vault.values()}, {"common"})

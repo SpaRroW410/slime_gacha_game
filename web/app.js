@@ -1050,12 +1050,14 @@ function dungeonsAll() {
         <button class="btn small danger" data-act="retreat" data-pid="${pid}" data-cost="${v.retreat.cost}" data-amb="${Math.round(v.retreat.ambush * 100)}" ${v.ready_in > 0 || S.state.wallet.purple_gel < v.retreat.cost ? 'disabled' : ''} title="Costs purple gel, morale, and the flight may be ambushed">🏃 Retreat · ${v.retreat.cost} 🟣</button></div>`}
       ${v.modifier ? `<div class="chip bad wrap">${esc(S.state.modifiers[v.modifier].emoji)} ${esc(S.state.modifiers[v.modifier].name)}: ${esc(S.state.modifiers[v.modifier].desc)}</div>` : ''}
       ${v.stop ? stopPanel(+pid, v) : ''}
+      <small class="mute" style="display:block">🎒 Pack: ${(v.pack || []).map((x) => `${esc(x.label)} ×${x.n}`).join(' · ') || '<b>empty</b> (nothing comes from the colony inside)'}</small>
       <small class="mute" style="display:block">⛺ Camp time left on this floor: <b>${v.camp_left}h</b> of ${v.camp_limit}h (the floor number, stretched by how well it is scouted).${v.relief > 0 ? ` Ambushes are ${Math.round(v.relief * 50)}% less likely: another party is closing in from below.` : ''}</small>
       ${v.callers.length ? reinforcePanel(+pid, v) : ''}
       ${giftPanel(+pid)}</div>`; }).join('')}
     <div class="row">${partyOptions('dpid')}
       ${entryParty ? `<label class="f">Start at floor <select data-ui="dstart">${entry.map((f) => `<option value="${f}" ${f === dstart ? 'selected' : ''}>${f}</option>`).join('')}</select></label>` : ''}
       <button class="btn danger" data-act="enter_dungeon">Enter</button></div>
+    ${packPanel('descent', S.state.party_size)}
     ${entryParty ? `<small class="mute">${esc(entryParty.name)}: least-travelled member has cleared floor ${entryParty.min_progress}.${entry.length === 1 ? ' They must start from floor 1.' : ''}</small>` : ''}
     <h4>What the colony knows</h4>
     ${segs.map((seg, i) => `<details ${i === 0 || nowFloors[seg[0].floor] ? 'open' : ''}><summary><b>Floors ${seg[0].floor}–${seg[seg.length - 1].floor}</b> <small class="mute">${Math.round(seg.reduce((a, f) => a + f.knowledge, 0) / seg.length)}% known</small></summary>${seg.map(floorHtml).join('')}</details>`).join('')}
@@ -1096,6 +1098,7 @@ function dungeonsAll() {
       <div class="row">${partyOptions('kpid')}<label>Min lvl <input type="number" data-ui="wlo" min="1" max="${wl}" value="${num(ui('wlo', 1), 1)}" style="width:4.5em"></label><label>Max lvl <input type="number" data-ui="whi" min="1" max="${wl}" value="${num(ui('whi', 5), 5)}" style="width:4.5em"></label><label>Waves <input type="number" data-ui="waves" data-rerender="1" min="1" max="${ws.wave_max}" value="${num(ui('waves', 1), 1)}" style="width:4.5em"></label>
         <label title="The party comes home once a member ends a wave below this share of its health">Home below <select data-ui="wstop">${[0, 10, 20, 30, 40, 50, 60].map((x) => `<option value="${x}" ${x === stopHp ? 'selected' : ''}>${x ? x + '% HP' : 'never (fight on)'}</option>`).join('')}</select></label>
         <button class="btn primary" data-act="skirmish">Run the simulation</button>${cmdToggle()}</div>
+      ${packPanel('wave', st.party_size)}
       ${sessionNote(ui('waves', 1), ws.wave_ticks, ws.wave_max, 'wave', 'wave')}</div>`;
   return { descent, stranded, scouting, pit, wave };
 }
@@ -1672,7 +1675,7 @@ function relicsView() {
     ${list.length ? `<div class="rgrid">${list.map(({ it, s: h }) => relicTile(it, h)).join('')}</div>` : `<p class="mute">${all.length ? 'No relic matches.' : "No relics yet. Venture into the Wayfarer's Rift."}</p>`}
     <div class="row"><button class="btn small" data-act="goto" data-t="dungeons" data-s="rift">🧭 To the Wayfarer's Rift</button></div></div>
   <details class="panel" style="margin-top:12px" data-keep="relicsmithOpen" ${ui('relicsmithOpen', false) ? 'open' : ''}><summary><b>🗝️ Reliquary & Relicsmith</b> <small class="mute">${chip(`level ${st.jobs.forge.reliquary}`, 'info')} ${chip(`rarity up to ${st.jobs.forge.rarity_max || '—'}`)} ${chip(`⚒️ relic ${st.jobs.forge.relic_progress}/${st.jobs.forge.shifts}`)}</small></summary>
-    <p class="mute">The Reliquary governs relic upgrades: a relic's next star needs it at least as high as the relic's stars; raising rarity needs level 3 (uncommon), 5 (rare), 8 (epic) or 10 (legendary). Upgrade it in Town › Buildings. An appointed <b>relicsmith</b> mends worn relics carried by slimes at home for free and slowly forges a new relic every ${st.jobs.forge.shifts} shifts' work (${esc(cost(st.jobs.forge.relic_cost))}).</p>
+    <p class="mute">The Reliquary governs relic upgrades: a relic's next star needs it at least as high as the relic's stars; raising rarity needs level 3 (uncommon), 5 (rare), 8 (epic) or 10 (legendary). Upgrade it in Town › Buildings. An appointed <b>relicsmith</b> mends worn relics carried by slimes at home for free and slowly forges a new <b>common</b> relic every ${st.jobs.forge.shifts} shifts' work (${esc(cost(st.jobs.forge.relic_cost))}).</p>
     ${postPanel('relicsmith')}</details>`;
 }
 /* One spare gear piece: equip it, sell one back, merge identical pieces into the next tier. */
@@ -1929,18 +1932,46 @@ function giftPanel(pid) {
    an animated arena (sprites, tweens) can replace it later without touching the rules or the commands.
    Every unit has data-unit="<index>" and classes (.alive/.dead/.acting/.targetable) a stylesheet or canvas can hook. */
 const EL_EMOJI = { fire: '🔥', water: '💧', earth: '🪨', air: '🌪', light: '✨', dark: '🌑', lightning: '⚡', ice: '❄', steam: '♨', mud: '🟤', lava: '🌋', storm: '⛈' };
+/* The pack a party carries: chosen before it leaves (raw rations, cooked dishes up to the Cold Storage allowance, potions).
+   Untouched, the game packs for you (the best dishes first, rations for the trip, a stamina potion each). Inside, nothing
+   comes from the colony: automatic fights eat and drink from the pack, best first; in a fight you lead you hand it out. */
+const packKey = (trip, k) => `pk_${trip}_${k.replace(/[^a-z0-9]/gi, '_')}`;
+function packChoice(trip) {
+  if (!S.ui['pk_' + trip + '_set']) return null;                       // never touched: the automatic pack
+  const ps = S.state.pack_stock, out = {};
+  [{ key: 'food' }, ...ps.dishes, ...ps.potions].forEach((x) => { const n = num(ui(packKey(trip, x.key), 0), 0); if (n > 0) out[x.key] = n; });
+  return out;
+}
+function packPanel(trip, members) {
+  const ps = S.state.pack_stock;
+  if (!ps) return '';
+  const set = !!S.ui['pk_' + trip + '_set'];
+  const field = (x, max, hint = '') => `<label class="f packf"><span>${esc(x.label)}${hint}</span><input type="number" min="0" max="${max}" value="${num(ui(packKey(trip, x.key), 0), 0)}" data-ui="${packKey(trip, x.key)}" data-pack="${trip}" style="width:4.2em"><small class="mute">/ ${max}</small></label>`;
+  const dishes = ps.dishes.map((d) => field(d, Math.min(d.n, ps.allowance), ` <small class="mute">+${d.nutrition}</small>`)).join('');
+  const pots = ps.potions.map((x) => field(x, x.n)).join('');
+  return `<details class="packbox" data-keep="pack_${trip}" ${ui('pack_' + trip, false) ? 'open' : ''}><summary><b>🎒 Pack for the trip</b> <small class="mute">${set ? 'chosen by you' : 'automatic: the best food first, rations for the trip, a stamina potion each'}</small></summary>
+    <small class="mute">The party carries only what is packed: inside, nothing comes from the colony. Cooked dishes travel thanks to the Cold Storage (at most ${ps.allowance} a trip).</small>
+    <div class="packgrid">${field({ key: 'food', label: '🍖 Ration (raw food)' }, ps.food)}${dishes || '<small class="mute">No cooked dishes in the pantry.</small>'}</div>
+    ${pots ? `<div class="packgrid">${pots}</div>` : '<small class="mute">No potions in stock.</small>'}
+    <div class="row"><button class="btn small" data-act="pack_auto" data-trip="${trip}" data-m="${members}">✨ Fill automatically</button><button class="btn small" data-act="pack_clear" data-trip="${trip}">Empty</button>${set ? `<button class="btn small" data-act="pack_reset" data-trip="${trip}">Let the game pack</button>` : ''}</div></details>`;
+}
 /* Supplies in a fight you lead: feed the hungry (a packed dish, else a ration), a stamina potion for the tired (it also
    wakes them up), and a camp before the next wave (wave simulation) or after this floor (Descent). None of it costs a turn. */
 function supplyRow(b) {
-  const party = b.units.filter((u) => u.side === 'party' && u.alive && !u.minion);
-  const hungry = party.filter((u) => u.food != null && u.food < 50).length, tired = party.filter((u) => u.energy != null && u.energy < 50).length;
+  const party = b.units.filter((u) => u.side === 'party' && u.alive && !u.minion && u.sid != null);
   const warn = party.filter((u) => u.hungry || u.tired).length;
-  const pots = (S.state.potions.stock || []).filter((p) => p.kind === 'stamina').reduce((a, p) => a + p.n, 0);
+  const pack = b.pack || [];
   const camp = b.kind === 'skirmish' || b.kind === 'delve', campOn = b.kind === 'skirmish' ? !!b.camp_next : !!S.ui.campAfter;
-  if (!camp && !hungry && !tired) return '';
-  return `<div class="row supplies">${warn ? `<small class="bad">⚠ ${warn} need${warn === 1 ? 's' : ''} looking after</small>` : '<small class="mute">Supplies:</small>'}
-    <button class="btn small" data-act="battle_feed" ${hungry ? '' : 'disabled'} title="Every hungry member eats: a cooked dish from the packs first, else a ration of food">🍖 Feed${hungry ? ` (${hungry})` : ''}</button>
-    <button class="btn small" data-act="battle_tonic" ${tired && pots ? '' : 'disabled'} title="Every tired member drinks a stamina potion from your stock: breath back now, energy up">🧃 Stamina potion${tired ? ` (${tired})` : ''} · ${pots} in stock</button>
+  if (!camp && !pack.length && !warn) return '';
+  let item = ui('give_item', pack[0]?.key);
+  if (!pack.some((x) => x.key === item)) item = pack[0]?.key;
+  S.ui.give_item = item;
+  const who = ui('give_who', 'all');
+  return `<div class="row supplies">${warn ? `<small class="bad">⚠ ${warn} need${warn === 1 ? 's' : ''} looking after</small>` : ''}
+    ${pack.length ? `<small class="mute">🎒 From the pack:</small><select data-ui="give_item">${pack.map((x) => `<option value="${esc(x.key)}" ${x.key === item ? 'selected' : ''}>${esc(x.label)} ×${x.n}</option>`).join('')}</select>
+      <select data-ui="give_who"><option value="all" ${who === 'all' ? 'selected' : ''}>to everyone who needs it</option>${party.map((u) => `<option value="${u.sid}" ${String(u.sid) === String(who) ? 'selected' : ''}>${esc(u.name)}${u.hungry ? ' 🍖' : ''}${u.tired ? ' 😴' : ''} (food ${u.food}, energy ${u.energy})</option>`).join('')}</select>
+      <button class="btn small primary" data-act="battle_give" title="Hand it out (costs no turn). Food goes to the hungry, stamina potions to the tired, vigor to the hurt.">Give</button>`
+      : '<small class="mute">🎒 The pack is empty.</small>'}
     ${camp ? `<button class="btn small ${campOn ? 'primary' : ''}" data-act="battle_camp" title="${b.kind === 'delve' ? 'Once this floor is won, the party camps to sleep and heal (it takes time, and ambushes can strike)' : 'Before the next wave the party camps until the hurt are mended and the tired have slept (it takes time)'}">⛺ ${campOn ? '✓ ' : ''}Camp ${b.kind === 'delve' ? 'after this floor' : 'before the next wave'}</button>` : ''}</div>`;
 }
 /* Manual fights group a slime's skills by what they do: one foe, every foe, weaken foes, help friends, heal. */
@@ -2199,7 +2230,7 @@ const A = {
   enter_dungeon: () => { const pid = num(ui('dpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     const p = partyById(pid); const start = num(ui('dstart'), p.entry[p.entry.length - 1]);
     const busy = busyMembers(pid);
-    confirmThen(`${busy.length ? pullNote(busy) : ''}Enter the Hollow Descent at floor ${start}?\n\nYou can only leave after a boss floor (every 5). Deaths are permanent.`, () => act('enter_dungeon', { pid, start: p.entry.includes(start) ? start : p.entry[p.entry.length - 1], recall: busy.length > 0 })); },
+    confirmThen(`${busy.length ? pullNote(busy) : ''}Enter the Hollow Descent at floor ${start}?\n\nYou can only leave after a boss floor (every 5). Deaths are permanent.`, () => act('enter_dungeon', { pid, start: p.entry.includes(start) ? start : p.entry[p.entry.length - 1], recall: busy.length > 0, pack: packChoice('descent') })); },
   retreat: (d) => confirmThen(`Break off and flee?\n\nIt costs ${d.cost} purple gel and morale, drains the party's stamina, and the flight can be ambushed (${d.amb}% chance of a hit that may be fatal). Cleared floors stay cleared, but you re-enter from a checkpoint.`, () => act('retreat', { pid: num(d.pid) })),
   leave_dungeon: (d) => act('leave_dungeon', { pid: num(d.pid) }),
   scout_plan: async () => { const ids = (S.ui.scout_ids || []).map(num); const first = num(ui('sfirst', 1), 1), last = num(ui('slast', first), first);
@@ -2271,7 +2302,7 @@ const A = {
     confirmThen(`${busy.length ? pullNote(busy) : ''}Commit the party to ${runs} Pit run(s) at depth ${depth}?\n\nThey only leave when finished or if everyone is knocked out. Downed slimes lose morale and drop their gear (no XP is lost).`, () => act('grind', { pid, depth, runs, recall: busyMembers(pid).length > 0, lure: !!ui('pit_lure', false) }, { slow: true, title: 'The Gloop Pit' })); },
   skirmish: () => { const pid = num(ui('kpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     const ws = S.state.dungeon.session, lo = Math.max(1, Math.min(ws.wave_level, num(ui('wlo', 1), 1))), hi = Math.max(lo, Math.min(ws.wave_level, num(ui('whi', 5), 5)));
-    const busy = busyMembers(pid), go = () => act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(ws.wave_max, num(ui('waves', 1), 1))), stop_hp: num(ui('wstop', ws.wave_stop), ws.wave_stop), manual: manualOn(), recall: busy.length > 0 }, { title: 'Wave simulation' });
+    const busy = busyMembers(pid), go = () => act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(ws.wave_max, num(ui('waves', 1), 1))), stop_hp: num(ui('wstop', ws.wave_stop), ws.wave_stop), manual: manualOn(), recall: busy.length > 0, pack: packChoice('wave') }, { title: 'Wave simulation' });
     return busy.length ? confirmThen(`${pullNote(busy)}Run the wave simulation?`, go) : go(); },
   party_train: () => { const pid = num(S.ui.ptpid); if (!pid) return toast('You need a full party at home.', true); act('party_train', { pid, tier: num(ui('dtier', 1), 1) }, { slow: true }); },
   drill_me: () => act('drill', { id: S.sel, discipline: ui('my_disc'), tier: num(ui('dtier', 1), 1) }),
@@ -2282,8 +2313,17 @@ const A = {
     if (!donor) return toast('Choose a relic to merge in.', true);
     confirmThen('Merge the chosen relic into this one? The relic you merge in is consumed for good.', () => act('merge_items', { target: num(d.uid), donor })); },
   gear_give: (d) => { const id = num(ui('gg_' + d.key)); return id ? act('equip', { id, key: d.key }) : toast('Nobody is free to wear it.', true); },
-  battle_feed: () => act('battle_feed', {}, { noBattle: true }),
-  battle_tonic: () => act('battle_tonic', {}, { noBattle: true }),
+  battle_give: () => { const who = ui('give_who', 'all'); return act('battle_give', { key: ui('give_item'), id: who === 'all' ? null : num(who) }, { noBattle: true }); },
+  pack_auto: (d) => { const ps = S.state.pack_stock, m = num(d.m, 5), trip = d.trip;
+    let room = ps.allowance, meals = m * (trip === 'wave' ? Math.max(1, Math.ceil(num(ui('waves', 1), 1) * 2 * 2 / 50)) : 2);
+    [{ key: 'food' }, ...ps.dishes, ...ps.potions].forEach((x) => { S.ui[packKey(trip, x.key)] = 0; });
+    [...ps.dishes].sort((a, b) => b.nutrition - a.nutrition).forEach((x) => { const n = Math.max(0, Math.min(x.n, room, meals)); S.ui[packKey(trip, x.key)] = n; room -= n; meals -= n; });
+    S.ui[packKey(trip, 'food')] = Math.max(0, Math.min(meals, Math.floor(ps.food * 0.66)));
+    let left = m;
+    ps.potions.filter((x) => x.key.startsWith('potion:stamina:')).sort((a, b) => num(b.key.split(':')[2]) - num(a.key.split(':')[2])).forEach((x) => { const n = Math.min(left, Math.floor(x.n * 0.66)); S.ui[packKey(trip, x.key)] = n; left -= n; });
+    S.ui['pk_' + trip + '_set'] = true; render(); },
+  pack_clear: (d) => { const ps = S.state.pack_stock; [{ key: 'food' }, ...ps.dishes, ...ps.potions].forEach((x) => { S.ui[packKey(d.trip, x.key)] = 0; }); S.ui['pk_' + d.trip + '_set'] = true; render(); },
+  pack_reset: (d) => { S.ui['pk_' + d.trip + '_set'] = false; render(); },
   battle_camp: () => { const b = S.state.battle;
     if (b && b.kind === 'skirmish') return act('battle_camp_next', { on: !b.camp_next }, { noBattle: true });
     S.ui.campAfter = !S.ui.campAfter; S.ui.campPid = b?.pid; render(); },
@@ -2352,7 +2392,7 @@ document.addEventListener('change', async (e) => {
   const t = e.target;
   if (t.dataset.sel) { S[t.dataset.sel] = t.value; render(); return; }
   if (t.dataset.colorid) { act('set_color', { id: num(t.dataset.colorid), color: t.value }); return; }
-  if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.rerender) render(); return; }
+  if (t.dataset.ui) { S.ui[t.dataset.ui] = t.value; if (t.dataset.pack) { S.ui['pk_' + t.dataset.pack + '_set'] = true; render(); return; } if (t.dataset.rerender) render(); return; }
   if (t.dataset.actChange === 'recipe') { act('set_recipe', { recipe: t.value }); return; }
   if (t.dataset.actChange === 'row' && S.sel) { act('set_row', { id: S.sel, row: t.value }); return; }
   if (t.dataset.actChange === 'stance' && S.sel) { act('stance', { id: S.sel, stance: t.value }); return; }

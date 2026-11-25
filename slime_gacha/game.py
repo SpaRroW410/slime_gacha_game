@@ -133,6 +133,7 @@ class Game:
         self.recipe_pref = "auto"                      # the recipe the chef cooks ("auto" = the best one)
         self.forge_progress, self.forge_next = 0, "weapon"   # the blacksmith's slow forging of gear (jobs._craft)
         self.relic_progress = 0.0                              # the relicsmith's slow forging of relics (jobs._relic_craft)
+        self.wave_packs: Dict[int, Dict[str, int]] = {}         # what a party on a wave trip carries (returned when it ends)
         self.stranded: List[dict] = []                 # overdue scouts waiting for a rescue party (see scout / rescue)
         self.next_stranded = 1
         self._owed = 0.0                               # hours the current session still has to pay (live mode)
@@ -2107,7 +2108,7 @@ class Game:
 
     # ---- battle -----------------------------------------------------------------
     def battle(self, pid: int, tier: int = 1, manual: bool = False, lo: Optional[int] = None, hi: Optional[int] = None,
-               waves: int = 1, recall: bool = False, stop_hp: Optional[int] = None):
+               waves: int = 1, recall: bool = False, stop_hp: Optional[int] = None, pack: Optional[Dict[str, int]] = None):
         """The wave simulation: a full party fights `waves` waves of monsters (one per party slot) as a drill. Nobody dies
         and there is no loot. Monsters are of a level between `lo` and `hi` (1-WAVE_MAX_LEVEL); the XP is fixed by
         the monsters and their level (no randomness, no rarity factor). Without lo/hi it uses the monsters of `tier` (4 is a
@@ -2115,7 +2116,7 @@ class Game:
         it ends). A long trip (up to WAVE_MAX_WAVES) comes home early once a member ends a wave below `stop_hp`% of its HP;
         only the waves the slimes fought on their own cost time - those you led by hand need no waiting."""
         stop = config.WAVE_STOP_HP if stop_hp is None else max(0, min(95, int(stop_hp)))
-        return self._play(self._skirmish_gen(pid, tier, lo, hi, waves, recall, stop), "skirmish", manual, pid)
+        return self._play(self._skirmish_gen(pid, tier, lo, hi, waves, recall, stop, pack), "skirmish", manual, pid)
 
     def wave_enemies(self, tier: int, lo: Optional[int], hi: Optional[int]):
         if lo is None and hi is None:
@@ -2130,10 +2131,11 @@ class Game:
         return out
 
     def _skirmish_gen(self, pid: int, tier: int, lo: Optional[int] = None, hi: Optional[int] = None, waves: int = 1,
-                      recall: bool = False, stop_hp: int = 0):
+                      recall: bool = False, stop_hp: int = 0, pack: Optional[Dict[str, int]] = None):
         self._require_full(pid)
         waves = max(1, min(config.WAVE_MAX_WAVES, int(waves)))
         party = self._ready_party(pid, recall)
+        self.wave_packs[pid] = self._take_pack(pack, len(party), config.WAVE_TICKS * waves)
         total_xp, won, log = 0, 0, []
         report = None
         self._owed = 0.0
@@ -2151,20 +2153,21 @@ class Game:
         are gone and someone is hungry, or when someone is too worn out to go on. Waves led by hand cost no time at all."""
         report = None
         auto_waves, home_early, camped = 0, "", 0
-        rations = [int(self.wallet.get("food") * self.share), 0,      # [packed raw rations, eaten, dishes it may carry]
-                   config.COLD_PACK_PER_LEVEL * self.buildings.level("cold_storage")]
+        pid = (self.flow or {}).get("pid")
+        pack = self.wave_packs.get(pid, {})
+        used = [0]
         for w in range(waves):
             members = [s for s in party if s.id in self.roster]
             camp_now = bool(self.flow and self.flow.pop("camp_next", False))   # asked for by hand (battle_camp_next)
-            if w and (not self._by_hand() or camp_now):              # between waves: eat, and rest if needed
-                self._wave_meals(members, rations)
+            if w and (not self._by_hand() or camp_now):              # between waves: eat and drink from the pack, and rest
+                used[0] += self._pack_auto(pack, members)
                 if camp_now or self._needs_camp(members):
                     h = self._camp(members, 24)
                     camped += h
-                    self._wave_meals(members, rations)
+                    used[0] += self._pack_auto(pack, members)
                 hungry = [s.name for s in members if s.needs.get("food") < config.AUTO_EAT_BELOW / 2]
-                if hungry and rations[0] <= 0:
-                    home_early = (f"🍖 The rations are gone and {', '.join(hungry[:3])} {'is' if len(hungry) == 1 else 'are'} hungry: "
+                if hungry and not any(k == "food" or k.startswith("dish:") for k in pack):
+                    home_early = (f"🍖 The pack has no food left and {', '.join(hungry[:3])} {'is' if len(hungry) == 1 else 'are'} hungry: "
                                   f"the party comes home after wave {w} of {waves}.")
                     break
                 if (why := self._field_unfit(members)):
@@ -2209,9 +2212,11 @@ class Game:
             for b in party[i + 1:]:
                 self.social.add_bond(a, b, config.WAVE_BOND * won)
         report.log.append(f"🧪 Simulation over ({won}/{waves} waves won): nobody is hurt for real - {total_xp} XP and battle proficiency gained.")
-        if rations[1] or camped:
-            report.log.append(f"🎒 On the way: {rations[1]} ration{'s' if rations[1] != 1 else ''} eaten from the stores"
+        if used[0] or camped:
+            report.log.append(f"🎒 On the way: {used[0]} item{'s' if used[0] != 1 else ''} used from the pack"
                               + (f", {camped}h camped to rest" if camped else "") + ".")
+        if (back := self._return_pack(self.wave_packs.pop(pid, None))):
+            report.log.append(back)
         if not auto_waves and won:
             events.append("   ⏱ You led these waves yourself: no waiting, the party is home.")
         report.log.extend(events)
@@ -2333,56 +2338,196 @@ class Game:
             run.set_manual(manual)
         return self._pump()
 
-    # ---- supplies in a fight led by hand: the party eats from its packs and drinks from the colony's potions -------------
+
+    # ---- trip packs: what a party carries (food, cooked dishes, potions), chosen before it leaves ---------------------------
+    # Keys: "food" (a ration of raw food), "dish:<recipe>" (a cooked dish; the Cold Storage sets how many travel) and
+    # "potion:<kind>:<grade>". Packed items leave the stores at departure; what is left comes home with the party (and is lost
+    # with it). Inside, nothing is sent from the colony: automatic fights eat and drink from the pack, best first; in a fight
+    # you lead you hand items out yourself.
+    def pack_allowance(self) -> int:
+        """Cooked dishes one trip may carry (the Cold Storage keeps them fresh)."""
+        return config.COLD_PACK_PER_LEVEL * self.buildings.level("cold_storage")
+
+    def auto_pack(self, members: int, hours: float) -> Dict[str, int]:
+        """A sensible pack: the best dishes first (as many as may travel), raw rations for the rest of the meals the trip
+        needs (at most 66% of the food stores), and a stamina potion per member while 66% of them is left, highest grade first."""
+        meals = max(members, math.ceil(members * hours * config.NEED_DECAY["food"] / config.FOOD_NUTRITION))
+        out: Dict[str, int] = {}
+        room = self.pack_allowance()
+        for r in sorted(jobs.RECIPES.values(), key=lambda r: -r.nutrition):
+            n = min(self.pantry.get(r.key, 0), room, meals)
+            if n > 0:
+                out["dish:" + r.key] = n
+                room -= n
+                meals -= n
+        food = min(meals, int(self.wallet.get("food") * self.share))
+        if food > 0:
+            out["food"] = food
+        left = members
+        for k in sorted((k for k in self.potions if k.startswith("stamina:")), key=lambda k: -int(k.split(":")[1])):
+            n = min(left, int(self.potions[k] * self.share))
+            if n > 0:
+                out["potion:" + k] = n
+                left -= n
+        return out
+
+    def _take_pack(self, items: Optional[Dict[str, int]], members: int, hours: float) -> Dict[str, int]:
+        """Take the chosen items out of the stores (as much as there is; dishes up to the Cold Storage allowance)."""
+        items = self.auto_pack(members, hours) if items is None else items
+        out: Dict[str, int] = {}
+        room = self.pack_allowance()
+        for k, n in items.items():
+            try:
+                n = int(n)
+            except (TypeError, ValueError):
+                continue
+            if n <= 0:
+                continue
+            if k == "food":
+                n = min(n, self.wallet.get("food"))
+                if n > 0:
+                    self.wallet.spend("food", n)
+            elif k.startswith("dish:"):
+                n = min(n, self.pantry.get(k[5:], 0), room)
+                room -= max(0, n)
+                if n > 0:
+                    self.pantry[k[5:]] -= n
+                    if self.pantry[k[5:]] <= 0:
+                        del self.pantry[k[5:]]
+            elif k.startswith("potion:"):
+                n = min(n, self.potions.get(k[7:], 0))
+                if n > 0:
+                    self.potions[k[7:]] -= n
+                    if self.potions[k[7:]] <= 0:
+                        del self.potions[k[7:]]
+            else:
+                continue
+            if n > 0:
+                out[k] = out.get(k, 0) + n
+        return out
+
+    def _return_pack(self, pack: Optional[Dict[str, int]]) -> str:
+        """What is left of a pack goes back to the stores."""
+        back = []
+        for k, n in (pack or {}).items():
+            if n <= 0:
+                continue
+            if k == "food":
+                self.wallet.add("food", n)
+            elif k.startswith("dish:"):
+                self.pantry[k[5:]] = self.pantry.get(k[5:], 0) + n
+            elif k.startswith("potion:"):
+                self.potions[k[7:]] = self.potions.get(k[7:], 0) + n
+            back.append(f"{n} {self.pack_label(k)}")
+        return f"🎒 Back in the stores from the pack: {', '.join(back)}." if back else ""
+
+    @staticmethod
+    def pack_label(k: str) -> str:
+        if k == "food":
+            return "🍖 Ration"
+        if k.startswith("dish:"):
+            r = jobs.RECIPES.get(k[5:])
+            return f"{r.emoji} {r.name}" if r else k
+        if k.startswith("potion:"):
+            kind, g = k[7:].split(":")
+            p = potions.KINDS.get(kind)
+            return f"{p.emoji if p else '🧪'} {p.name if p else kind} G{g}"
+        return k
+
+    def pack_of(self, pid: Optional[int]) -> Optional[Dict[str, int]]:
+        """The pack a party carries now (inside the Descent, or on a wave trip), or None."""
+        if pid in self.delves:
+            return self.delves[pid].setdefault("pack", {})
+        return self.wave_packs.get(pid)
+
+    def _use_pack_item(self, pack: Dict[str, int], s: Slime, k: str) -> str:
+        """One item from the pack for one slime."""
+        pack[k] -= 1
+        if pack[k] <= 0:
+            del pack[k]
+        if k == "food":
+            s.needs.add("food", config.FOOD_NUTRITION)
+            return f"🍖 {s.name} eats a ration from the pack."
+        if k.startswith("dish:"):
+            r = jobs.RECIPES[k[5:]]
+            s.needs.add("food", r.nutrition)
+            if r.morale:
+                self.social.shift_morale(s, r.morale)
+                emotions.feel(s, "joy", r.morale)
+            return f"{r.emoji} {s.name} eats a {r.name} from the pack."
+        kind, g = k[7:].split(":")
+        msg = self._drink(s, kind, int(g))
+        if kind == "stamina":
+            run = self.battle_run()
+            for c in (run.everyone if run else []):
+                if c.source is s and c.stamina_max:
+                    c.stamina = c.stamina_max              # second wind in this very fight
+        return msg
+
+    def _pack_auto(self, pack: Optional[Dict[str, int]], members, out: Optional[List[str]] = None) -> int:
+        """Automatic upkeep from a pack: the hungry eat the most nourishing food first, the tired drink the highest-grade
+        stamina potion. Returns how many items were used."""
+        if not pack:
+            return 0
+        used = 0
+        for s in members:
+            n = 0
+            while s.id in self.roster and s.needs.get("food") < config.AUTO_EAT_BELOW and n < 3:
+                foods = [k for k in pack if k == "food" or k.startswith("dish:")]
+                if not foods:
+                    break
+                k = max(foods, key=lambda k: config.FOOD_NUTRITION if k == "food" else jobs.RECIPES[k[5:]].nutrition)
+                line = self._use_pack_item(pack, s, k)
+                if out is not None:
+                    out.append(line)
+                n += 1
+                used += 1
+            if s.id in self.roster and s.needs.get("energy") < config.FIGHT_WARN_BELOW:
+                tonics = [k for k in pack if k.startswith("potion:stamina:")]
+                if tonics and not any(b["kind"] == "stamina" for b in s.buffs):
+                    line = self._use_pack_item(pack, s, max(tonics, key=lambda k: int(k.split(":")[-1])))
+                    if out is not None:
+                        out.append(line)
+                    used += 1
+        return used
+
+    def battle_give(self, key: str, sid: Optional[int] = None) -> List[str]:
+        """In a fight you lead: hand an item from the party's pack to one slime, or to everyone who needs it (food to the
+        hungry, stamina potions to the tired, vigor to the hurt, other potions to all). Costs no turn; nothing comes from
+        the colony's stores."""
+        party = self._fight_party()
+        if sid is not None:
+            party = [s for s in party if s.id == sid]
+            if not party:
+                raise InvalidAction("That slime is not in this fight.")
+        out = []
+        for s in party:
+            p = self.parties.party_of(s.id)
+            pack = self.pack_of(p.id if p else None) or {}
+            if pack.get(key, 0) <= 0:
+                continue
+            if sid is None:
+                need = (s.needs.get("food") < config.HUNGRY_BELOW if key == "food" or key.startswith("dish:")
+                        else s.needs.get("energy") < config.HUNGRY_BELOW if key.startswith("potion:stamina:")
+                        else s.hp < s.max_hp * 0.6 if key.startswith("potion:vigor:") else True)
+                if not need:
+                    continue
+            if key.startswith("potion:"):
+                kind = key.split(":")[1]
+                if not any(b["kind"] == kind for b in s.buffs) and len(s.buffs) >= attributes.potion_slots(s):
+                    out.append(f"{s.name} cannot take another potion now ({len(s.buffs)}/{attributes.potion_slots(s)}).")
+                    continue
+            out.append(self._use_pack_item(pack, s, key))
+        if not out:
+            raise InvalidAction("Nobody needs that (or the pack has none left).")
+        return out
+
+    # ---- supplies in a fight led by hand ---------------------------------------------------------------------------------
     def _fight_party(self) -> List[Slime]:
         run = self.battle_run()
         if run is None:
             raise InvalidAction("There is no fight going on.")
         return [s for s in run.party if s.id in self.roster and s.alive]
-
-    def battle_feed(self) -> List[str]:
-        """Every hungry member eats: a cooked dish from the pantry first (as the Cold Storage lets them carry), else a
-        ration of raw food from the stores. Costs no turn."""
-        out = []
-        for s in self._fight_party():
-            if s.needs.get("food") >= config.HUNGRY_BELOW:
-                continue
-            if self.needs.meal_hook and self.needs.meal_hook(s):
-                out.append(f"🍽 {s.name} eats a cooked dish from the packs.")
-            elif self.wallet.get("food") >= 1:
-                self.wallet.spend("food", 1)
-                s.needs.add("food", config.FOOD_NUTRITION)
-                out.append(f"🍖 {s.name} eats a ration.")
-            else:
-                out.append("🍖 There is no food left to send.")
-                break
-        if not out:
-            raise InvalidAction("Nobody in the party is hungry.")
-        return out
-
-    def battle_tonic(self) -> List[str]:
-        """Every tired member drinks a stamina potion from the stock (the humblest grade first): its breath comes back in this
-        fight and its energy rises. Costs no turn."""
-        run, out = self.battle_run(), []
-        for s in self._fight_party():
-            if s.needs.get("energy") >= config.HUNGRY_BELOW:
-                continue
-            grades = sorted(int(k.split(":")[1]) for k, n in self.potions.items() if k.split(":")[0] == "stamina" and n > 0)
-            if not grades:
-                out.append("🧃 No stamina potions left: brew some in the Alchemy Lab, or buy one with purple gel (Commander's gifts).")
-                break
-            g = grades[0]
-            k = potions.key("stamina", g)
-            self.potions[k] -= 1
-            if not self.potions[k]:
-                del self.potions[k]
-            out.append(self._drink(s, "stamina", g))
-            for c in run.everyone:
-                if c.source is s and c.stamina_max:
-                    c.stamina = c.stamina_max                  # second wind in this very fight
-        if not out:
-            raise InvalidAction("Nobody in the party is tired.")
-        return out
 
     def battle_camp_next(self, on: bool) -> str:
         """Ask the party to camp before its next wave (wave simulation), even when you lead it by hand; it rests until the
@@ -3587,7 +3732,8 @@ class Game:
         return [1] + [c + 1 for c in range(config.MAIN_BOSS_EVERY, low + 1, config.MAIN_BOSS_EVERY)
                       if c < dungeon.MAX_FLOOR]
 
-    def enter_dungeon(self, pid: int, start: Optional[int] = None, recall: bool = False) -> str:
+    def enter_dungeon(self, pid: int, start: Optional[int] = None, recall: bool = False,
+                      pack: Optional[Dict[str, int]] = None) -> str:
         """Enter the Hollow Descent at `start` (default: as deep as every member's progress allows).
         Inside, you may only leave at a checkpoint (after a boss floor)."""
         if pid in self.delves:
@@ -3602,8 +3748,10 @@ class Game:
         pre: List[str] = []
         self._autonomy_prepare(party, pre)
         self._set_flag(party, "main")
-        self.delves[pid] = dict(floor=start, start=start, hours=0)
+        self.delves[pid] = dict(floor=start, start=start, hours=0, pack=self._take_pack(pack, len(party), 24))
         nxt = self._checkpoint_after(start)
+        carried = self.delves[pid]["pack"]
+        pre.append("🎒 The pack: " + (", ".join(f"{n} {self.pack_label(k)}" for k, n in carried.items()) or "nothing at all") + ".")
         return (f"🕳 {self.parties.get(pid).name} enters the Hollow Descent at floor {start} "
                 f"(knowledge {self._knowledge(start):.0f}%). The next exit is after the boss on floor {nxt}."
                 + "".join("\n   " + x for x in pre))
@@ -3627,10 +3775,11 @@ class Game:
                                 f"falls - or the whole party does.")
         party = self._members_in("main", pid)
         self._clear_flag(party)
+        back = self._return_pack(d.get("pack"))
         del self.delves[pid]
         for s in party:
             self.social.shift_morale(s, 2)
-        return f"{self.parties.get(pid).name} climbs out of the Hollow Descent after {d['hours']}h."
+        return f"{self.parties.get(pid).name} climbs out of the Hollow Descent after {d['hours']}h." + (f"\n{back}" if back else "")
 
     def retreat_cost(self, pid: int) -> int:
         """Purple gel an emergency retreat costs: a base fee plus one per segment of depth."""
@@ -3664,6 +3813,8 @@ class Game:
             s.needs.add("esteem", -10)
             s.stamina_frac = min(s.stamina_frac, 0.3)
         self._clear_flag(survivors)
+        if survivors and (back := self._return_pack(d.get("pack"))):
+            out.append("   " + back)
         self.delves.pop(pid, None)
         if survivors:
             out.append(f"   {len(survivors)} slime(s) stumble out, shaken and exhausted.")
@@ -3758,6 +3909,9 @@ class Game:
         info = dungeon.floor_info(self.dungeon_seed, floor, self.parties.size)
         enemies = info.enemies
         delver_share = sum(outlook.has(s, "delve") for s in party) / max(1, len(party))
+        if not self._by_hand():                                # an automatic floor: the hungry eat from their pack, the tired drink
+            for q in pids:
+                self._pack_auto(self.delves[q].get("pack"), self._members_in("main", q))
         boons = [tuple(b) for q in pids for b in self.delves[q].get("boons", [])]
         for q in pids:
             self.delves[q]["boons"] = []                      # supplies from a wayside stop last one fight
@@ -4312,23 +4466,6 @@ class Game:
                 if s.id in self.roster and s.alive:
                     self.needs.field_hour(s, asleep, out, scale)
         self._reap(out)
-
-    def _wave_meals(self, members, rations) -> None:
-        """Hungry members of a wave trip eat: a cooked dish carried from the pantry first (as many as the Cold Storage lets a
-        trip carry), else one of the packed rations (rations = [left, eaten, dishes]; at most 66% of the food stores)."""
-        for s in members:
-            n = 0
-            while s.id in self.roster and s.needs.get("food") < config.AUTO_EAT_BELOW and n < 3:
-                n += 1
-                if len(rations) > 2 and rations[2] > 0 and self.needs.meal_hook and self.needs.meal_hook(s):
-                    rations[2] -= 1
-                    continue
-                if rations[0] < 1 or self.wallet.get("food") < 1:
-                    break
-                self.wallet.spend("food", 1)
-                rations[0] -= 1
-                rations[1] += 1
-                s.needs.add("food", config.FOOD_NUTRITION)
 
     def _field_meals(self, members) -> None:
         """Hungry members of a session eat: a cooked meal from the pantry first, else field rations from the stores."""

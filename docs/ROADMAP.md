@@ -164,6 +164,7 @@ As of 27 October 2026:
 - [x] **103. Cold Storage** — a new building keeps cooked dishes: 8 more pantry servings a level, 3 dishes a level carried on each trip (eaten before raw rations), and two finer dishes (Smoked Fish Platter at 2, Royal Banquet at 4).  *Done when:* met.
 - [x] **104. Supplies in fights led by hand** — hungry and tired party slimes show 🍖 / 😴; Feed (a packed dish, else a ration), Stamina potion (from stock: breath back now, energy up) and Camp (before the next wave, or after the floor in the Descent), none costing a turn.  *Done when:* met (played in Chromium).
 - [x] **105. Gentle Keeper limits leave room for ego fusions** — below floor 50 every limit also grows with the party size by the ego fusions an endgame party needs (3 per slot by floor 100): gold on floor 100 is 50, 65 or 80 for parties of 5, 10 or 15.  *Done when:* met.
+- [x] **106. Packs for the trip; forged relics are common** — a party packs before it enters the Descent or a wave trip: raw rations, cooked dishes (up to the Cold Storage allowance, several kinds) and potions, chosen in a Pack panel or packed by the game (best dishes first, rations for the trip, a stamina potion each). Packed items leave the stores and leftovers come home; inside nothing comes from the colony. Automatic fights eat and drink from the pack best first; in a fight you lead you hand out an item to one slime or to everyone who needs it (this replaces feeding from the colony). The Relicsmith forges only common relics.  *Done when:* met (packed, handed out and checked in Chromium: the colony's food stayed untouched).
 
 ### After floor 50 (art and sound)
 
@@ -440,7 +441,7 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
 
 ### M30 — The Deep Hollow (25 November 2026)
-- [x] Floors 51-100, exponentially harder (93); long wave grinds (94); ego ascension to 150 (95); more gear and relics in tiles and windows (96); spells named by class (97); manual fights on one screen, animated (98). Explosive Brew checked and left as it is: no stronger than the mage's Fire Blob. Wave rations and camping (99); gear to tier 5 and autonomous gear upkeep (100); grouped, animated skills and a finale (101). Buildings to level 10 and the Reliquary (102); Cold Storage (103); supplies in fights (104); deeper Gentle Keeper limits (105).
+- [x] Floors 51-100, exponentially harder (93); long wave grinds (94); ego ascension to 150 (95); more gear and relics in tiles and windows (96); spells named by class (97); manual fights on one screen, animated (98). Explosive Brew checked and left as it is: no stronger than the mage's Fire Blob. Wave rations and camping (99); gear to tier 5 and autonomous gear upkeep (100); grouped, animated skills and a finale (101). Buildings to level 10 and the Reliquary (102); Cold Storage (103); supplies in fights (104); deeper Gentle Keeper limits (105); packs for the trip and common forged relics (106).
 
 ### M29 — Tidier screens (21 November 2026)
 - [x] One Relics screen and a gear-only Armory (89); training on the slime card, trainers in the Academy (90); parties fold to a summary (91); activity badges on slimes' heads (92)

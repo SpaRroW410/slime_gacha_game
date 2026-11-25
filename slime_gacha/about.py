@@ -83,7 +83,7 @@ ROADMAP: List[Dict[str, object]] = [
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
 WHATS_NEW = dict(id="2026-11-26-buildings-ten",
-                 text="Buildings now climb to level 10. A new Reliquary governs relic stars and rarity (rare at level 5, legendary at 10), with a Relicsmith who mends and forges relics; the Blacksmith forges gear. A Cold Storage keeps cooked dishes for trips and unlocks finer dishes. In fights you lead, hungry and tired slimes are flagged and you can feed them, give a stamina potion or ask them to camp. Gentle Keeper medals below floor 50 now allow for ego fusions.")
+                 text="Buildings now climb to level 10. A new Reliquary governs relic stars and rarity (rare at level 5, legendary at 10), with a Relicsmith who mends and forges relics; the Blacksmith forges gear. A Cold Storage keeps cooked dishes for trips and unlocks finer dishes. Parties now pack for the trip (food, cooked dishes, potions) before entering the Descent or a wave trip; inside nothing comes from the colony, and in fights you lead you hand the pack out yourself. Forged relics are always common. Gentle Keeper medals below floor 50 now allow for ego fusions.")
 
 
 def build() -> Dict[str, object]:

@@ -313,7 +313,12 @@ def snapshot(g: Game) -> dict:
         vice_challenge=(lambda c: dict(id=c["challenger"], name=g.roster[c["challenger"]].name)
                         if c and c["challenger"] in g.roster else None)(g.vice_challenge),
         vice_hunt_max=config.VICE_HUNT_MAX_PARTIES,
-        battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid"), camp_next=bool(g.flow.get("camp_next"))) if run else None),
+        battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid"), camp_next=bool(g.flow.get("camp_next")),
+                     pack=[dict(key=k, n=n, label=g.pack_label(k)) for k, n in sorted((g.pack_of(g.flow.get("pid")) or {}).items())]) if run else None),
+        pack_stock=dict(food=g.wallet.get("food"), allowance=g.pack_allowance(),
+                        dishes=[dict(key="dish:" + k, n=n, label=g.pack_label("dish:" + k), nutrition=jobs_mod.RECIPES[k].nutrition)
+                                for k, n in sorted(g.pantry.items()) if n > 0 and k in jobs_mod.RECIPES],
+                        potions=[dict(key="potion:" + k, n=n, label=g.pack_label("potion:" + k)) for k, n in sorted(g.potions.items()) if n > 0]),
         battle_end=_take_battle_end(g),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
@@ -368,6 +373,7 @@ def snapshot(g: Game) -> dict:
             max_floor=dungeon.MAX_FLOOR, cleared=g.descent_cleared,
             pit=dict(_pit_view(g), lure_cost=config.PIT_LURE_COST, lure_xp=config.PIT_LURE_XP, lure_gear=config.PIT_LURE_GEAR),
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
+                                   pack=[dict(key=k, n=n, label=g.pack_label(k)) for k, n in sorted((d.get("pack") or {}).items())],
                                    boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
                                    knowledge=g._knowledge(d["floor"]),
                                    retreat=dict(cost=g.retreat_cost(pid), ambush=round(g.retreat_ambush_chance(pid), 2)),
@@ -962,7 +968,13 @@ def _council(g, a):
 @command("enter_dungeon")
 def _enter(g, a):
     start = a.get("start")
-    return _msg(g.enter_dungeon(_i(a, "pid"), int(start) if start not in (None, "") else None, bool(a.get("recall"))))
+    return _msg(g.enter_dungeon(_i(a, "pid"), int(start) if start not in (None, "") else None, bool(a.get("recall")), _pack_arg(a)))
+
+
+def _pack_arg(a):
+    """A pack chosen in the page ({key: count}), or None for the automatic one."""
+    p = a.get("pack")
+    return {str(k): int(v) for k, v in p.items() if str(v).lstrip("-").isdigit()} if isinstance(p, dict) else None
 
 
 @command("retreat")
@@ -1152,14 +1164,10 @@ def _battle_auto_turn(g, a):
     return _flow_result(g, kind, g.battle_auto_turn())
 
 
-@command("battle_feed")
-def _battle_feed(g, a):
-    return g.battle_feed(), {}
-
-
-@command("battle_tonic")
-def _battle_tonic(g, a):
-    return g.battle_tonic(), {}
+@command("battle_give")
+def _battle_give(g, a):
+    sid = a.get("id")
+    return g.battle_give(str(a.get("key", "")), None if sid in (None, "", "all") else int(sid)), {}
 
 
 @command("battle_camp_next")
@@ -1206,7 +1214,7 @@ def _grind(g, a):
 @command("skirmish")
 def _skirmish(g, a):
     return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a), a.get("lo") and _i(a, "lo"), a.get("hi") and _i(a, "hi"), _i(a, "waves", 1),
-                                                bool(a.get("recall")), None if a.get("stop_hp") is None else _i(a, "stop_hp")))
+                                                bool(a.get("recall")), None if a.get("stop_hp") is None else _i(a, "stop_hp"), _pack_arg(a)))
 
 
 SESSION_TITLES = dict(send_groups="Expeditions", grind="The Gloop Pit", adventure="The Wayfarer's Rift", quarry="The Starfall Quarry", explore="An expedition", skirmish="Wave simulation",
@@ -1214,7 +1222,7 @@ SESSION_TITLES = dict(send_groups="Expeditions", grind="The Gloop Pit", adventur
 
 
 # ---- session -----------------------------------------------------------------------------------------------
-BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift", "battle_feed", "battle_tonic", "battle_camp_next"}
+BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift", "battle_camp_next", "battle_give"}
 
 
 class Session:

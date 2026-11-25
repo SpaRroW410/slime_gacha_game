@@ -56,7 +56,7 @@ JOBS: Dict[str, Job] = {j.key: j for j in (
         ("mage", "necromancer")),
     Job("blacksmith", "Blacksmith", "🔨", "armory", "Slowly forges gear (the best tier the Armory sells) from the colony's materials; a skilled smith works faster.",
         ("barbarian", "ranger"), forages=True),
-    Job("relicsmith", "Relicsmith", "🗝️", "reliquary", "Mends worn relics carried by slimes at home and, slowly, forges new relics from scrap and gel.",
+    Job("relicsmith", "Relicsmith", "🗝️", "reliquary", "Mends worn relics carried by slimes at home and, slowly, forges new common relics from scrap and gel (rarity is raised at the Reliquary).",
         ("alchemist", "paladin"), forages=True),
     Job("brewer", "Brewer", "⚗️", "alchemy", "Brews basic potions from the herbs the colony holds.",
         ("medic", "necromancer"), forages=True),
@@ -428,7 +428,7 @@ def _relic_craft(game, smith, events: List[str], step: float = 1.0) -> bool:
     except NotEnoughResources:
         game.relic_progress = config.CRAFT_SHIFTS - 0.01          # waits for the materials
         return False
-    it = game.new_item(False)
+    it = game.new_item(False, rarity="common")                    # a forge makes plain relics: rarity is raised at the Reliquary
     events.append(f"⚒️ {smith.name} forges a relic: {it.label()}.")
     game.relic_progress = 0.0
     return True

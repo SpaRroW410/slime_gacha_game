@@ -486,3 +486,9 @@ details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px sol
 @keyframes warnpulse { 50% { transform: scale(1.25); } }
 .arena .supplies { gap: 6px; align-items: center; }
 @media (prefers-reduced-motion: reduce) { .arena .warnb { animation: none; } }
+/* the pack a party carries */
+.packbox { margin-top: 6px; } .packbox > summary { cursor: pointer; }
+.packgrid { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 6px 0; }
+.packf { display: inline-flex; align-items: center; gap: 4px; }
+.arena .supplies select { max-width: 46%; }
+@media (max-width: 640px) { .arena .supplies select { max-width: 100%; } }

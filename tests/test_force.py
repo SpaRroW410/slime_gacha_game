@@ -632,12 +632,12 @@ class TestWaveRations(unittest.TestCase):
         self.assertEqual(sum(1 for l in r.log if l.startswith("🌊 Wave")), 100)
         self.assertEqual(len(g.roster), n)
         self.assertLess(g.wallet.get("food"), 300)
-        self.assertTrue(any("rations eaten" in l and "camped" in l for l in r.log))
+        self.assertTrue(any("used from the pack" in l and "camped" in l for l in r.log))
 
     def test_it_packs_at_most_two_thirds_of_the_food_and_comes_home_hungry(self):
         g, r, n = self._trip(10)
         self.assertGreaterEqual(g.wallet.get("food"), 10 - int(10 * g.share))
-        self.assertTrue(any("rations are gone" in l for l in r.log))
+        self.assertTrue(any("pack has no food left" in l for l in r.log))
         self.assertEqual(len(g.roster), n)
 
 
@@ -712,11 +712,13 @@ class TestArenaFinaleAndSkillData(unittest.TestCase):
 
 class TestFightSupplies(unittest.TestCase):
     """In a fight led by hand the party can eat, drink a stamina potion (which wakes it up) and ask to camp."""
-    def _fight(self):
+    def _fight(self, pack=None):
         g = rich(231)
         pid = party(g, strong=True)
         g.potions["stamina:1"] = 2
-        g.enter_dungeon(pid)
+        g.potions["stamina:3"] = 1
+        g.pantry["stew"] = 4
+        g.enter_dungeon(pid, pack=pack if pack is not None else {"food": 3, "dish:stew": 2, "potion:stamina:1": 2})
         for s in members(g, pid):
             s.needs.set("food", 30)
             s.needs.set("energy", 32)
@@ -724,22 +726,50 @@ class TestFightSupplies(unittest.TestCase):
         self.assertIsNotNone(g.battle_run())
         return g, pid
 
-    def test_the_arena_warns_and_the_party_eats_and_drinks(self):
+    def test_the_pack_is_taken_at_the_door_and_handed_out_by_the_keeper(self):
         g, pid = self._fight()
+        self.assertEqual(g.pantry.get("stew"), 2)                         # two stews left home in the pack
+        self.assertEqual(g.potions.get("stamina:1"), None)
         u = [x for x in g.battle_run().view()["units"] if x["side"] == "party"][0]
         self.assertTrue(u["hungry"] and u["tired"])
         food = g.wallet.get("food")
-        out = g.battle_feed()
-        self.assertTrue(out)
-        self.assertLess(g.wallet.get("food"), food)
-        self.assertTrue(all(s.needs.get("food") > 30 for s in members(g, pid)))
-        out = g.battle_tonic()
-        self.assertEqual(sum(1 for l in out if "drinks" in l), 2)       # two potions in stock
-        self.assertTrue(any("No stamina potions left" in l for l in out))
-        self.assertNotIn("stamina:1", g.potions)
-        self.assertGreater(max(s.needs.get("energy") for s in members(g, pid)), 32)
+        a = members(g, pid)[0]
+        out = g.battle_give("dish:stew", a.id)                           # the keeper picks the item and the slime
+        self.assertEqual(len(out), 1)
+        self.assertGreater(a.needs.get("food"), 30)
+        out = g.battle_give("food")                                       # everyone hungry gets a ration, while they last
+        self.assertEqual(sum(1 for l in out if "ration" in l), 3)
+        self.assertEqual(g.wallet.get("food"), food)                      # nothing comes from the colony's stores
+        out = g.battle_give("potion:stamina:1")
+        self.assertEqual(sum(1 for l in out if "drinks" in l), 2)
+        self.assertEqual(g.pack_of(pid), {"dish:stew": 1})
         with self.assertRaises(InvalidAction):
-            g.battle_feed()                                               # nobody is hungry now
+            g.battle_give("potion:stamina:1")                             # the pack has none left
+        g.potions.pop("stamina:3")
+        while g.battle_run() is not None:
+            g.battle_auto_turn()
+
+    def test_automatic_floors_eat_the_best_first_and_leftovers_come_home(self):
+        g = rich(233)
+        pid = party(g, strong=True)
+        g.pantry.update(porridge=3, feast=2)
+        g.enter_dungeon(pid, pack={"food": 5, "dish:porridge": 3, "dish:feast": 2})
+        for s in members(g, pid):
+            s.needs.set("food", 20)
+        g.delve_next(pid)                                                 # an automatic floor: feasts first
+        pack = g.pack_of(pid)
+        self.assertNotIn("dish:feast", pack)
+        food = g.wallet.get("food")
+        g.delves[pid]["floor"] = 6                                        # at a checkpoint: climb out
+        g.leave_dungeon(pid)
+        self.assertGreater(g.wallet.get("food") + sum(g.pantry.values()), food)
+
+    def test_automatic_packs_take_the_best_and_respect_the_cold_storage(self):
+        g = rich(234)
+        g.pantry.update(feast=10, porridge=10)
+        p = g.auto_pack(5, 24)
+        self.assertEqual(p.get("dish:feast"), g.pack_allowance())         # the best dishes, as many as may travel
+        self.assertNotIn("dish:porridge", p)
 
     def test_a_wave_trip_led_by_hand_camps_when_asked(self):
         g = rich(232)
