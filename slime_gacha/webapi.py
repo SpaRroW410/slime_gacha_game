@@ -12,7 +12,7 @@ import json
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import passives as passives_mod, rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import passives as passives_mod, rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, playlog as playlog_mod, pools as pools_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -41,7 +41,43 @@ def _train_style(g: Game, s, own: str):
     return (e or {}).get("style") or own
 
 
-def slime_view(g: Game, s) -> dict:
+def bond_index(g: Game) -> dict:
+    """Every slime's bonds and children, built once per snapshot (the Relationships tab of a slime's card)."""
+    bonds: Dict[int, list] = {}
+    for k, v in g.social.bonds.items():
+        a, b = tuple(k)
+        bonds.setdefault(a, []).append((b, v))
+        bonds.setdefault(b, []).append((a, v))
+    kids: Dict[int, list] = {}
+    for x in g.slimes():
+        for p in x.parents:
+            kids.setdefault(p, []).append(x.id)
+    return dict(bonds=bonds, kids=kids)
+
+
+def _ties_view(g: Game, s, idx: Optional[dict]) -> dict:
+    """One slime's relationships, compact: its ties (with the bond), the slimes it is growing close to or clashing with
+    (no tie yet), its parents and its children."""
+    ties = g.relations.of(s.id)
+    tied = {r["other"] for r in ties}
+    mine = [(o, v) for o, v in (idx or {}).get("bonds", {}).get(s.id, []) if o in g.roster and o not in tied]
+    return dict(relations=[dict(other=r["other"], kind=r["kind"], since=r["since"], mentor=r.get("mentor"),
+                                bond=round(g.social.bond(s.id, r["other"]))) for r in ties],
+                near=[dict(other=o, bond=round(v)) for o, v in sorted(mine, key=lambda x: -x[1])[:3] if v >= 10],
+                friction=[dict(other=o, bond=round(v)) for o, v in sorted(mine, key=lambda x: x[1])[:3] if v <= -10],
+                children=list((idx or {}).get("kids", {}).get(s.id, [])))
+
+
+def _ability_card(s, k: str) -> dict:
+    """One skill on the slime card: what it is (for grouping), its cost in action points and pool, and where it comes from."""
+    ab = get_ability(k)
+    return dict(key=k, name=spells.class_name(ab, s.archetype), element=ab.element, kind=ab.kind, target=ab.target,
+                fx=sorted({f[0] for f in ab.fx}), power=ab.power, desc=ab.description, ap=pools_mod.ap_cost(ab),
+                pool=pools_mod.pool_of(ab), cost=round(pools_mod.pool_cost(ab) * pools_mod.level_scale(s)),
+                spell=k in s.spells, rarity=k in attributes.rarity_skills(s))
+
+
+def slime_view(g: Game, s, idx: Optional[dict] = None) -> dict:
     st = s.max_stats()
     a = s.arch
     party = g.parties.party_of(s.id)
@@ -71,8 +107,7 @@ def slime_view(g: Game, s) -> dict:
         hobby=routine_mod.hobby(s)[1], hatch_in=rituals_mod.next_hatch_in(g, s), coping=coping_mod.STYLE_TEXT[coping_mod.style(s)], coping_healthy=coping_mod.style(s) not in ("vent", "dwell"), burnt=meaning_mod.burned_out(s),
         meaning=({k: round(v, 2) for k, v in meaning_mod.scores(s).items()} if s.life and s.life.get("days") else None),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
-        abilities=[dict(key=k, name=spells.class_name(get_ability(k), s.archetype), element=get_ability(k).element,
-                        kind=get_ability(k).kind) for k in s.known_abilities()],
+        abilities=[_ability_card(s, k) for k in s.known_abilities()],
         spells=list(s.spells), spell_names=spells.names_for(s), spell_style=spells.name_style(s.archetype), spell_stage={k: spells.mutation_stage(get_ability(k), elements.slime_mastery(s, get_ability(k).element)) for k in s.spells if get_ability(k).element},
         attuned=list(s.attuned),
         mastery={b: elements.basic_level(s, b) for b in s.attuned},
@@ -90,8 +125,7 @@ def slime_view(g: Game, s) -> dict:
                         why=(awakening.why(s) if awakening.outcome(s) else ""), despair_stage=awakening.despair_stage(s),
                         life={k: round(v, 2) for k, v in awakening.scores(s).items()} if s.life and s.life.get("days") else None)
                    if awakening.candidate(s) else None),
-        relations=[dict(other=r["other"], kind=r["kind"], since=r["since"], mentor=r.get("mentor"))
-                   for r in g.relations.of(s.id)],
+        **_ties_view(g, s, idx),
         parents=list(s.parents), parent_names=list(s.parent_names), generation=s.generation,
         merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
         stamina=s.stamina, max_stamina=s.max_stamina, mana=s.mana, max_mana=s.max_mana, buffs=[dict(b) for b in s.buffs], potion_slots=attributes.potion_slots(s),
@@ -297,7 +331,8 @@ def colony_mood(g: Game) -> dict:
 
 
 def snapshot(g: Game) -> dict:
-    slimes = [slime_view(g, s) for s in g.slimes()]
+    idx = bond_index(g)
+    slimes = [slime_view(g, s, idx) for s in g.slimes()]
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
                     synergy=round(g.party_synergy(p.id) - 1, 4) if len(p.members) > 1 else 0.0,
                     in_delve=p.id in g.delves, away=any(g.slime(i).busy for i in p.members), activity=g.party_activity(p.id),
@@ -330,7 +365,9 @@ def snapshot(g: Game) -> dict:
                      grades=[dict(grade=i + 1, bonus=potions_mod.bonus(i + 1), hours=potions_mod.hours(i + 1),
                                   brew_hours=potions_mod.brew_hours(i + 1)) for i in range(5)],
                      herbs={c: g.wallet.get(potions_mod.herb_key(c)) for c in config.HERBS},
-                     autonomy=g.autonomy, autonomy_share=config.AUTONOMY_SHARE),
+                     autonomy=g.autonomy, autonomy_share=config.AUTONOMY_SHARE,
+                     auto_gel=int(g.gel_budget()), auto_gel_hour=g.auto_gel_rate, auto_gel_choices=list(config.AUTO_GEL_CHOICES),
+                     auto_gel_max=config.AUTO_GEL_MAX),
         keeper=dict(level=g.keeper.level, xp=g.keeper.xp, xp_next=keeper_mod.xp_to_next(g.keeper.level),
                     title=keeper_mod.title(g.keeper.level, g.keeper.title_pick), points=g.keeper.points, max_level=config.KEEPER_MAX_LEVEL,
                     respec=dict(cost=g.keeper.respec_cost(), count=g.keeper.respecs),
@@ -354,7 +391,7 @@ def snapshot(g: Game) -> dict:
                        rarity_gel=config.RARITY_ASCEND_GEL, star_stones=config.STAR_ASCEND_STONES,
                        rates=config.STONE_RATES, merge=config.STONE_MERGE, max_party=config.ADV_MAX_PARTY,
                        max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
-        auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
+        auto_care=g.needs.auto_care, slimes=slimes, parties=parties, playlog=_playlog_info(g),
         buildings=g.building_report(),
         version=config.VERSION, whats_new=about_mod.WHATS_NEW,
         stranded=[dict(id=e["id"], ids=e["ids"], names=[g.roster[i].name for i in e["ids"] if i in g.roster], first=e["first"], last=e["last"],
@@ -601,6 +638,31 @@ def _party_hunt(g, a):
 @command("about")
 def _about(g, a):
     return [], about_mod.build()
+
+
+def _playlog_info(g) -> dict:
+    """The recorder's switch and how much it holds (the size is worked out again only when the log changes)."""
+    n = len(g.playlog)
+    key = (n, g.playlog[-1].get("tick") if n else None)
+    cached = getattr(g, "_plog_kb", None)
+    if not cached or cached[0] != key:
+        g._plog_kb = cached = (key, playlog_mod.size_kb(g))
+    return dict(on=g.playlog_on, n=n, kb=cached[1], max_kb=config.PLAYLOG_MAX_KB)
+
+
+@command("playlog_set")
+def _playlog_set(g, a):
+    return [g.playlog_set(bool(a.get("on")))], {}
+
+
+@command("playlog_clear")
+def _playlog_clear(g, a):
+    return [g.playlog_clear()], {}
+
+
+@command("playlog_export")
+def _playlog_export(g, a):
+    return [], playlog_mod.export(g)
 
 
 @command("guide")
@@ -910,6 +972,11 @@ def _talk(g, a):
 @command("autonomy")
 def _autonomy(g, a):
     return _msg(g.set_autonomy(bool(a.get("on", True))))
+
+
+@command("auto_gel")
+def _auto_gel(g, a):
+    return _msg(g.set_auto_gel(int(a.get("rate", config.AUTO_GEL_PER_HOUR))))
 
 
 @command("brew")

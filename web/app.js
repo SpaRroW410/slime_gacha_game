@@ -9,12 +9,12 @@ const CORE_RES = ['white_gel', 'purple_gel', 'food', 'essence'];
 const NEED_NAME = { energy: 'Energy', food: 'Food', safety: 'Safety', belonging: 'Belonging', esteem: 'Esteem' };
 const WISH = { energy: 'needs sleep', food: 'is hungry', safety: 'feels unsafe (hurt)', belonging: 'feels lonely', esteem: 'wants to prove itself' };
 const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'],
-  ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide'], ['about', 'ℹ️ About']];
+  ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 Community'], ['guide', '📖 Guide'], ['about', 'ℹ️ About']];
 const SUBS = {
   dungeons: [['descent', 'Hollow Descent'], ['scouting', 'Scouting'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['places', 'More places'], ['hunts', 'Hunts & foraging'], ['wave', 'Wave simulation']],
   town: [['buildings', 'Buildings'], ['armory', 'Armory (gear)'], ['relics', 'Relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
   academy: [['training', '🥋 Facilities & trainers'], ['library', '📚 Library & spells']],
-  people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
+  people: [['bonds', 'Couples & family'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'mossy_burrows', 'stranded', 'rescue'];
 
@@ -219,6 +219,31 @@ async function currentSave() {
   let save = S.lastSave || loadLocal();
   if (!save) { try { const r = await backend.call('state', {}); save = r && r.save; } catch (e) { /* no game yet */ } }
   return save || null;
+}
+/* The playtest recorder (off by default): a switch that warns about the save growing, its size, export and clear. */
+function playlogPanel() {
+  const pl = S.state.playlog;
+  if (!pl) return '';
+  const big = pl.kb > pl.max_kb * 0.66;
+  return `<h4 style="margin:6px 0 0">Playtest recorder ${info('For playtesting: writes every fight (where, the party and its gear, by hand or auto, the result, rounds, deaths, HP and pools left) and Descent entries, exits, retreats and camps into the save, so you can export the log and share it. Off by default because it makes the save bigger.')}</h4>
+      <div class="row"><button class="btn small ${pl.on ? 'primary' : ''}" data-act="playlog_toggle" data-on="${pl.on ? 0 : 1}">🧪 Recorder ${pl.on ? 'on' : 'off'}</button>
+        <small class="${big ? 'bad' : 'mute'}">${pl.n} entr${pl.n === 1 ? 'y' : 'ies'} · ~${pl.kb} KB${big ? ' — getting big: export and clear it' : ''}</small></div>
+      ${pl.n ? `<div class="row"><button class="btn small" data-act="playlog_export">⬇ Export playtest log</button><button class="btn small danger" data-act="playlog_clear">🗑 Clear the log</button></div>` : ''}`;
+}
+/* Hand a JSON file to the player: the share sheet where there is one, else a download. */
+async function shareJson(obj, name, title) {
+  const text = JSON.stringify(obj);
+  let file = null;
+  try { file = new File([text], name, { type: 'application/json' }); } catch (e) { /* old browser */ }
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title }); return true; } catch (e) { if (e && e.name === 'AbortError') return false; }
+  }
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = name; a.style.display = 'none'; document.body.appendChild(a); a.click();
+    setTimeout(() => a.remove(), 1000); setTimeout(() => URL.revokeObjectURL(url), 120000);
+    return true;
+  } catch (e) { toast('Export failed.', true); return false; }
 }
 /* Export: the share sheet where there is one (iPhone: "Save to Files"), else a download link added to the page (Safari needs
    it attached) and kept alive long enough; the text can also be copied. */
@@ -640,9 +665,9 @@ function drawer(s) {
   const free = !s.busy;
   const inDun = DUNGEON_KINDS.includes(s.in_dungeon);
   const ctx = { st, free, inDun };
-  const tabs = [['overview', 'Overview'], ['fight', 'Fight'], ['train', 'Train'], ['mind', 'Mind'], ['gear', 'Gear']];
+  const tabs = [['overview', 'Overview'], ['fight', 'Fight'], ['train', 'Train'], ['mind', 'Mind'], ['ties', 'Relationships'], ['gear', 'Gear']];
   const dt = tabs.some(([k]) => k === S.dtab) ? S.dtab : 'overview';
-  const body = { overview: dOverview, fight: dFight, train: dTrain, mind: dMind, gear: dGear }[dt](s, ctx);
+  const body = { overview: dOverview, fight: dFight, train: dTrain, mind: dMind, ties: dTies, gear: dGear }[dt](s, ctx);
   return `<aside class="drawer">
     <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button> <input type="color" class="colpick" data-colorid="${s.id}" value="${s.color || CLASS_COLORS[s.archetype] || '#5be0a0'}" title="Slime colour (ring colour stays with rarity)"> ${s.color ? `<button class="btn small" data-act="set_color" data-id="${s.id}" data-reset="1" title="Back to class colour">↺</button>` : ''}</h2><button class="btn small" data-act="closesel">✕</button></div>
     ${s.fights > (st.shadow?.fight_limit ?? 1) ? `<div class="panel flat"><small>⚠ A troublemaker: came to blows with ${s.fights} different slimes this month (more than ${st.shadow.fight_limit} makes one). Merging or destroying it costs no morale.</small></div>` : ''}
@@ -683,17 +708,12 @@ function passivesHtml(s, st) {
 function dOverview(s, { st, free, inDun }) {
   const care = (c, label, extra = '') => `<button class="btn small" data-act="do" data-c="${c}" ${inDun || extra ? 'disabled' : ''} ${inDun ? 'title="Inside a dungeon - you cannot tend to them"' : ''}>${label}</button>`;
   const zone = ui('zone', st.zones[0].key);
-  return `<div class="kv">${[['HP', `${s.hp}/${s.max_hp}`], ['ATK', s.stats.atk], ['DEF', s.stats.defense], ['MAG', s.stats.mag], ['SPD', s.stats.spd], ['Power', s.power]].map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('')}</div>
-    <small class="mute">⚡ Total power <b>${s.power}</b> = (${Object.entries(s.power_parts).map(([k, v]) => `${k} ${v}`).join(' + ')}) × mood &amp; morale ${s.power_mult} ${info('Total power sums what the slime is (stats: class, level, rarity, stars, stage, gear, relics, potions) and what it can do (skills scaled by the stat they use, capstones and spell forms counting extra, star attributes, elemental mastery, fighting styles, class proficiency), then multiplies by its current mood and morale.')}</small>
-    ${bar(s.hp, s.max_hp, 'hp', 'HP')}${bar(s.xp, s.xp_next, 'xp', 'XP', s.level >= s.level_cap ? 'level cap' : `${s.xp}/${s.xp_next}`)}
-    ${bar(s.morale, 100, 'morale', `Morale — ${s.morale_label}`, `power ×${s.morale_factor}`)}
-    ${sect(`On its mind ${s.request ? badge('request', 'warn') : ''}`, 'Slimes pick goals from what they remember, act on them when idle, and sometimes ask you for something. Granting requests builds trust; slimes who trust you put up with more, and refusals are remembered.', `<div class="stack"><small>🎯 ${s.goal ? esc(s.goal) : 'no particular goal'}</small><small class="mute">🤝 Trust in you: ${s.trust}/100</small>${s.request ? requestRow(s) : ''}</div>`)}
-    ${sect('Memories', 'What this slime remembers about the others. Grudges make quarrels likelier (and are their stated reason); thanks make them rarer. Memories fade over a few weeks.', s.memories.length ? `<div class="stack">${s.memories.map((m) => `<small class="${m.sign < 0 ? 'bad' : m.sign > 0 ? '' : 'mute'}">${m.sign < 0 ? '😠' : m.sign > 0 ? '💚' : '🕯'} ${esc(m.text)} <span class="mute">· day ${m.day + 1}</span></small>`).join('')}</div>` : '<small class="mute">Nothing on its mind yet.</small>')}
-    ${bar(s.sanity, s.sanity_max, 'sanity', `Sanity ${s.sanity}/${s.sanity_max} — ${s.sanity_label}`, s.mood_cap < 1 ? `mood capped at ${Math.round(s.mood_cap * 100)}%` : 'no cap')} ${info('Sanity is how much a slime can take. Deaths of friends, knock-outs, lost battles, brawls and long miserable stretches wear it down; sleep, the Rest Area, the Hospital, a calm happy home, a won fight, the Keeper\'s Soothe and one talk a day build it back. Low sanity caps the mood, so food and pets alone cannot fix a worn-down slime; below 20% it refuses dungeons, below 10% work. Rarer slimes have a bigger reserve and lose less per blow.')}
-    ${bar(s.stamina, s.max_stamina, 'know', `⚡ Stamina`, `${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}
-    ${bar(s.mana, s.max_mana, 'mana', `🔷 Mana`, `${Math.round(s.mana)}/${Math.round(s.max_mana)}`)}
-    ${s.buffs.length ? `<div class="row"><small class="mute">potion slots ${s.buffs.length}/${s.potion_slots}</small>${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}
-    ${sect('Trades', 'What this slime has learned at the posts in town. Each shift worked earns a little experience in that trade; the level (up to 10) raises the post\'s output by 12% per level, and a natural talent adds 25%. A trade\'s level is kept when the slime moves to another post.', s.trades.length ? s.trades.map((t) => bar(t.next ? t.xp - t.floor : 1, t.next ? t.next - t.floor : 1, 'xp', `${t.emoji} ${esc(t.name)} · level ${t.level}${t.level >= t.max ? ' (max)' : ''}${t.current ? ' · at this post now' : ''}${t.talent ? ' · ⭐ talent' : ''}`, t.next ? `${t.xp - t.floor}/${t.next - t.floor} shifts` : 'max level')).join('') : '<small class="mute">No trade yet: appoint it to a post in Town.</small>')}
+  return `<div class="kv">${[['ATK', s.stats.atk], ['DEF', s.stats.defense], ['MAG', s.stats.mag], ['SPD', s.stats.spd]].map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('')}</div>
+    <small class="mute" style="display:block">⚡ Total power <b>${s.power}</b> = (${Object.entries(s.power_parts).map(([k, v]) => `${k} ${v}`).join(' + ')}) × mood &amp; morale ${s.power_mult} ${info('Total power sums what the slime is (stats: class, level, rarity, stars, stage, gear, relics, potions) and what it can do (skills scaled by the stat they use, capstones and spell forms counting extra, star attributes, elemental mastery, fighting styles, class proficiency), then multiplies by its current mood and morale. The ⚡ tag on its portrait is the same power on a 001-999 scale.')}</small>
+    ${sect('Condition', '', `${bar(s.hp, s.max_hp, 'hp', '❤️ HP', `${s.hp}/${s.max_hp}`)}${bar(s.xp, s.xp_next, 'xp', '✨ XP', s.level >= s.level_cap ? 'level cap' : `${s.xp}/${s.xp_next}`)}
+      ${bar(s.morale, 100, 'morale', `🎖️ Morale — ${s.morale_label}`, `power ×${s.morale_factor}`)}
+      ${bar(s.stamina, s.max_stamina, 'know', '⚡ Stamina', `${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}${bar(s.mana, s.max_mana, 'mana', '🔷 Mana', `${Math.round(s.mana)}/${Math.round(s.max_mana)}`)}
+      ${s.buffs.length ? `<div class="row"><small class="mute">Potions ${s.buffs.length}/${s.potion_slots}</small>${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}`)}
     ${sect(`Needs ${s.dominant ? badge(WISH[s.dominant], 'warn') : badge('content', 'ok')}`, 'Needs fall over time. Unmet needs lower mood and morale, stir bad feelings and, at zero, hurt the slime. See the Guide tab for details.', Object.entries(s.needs).map(([k, v]) => bar(v, 100, 'need', NEED_NAME[k], v)).join(''))}
     ${sect('Care', inDun ? 'This slime is inside a dungeon: feeding, petting, sleeping and potions are not possible until it is back.' : 'Feeding, petting and rest. Not possible while a slime is inside a dungeon.', `<div class="row">
       ${care('feed', st.jobs.kitchen.total > 0 ? '🍽 Feed (kitchen)' : '🍖 Feed', st.wallet.food > 0 || st.jobs.kitchen.total > 0 ? '' : 'x')}${care('serve', '🍽 Serve a dish', st.jobs.kitchen.total > 0 ? '' : 'x')}${care('pet', '🤗 Pet')}
@@ -709,41 +729,39 @@ function dOverview(s, { st, free, inDun }) {
         <button class="btn small" data-act="do" data-c="recall" ${callable ? '' : 'disabled'} title="${esc(callWhy)}">📞 Call back</button>
         ${s.job ? `<button class="btn small danger" data-act="stop_job" data-id="${s.id}" data-confirm="1" data-jn="${esc(s.job.name)}" title="Take ${esc(s.name)} off the ${esc(s.job.name)} post. The shift in progress is lost: no work is done for it.">🧰 Dismiss from work (${esc(s.job.name)})</button>` : ''}`;
       })()}
-      ${s.can_evolve ? `<button class="btn small primary" data-act="do" data-c="evolve" ${free ? '' : 'disabled'}>🌟 Evolve (${s.evolve_cost} ✨)</button>` : ''}</div>
+      </div>
       ${st.potions.stock.length ? `<div class="row"><select data-ui="pot_sel">${st.potions.stock.map((p) => `<option value="${p.kind}:${p.grade}">${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}</option>`).join('')}</select><button class="btn small" data-act="use_potion" ${inDun ? 'disabled' : ''}>Drink</button></div>` : ''}`)}
     ${sect('Orders', 'Stance decides what the slime does in a fight. Hunting sends it out for gel, food and essence.', `<div class="row"><label class="f">Row <select data-act-change="row" title="Where it stands in a fight: melee blows only reach the front row while someone stands there; the back row is sheltered but cannot swing melee well"><option value="auto" ${s.row_set ? '' : 'selected'}>auto (${s.row})</option><option value="front" ${s.row_set === 'front' ? 'selected' : ''}>front</option><option value="back" ${s.row_set === 'back' ? 'selected' : ''}>back</option></select></label>
       <label class="f">Stance <select data-act-change="stance">${st.stances.map((x) => `<option ${x === s.behavior ? 'selected' : ''}>${x}</option>`).join('')}</select></label></div>
       <div class="row"><select data-ui="zone">${st.zones.map((z) => `<option value="${z.key}" ${z.key === zone ? 'selected' : ''}>${esc(z.name)} (${z.duration}h)</option>`).join('')}</select>
         <button class="btn small" data-act="hunt" ${free && s.state === 'idle' ? '' : 'disabled'}>🏞 Hunt</button>${s.state === 'hunting' ? '<button class="btn small" data-act="do" data-c="recall">Recall</button>' : ''}</div>`)}
-    <p>${s.traits.map((t) => badge(t)).join(' ')}</p>`;
+`;
 }
 
 function dFight(s, { st, free }) {
-  return `${sect('Skills', 'Abilities come from the class (by level), evolution, specialization, rarity and learned spells.', `<p>${s.abilities.map((a) => badge((a.element ? elName(a.element) + ' ' : '') + esc(a.name), 'info')).join(' ')}</p>`)}
-    ${sect('Passive skills', 'Perks a slime earns by mastering something: an element, a trade, its class or a fighting style, or ties with other slimes. They are always on: nothing to cast. Locked ones say what it takes.', passivesHtml(s, st))}
-    ${sect('Attributes', 'Each extra star adds a class attribute; each rarity step adds a class skill.', `<div class="stack" style="gap:3px">
+  const kit = s.abilities.filter((a) => !a.spell);
+  const nSpells = s.abilities.length - kit.length;
+  const icon = { stamina: '⚡', mana: '🔷', nature: '🍃' };
+  const skill = (a) => `<span class="skc" title="${esc(`${a.desc ? a.desc + ' · ' : ''}power ${a.power} · ${a.ap} action points${a.pool ? ` · ${a.cost} ${a.pool}` : ' · free'}${a.rarity ? ' · a rarity skill' : ''}`)}">${a.rarity ? '✨ ' : ''}${a.element ? elName(a.element) + ' ' : ''}<b>${esc(a.name)}</b> <small class="mute">${a.ap}●${a.pool ? ' ' + icon[a.pool] + a.cost : ''}</small></span>`;
+  const groups = SKILL_GROUPS.map(([g, label]) => [label, kit.filter((a) => skillGroup(a) === g)]).filter(([, l]) => l.length);
+  return `${sect('Class', 'Specialization turns cross-training into a hybrid class (it takes a fighting style trained in the Train tab).', `<p>${s.spec ? `${s.spec.emoji} <b>${esc(s.spec.name)}</b> <small class="mute">(${esc(s.class_name)} + ${esc(s.spec.disc)})</small>` : `<b>${esc(s.class_name)}</b>`} · Descent: <b>floor ${s.progress}</b></p>
+      ${s.spec_options.length ? `<div class="stack">${s.spec_options.map((o) => `<div class="row between panel flat"><span>${o.emoji} <b>${esc(o.name)}</b> <small class="mute">via ${esc(o.style)} (lvl ${o.level})</small><br><small class="mute">${o.ok ? esc(o.desc) : esc(o.reason)}</small></span>
+        <button class="btn small ${o.ok ? 'primary' : ''}" data-act="specialize" data-id="${s.id}" data-disc="${o.discipline}" data-n="${esc(s.name)}" data-spec="${esc(o.name)}" data-cost="${esc(cost(st.spec.cost))}" ${o.ok && free && st.wallet.white_gel >= (st.spec.cost.white_gel || 0) && st.wallet.essence >= (st.spec.cost.essence || 0) ? '' : 'disabled'}>Specialize</button></div>`).join('')}</div>` : ''}`)}
+    ${sect('Skills', 'Its combat kit, grouped as in a fight you lead, with each skill\'s cost: action points (●, 3 come every turn) and the pool it burns (⚡ stamina, 🔷 mana, 🍃 nature). ✨ marks a rarity skill. Spells are listed in the Train tab.', `<div class="stack" style="gap:2px">${groups.map(([label, l]) => `<div class="tierow"><span class="tiel">${label}</span><span class="tiev">${l.map(skill).join('')}</span></div>`).join('')}
+      ${nSpells ? `<small class="mute">+ ${nSpells} learned spell${nSpells === 1 ? '' : 's'} (Train tab)</small>` : ''}
+      ${s.next_rarity_skill ? `<small class="mute">Next rarity unlocks: ✨ ${esc(s.next_rarity_skill)}</small>` : ''}</div>`)}
+    ${sect('Star attributes', 'Each extra star adds a class attribute.', `<div class="stack" style="gap:3px">
       ${s.star_attrs.map((a) => `<div>${stars(a.star)} <b>${esc(a.label)}</b> +${Math.round(a.value * 100)}%</div>`).join('') || '<small class="mute">No star attributes yet.</small>'}
-      ${s.next_star_attr ? `<small class="mute">Next at ${s.next_star_attr.star}★: ${esc(s.next_star_attr.label)} +${Math.round(s.next_star_attr.value * 100)}%</small>` : ''}
-      ${s.rarity_skills.map((k) => `<div>✨ <b>${esc(k.name)}</b></div>`).join('')}
-      ${s.next_rarity_skill ? `<small class="mute">Next rarity unlocks: ${esc(s.next_rarity_skill)}</small>` : ''}</div>`)}
-    ${s.prof && s.prof.capstones.length ? sect('Class proficiency', `Practice (fighting, sparring, studying magic) keeps it high; it fades after ${3} idle days. A legendary 5★ that never specialized earns two capstones: the first needs ${s.prof.one}, the second ${s.prof.both}.`, `<div class="stack" style="gap:4px">
-      ${bar(s.prof.value, 100, s.prof.value >= s.prof.both ? 'lvl-ok' : s.prof.value >= s.prof.one ? 'lvl-mid' : 'lvl-low', 'Proficiency', String(s.prof.value))}
-      ${s.prof.earned ? s.prof.capstones.map((c) => `<div>${c.usable ? '👑' : '🔒'} <b>${esc(c.name)}</b> <small class="mute">${esc(c.desc)}${c.usable ? '' : ` (needs proficiency ${c.need})`}</small></div>`).join('') : `<small class="mute">Capstones: ${s.prof.capstones.map((c) => esc(c.name)).join(', ')} — earned at legendary 5★ without ever specializing.</small>`}
-      ${s.prof.idle > 3 ? `<small class="mute">Idle for ${s.prof.idle} days: fading.</small>` : ''}
-      ${s.prof.hybrid ? `<hr style="border:0;border-top:1px solid var(--line);margin:6px 0">${bar(s.prof.hybrid.value, 100, 'know', esc(s.prof.hybrid.name) + ' proficiency', String(s.prof.hybrid.value))}
-        ${s.prof.hybrid.capstone ? `<div>👑 <b>${esc(s.prof.hybrid.capstone.name)}</b> <small class="mute">at ${s.prof.hybrid.scale}% strength (max 60%, a pure capstone is 100%). ${esc(s.prof.hybrid.capstone.desc)}</small></div>` : '<small class="mute">A hybrid capstone unlocks at legendary 5★.</small>'}
-        ${s.prof.hybrid.idle > 3 ? `<small class="mute">Second discipline idle for ${s.prof.hybrid.idle} days: fading.</small>` : ''}` : ''}</div>`) : ''}
-    ${sect('Ascension', 'Rarity costs white gel; stars cost ascension stones. Both are permanent. The chamber destroys a slime for gel and stones.', `<div class="row">
+      ${s.next_star_attr ? `<small class="mute">Next at ${s.next_star_attr.star}★: ${esc(s.next_star_attr.label)} +${Math.round(s.next_star_attr.value * 100)}%</small>` : ''}</div>`)}
+    ${sect('Passive skills', 'Perks a slime earns by mastering something: an element, a trade, its class or a fighting style, or ties with other slimes. They are always on: nothing to cast. Locked ones say what it takes.', passivesHtml(s, st))}
+    ${sect('Growth', 'Evolution raises the stage (and the level cap). Rarity costs white gel; stars cost ascension stones. Both are permanent. The chamber destroys a slime for gel and stones.', `<div class="row">
+      ${s.can_evolve ? `<button class="btn small primary" data-act="do" data-c="evolve" ${free ? '' : 'disabled'}>🌟 Evolve (${s.evolve_cost} ✨)</button>` : ''}
       <button class="btn small ${s.ascend.next_rarity && s.ascend.rarity_ready && st.wallet.white_gel >= s.ascend.rarity_cost ? 'primary' : ''}" data-act="slime_rarity" ${free && s.ascend.next_rarity && s.ascend.rarity_ready && st.wallet.white_gel >= s.ascend.rarity_cost ? '' : 'disabled'} title="Needs level ${s.ascend.rarity_level} and 5 stars">✨ ${s.ascend.next_rarity ? `to ${s.ascend.next_rarity} · ${s.ascend.rarity_cost} ⚪${s.ascend.rarity_ready ? '' : ` · Lv${s.ascend.rarity_level} & 5★`}` : 'Legendary'}</button>
       <button class="btn small ${s.ascend.star_cost && s.level >= s.ascend.star_level && st.ascension.total >= s.ascend.star_cost ? 'primary' : ''}" data-act="slime_star" ${free && s.ascend.star_cost && s.level >= s.ascend.star_level && st.ascension.total >= s.ascend.star_cost ? '' : 'disabled'} title="${s.ascend.star_cost ? `Needs level ${s.ascend.star_level} and ${s.ascend.star_cost} stones` : ''}">🌟 ${s.ascend.star_cost ? `to ${s.stars + 1}★ · Lv${s.ascend.star_level} · ${s.ascend.star_cost} 💎` : 'Max stars'}</button>
       <button class="btn small danger" data-act="destroy_slime" data-id="${s.id}" data-n="${esc(s.name)}" data-y="${esc(cost(s.ascend.chamber))}" ${free ? '' : 'disabled'}>🔥 Destroy</button></div>
       ${s.rarity === 'legendary' && s.stage >= 2 ? (() => { const egos = Object.values(s.items).filter((it) => it.ego).length;
         return `<small class="${s.level_cap > 100 ? '' : 'mute'}" style="display:block">${s.level_cap > 100 ? `👁️ Ego-ascended: wearing an ego relic in every slot lets ${esc(s.name)} grow to level ${s.level_cap}.` : `🔒 Level 150: wear an ego relic in all three slots (${egos}/3). Ego relics are fused in Town › Relics.`}</small>`; })() : ''}
-      ${Object.keys(s.merge_bonus).length ? `<small class="mute">Merged-in stats: ${Object.entries(s.merge_bonus).filter(([, v]) => v).map(([k, v]) => `+${v} ${k}`).join(' ')}</small>` : ''}`)}
-    ${sect('Class &amp; progress', 'Specialization turns cross-training into a hybrid class. Outlook forms from what the slime does most.', `<p>${s.spec ? `${s.spec.emoji} <b>${esc(s.spec.name)}</b> <small class="mute">(${esc(s.class_name)} + ${esc(s.spec.disc)})</small>` : `<b>${esc(s.class_name)}</b>`} · Descent: <b>floor ${s.progress}</b></p>
-      <p>${s.outlook ? `${s.outlook.emoji} <b>${esc(s.outlook.name)}</b> <small class="mute">${esc(s.outlook.perk)}</small>` : '<span class="mute">Outlook undecided.</span>'}</p>
-      ${s.spec_options.length ? `<div class="stack">${s.spec_options.map((o) => `<div class="row between panel flat"><span>${o.emoji} <b>${esc(o.name)}</b> <small class="mute">via ${esc(o.style)} (lvl ${o.level})</small><br><small class="mute">${o.ok ? esc(o.desc) : esc(o.reason)}</small></span>
-        <button class="btn small ${o.ok ? 'primary' : ''}" data-act="specialize" data-id="${s.id}" data-disc="${o.discipline}" data-n="${esc(s.name)}" data-spec="${esc(o.name)}" data-cost="${esc(cost(st.spec.cost))}" ${o.ok && free && st.wallet.white_gel >= (st.spec.cost.white_gel || 0) && st.wallet.essence >= (st.spec.cost.essence || 0) ? '' : 'disabled'}>Specialize</button></div>`).join('')}</div>` : ''}`)}`;
+      ${Object.keys(s.merge_bonus).length ? `<small class="mute">Merged-in stats: ${Object.entries(s.merge_bonus).filter(([, v]) => v).map(([k, v]) => `+${v} ${k}`).join(' ')}</small>` : ''}`)}`;
 }
 
 /* The Train tab: everything one slime can practise, in one place (drills, sparring, elements, spells). The Academy keeps the
@@ -767,7 +785,7 @@ function dTrain(s, { st }) {
   const drill = `<div class="row"><select data-ui="my_disc" data-rerender="1">${discOpts('yard', dk)}</select>
       <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select>
       <button class="btn small primary" data-act="drill_me" ${ok && room(yard) ? '' : 'disabled'}>🥋 Drill · ${tr.ticks}h · ${esc(cost(tr.cost))}</button></div>
-    <small class="mute">${gain > 0 ? `Worth about <b>+${gain}</b> proficiency` : 'Not its discipline: only a little general practice'}${s.prof ? ` (now ${s.prof.value})` : ''} · ${fac(yard).users.length}/${fac(yard).capacity} places taken · trainer ${st.jobs.trainer[dk] ? `+${st.jobs.trainer[dk]}% gains` : 'none appointed'}${!room(yard) ? ' · <b>the yard is full</b>' : ''}</small>`;
+    <small class="mute">${gain > 0 ? `Worth about <b>+${gain}</b> proficiency` : 'Not its discipline: only a little general practice'} · ${fac(yard).users.length}/${fac(yard).capacity} places taken · trainer ${st.jobs.trainer[dk] ? `+${st.jobs.trainer[dk]}% gains` : 'none appointed'}${!room(yard) ? ' · <b>the yard is full</b>' : ''}</small>`;
   let sk = ui('my_style', s.discipline);
   if (!discs.some((d) => d.key === sk)) sk = discs[0].key;
   S.ui.my_style = sk;
@@ -808,27 +826,65 @@ function dTrain(s, { st }) {
       ${mutationNotes(s)}`
     : `<p class="mute">Elements unlock at 3★ for any class: this slime is ${s.stars}★.</p>`;
   return `${!ok ? `<div class="panel flat"><small>⏳ It cannot train right now: ${esc(why)}.</small></div>` : tags ? `<small class="mute">Note${tags}</small>` : ''}
+    ${s.prof ? sect('Class proficiency', `Practice (fighting, sparring, studying magic) keeps it high; it fades after ${3} idle days. A legendary 5★ that never specialized earns two capstones: the first needs ${s.prof.one}, the second ${s.prof.both}.`, `<div class="stack" style="gap:4px">
+      ${bar(s.prof.value, 100, s.prof.value >= s.prof.both ? 'lvl-ok' : s.prof.value >= s.prof.one ? 'lvl-mid' : 'lvl-low', 'Proficiency', String(s.prof.value))}
+      ${s.prof.earned ? s.prof.capstones.map((c) => `<div>${c.usable ? '👑' : '🔒'} <b>${esc(c.name)}</b> <small class="mute">${esc(c.desc)}${c.usable ? '' : ` (needs proficiency ${c.need})`}</small></div>`).join('') : `<small class="mute">Capstones: ${s.prof.capstones.map((c) => esc(c.name)).join(', ')} — earned at legendary 5★ without ever specializing.</small>`}
+      ${s.prof.idle > 3 ? `<small class="mute">Idle for ${s.prof.idle} days: fading.</small>` : ''}
+      ${s.prof.hybrid ? `<hr style="border:0;border-top:1px solid var(--line);margin:6px 0">${bar(s.prof.hybrid.value, 100, 'know', esc(s.prof.hybrid.name) + ' proficiency', String(s.prof.hybrid.value))}
+        ${s.prof.hybrid.capstone ? `<div>👑 <b>${esc(s.prof.hybrid.capstone.name)}</b> <small class="mute">at ${s.prof.hybrid.scale}% strength (max 60%, a pure capstone is 100%). ${esc(s.prof.hybrid.capstone.desc)}</small></div>` : '<small class="mute">A hybrid capstone unlocks at legendary 5★.</small>'}
+        ${s.prof.hybrid.idle > 3 ? `<small class="mute">Second discipline idle for ${s.prof.hybrid.idle} days: fading.</small>` : ''}` : ''}</div>`) : ''}
     ${sect('Proficiency drill', 'Solo drills in the Blade Yard, Archery Range or Mana Pool raise class proficiency (what keeps capstone skills usable). Its own discipline gives the most. Upgrade the yards in Town > Buildings; appoint trainers in the Academy.', drill)}
     ${sect('Sparring — fighting styles', 'Duels with another slime build a fighting style with permanent combat perks. Sparring outside its class leads to specialization.', spar)}
-    ${sect('Elements &amp; spells', 'Study raises mastery of a basic element (mages have an extra slot and study faster). Spells come from the Library catalogue; fuse new ones in the Academy Spell lab.', elems)}`;
+    ${sect('Elements &amp; spells', 'Study raises mastery of a basic element (mages have an extra slot and study faster). Spells come from the Library catalogue; fuse new ones in the Academy Spell lab.', elems)}
+    ${sect('Trades', 'What this slime has learned at the posts in town. Each shift worked earns a little experience in that trade; the level (up to 10) raises the post\'s output by 12% per level, and a natural talent adds 25%. A trade\'s level is kept when the slime moves to another post.', s.trades.length ? s.trades.map((t) => bar(t.next ? t.xp - t.floor : 1, t.next ? t.next - t.floor : 1, 'xp', `${t.emoji} ${esc(t.name)} · level ${t.level}${t.level >= t.max ? ' (max)' : ''}${t.current ? ' · at this post now' : ''}${t.talent ? ' · ⭐ talent' : ''}`, t.next ? `${t.xp - t.floor}/${t.next - t.floor} shifts` : 'max level')).join('') : '<small class="mute">No trade yet: appoint it to a post in Town.</small>')}`;
 }
 
 function dMind(s, { st, free, inDun }) {
-  const em = { couple: '💘 Partner', best_friend: '💞 Best friend', friend: '🤝 Friend', rival: '⚔️ Rival' };
-  return `${sect('Feelings', 'Passing feelings shift stats in battle. The Guide tab lists what raises and lowers each one.', `<div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value)) + ((f.why || []).length ? `<small class="mute why">${f.why.map(esc).join(' · ')}</small>` : '')).join('') : '<small class="mute">Calm and unremarkable.</small>'}
+  const mem = (s.memories || []).slice().sort((x, y) => y.day - x.day);
+  const memRow = (m) => `<div><small class="${m.sign < 0 ? 'bad' : m.sign > 0 ? '' : 'mute'}">${m.sign < 0 ? '😠' : m.sign > 0 ? '💚' : '🕯'} ${esc(m.text)} <span class="mute">· day ${m.day + 1}</span></small></div>`;
+  return `${sect('Personality', 'Traits come with the slime and shape its needs, quarrels and how it copes.', `<div class="stack" style="gap:3px">
+      <div>${s.traits.map((t) => badge(t)).join(' ')}</div>
+      <small class="mute" style="display:block">In the evenings it ${esc(s.hobby)}. <span title="How this slime handles a bad feeling (from its personality). Venting and dwelling make things worse.">When upset it ${esc(s.coping)}${s.coping_healthy ? '' : ' (it does not help)'}.</span> ${s.hatch_in === 0 ? '🎂 <b>Today is its hatch day!</b> A word from you will be noticed.' : `Hatch day in ${s.hatch_in} day${s.hatch_in === 1 ? '' : 's'}.`}</small></div>`)}
+    ${sect('Sanity and feelings', 'Sanity is how much a slime can take: deaths of friends, knock-outs, lost battles, brawls and long miserable stretches wear it down; sleep, rest, the Hospital, a calm happy home, a won fight, the Keeper\'s Soothe and one talk a day build it back. Low sanity caps the mood; below 20% it refuses dungeons, below 10% work. Passing feelings shift stats in battle (the Guide lists what raises and lowers each).', `<div class="stack" style="gap:4px">
+      ${bar(s.sanity, s.sanity_max, 'sanity', `🧠 Sanity — ${s.sanity_label}`, `${s.sanity}/${s.sanity_max}${s.mood_cap < 1 ? ` · mood capped at ${Math.round(s.mood_cap * 100)}%` : ''}`)}
+      ${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value)) + ((f.why || []).length ? `<small class="mute why">${f.why.map(esc).join(' · ')}</small>` : '')).join('') : '<small class="mute">Calm and unremarkable.</small>'}
       <div title="How life has felt over the last few days. Feelings settle back to a slime's usual mood, and a good life lifts it.">🌤 Contentment: <b>${esc(s.content_label)}</b> <small class="mute">${s.content}/100</small></div>
       ${Object.keys(s.feeling_effects).length ? `<small class="mute" style="display:block">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
-      ${s.awareness ? awarenessHtml(s.awareness) : ''}
-      <small class="mute" style="display:block">In the evenings it ${esc(s.hobby)}. ${s.hatch_in === 0 ? '🎂 <b>Today is its hatch day!</b> A word from you will be noticed.' : `Hatch day in ${s.hatch_in} day${s.hatch_in === 1 ? '' : 's'}.`}</small>
-      <small class="mute" style="display:block" title="How this slime handles a bad feeling (from its personality). Venting and dwelling make things worse.">When upset it ${esc(s.coping)}${s.coping_healthy ? '' : ' (it does not help)'}.</small>
       ${(s.grief || []).length ? `<div>🕯 Grieving ${s.grief.map((x) => `<b>${esc(x.name)}</b> <small class="mute">(${x.days} day${x.days === 1 ? '' : 's'} ago)</small>`).join(', ')}</div>` : ''}
       ${s.burnt ? '<div class="warn">😶 Going through the motions: the same days, nothing chosen, nobody noticing. Praise, a change of routine or a choice of its own brings the spark back.</div>' : ''}
-      ${s.meaning && !s.awareness?.outcome ? `<small class="mute">Last week: care ${Math.round(s.meaning.care * 100)}% · connection ${Math.round(s.meaning.connection * 100)}% · purpose ${Math.round(s.meaning.purpose * 100)}% · hardship ${Math.round(s.meaning.hardship * 100)}%</small>` : ''}
       <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button>
         <button class="btn small" data-act="praise" ${inDun ? 'disabled' : ''} title="${s.praised ? 'Already praised today: more helps less' : 'Recognition: esteem and pride, and it gives the day meaning'}">👏 Praise${s.praised ? ' ✓' : ''}</button></div></div>`)}
-    ${sect('Relationships', 'Ties form from bonds: friends, best friends, rivals, mentors and couples. See the People tab.', `<div class="stack" style="gap:3px">${s.relations.map((r) => { const o = slimeById(r.other); if (!o) return ''; const label = r.kind === 'mentor' ? (r.mentor === s.id ? '🎓 Mentee' : '🎓 Mentor') : em[r.kind]; return `<div>${label}: <b>${esc(o.name)}</b></div>`; }).join('') || '<small class="mute">No ties yet.</small>'}
-      ${s.parents.length ? `<div>🥚 Child of <b>${s.parent_names.map(esc).join(' &amp; ')}</b> · generation ${s.generation}</div>` : ''}</div>`)}
-    ${sect('Experience', 'What this slime has done most shapes its outlook.', `<small class="mute">${Object.entries(s.exp).map(([k, v]) => `${k} ${v}`).join(' · ') || 'no experience yet'}</small><p class="mute">Wins ${s.wins} · merged ${s.merged}</p>`)}`;
+    ${sect(`On its mind ${s.request ? badge('request', 'warn') : ''}`, 'Slimes pick goals from what they remember, act on them when idle, and sometimes ask you for something. Granting requests builds trust; slimes who trust you put up with more, and refusals are remembered.', `<div class="stack" style="gap:3px"><div><small>🎯 ${s.goal ? esc(s.goal) : 'no particular goal'}</small></div><div><small class="mute">🤝 Trust in you: ${s.trust}/100</small></div>${s.request ? requestRow(s) : ''}</div>`)}
+    ${sect('Memories', 'What this slime remembers about the others, newest first. Grudges make quarrels likelier (and are their stated reason); thanks make them rarer. Memories fade over a few weeks.', mem.length ? `<div class="stack" style="gap:2px">${mem.slice(0, 4).map(memRow).join('')}</div>${mem.length > 4 ? `<details data-keep="memMore"><summary class="mute">${mem.length - 4} older</summary><div class="stack" style="gap:2px">${mem.slice(4).map(memRow).join('')}</div></details>` : ''}` : '<small class="mute">Nothing on its mind yet.</small>')}
+    ${s.awareness || (s.meaning && !s.awareness?.outcome) ? sect('Its life', 'How its days have felt lately (and, for a legendary 5★, what it makes of being code).', `${s.awareness ? awarenessHtml(s.awareness) : ''}
+      ${s.meaning && !s.awareness?.outcome ? `<small class="mute" style="display:block">Last week: care ${Math.round(s.meaning.care * 100)}% · connection ${Math.round(s.meaning.connection * 100)}% · purpose ${Math.round(s.meaning.purpose * 100)}% · hardship ${Math.round(s.meaning.hardship * 100)}%</small>` : ''}`) : ''}
+    ${sect('Outlook', 'What this slime has done most shapes its outlook, which gives a small perk.', `<div class="stack" style="gap:3px"><div>${s.outlook ? `${s.outlook.emoji} <b>${esc(s.outlook.name)}</b> <small class="mute">${esc(s.outlook.perk)}</small>` : '<span class="mute">Outlook undecided.</span>'}</div>
+      <small class="mute" style="display:block">${Object.entries(s.exp).map(([k, v]) => `${k} ${v}`).join(' · ') || 'no experience yet'} · wins ${s.wins} · merged ${s.merged}</small></div>`)}`;
+}
+
+/* A slime's relationships, compact: its ties (partner, best friends, friends, mentor / mentees, rivals) with the bond,
+   whom it is growing close to or clashing with, and its family. Names open that slime's card. */
+function dTies(s) {
+  const who = (id, extra = '') => { const o = slimeById(id); return o ? `<button class="linkish tie" data-act="sel" data-id="${id}">${avatar(o, 'xs nobadge')}<b>${esc(o.name)}</b></button>${extra}` : ''; };
+  const bondTag = (v) => `<small class="mute">bond ${v}</small>`;
+  const groups = [
+    ['couple', '💘 Partner', (r) => r.kind === 'couple'],
+    ['best_friend', '💞 Best friends', (r) => r.kind === 'best_friend'],
+    ['friend', '🤝 Friends', (r) => r.kind === 'friend'],
+    ['mentor', '🎓 Mentor', (r) => r.kind === 'mentor' && r.mentor !== s.id],
+    ['mentee', '🌱 Mentees', (r) => r.kind === 'mentor' && r.mentor === s.id],
+    ['rival', '⚔️ Rivals', (r) => r.kind === 'rival'],
+  ];
+  const line = (label, items) => items.length ? `<div class="tierow"><span class="tiel">${label}</span><span class="tiev">${items.join('')}</span></div>` : '';
+  const ties = groups.map(([, label, f]) => line(label, s.relations.filter(f).map((r) => `<span class="tiep">${who(r.other)} ${bondTag(r.bond)}</span>`))).join('');
+  const near = line('✨ Growing close', (s.near || []).map((r) => `<span class="tiep">${who(r.other)} ${bondTag(r.bond)}</span>`));
+  const fric = line('💢 Friction', (s.friction || []).map((r) => `<span class="tiep">${who(r.other)} ${bondTag(r.bond)}</span>`));
+  const parents = s.parents.length ? line('🥚 Parents', s.parents.map((id, i) => `<span class="tiep">${slimeById(id) ? who(id) : `<b class="mute">${esc(s.parent_names[i] || '?')}</b> <small class="mute">(gone)</small>`}</span>`)) : '';
+  const kids = line('🍼 Children', (s.children || []).map((id) => `<span class="tiep">${who(id)}</span>`));
+  return `${sect('Ties', 'Bonds grow from time spent together: friends, then best friends; long quarrels make rivals; a veteran takes a younger slime under its wing; two who truly love each other become a couple (Community › Couples & family is where a couple can have a child).',
+      `<div class="stack" style="gap:2px">${ties || '<small class="mute">No ties yet.</small>'}</div>`)}
+    ${near || fric ? sect('Between', 'Slimes it is getting along with, or clashing with, that are not a tie yet.', `<div class="stack" style="gap:2px">${near}${fric}</div>`) : ''}
+    ${sect('Family', s.generation ? `Generation ${s.generation}.` : 'Pulled from the Well (first generation).', `<div class="stack" style="gap:2px">${parents}${kids}${parents || kids ? '' : '<small class="mute">No parents or children in the colony.</small>'}</div>`)}`;
 }
 
 function dGear(s, { st, free }) {
@@ -1747,16 +1803,19 @@ function famUnit(u, depth = 0) {
 }
 function bonds() {
   const st = S.state, f = st.family;
-  const ties = (k) => f.ties[k].map((t) => {
+  const couples = f.ties.couple.map((t) => {
     const aS = slimeById(t.a), bS = slimeById(t.b);
-    const extra = k === 'mentor' ? ` <small class="mute">(${esc(t.mentor === t.a ? t.a_name : t.b_name)} teaches)</small>` : '';
-    const bud = k === 'couple' ? `<button class="btn small ${t.bud_in === 0 ? 'primary' : ''}" data-act="bud" data-a="${t.a}" data-b="${t.b}" ${t.bud_in === 0 && aS && bS && !aS.busy && !bS.busy && affordable(f.bud_cost) ? '' : 'disabled'}>🥚 Have a child · ${cost(f.bud_cost)}</button>${t.bud_in ? `<small class="mute"> in ${t.bud_in}d</small>` : ''}` : '';
-    return `<div class="row between panel flat" style="margin:4px 0"><span>${esc(t.a_name)} ${f.kinds[k].emoji} ${esc(t.b_name)}${extra} <small class="mute">bond ${t.bond}</small></span>${bud}</div>`;
-  }).join('') || '<small class="mute">None yet.</small>';
+    const bud = `<button class="btn small ${t.bud_in === 0 ? 'primary' : ''}" data-act="bud" data-a="${t.a}" data-b="${t.b}" ${t.bud_in === 0 && aS && bS && !aS.busy && !bS.busy && affordable(f.bud_cost) ? '' : 'disabled'}>🥚 Have a child · ${cost(f.bud_cost)}</button>${t.bud_in ? `<small class="mute"> in ${t.bud_in}d</small>` : ''}`;
+    const nm = (id, n) => slimeById(id) ? `<button class="linkish" data-act="sel" data-id="${id}"><b>${esc(n)}</b></button>` : esc(n);
+    return `<div class="row between panel flat" style="margin:4px 0"><span>${nm(t.a, t.a_name)} ${f.kinds.couple.emoji} ${nm(t.b, t.b_name)} <small class="mute">bond ${t.bond}</small></span>${bud}</div>`;
+  }).join('') || '<small class="mute">No couples yet.</small>';
+  const counts = ['best_friend', 'friend', 'mentor', 'rival'].map((k) => chip(`${f.kinds[k].emoji} ${f.ties[k].length} ${esc(f.kinds[k].label.toLowerCase())}`, '')).join(' ');
   return `<div class="grid cols2">
-  <div class="stack">${['couple', 'best_friend', 'friend', 'mentor', 'rival'].map((k) => `<div class="panel stack"><h3>${f.kinds[k].emoji} ${esc(f.kinds[k].label)} <small class="mute">(${f.ties[k].length})</small></h3>${ties(k)}</div>`).join('')}</div>
+  <div class="stack"><div class="panel stack"><h3>${f.kinds.couple.emoji} ${esc(f.kinds.couple.label)} <small class="mute">(${f.ties.couple.length})</small></h3>${couples}</div>
+    <div class="panel stack"><h3>Other ties</h3><div class="row">${counts}</div>
+      <small class="mute">Friends, best friends, mentors and rivals are on each slime's card, under <b>Relationships</b>: open a slime to see whom it is close to, clashing with and related to.</small></div></div>
   <div class="stack"><div class="panel stack"><h2>🌳 Family trees</h2>
-    <p class="mute">Slimes who bond become friends and best friends; quarrels breed rivals; veterans take younger slimes under their wing; and two slimes who truly love each other can have a child — a new slime with traits, class and rarity drawn from both parents. Ties help parties (synergy, feelings) and hurt when someone is lost.</p>
+    <p class="mute">Two slimes who truly love each other can have a child — a new slime with traits, class and rarity drawn from both parents. Ties help parties (synergy, feelings) and hurt when someone is lost.</p>
     ${f.families.length ? f.families.map((r) => `<div class="panel flat">${famUnit(r)}</div>`).join('') : '<p class="mute">No children yet.</p>'}</div></div></div>`;
 }
 
@@ -1864,7 +1923,7 @@ function townAll() {
     <small class="mute">Grades: ${st.potions.grades.map((g) => `${g.grade}: +${Math.round(g.bonus * 100)}% for ${g.hours}h`).join(' · ')}</small>
     <div class="row">${st.potions.stock.map((p) => chip(`${(st.potions.kinds.find((k) => k.key === p.kind) || {}).emoji} ${p.kind} G${p.grade} ×${p.n}`, 'info')).join('') || '<small class="mute">No potions yet.</small>'}</div>
     <div class="row"><button class="btn small ${st.potions.autonomy ? 'primary' : ''}" data-act="autonomy">🤖 Slime autonomy: ${st.potions.autonomy ? 'on' : 'off'}</button>
-      <small class="mute">When on, slimes help themselves to up to ${Math.round(st.potions.autonomy_share * 100)}% of your stocks without asking: they drink potions (tired ones stamina, hurt ones vigor, class-suited ones before a trip), mend worn gear, dress themselves from the relic vault and armory (taking clearly better gear too), level the relics they wear, merge spare gear up a tier, and brew potions the colony is short of — at least 34% of the most you ever held is always left for you.</small></div></div>`;
+      <small class="mute">When on, slimes help themselves to up to ${Math.round(st.potions.autonomy_share * 100)}% of your stocks without asking: they drink potions (tired ones stamina, hurt ones vigor, class-suited ones before a trip), mend worn gear, dress themselves from the relic vault and armory (taking clearly better gear too), level the relics they wear, merge spare gear up a tier, brew potions the colony is short of, and go to train or study when that is what they want — at least 34% of the most you ever held is always left for you. Gel for the training they start comes only from an allowance of ${st.potions.auto_gel_hour} white gel per real hour (left now: ${st.potions.auto_gel}).</small></div></div>`;
 }
 
 /* ---------------------------------------------------------------- council */
@@ -2145,13 +2204,19 @@ function modalHtml() {
       <div class="seg">${Object.entries(I18N.langs).map(([c, n]) => `<button class="${I18N.lang === c ? 'on' : ''}" data-act="lang" data-c="${c}">${n}</button>`).join('')}</div>` : ''}
       <h4 style="margin:6px 0 0">Helpers</h4>
       <div class="row"><button class="btn small ${S.state.auto_care ? 'primary' : ''}" data-act="autocare" title="Auto-care feeds, sleeps and rests slimes by itself">🤖 Auto-care ${S.state.auto_care ? 'on' : 'off'}</button>
-        <button class="btn small ${S.state.potions.autonomy ? 'primary' : ''}" data-act="autonomy" title="Slimes use up to 66% of your stocks by themselves">🤖 Autonomy ${S.state.potions.autonomy ? 'on' : 'off'}</button></div>
+        <button class="btn small ${S.state.potions.autonomy ? 'primary' : ''}" data-act="autonomy" title="Slimes use up to 66% of your stocks by themselves, and go to train or study when they want to (gel: at most ${S.state.potions.auto_gel_hour} a real hour)">🤖 Autonomy ${S.state.potions.autonomy ? 'on' : 'off'}</button></div>
+      ${(() => { const p = S.state.potions, cur = p.auto_gel_hour, custom = !p.auto_gel_choices.includes(cur);
+        return `<div class="row"><small class="mute">Gel for self-started training ${info('With autonomy on, slimes that want to get stronger or learn go to drill or study by themselves. This is the most white gel they may spend on it per real hour (one hour\'s worth at most is saved up). Raise it for a big colony, or 0 for none. Other materials always follow the 66% rule.')}</small>
+          <div class="seg small">${p.auto_gel_choices.map((x) => `<button class="${cur === x ? 'on' : ''}" data-act="auto_gel" data-rate="${x}">${x === 0 ? 'none' : x}</button>`).join('')}</div>
+          <input type="number" min="0" max="${p.auto_gel_max}" step="5" value="${cur}" data-ui="auto_gel_custom" style="width:5em" title="Any amount up to ${p.auto_gel_max}"><button class="btn small ${custom ? 'primary' : ''}" data-act="auto_gel" data-custom="1">Set</button>
+          <small class="mute">⚪ / real hour · ${p.auto_gel} left now</small></div>`; })()}
       <h4 style="margin:6px 0 0">Tutorial</h4>
       <button class="btn" data-act="tour">🎓 Replay the tutorial</button>
       <h4 style="margin:6px 0 0">Save</h4>
       <button class="btn" data-act="export">⬇ Export save (.json)</button>
       <button class="btn" data-act="copy_save">📋 Copy save text</button>
       <label class="btn" style="display:block">⬆ Import save<input type="file" accept=".json,application/json" data-import hidden></label>
+      ${playlogPanel()}
       <button class="btn danger" data-act="newgame2">🗑 Start a new colony</button>
       <small class="mute">Backend: ${esc(S.backendName)}. Your colony is saved automatically in this browser.</small></div></div>`;
   }
@@ -2211,6 +2276,7 @@ const A = {
   keeper_title: (d) => act('keeper_title', { key: d.key || '' }),
   bud: (d) => confirmThen('Have a child? It costs ' + cost(S.state.family.bud_cost) + '.', () => act('bud', { a: num(d.a), b: num(d.b) })),
   autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
+  auto_gel: (d) => act('auto_gel', { rate: d.custom ? num(ui('auto_gel_custom', S.state.potions.auto_gel_hour), 10) : num(d.rate, 10) }),
   merge_gel: (d) => act('merge_gel', { n: d.n === 'max' ? Math.floor(S.state.wallet.white_gel / S.state.rates.gel_merge) : num(d.n) }),
   pit_lure: () => { S.ui.pit_lure = !ui('pit_lure', false); render(); },
   adv_lure: () => { S.ui.adv_lure = !ui('adv_lure', false); render(); },
@@ -2380,6 +2446,13 @@ const A = {
     try { localStorage.removeItem(LS_KEY); } catch (e) { /* blocked */ }
     S.damaged = null; S.lastSave = null; render(); }),
   export: async () => { await exportSave(); render(); },
+  playlog_toggle: (d) => d.on === '1'
+    ? confirmThen(`Turn on the playtest recorder?\n\nEvery fight will be written into your save: about 0.5-2 KB each (more for a bigger party), up to ${(S.state.playlog.max_kb / 1000).toFixed(1)} MB in all; past that the oldest entries drop off. A bigger save is slower to save and to export, and a browser only has a few MB for it.\n\nExport the log from this menu to share it, then turn the recorder off and clear it.`, () => act('playlog_set', { on: true }))
+    : act('playlog_set', { on: false }),
+  playlog_clear: () => confirmThen('Clear the playtest log? Export it first if you want to keep it.', () => act('playlog_clear')),
+  playlog_export: async () => { const r = await backend.call('playlog_export', {});
+    if (!r.ok) return toast(r.error || 'Export failed.', true);
+    if (await shareJson(r.result, `slime-gacha-playtest-day${S.state?.day ?? ''}.json`, 'Slime Gacha playtest log')) toast(`Playtest log exported (${r.result.entries.length} entries).`); },
   dismiss_news: () => { lsSet(LS_NEWS, S.state.whats_new.id); render(); },
   snooze_backup: () => { lsSet(LS_SNOOZE, Date.now()); render(); },
   admit_hurt: () => act('admit_hurt'),

@@ -98,6 +98,7 @@ class TestLibrary(Cleanup):
 
     def test_study_levels_and_cap(self):
         g = rich_game()
+        g.autonomy = False                                  # studying by hand only (no self-started study)
         s = scholar(g, "barbarian", 3)
         g.needs.auto_care = False
         for _ in range(12):
@@ -153,6 +154,7 @@ class TestLibrary(Cleanup):
 
     def test_spell_slot_limit_and_forget(self):
         g = rich_game()
+        g.autonomy = False                                  # studying by hand only (no self-started study)
         s = scholar(g, "mage", 5)
         for el in elements.BASICS:
             master(g, s, el, 2)

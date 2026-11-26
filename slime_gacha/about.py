@@ -85,8 +85,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-26-combat-resources",
-                 text="Fights now run on three pools and action points. Physical skills burn stamina, magic burns mana (it carries over between fights like stamina; Arcane potions refill it), elemental skills burn nature (half full at the start of every fight). Every turn brings 3 action points, saved up to 6: a plain skill costs 3, big area skills like Explosive Brew or Rampage cost 6, so they can no longer open a fight and end it, and saved points let a slime act twice in a turn. In fights you lead, End turn saves your points. Cooldowns are down to 'not twice a turn'. Monsters play by the same rules, and healers can no longer heal forever in a spar.")
+WHATS_NEW = dict(id="2026-11-26-self-starting",
+                 text="Slimes now act on what they want. With autonomy on, one that wants to get stronger, master its style or learn an element goes to drill or study by itself when a place is free (gel only from an allowance you set in the menu: 10 white gel per real hour to start). Rivals ask you for a sparring match to settle things, and slimes ask for posts they have a knack for (chef, trainer, blacksmith ...). Tired slimes take a free Rest Area bed before napping. Also new: People is now Community, every slime card has a Relationships tab and a tidier layout, and an optional playtest recorder sits in the menu.")
 
 
 def build() -> Dict[str, object]:

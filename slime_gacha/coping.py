@@ -84,7 +84,7 @@ def cope(g, s, rng: random.Random, events: List[str]) -> bool:
         emotions.soothe(s, feeling, config.COPE_EASE)
         events.append(f"😤 {s.name} is feeling {name}, sets its jaw and faces it.")
     elif st == "sleep":
-        if s.needs.get("energy") < 90:
+        if s.needs.get("energy") < 90 and not g._auto_rest(s):     # a free bed in the Rest Area first
             s.state = "sleeping"
         emotions.soothe(s, feeling, config.COPE_EASE * 0.8)
         events.append(f"😴 {s.name} is feeling {name} and sleeps it off.")

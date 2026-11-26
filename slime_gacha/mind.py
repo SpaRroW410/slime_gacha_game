@@ -12,7 +12,7 @@
 import random
 from typing import List
 
-from . import awakening, config, emotions, jobs, meaning, memory, outlook, sanity, sparring
+from . import awakening, config, elements, emotions, jobs, meaning, memory, outlook, sanity, sparring
 from .errors import InvalidAction
 from .growth import add_xp
 
@@ -73,6 +73,10 @@ def _goal_options(g, s) -> List[tuple]:
         if mid in g.roster:
             out.append((2.0, dict(kind="mentor", target=mid, text=f"wants to look after {g.roster[mid].name}, its mentee")))
             break
+    el = learn_target(s)
+    if el:
+        out.append((0.8 + 1.0 * (s.archetype in config.SCHOLAR_CLASSES) + 0.5 * ("timid" not in traits),
+                    dict(kind="learn", target=0, el=el, text=f"wants to learn more about {elements.get(el).name.lower()}")))
     out.append((0.6 + 1.5 * (outlook.has(s, "scout") or outlook.has(s, "hunt")),
                 dict(kind="explore", target=0, text="wants to see what lies beyond the colony")))
     out.append((0.6 + 1.0 * bool(s.job), dict(kind="craft", target=0, text="wants to make something with its own hands")))
@@ -89,6 +93,20 @@ def _goal_options(g, s) -> List[tuple]:
         w *= 1.5 if traits & {"grumpy", "proud"} else 0.5 if "kind" in traits else 1.0
         out.append((w, dict(kind="rival", target=best["other"], text=f"wants to prove themself against {best['name']}")))
     return out
+
+
+def learn_target(s) -> str:
+    """The element a slime would like to study: the attuned one it knows least (below its cap), else a new one if it has a
+    free slot. '' when elements are closed to it (under 3 stars) or it has learned all it can for now."""
+    if not elements.can_master(s) or elements.mastery_paused(s):
+        return ""
+    cap = elements.mastery_cap(s)
+    open_ = [b for b in s.attuned if elements.basic_level(s, b) < cap]
+    if open_:
+        return min(open_, key=lambda b: elements.basic_level(s, b))
+    if len(s.attuned) < elements.slot_count(s):
+        return next(b for b in elements.BASICS if b not in s.attuned)
+    return ""
 
 
 def _rng(g, s, salt: int = 0) -> random.Random:
@@ -143,6 +161,10 @@ def decide(g, s, events: List[str]) -> bool:
             g.social.add_bond(s, other, 2)
             emotions.feel(s, "pride", 8)
             events.append(f"🎓 {s.name} gives {other.name} a lesson.")
+    elif k == "learn" and goal.get("el") in s.attuned and s.needs.get("energy") >= 40:
+        elements.add_mastery_xp(s, goal["el"], config.LEARN_STYLE_XP)
+        emotions.feel(s, "wonder", 5)
+        events.append(f"📖 {s.name} reads up on {elements.get(goal['el']).name.lower()} on their own.")
     elif k == "explore":
         emotions.feel(s, "wonder", 8)
         s.needs.add("esteem", 4)
@@ -204,6 +226,10 @@ def make_request(g, s):
                             text=f"asks to be moved out of {party.name}: {o.name} is still on their mind")
     if sanity.frac(s) < 0.5 and s.state == "idle" and not s.in_dungeon:
         return dict(kind="rest", target=0, day=g.day, text="asks for a rest day: \"I can't keep going like this.\"")
+    rival = spar_rival(g, s)
+    if rival:
+        return dict(kind="spar", target=rival.id, day=g.day,
+                    text=f"asks for a sparring match with {rival.name}, its rival, to settle things")
     if not party and _free_at_home(g, s):
         for o in g.slimes():
             p = g.parties.party_of(o.id)
@@ -211,10 +237,41 @@ def make_request(g, s):
                     memory.opinion(s, o)["gratitude"] + max(0.0, g.social.bond(s, o)) / 10.0 >= config.REQUEST_FRIEND:
                 return dict(kind="join_party", target=o.id, day=g.day, party=p.id, text=f"asks to join {o.name}'s party, {p.name}")
     if _free_at_home(g, s):
-        for key, job in jobs.JOBS.items():
-            if job.classes and s.archetype in job.classes and len(jobs.workers(g, key)) < jobs.slots(g, key) and not jobs.why_not(g, s, key):
+        for key, job in jobs.JOBS.items():                             # a post it is made for: its class, a natural
+            fits = (job.classes and s.archetype in job.classes) or s.archetype in job.talents   # knack, or the trade learned
+            fits = fits or jobs.level(s, key) >= 2
+            if fits and jobs.slots(g, key) > 0 and len(jobs.workers(g, key)) < jobs.slots(g, key) and not jobs.why_not(g, s, key):
                 return dict(kind="post", target=0, day=g.day, job=key, text=f"asks for the {job.name.lower()} post")
     return None
+
+
+def spar_rival(g, s):
+    """A rival (a rival tie, or the slime its goal is set on beating) that both are free and fit to spar with now."""
+    ids = [r["other"] for r in g.relations.of(s.id) if r["kind"] == "rival"]
+    if s.goal and s.goal.get("kind") == "rival":
+        ids.append(s.goal.get("target"))
+    for oid in ids:
+        o = g.roster.get(oid)
+        if o is None or not _free_at_home(g, s) or not _free_at_home(g, o):
+            continue
+        try:
+            sparring.check_ready(s)
+            sparring.check_ready(o)
+        except InvalidAction:
+            continue
+        return o
+    return None
+
+
+def _grant_spar(g, s, r) -> str:
+    o = g.roster.get(r["target"])
+    if o is None:
+        raise InvalidAction("That rival is no longer in the colony.")
+    res = g.spar(s.id, o.id, s.arch.discipline)
+    g.social.add_bond(s, o, config.RIVAL_SPAR_BOND)                           # it is out in the open now: the air clears a little
+    s.trust = min(100.0, s.trust + config.TRUST_GRANT)
+    awakening.note(s, "chose")
+    return " ".join(list(res.summary[:2]) + [f"The rivalry cools a little. {s.name} trusts you more (trust {int(s.trust)})."])
 
 
 def answer(g, sid: int, accept: bool) -> str:
@@ -222,6 +279,10 @@ def answer(g, sid: int, accept: bool) -> str:
     r = s.request
     if not r:
         raise InvalidAction(f"{s.name} has no request.")
+    if accept and r["kind"] == "spar":
+        msg = _grant_spar(g, s, r)                                           # raises (and keeps the request) if it cannot happen
+        s.request = None
+        return msg
     s.request = None
     if not accept:
         s.trust = max(0.0, s.trust - (config.TRUST_DENY_REST if r["kind"] in ("rest", "leave") else config.TRUST_DENY))

@@ -1,4 +1,4 @@
-"""Campaign chapters (docs/STORY.md): story beats that unlock from play and are read in People > Records.
+"""Campaign chapters (docs/STORY.md): story beats that unlock from play and are read in Community > Records.
 
 Chapters are data: (key, title, hint, trigger kind, value, text). Triggers: "pulls" (gacha pulls), "colony" (slimes at home),
 "floor" (deepest Descent floor cleared), "cleared" (the final boss has fallen).
@@ -54,5 +54,5 @@ def check(g) -> List[str]:
     for c in CHAPTERS:
         if c.key not in g.chapters and reached(g, c):
             g.chapters.append(c.key)
-            out.append(f"📖 New chapter: {c.title}. Read it in People > Records.")
+            out.append(f"📖 New chapter: {c.title}. Read it in Community > Records.")
     return out

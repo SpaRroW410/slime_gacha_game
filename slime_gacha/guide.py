@@ -109,6 +109,12 @@ def build() -> list:
             dict(name="The tour", text="It lights up one real button at a time (the Well, your free pull, a slime's card, a new party, the Descent, "
                                        "the time bar, Merge & destroy) and moves on once you have clicked it. Next skips a step, Skip tutorial ends it. "
                                        "Replay it any time from the slime menu at the top left (Menu > Tutorial)."),
+            dict(name="Playtest recorder", text=f"Menu > Playtest recorder. Off by default. When on, every fight is written into the save: "
+                 "where (Descent floor, wave, Pit depth, expedition), the party (class, rarity, stars, level, gear tiers, relics), by hand or "
+                 "automatic, the result, rounds, deaths, and HP, stamina and mana left; Descent entries (with the pack), exits, retreats and "
+                 f"camps too. Each fight adds about 0.5-2 KB (more for a bigger party), up to {c.PLAYLOG_MAX_KB / 1000:g} MB in all (the oldest "
+                 "entries drop off): the save grows, so a "
+                 "warning asks first. Export playtest log saves a .json file to share; clear it and turn the recorder off when you are done."),
         ]),
         dict(title="Needs and mood", icon="🫧", blurb="The five needs decide how a slime feels, whether it asks for care, "
              "and how well it fights.", items=[dict(name=n, text=t) for n, t in need_rows] + [
@@ -225,7 +231,9 @@ def build() -> list:
         _class_skills_section(),
         dict(title="Bonds, family and the Keeper", icon="💞", blurb="Relationships between slimes, and your own progress.", items=[
             dict(name="Ties", text="Friends (bond 25+), best friends (45+), rivals (sour bond and quarrels), mentors (8+ levels ahead) and "
-                                   "couples (deep bond, compatibility, affection). Reviewed once a day."),
+                                   "couples (deep bond, compatibility, affection). Reviewed once a day. Each slime's card has a "
+                                   "Relationships tab: its ties with the bond, who it is growing close to or clashing with, its parents and "
+                                   "children. Community > Couples & family lists the couples (where a couple can have a child) and the family trees."),
             dict(name="Children", text=f"A couple together {c.BUD_MIN_DAYS}+ days can have a child (rest {c.BUD_COOLDOWN_DAYS} days between). "
                                        "Traits, class and rarity come from both parents."),
             dict(name="Compatibility", text="Traits, class chemistry, shared elements, friendship and bond decide how well two slimes work "
@@ -239,7 +247,7 @@ def build() -> list:
                      f"floor {f}: gold at {g} or fewer, silver at {s_}, bronze at {b}" for f, (g, s_, b) in ((f, achievements.gentle_limits(f, 5)) for f in sorted(c.GENTLE_FLOORS)))
                  + f" (for a party of five; below floor {c.HEART_FLOOR} every limit also grows with the party size: up to {c.GENTLE_EGO_PER_SLOT} more per party slot "
                    "by floor 100, for the ego fusions an endgame party needs, so gold always leaves room for what clearing takes)"
-                 + ". Your first gold earns the title 'the Gentle'. People > Keeper shows the medals and the count; the merge screens (Town > Merge & destroy and People > Council) show how "
+                 + ". Your first gold earns the title 'the Gentle'. Community > Keeper shows the medals and the count; the merge screens (Town > Merge & destroy and Community > Council) show how "
                    "many more sacrifices the next medal allows."),
             dict(name="The Deep Hollow (floors 51-100)", text=f"Below the Parched King's throne on floor {c.HEART_FLOOR} the Descent goes on for fifty more floors, "
                  f"with ten more bosses. From there every floor is built for slimes {c.DEEP_LEVEL_STEP:g} levels stronger than the last (floor 100 for level "
@@ -280,7 +288,7 @@ def build() -> list:
                                                f"{c.HYBRID_CAPSTONE_MAX:.0%} of a pure capstone's strength (30% to 60% depending on its second proficiency, which grows "
                                                f"from its hybrid skills and training in its secondary discipline). A slime that was pure first keeps its pure "
                                                f"capstones only while it keeps practising its original discipline; neglect it and they lock, the second one first."),
-            dict(name="Vice Keeper", text=f"People > Keeper: appoint a trusted slime ({c.VICE_MIN_STARS} stars or more) as Vice Keeper. In its own group (same party and "
+            dict(name="Vice Keeper", text=f"Community > Keeper: appoint a trusted slime ({c.VICE_MIN_STARS} stars or more) as Vice Keeper. In its own group (same party and "
                                           "same dungeon or task) it can mediate quarrels and feed and tend slimes even where you cannot reach, and it settles "
                                           "quarrels by itself (at home it leaves serious ones to you). It never merges or destroys, and cannot be merged or "
                                           "destroyed while in office."),
@@ -380,6 +388,20 @@ def build() -> list:
             dict(name="Gear and relic upkeep", text="With autonomy on, slimes also take clearly better spare gear (15% better) for their own slots, "
                                            "level the relics they wear (one level an hour, paid with materials), and once a day merge three spare "
                                            "gear pieces of one kind into the next tier when those three are within 66% of the spares (gear in use is "
-                                           "never touched). They never spend a stock below 34% of the most you have ever held of it.")]),
+                                           "never touched). They never spend a stock below 34% of the most you have ever held of it."),
+            dict(name="Training on their own", text=f"With autonomy on, an idle slime at home whose goal is to get stronger, to master its "
+                 "fighting style or to learn an element goes and does it when a place is free: a drill in its own yard (the best tier the "
+                 "Training Grounds allow and it can afford) or a study session in the Library. It must be rested, fed, well and not "
+                 "needed by its party. Gel for this comes only from a small allowance: "
+                 f"{c.AUTO_GEL_PER_HOUR} white gel per real hour by default, never more than one hour's worth saved up, so a long "
+                 "absence cannot turn into a spree; other materials follow the 66% rule. A big colony can raise it (or set it to 0) "
+                 "in the menu under Helpers; Town > Alchemy Lab shows what is left this hour."),
+            dict(name="Asking for things", text="Slimes ask for what they want (Colony requests, or the slime's card): a rest day, a "
+                 "party, to be moved away from a grudge, a post they are made for (their class, a natural knack, or a trade they have "
+                 "learned: chef, trainer, blacksmith ...), and a rival may ask for a sparring match to settle things. Granting builds "
+                 "trust (a granted rival spar also cools the rivalry); turning it down is remembered."),
+            dict(name="A bed before a nap", text="With auto-care on, a tired slime takes a free bed in the Rest Area before it naps where "
+                 "it stands (the Rest Area restores energy much faster), and slimes already asleep at home move into a bed when one "
+                 "frees up. Feeling low and sleeping it off works the same way.")]),
     ]
     return sections
