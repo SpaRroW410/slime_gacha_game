@@ -114,6 +114,8 @@ def slime_view(g: Game, s, idx: Optional[dict] = None) -> dict:
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         mastery_paused=(elements.stars_to_resume(s) if elements.mastery_paused(s) else None),
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
+        style_xp={d.key: dict(zip(("xp", "next"), sparring.style_progress(s, d.key))) for d in sparring.DISCIPLINES},
+        style_cap=g.buildings.style_cap(),
         content=round(s.content), content_label=emotions.content_label(s),
         feelings=[dict(key=k, name=emotions.EMOTIONS[k].name, emoji=emotions.EMOTIONS[k].emoji,
                        value=round(v), kind=emotions.EMOTIONS[k].kind, why=emotions.causes(s, k)) for k, v in
@@ -467,7 +469,7 @@ def snapshot(g: Game) -> dict:
                     for k in bld_mod.FACILITIES},
         facility_yards=bld_mod.DRILL_YARDS, party_yard=bld_mod.PARTY_YARD, facility_arenas=bld_mod.SPAR_ARENAS, party_arena=bld_mod.PARTY_ARENA,
         drill=dict(base=config.PROF_DRILL, grounds=g.buildings.level("training_grounds"),
-                   tiers=[dict(tier=i + 1, name=t[0], needs=t[1], ticks=t[2], cost=t[3], mult=t[4], unlocked=g.buildings.level("training_grounds") >= t[1])
+                   tiers=[dict(tier=i + 1, name=t[0], needs=t[1], ticks=t[2], cost=t[3], mult=t[4], style_xp=round(config.DRILL_STYLE_XP * t[5], 1), unlocked=g.buildings.level("training_grounds") >= t[1])
                           for i, t in enumerate(config.DRILL_TIERS)]),
         elements=dict(basics=list(elements.BASICS),
                       list=[dict(key=e.key, name=e.name, emoji=e.emoji, tier=e.tier,

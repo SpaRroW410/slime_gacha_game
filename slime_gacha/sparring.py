@@ -50,6 +50,23 @@ def style_level(slime, discipline: str) -> int:
     return sum(1 for t in config.STYLE_XP if xp >= t)
 
 
+def style_progress(slime, discipline: str):
+    """(xp, xp needed for the next level or None at the top)."""
+    xp = slime.style_xp.get(discipline, 0)
+    lv = style_level(slime, discipline)
+    return xp, (config.STYLE_XP[lv] if lv < len(config.STYLE_XP) else None)
+
+
+def style_note(slime, discipline: str, gained: float, level: int, cap: int) -> str:
+    """How a session moved a fighting style, for the journal: '+4 swordsmanship XP (8/30 to level 1)'."""
+    d = DISCIPLINES.get(discipline)
+    xp, nxt = style_progress(slime, discipline)
+    if gained <= 0:
+        return f"{d.style.lower()} is at the Training Grounds' ceiling (level {cap})"
+    return (f"+{gained:g} {d.style.lower()} XP ({xp:g}/{nxt} to level {level + 1})" if nxt is not None
+            else f"+{gained:g} {d.style.lower()} XP (top level)")
+
+
 def style_levels(slime) -> Dict[str, int]:
     return {d.key: style_level(slime, d.key) for d in DISCIPLINES}
 

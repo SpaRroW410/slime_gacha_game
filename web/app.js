@@ -785,7 +785,7 @@ function dTrain(s, { st }) {
   const drill = `<div class="row"><select data-ui="my_disc" data-rerender="1">${discOpts('yard', dk)}</select>
       <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select>
       <button class="btn small primary" data-act="drill_me" ${ok && room(yard) ? '' : 'disabled'}>🥋 Drill · ${tr.ticks}h · ${esc(cost(tr.cost))}</button></div>
-    <small class="mute">${gain > 0 ? `Worth about <b>+${gain}</b> proficiency` : 'Not its discipline: only a little general practice'} · ${fac(yard).users.length}/${fac(yard).capacity} places taken · trainer ${st.jobs.trainer[dk] ? `+${st.jobs.trainer[dk]}% gains` : 'none appointed'}${!room(yard) ? ' · <b>the yard is full</b>' : ''}</small>`;
+    <small class="mute">${gain > 0 ? `Worth about <b>+${gain}</b> proficiency` : 'Not its discipline: only a little general practice'} and <b>+${tr.style_xp}</b> ${esc(discs.find((d) => d.key === dk).style.toLowerCase())} XP · ${fac(yard).users.length}/${fac(yard).capacity} places taken · trainer ${st.jobs.trainer[dk] ? `+${st.jobs.trainer[dk]}% gains` : 'none appointed'}${!room(yard) ? ' · <b>the yard is full</b>' : ''}</small>`;
   let sk = ui('my_style', s.discipline);
   if (!discs.some((d) => d.key === sk)) sk = discs[0].key;
   S.ui.my_style = sk;
@@ -798,7 +798,9 @@ function dTrain(s, { st }) {
       ${opps.length ? `<label class="f">vs <select data-ui="my_opp">${opps.map((o) => `<option value="${o.id}" ${o.id === opp ? 'selected' : ''}>${esc(o.name)} (${esc(o.class_name)} Lv${o.level})${trainTags(o)}</option>`).join('')}</select></label>` : '<small class="mute">nobody else is free to spar</small>'}
       <button class="btn small primary" data-act="spar_me" ${ok && opps.length && room(arena, 2) ? '' : 'disabled'}>⚔ Spar · ${esc(cost(st.mercy.spar_cost))} · ${st.mercy.train_ticks}h</button></div>
     <small class="mute">${esc(discs.find((d) => d.key === sk).perk)} · ${fac(arena).name}: ${fac(arena).users.length}/${fac(arena).capacity} places${!room(arena, 2) ? ' · <b>no room for a duel</b>' : ''}. Non-lethal: the loser is left at 1 HP.</small>
-    ${discs.map((d) => bar(s.style[d.key], 10, '', `${d.emoji} ${d.style}${s.discipline === d.key ? ' (class)' : ''}`, `L${s.style[d.key]}`)).join('')}`;
+    ${discs.map((d) => { const p = (s.style_xp || {})[d.key] || {}, lv = s.style[d.key], capped = lv >= s.style_cap && p.next != null;
+      return bar(p.next ? p.xp : 1, p.next || 1, '', `${d.emoji} ${d.style}${s.discipline === d.key ? ' (class)' : ''} · L${lv}`, p.next == null ? 'top level' : capped ? `L${lv} is the Training Grounds' ceiling` : `${Math.round(p.xp)}/${p.next} XP to L${lv + 1}`); }).join('')}
+    <small class="mute">Sparring gives the most style XP; drills give a little (${st.drill.tiers.map((t) => `${esc(t.name.toLowerCase())} +${t.style_xp}`).join(', ')} before bonuses).</small>`;
   const el = (b) => {
     const e = st.elements.list.find((x) => x.key === b), lv = s.mastery[b];
     return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${Math.max(s.mastery_cap, lv)}</b>` : '<span class="mute">not attuned</span>'}</span>
