@@ -4490,7 +4490,7 @@ class Game:
         self._owed = 0.0
         self._set_flag(party, "grind")
         if runs > config.GRIND_MAX_RUNS:
-            res.summary.append(f"   (a session lasts at most {config.SESSION_MAX_HOURS}h: {config.GRIND_MAX_RUNS} runs instead of {runs})")
+            res.summary.append(f"   (a Pit session lasts at most {config.PIT_SESSION_HOURS}h inside, about a day at home: {config.GRIND_MAX_RUNS} runs instead of {runs})")
         runs = min(max(1, runs), config.GRIND_MAX_RUNS)
         used = 0                                                # hours of the day's session spent, camping included
         try:
@@ -4501,7 +4501,7 @@ class Game:
                     break
                 self._field_meals(members)
                 if self._needs_camp(members):
-                    hours = self._camp(members, max(0, config.SESSION_MAX_HOURS - used - config.GRIND_TICKS))
+                    hours = self._camp(members, max(0, config.PIT_SESSION_HOURS - used - config.GRIND_TICKS))
                     used += hours
                     res.summary.append(f"   (camped {hours}h)")
                     members = [s for s in party if s.id in self.roster]
@@ -4512,8 +4512,8 @@ class Game:
                 if (why := self._field_unfit(members)):
                     res.stop_reason = why
                     break
-                if used + config.GRIND_TICKS > config.SESSION_MAX_HOURS:
-                    res.stop_reason = f"the day's session is over ({config.SESSION_MAX_HOURS}h, camping included)"
+                if used + config.GRIND_TICKS > config.PIT_SESSION_HOURS:
+                    res.stop_reason = f"the session is over ({config.PIT_SESSION_HOURS}h inside, about a day at home, camping included)"
                     break
                 for s in members:
                     if s.state in ("sleeping", "resting"):

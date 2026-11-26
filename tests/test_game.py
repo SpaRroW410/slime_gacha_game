@@ -451,9 +451,13 @@ class TestGrindDungeon(unittest.TestCase):
         g.refusal = lambda *a, **k: ""                          # (they would normally refuse so hurt)
         res = g.grind(pid, 3, 60)
         camped = sum(int(x.split("camped ")[1].split("h")[0]) for x in res.summary if "(camped " in x)
-        self.assertLessEqual(len(res.runs) * config.GRIND_TICKS + camped, config.SESSION_MAX_HOURS)
+        self.assertLessEqual(len(res.runs) * config.GRIND_TICKS + camped, config.PIT_SESSION_HOURS)
         self.assertLessEqual(len(res.runs), config.GRIND_MAX_RUNS)
-        self.assertTrue(any("a session lasts at most" in x for x in res.summary))
+        self.assertTrue(any("a Pit session lasts at most" in x for x in res.summary))
+
+    def test_a_full_pit_session_takes_about_a_day_at_home(self):
+        from slime_gacha import places
+        self.assertEqual(config.GRIND_MAX_RUNS * config.GRIND_TICKS / places.dilation("grind"), 24)
 
     def test_nobody_dies_even_when_crushed(self):
         g, pid = self._party()

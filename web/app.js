@@ -1180,9 +1180,9 @@ function sessionNote(runs, ticks, maxRuns, what = 'run', kind = 'adventure') {
   const ss = S.state.dungeon.session, n = Math.max(1, Math.min(num(runs, 1), maxRuns)), hours = n * ticks;
   const lobby = Math.max(1, Math.ceil(hours / (S.state.clock.dilation?.[kind] || 1) - 1e-9));
   const live = S.state.clock.mode === 'live' ? ` (about ${Math.max(1, Math.round(lobby / (S.state.clock.rate_now || S.state.clock.lobby_rate) * 60))} real minutes at the current speed)` : '';
-  const cut = num(runs, 1) > maxRuns ? ` <b>Limited to ${maxRuns} ${what}s: a session is one day at most.</b>` : '';
+  const cut = num(runs, 1) > maxRuns ? ` <b>Limited to ${maxRuns} ${what}s: a session is ${kind === 'grind' ? 'about one day at home' : 'one day inside'} at most.</b>` : '';
   if (kind === 'wave') return `<small class="mute" style="display:block">⏱ ${n} wave${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here${lobby >= 24 ? `, ${(lobby / 24).toFixed(1)} days` : ''})${live}, at most, plus camping: they come home early when a wave is lost, someone drops below the health line, or the rations run out. They pack up to 66% of the food (🍖 ${Math.floor(S.state.wallet.food * 0.66)} now) and camp when tired. Waves you lead yourself cost no time. The report arrives when they are back.</small>`;
-  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here)${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h inside (earlier if the whole party is knocked out). The report and the haul arrive when it is back.${cut}</small>`;
+  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here)${live}. Camping to heal counts too: the party always comes home within ${kind === 'grind' ? ss.pit_hours : ss.max_hours}h inside (earlier if the whole party is knocked out). The report and the haul arrive when it is back.${cut}</small>`;
 }
 /* Which party (or group of slimes) is away and how long it has left. */
 const partyNameOf = (ids) => { const p = (S.state.parties || []).find((q) => ids.every((i) => q.members.includes(i))) || (S.state.parties || []).find((q) => ids.some((i) => q.members.includes(i))); return p ? p.name : null; };

@@ -425,7 +425,7 @@ def snapshot(g: Game) -> dict:
                                    next_hours=dungeon.clear_hours(d["floor"], sum(s.level for s in g._members_in("main", pid)) / max(1, len(g._members_in("main", pid))), g._knowledge(d["floor"]), max(1, len(g._members_in("main", pid)))),
                                    members=[m.id for m in g._members_in("main", pid)])
                     for pid, d in g.delves.items()},
-            session=dict(max_hours=config.SESSION_MAX_HOURS, grind_ticks=config.GRIND_TICKS, grind_runs=config.GRIND_MAX_RUNS,
+            session=dict(max_hours=config.SESSION_MAX_HOURS, pit_hours=config.PIT_SESSION_HOURS, grind_ticks=config.GRIND_TICKS, grind_runs=config.GRIND_MAX_RUNS,
                          adv_ticks=config.ADV_TICKS, adv_runs=config.ADV_MAX_RUNS, wave_ticks=config.WAVE_TICKS, wave_max=config.WAVE_MAX_WAVES, wave_level=config.WAVE_MAX_LEVEL, wave_stop=config.WAVE_STOP_HP),
             grind_depths=config.GRIND_DEPTHS, scout_hours=[config.SCOUT_MIN_HOURS, config.SCOUT_MAX_HOURS],
             scout_max_floors=config.SCOUT_MAX_FLOORS, scout_food=config.SCOUT_FOOD_PER_HOUR,

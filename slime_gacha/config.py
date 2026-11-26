@@ -431,7 +431,8 @@ ADV_TICKS = 2
 SESSION_MAX_HOURS = 24            # no farming session (Pit, Rift, Quarry) lasts longer than one game day, camping included
 FIELD_REST_ENERGY = 80            # a session party that has to sleep (anyone under AUTO_SLEEP_BELOW energy) rests until everyone has this much
 ADV_MAX_RUNS = SESSION_MAX_HOURS // ADV_TICKS     # = 12 runs of 2 hours
-GRIND_MAX_RUNS = SESSION_MAX_HOURS // GRIND_TICKS
+PIT_SESSION_HOURS = 72           # ... but a Gloop Pit session may run a whole day AT HOME: 72h inside at its x3 dungeon time
+GRIND_MAX_RUNS = PIT_SESSION_HOURS // GRIND_TICKS     # = 36 runs of 2 hours
 ADV_DROP_PER_FOE = 0.45          # chance per defeated foe to drop a relic
 ADV_LURE_COST = 1                # purple gel per run for a lure ...
 ADV_LURE_BOOST = 4.0             # ... which multiplies the non-common relic weights
