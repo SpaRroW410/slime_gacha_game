@@ -109,6 +109,12 @@ def build() -> list:
             dict(name="The tour", text="It lights up one real button at a time (the Well, your free pull, a slime's card, a new party, the Descent, "
                                        "the time bar, Merge & destroy) and moves on once you have clicked it. Next skips a step, Skip tutorial ends it. "
                                        "Replay it any time from the slime menu at the top left (Menu > Tutorial)."),
+            dict(name="Playtest recorder", text=f"Menu > Playtest recorder. Off by default. When on, every fight is written into the save: "
+                 "where (Descent floor, wave, Pit depth, expedition), the party (class, rarity, stars, level, gear tiers, relics), by hand or "
+                 "automatic, the result, rounds, deaths, and HP, stamina and mana left; Descent entries (with the pack), exits, retreats and "
+                 f"camps too. Each fight adds about 0.5-2 KB (more for a bigger party), up to {c.PLAYLOG_MAX_KB / 1000:g} MB in all (the oldest "
+                 "entries drop off): the save grows, so a "
+                 "warning asks first. Export playtest log saves a .json file to share; clear it and turn the recorder off when you are done."),
         ]),
         dict(title="Needs and mood", icon="🫧", blurb="The five needs decide how a slime feels, whether it asks for care, "
              "and how well it fights.", items=[dict(name=n, text=t) for n, t in need_rows] + [

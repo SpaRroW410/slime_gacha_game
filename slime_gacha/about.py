@@ -85,8 +85,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-26-combat-resources",
-                 text="Fights now run on three pools and action points. Physical skills burn stamina, magic burns mana (it carries over between fights like stamina; Arcane potions refill it), elemental skills burn nature (half full at the start of every fight). Every turn brings 3 action points, saved up to 6: a plain skill costs 3, big area skills like Explosive Brew or Rampage cost 6, so they can no longer open a fight and end it, and saved points let a slime act twice in a turn. In fights you lead, End turn saves your points. Cooldowns are down to 'not twice a turn'. Monsters play by the same rules, and healers can no longer heal forever in a spar.")
+WHATS_NEW = dict(id="2026-11-26-playtest-recorder",
+                 text="New in the menu: a playtest recorder. Off by default; when on, every fight (where, the party and its gear, the result, deaths, health and pools left) and every Descent entry, exit, retreat and camp is written into the save, so you can export the log and share it. It makes the save bigger (up to 1.5 MB), so it asks first; clear it and switch it off when you are done.")
 
 
 def build() -> Dict[str, object]:

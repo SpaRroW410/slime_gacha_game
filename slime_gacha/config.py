@@ -493,6 +493,7 @@ NATURE_PER_MASTERY = 0.06        # the top elemental mastery level widens the na
 POOL_DEFEND = 0.10               # Defend refills this share of every pool
 FOE_POOL = 100.0                 # a monster's stamina, mana and nature
 ARCANE_MANA = 0.25               # an Arcane Potion refills this share of mana per grade (in a fight: all of it)
+PLAYLOG_MAX_KB = 1500             # the playtest recorder keeps at most this much (the oldest entries drop off)
 WINDED_BELOW = 0.10              # a slime under this share of max stamina is winded (physical blows weaker)
 HERB_DROP = {"grind": 0.35, "adventure": 0.10, "quarry": 0.10}   # per foe, 1-3 herbs
 POTION_BONUS = [0.10, 0.15, 0.20, 0.30, 0.40]                    # grade 1..5

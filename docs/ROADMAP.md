@@ -34,7 +34,7 @@ As of 27 October 2026:
 
 - [~] **1. Floor-50 playtest and balance (now to floor 100)** — harness `tools/playtest.py` and report § 6 below are done; an AI bug that wasted opening turns on buffs is fixed. The Deep Hollow (51-100) is tuned from simulations without gear only (task 93): it needs a geared playthrough too.
   Re-run on the current code (equal star levels, formations, one-day sessions): floor 50 needs level 57 / 50 / 41 / 31 / 25 for common / uncommon / rare / epic / legendary, ~130-186 real hours at x3; smoothness 0.132 (limit 0.22).
-  *Done when:* the real descent to floor 50 has been played through (with gear, elements, scouting) and the follow-ups below are closed. Left: extend the harness (or a hand playthrough) to gear, relics, elements and potions.
+  *Done when:* the real descent to floor 50 has been played through (with gear, elements, scouting) and the follow-ups below are closed. Left: extend the harness (or a hand playthrough) to gear, relics, elements and potions. For the hand playthrough, Menu > Playtest recorder (off by default) writes every fight and trip event into the save; Export playtest log gives a .json file to share.
 
 ### Web portals — launch on Poki, CrazyGames, MSN Games and similar sites, with gentle ads
 
@@ -459,6 +459,9 @@ evolving specializations, and whether job skill decays like proficiency.
 ### M26 — Dungeon time (28 October 2026)
 - [x] Per-place time dilation (x3 for every dungeon except scouting, hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
+
+### M32 — Playtest recorder (26 November 2026)
+- [x] An opt-in recorder (`playlog.py`): every fight and Descent trip event in the save, capped at 1.5 MB, exported as .json from the menu, with a warning before it is switched on (for task 1).
 
 ### M31 — Combat resources (26 November 2026)
 - [x] Stamina, mana and nature pools (108); action points with several actions a turn and minimal cooldowns (109); the AI and balance pass (110); the arena and Guide for resources (111).

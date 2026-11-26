@@ -220,6 +220,31 @@ async function currentSave() {
   if (!save) { try { const r = await backend.call('state', {}); save = r && r.save; } catch (e) { /* no game yet */ } }
   return save || null;
 }
+/* The playtest recorder (off by default): a switch that warns about the save growing, its size, export and clear. */
+function playlogPanel() {
+  const pl = S.state.playlog;
+  if (!pl) return '';
+  const big = pl.kb > pl.max_kb * 0.66;
+  return `<h4 style="margin:6px 0 0">Playtest recorder ${info('For playtesting: writes every fight (where, the party and its gear, by hand or auto, the result, rounds, deaths, HP and pools left) and Descent entries, exits, retreats and camps into the save, so you can export the log and share it. Off by default because it makes the save bigger.')}</h4>
+      <div class="row"><button class="btn small ${pl.on ? 'primary' : ''}" data-act="playlog_toggle" data-on="${pl.on ? 0 : 1}">🧪 Recorder ${pl.on ? 'on' : 'off'}</button>
+        <small class="${big ? 'bad' : 'mute'}">${pl.n} entr${pl.n === 1 ? 'y' : 'ies'} · ~${pl.kb} KB${big ? ' — getting big: export and clear it' : ''}</small></div>
+      ${pl.n ? `<div class="row"><button class="btn small" data-act="playlog_export">⬇ Export playtest log</button><button class="btn small danger" data-act="playlog_clear">🗑 Clear the log</button></div>` : ''}`;
+}
+/* Hand a JSON file to the player: the share sheet where there is one, else a download. */
+async function shareJson(obj, name, title) {
+  const text = JSON.stringify(obj);
+  let file = null;
+  try { file = new File([text], name, { type: 'application/json' }); } catch (e) { /* old browser */ }
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title }); return true; } catch (e) { if (e && e.name === 'AbortError') return false; }
+  }
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = name; a.style.display = 'none'; document.body.appendChild(a); a.click();
+    setTimeout(() => a.remove(), 1000); setTimeout(() => URL.revokeObjectURL(url), 120000);
+    return true;
+  } catch (e) { toast('Export failed.', true); return false; }
+}
 /* Export: the share sheet where there is one (iPhone: "Save to Files"), else a download link added to the page (Safari needs
    it attached) and kept alive long enough; the text can also be copied. */
 async function exportSave() {
@@ -2152,6 +2177,7 @@ function modalHtml() {
       <button class="btn" data-act="export">⬇ Export save (.json)</button>
       <button class="btn" data-act="copy_save">📋 Copy save text</button>
       <label class="btn" style="display:block">⬆ Import save<input type="file" accept=".json,application/json" data-import hidden></label>
+      ${playlogPanel()}
       <button class="btn danger" data-act="newgame2">🗑 Start a new colony</button>
       <small class="mute">Backend: ${esc(S.backendName)}. Your colony is saved automatically in this browser.</small></div></div>`;
   }
@@ -2380,6 +2406,13 @@ const A = {
     try { localStorage.removeItem(LS_KEY); } catch (e) { /* blocked */ }
     S.damaged = null; S.lastSave = null; render(); }),
   export: async () => { await exportSave(); render(); },
+  playlog_toggle: (d) => d.on === '1'
+    ? confirmThen(`Turn on the playtest recorder?\n\nEvery fight will be written into your save: about 0.5-2 KB each (more for a bigger party), up to ${(S.state.playlog.max_kb / 1000).toFixed(1)} MB in all; past that the oldest entries drop off. A bigger save is slower to save and to export, and a browser only has a few MB for it.\n\nExport the log from this menu to share it, then turn the recorder off and clear it.`, () => act('playlog_set', { on: true }))
+    : act('playlog_set', { on: false }),
+  playlog_clear: () => confirmThen('Clear the playtest log? Export it first if you want to keep it.', () => act('playlog_clear')),
+  playlog_export: async () => { const r = await backend.call('playlog_export', {});
+    if (!r.ok) return toast(r.error || 'Export failed.', true);
+    if (await shareJson(r.result, `slime-gacha-playtest-day${S.state?.day ?? ''}.json`, 'Slime Gacha playtest log')) toast(`Playtest log exported (${r.result.entries.length} entries).`); },
   dismiss_news: () => { lsSet(LS_NEWS, S.state.whats_new.id); render(); },
   snooze_backup: () => { lsSet(LS_SNOOZE, Date.now()); render(); },
   admit_hurt: () => act('admit_hurt'),

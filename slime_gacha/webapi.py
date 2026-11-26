@@ -12,7 +12,7 @@ import json
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import passives as passives_mod, rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import passives as passives_mod, rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, playlog as playlog_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -354,7 +354,7 @@ def snapshot(g: Game) -> dict:
                        rarity_gel=config.RARITY_ASCEND_GEL, star_stones=config.STAR_ASCEND_STONES,
                        rates=config.STONE_RATES, merge=config.STONE_MERGE, max_party=config.ADV_MAX_PARTY,
                        max_runs=config.ADV_MAX_RUNS, chamber=g.buildings.level("chamber")),
-        auto_care=g.needs.auto_care, slimes=slimes, parties=parties,
+        auto_care=g.needs.auto_care, slimes=slimes, parties=parties, playlog=_playlog_info(g),
         buildings=g.building_report(),
         version=config.VERSION, whats_new=about_mod.WHATS_NEW,
         stranded=[dict(id=e["id"], ids=e["ids"], names=[g.roster[i].name for i in e["ids"] if i in g.roster], first=e["first"], last=e["last"],
@@ -601,6 +601,31 @@ def _party_hunt(g, a):
 @command("about")
 def _about(g, a):
     return [], about_mod.build()
+
+
+def _playlog_info(g) -> dict:
+    """The recorder's switch and how much it holds (the size is worked out again only when the log changes)."""
+    n = len(g.playlog)
+    key = (n, g.playlog[-1].get("tick") if n else None)
+    cached = getattr(g, "_plog_kb", None)
+    if not cached or cached[0] != key:
+        g._plog_kb = cached = (key, playlog_mod.size_kb(g))
+    return dict(on=g.playlog_on, n=n, kb=cached[1], max_kb=config.PLAYLOG_MAX_KB)
+
+
+@command("playlog_set")
+def _playlog_set(g, a):
+    return [g.playlog_set(bool(a.get("on")))], {}
+
+
+@command("playlog_clear")
+def _playlog_clear(g, a):
+    return [g.playlog_clear()], {}
+
+
+@command("playlog_export")
+def _playlog_export(g, a):
+    return [], playlog_mod.export(g)
 
 
 @command("guide")
