@@ -10,7 +10,7 @@
   DRIFT     Experience slowly rewrites traits: many knock-outs make a slime timid, many wins proud, much healing kind.
 """
 import random
-from typing import List
+from typing import List, Optional
 
 from . import awakening, config, elements, emotions, jobs, meaning, memory, outlook, sanity, sparring
 from .errors import InvalidAction
@@ -216,7 +216,57 @@ def urgent_request(g, s):
     return None
 
 
-def make_request(g, s):
+def would_join(g, b, a) -> float:
+    """How likely `b` is to say yes when `a` asks it to go hunting together: liking (bond, compatibility, thanks against
+    grudges) and temperament (kind and chatty slimes say yes more, timid and grumpy ones less), and whether it feels up to it."""
+    op = memory.opinion(b, a)
+    p = 0.45 + 0.012 * g.social.bond(b, a) + 0.006 * g.social.compat(b, a) + 0.05 * op["gratitude"] - 0.08 * op["grudge"]
+    t = set(b.traits)
+    p += 0.15 * ("kind" in t) + 0.1 * ("chatty" in t) - 0.15 * ("timid" in t) - 0.2 * ("grumpy" in t)
+    p -= 0.2 * (b.mood() < 0.4)
+    return max(0.05, min(0.95, p))
+
+
+def hunt_zone_for(g, pair):
+    """The richest hunting zone both can clear comfortably (the same rule as foraging), else the gentlest."""
+    from .hunt import ZONES
+    zones = sorted(ZONES, key=lambda z: -z.duration)
+    weakest = min(x.power_rating() for x in pair)
+    return next((z for z in zones if weakest >= z.danger * config.FORAGE_SAFETY), zones[-1])
+
+
+def invite(g, s, events: List[str]):
+    """A slime that wants to make friends with another asks it to go hunting together. If the other says yes, it becomes a
+    request to the Keeper (who can send them even from different parties); if it says no, the asker is hurt and they drift
+    apart a little. Returns the request, or None."""
+    goal = s.goal or {}
+    o = g.roster.get(goal.get("target")) if goal.get("kind") == "befriend" else None
+    if o is None or o.id == s.id or not _free_at_home(g, s) or not _free_at_home(g, o):
+        return None
+    if g.day - goal.get("asked", -99) < config.INVITE_AGAIN_DAYS:
+        return None
+    for x in (s, o):
+        try:
+            g.hunts.check(x)
+        except InvalidAction:
+            return None
+        if g.refusal(x, "dungeon"):
+            return None
+    goal["asked"] = g.day
+    if _rng(g, o, 7 + s.id).random() > would_join(g, o, s):
+        g.social.add_bond(s, o, -config.INVITE_REFUSED_BOND)
+        emotions.feel(s, "sadness", 12, f"{o.name} said no")
+        emotions.feel(s, "loneliness", 8, f"{o.name} said no")
+        events.append(f"🙁 {o.name} turns down {s.name}'s invitation to go hunting together. {s.name} is hurt "
+                      f"(bond -{config.INVITE_REFUSED_BOND}).")
+        return None
+    z = hunt_zone_for(g, (s, o))
+    emotions.feel(s, "joy", 6, f"{o.name} said yes")
+    return dict(kind="hunt_with", target=o.id, day=g.day, zone=z.key,
+                text=f"and {o.name} would like to go hunting together at {z.name} ({s.name} asked, {o.name} said yes)")
+
+
+def make_request(g, s, events: Optional[List[str]] = None):
     """A request this slime would make to the Keeper right now, or None."""
     party = g.parties.party_of(s.id)
     if party and not g.party_activity(party.id):                              # a grudge against a party-mate
@@ -226,6 +276,10 @@ def make_request(g, s):
                             text=f"asks to be moved out of {party.name}: {o.name} is still on their mind")
     if sanity.frac(s) < 0.5 and s.state == "idle" and not s.in_dungeon:
         return dict(kind="rest", target=0, day=g.day, text="asks for a rest day: \"I can't keep going like this.\"")
+    if (s.goal or {}).get("kind") == "befriend":
+        r = invite(g, s, events if events is not None else [])
+        if r:
+            return r
     rival = spar_rival(g, s)
     if rival:
         return dict(kind="spar", target=rival.id, day=g.day,
@@ -263,6 +317,26 @@ def spar_rival(g, s):
     return None
 
 
+def _grant_hunt(g, s, r) -> str:
+    o = g.roster.get(r["target"])
+    if o is None:
+        raise InvalidAction("That slime is no longer in the colony.")
+    for x in (s, o):
+        if not _free_at_home(g, x):
+            raise InvalidAction(f"{x.name} is busy right now ({x.in_dungeon or x.state}).")
+        g.hunts.check(x)
+        if (why := g.refusal(x, "dungeon")):
+            raise InvalidAction(f"{x.name} {why}.")
+    g.hunt_group += 1
+    lines = [g.hunt(x.id, r["zone"], g.hunt_group) for x in (s, o)]      # one group: they bond when they come home
+    g.social.add_bond(s, o, config.INVITE_GRANTED_BOND)
+    for x in (s, o):
+        emotions.feel(x, "joy", 8, "a hunt together")
+    s.trust = min(100.0, s.trust + config.TRUST_GRANT)
+    awakening.note(s, "chose")
+    return " ".join(lines + [f"{s.name} and {o.name} set out together. {s.name} trusts you more (trust {int(s.trust)})."])
+
+
 def _grant_spar(g, s, r) -> str:
     o = g.roster.get(r["target"])
     if o is None:
@@ -279,6 +353,10 @@ def answer(g, sid: int, accept: bool) -> str:
     r = s.request
     if not r:
         raise InvalidAction(f"{s.name} has no request.")
+    if accept and r["kind"] == "hunt_with":
+        msg = _grant_hunt(g, s, r)                                           # raises (and keeps the request) if it cannot happen
+        s.request = None
+        return msg
     if accept and r["kind"] == "spar":
         msg = _grant_spar(g, s, r)                                           # raises (and keeps the request) if it cannot happen
         s.request = None
@@ -356,7 +434,7 @@ def daily(g, events: List[str]) -> None:
             s.request = urgent
             events.append(f"💬 {s.name} {urgent['text']}.")
         elif s.request is None and _rng(g, s, 2).random() < config.REQUEST_CHANCE:
-            r = make_request(g, s)
+            r = make_request(g, s, events)
             if r:
                 s.request = r
                 events.append(f"💬 {s.name} {r['text']}.")

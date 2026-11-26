@@ -460,6 +460,9 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Per-place time dilation (x3 for every dungeon except scouting, hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
 
+### M35 — Hunting together to make a friend (26 November 2026)
+- [x] A slime that wants to befriend another invites it to hunt together; a yes becomes a Keeper request that sends both out (across parties, +4 bond and the hunt's bond), a no costs 3 bond and saddens the asker, who waits 3 days to ask again.
+
 ### M34 — Slimes that act on their own (26 November 2026)
 - [x] A "learn" goal; with autonomy on, idle slimes start the drill or study they want (gel only from 10 white gel per real hour, one hour banked at most); rivals ask for a sparring match (granting it cools the rivalry); post requests for any post a slime has a knack or trade for (chef, trainers ...); tired and sleeping slimes take a free Rest Area bed first. The gel allowance is set in the menu (Helpers: none, 10, 25, 50, 100, 250 or any amount up to 1000 a real hour).
 
