@@ -9,12 +9,12 @@ const CORE_RES = ['white_gel', 'purple_gel', 'food', 'essence'];
 const NEED_NAME = { energy: 'Energy', food: 'Food', safety: 'Safety', belonging: 'Belonging', esteem: 'Esteem' };
 const WISH = { energy: 'needs sleep', food: 'is hungry', safety: 'feels unsafe (hurt)', belonging: 'feels lonely', esteem: 'wants to prove itself' };
 const TABS = [['colony', '🟢 Colony'], ['gacha', '🎰 Gacha'], ['parties', '👥 Parties'], ['dungeons', '🕳 Dungeons'],
-  ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 People'], ['guide', '📖 Guide'], ['about', 'ℹ️ About']];
+  ['academy', '📚 Academy'], ['town', '🏠 Town'], ['people', '💞 Community'], ['guide', '📖 Guide'], ['about', 'ℹ️ About']];
 const SUBS = {
   dungeons: [['descent', 'Hollow Descent'], ['scouting', 'Scouting'], ['pit', 'Gloop Pit (XP)'], ['rift', "Wayfarer's Rift (relics)"], ['quarry', 'Starfall Quarry (stones)'], ['places', 'More places'], ['hunts', 'Hunts & foraging'], ['wave', 'Wave simulation']],
   town: [['buildings', 'Buildings'], ['armory', 'Armory (gear)'], ['relics', 'Relics'], ['alchemy', 'Alchemy'], ['kitchen', 'Kitchen'], ['hospital', 'Hospital'], ['sacrifice', 'Merge & destroy']],
   academy: [['training', '🥋 Facilities & trainers'], ['library', '📚 Library & spells']],
-  people: [['bonds', 'Bonds'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
+  people: [['bonds', 'Couples & family'], ['keeper', 'Keeper'], ['council', 'Council'], ['records', 'Records']],
 };
 const DUNGEON_KINDS = ['main', 'grind', 'scout', 'adventure', 'quarry', 'mossy_burrows', 'stranded', 'rescue'];
 
@@ -665,9 +665,9 @@ function drawer(s) {
   const free = !s.busy;
   const inDun = DUNGEON_KINDS.includes(s.in_dungeon);
   const ctx = { st, free, inDun };
-  const tabs = [['overview', 'Overview'], ['fight', 'Fight'], ['train', 'Train'], ['mind', 'Mind'], ['gear', 'Gear']];
+  const tabs = [['overview', 'Overview'], ['fight', 'Fight'], ['train', 'Train'], ['mind', 'Mind'], ['ties', 'Relationships'], ['gear', 'Gear']];
   const dt = tabs.some(([k]) => k === S.dtab) ? S.dtab : 'overview';
-  const body = { overview: dOverview, fight: dFight, train: dTrain, mind: dMind, gear: dGear }[dt](s, ctx);
+  const body = { overview: dOverview, fight: dFight, train: dTrain, mind: dMind, ties: dTies, gear: dGear }[dt](s, ctx);
   return `<aside class="drawer">
     <div class="row between"><h2 style="margin:0">${esc(s.name)} ${s.is_vice ? '<span title="Vice Keeper">🎖</span>' : ''} <button class="btn small" data-act="rename_slime" data-id="${s.id}" data-n="${esc(s.name)}" title="Rename">✏</button> <input type="color" class="colpick" data-colorid="${s.id}" value="${s.color || CLASS_COLORS[s.archetype] || '#5be0a0'}" title="Slime colour (ring colour stays with rarity)"> ${s.color ? `<button class="btn small" data-act="set_color" data-id="${s.id}" data-reset="1" title="Back to class colour">↺</button>` : ''}</h2><button class="btn small" data-act="closesel">✕</button></div>
     ${s.fights > (st.shadow?.fight_limit ?? 1) ? `<div class="panel flat"><small>⚠ A troublemaker: came to blows with ${s.fights} different slimes this month (more than ${st.shadow.fight_limit} makes one). Merging or destroying it costs no morale.</small></div>` : ''}
@@ -839,7 +839,6 @@ function dTrain(s, { st }) {
 }
 
 function dMind(s, { st, free, inDun }) {
-  const em = { couple: '💘 Partner', best_friend: '💞 Best friend', friend: '🤝 Friend', rival: '⚔️ Rival' };
   return `${sect('Feelings', 'Passing feelings shift stats in battle. The Guide tab lists what raises and lowers each one.', `<div class="stack" style="gap:4px">${s.feelings.length ? s.feelings.map((f) => bar(f.value, 100, f.kind === 'bad' ? 'bad' : 'know', `${f.emoji} ${esc(f.name)}`, String(f.value)) + ((f.why || []).length ? `<small class="mute why">${f.why.map(esc).join(' · ')}</small>` : '')).join('') : '<small class="mute">Calm and unremarkable.</small>'}
       <div title="How life has felt over the last few days. Feelings settle back to a slime's usual mood, and a good life lifts it.">🌤 Contentment: <b>${esc(s.content_label)}</b> <small class="mute">${s.content}/100</small></div>
       ${Object.keys(s.feeling_effects).length ? `<small class="mute" style="display:block">In battle: ${Object.entries(s.feeling_effects).map(([k, v]) => `${k.toUpperCase().slice(0, 3)} ${v > 0 ? '+' : ''}${v}%`).join(' · ')}</small>` : ''}
@@ -851,9 +850,32 @@ function dMind(s, { st, free, inDun }) {
       ${s.meaning && !s.awareness?.outcome ? `<small class="mute">Last week: care ${Math.round(s.meaning.care * 100)}% · connection ${Math.round(s.meaning.connection * 100)}% · purpose ${Math.round(s.meaning.purpose * 100)}% · hardship ${Math.round(s.meaning.hardship * 100)}%</small>` : ''}
       <div class="row"><button class="btn small" data-act="talk" ${inDun ? 'disabled' : ''} title="${s.talked ? 'Already talked today: another talk helps less' : 'A daily talk restores some sanity'}">💬 Talk${s.talked ? ' ✓' : ''}</button>
         <button class="btn small" data-act="praise" ${inDun ? 'disabled' : ''} title="${s.praised ? 'Already praised today: more helps less' : 'Recognition: esteem and pride, and it gives the day meaning'}">👏 Praise${s.praised ? ' ✓' : ''}</button></div></div>`)}
-    ${sect('Relationships', 'Ties form from bonds: friends, best friends, rivals, mentors and couples. See the People tab.', `<div class="stack" style="gap:3px">${s.relations.map((r) => { const o = slimeById(r.other); if (!o) return ''; const label = r.kind === 'mentor' ? (r.mentor === s.id ? '🎓 Mentee' : '🎓 Mentor') : em[r.kind]; return `<div>${label}: <b>${esc(o.name)}</b></div>`; }).join('') || '<small class="mute">No ties yet.</small>'}
-      ${s.parents.length ? `<div>🥚 Child of <b>${s.parent_names.map(esc).join(' &amp; ')}</b> · generation ${s.generation}</div>` : ''}</div>`)}
     ${sect('Experience', 'What this slime has done most shapes its outlook.', `<small class="mute">${Object.entries(s.exp).map(([k, v]) => `${k} ${v}`).join(' · ') || 'no experience yet'}</small><p class="mute">Wins ${s.wins} · merged ${s.merged}</p>`)}`;
+}
+
+/* A slime's relationships, compact: its ties (partner, best friends, friends, mentor / mentees, rivals) with the bond,
+   whom it is growing close to or clashing with, and its family. Names open that slime's card. */
+function dTies(s) {
+  const who = (id, extra = '') => { const o = slimeById(id); return o ? `<button class="linkish tie" data-act="sel" data-id="${id}">${avatar(o, 'xs nobadge')}<b>${esc(o.name)}</b></button>${extra}` : ''; };
+  const bondTag = (v) => `<small class="mute">bond ${v}</small>`;
+  const groups = [
+    ['couple', '💘 Partner', (r) => r.kind === 'couple'],
+    ['best_friend', '💞 Best friends', (r) => r.kind === 'best_friend'],
+    ['friend', '🤝 Friends', (r) => r.kind === 'friend'],
+    ['mentor', '🎓 Mentor', (r) => r.kind === 'mentor' && r.mentor !== s.id],
+    ['mentee', '🌱 Mentees', (r) => r.kind === 'mentor' && r.mentor === s.id],
+    ['rival', '⚔️ Rivals', (r) => r.kind === 'rival'],
+  ];
+  const line = (label, items) => items.length ? `<div class="tierow"><span class="tiel">${label}</span><span class="tiev">${items.join('')}</span></div>` : '';
+  const ties = groups.map(([, label, f]) => line(label, s.relations.filter(f).map((r) => `<span class="tiep">${who(r.other)} ${bondTag(r.bond)}</span>`))).join('');
+  const near = line('✨ Growing close', (s.near || []).map((r) => `<span class="tiep">${who(r.other)} ${bondTag(r.bond)}</span>`));
+  const fric = line('💢 Friction', (s.friction || []).map((r) => `<span class="tiep">${who(r.other)} ${bondTag(r.bond)}</span>`));
+  const parents = s.parents.length ? line('🥚 Parents', s.parents.map((id, i) => `<span class="tiep">${slimeById(id) ? who(id) : `<b class="mute">${esc(s.parent_names[i] || '?')}</b> <small class="mute">(gone)</small>`}</span>`)) : '';
+  const kids = line('🍼 Children', (s.children || []).map((id) => `<span class="tiep">${who(id)}</span>`));
+  return `${sect('Ties', 'Bonds grow from time spent together: friends, then best friends; long quarrels make rivals; a veteran takes a younger slime under its wing; two who truly love each other become a couple (Community › Couples & family is where a couple can have a child).',
+      `<div class="stack" style="gap:2px">${ties || '<small class="mute">No ties yet.</small>'}</div>`)}
+    ${near || fric ? sect('Between', 'Slimes it is getting along with, or clashing with, that are not a tie yet.', `<div class="stack" style="gap:2px">${near}${fric}</div>`) : ''}
+    ${sect('Family', s.generation ? `Generation ${s.generation}.` : 'Pulled from the Well (first generation).', `<div class="stack" style="gap:2px">${parents}${kids}${parents || kids ? '' : '<small class="mute">No parents or children in the colony.</small>'}</div>`)}`;
 }
 
 function dGear(s, { st, free }) {
@@ -1772,16 +1794,19 @@ function famUnit(u, depth = 0) {
 }
 function bonds() {
   const st = S.state, f = st.family;
-  const ties = (k) => f.ties[k].map((t) => {
+  const couples = f.ties.couple.map((t) => {
     const aS = slimeById(t.a), bS = slimeById(t.b);
-    const extra = k === 'mentor' ? ` <small class="mute">(${esc(t.mentor === t.a ? t.a_name : t.b_name)} teaches)</small>` : '';
-    const bud = k === 'couple' ? `<button class="btn small ${t.bud_in === 0 ? 'primary' : ''}" data-act="bud" data-a="${t.a}" data-b="${t.b}" ${t.bud_in === 0 && aS && bS && !aS.busy && !bS.busy && affordable(f.bud_cost) ? '' : 'disabled'}>🥚 Have a child · ${cost(f.bud_cost)}</button>${t.bud_in ? `<small class="mute"> in ${t.bud_in}d</small>` : ''}` : '';
-    return `<div class="row between panel flat" style="margin:4px 0"><span>${esc(t.a_name)} ${f.kinds[k].emoji} ${esc(t.b_name)}${extra} <small class="mute">bond ${t.bond}</small></span>${bud}</div>`;
-  }).join('') || '<small class="mute">None yet.</small>';
+    const bud = `<button class="btn small ${t.bud_in === 0 ? 'primary' : ''}" data-act="bud" data-a="${t.a}" data-b="${t.b}" ${t.bud_in === 0 && aS && bS && !aS.busy && !bS.busy && affordable(f.bud_cost) ? '' : 'disabled'}>🥚 Have a child · ${cost(f.bud_cost)}</button>${t.bud_in ? `<small class="mute"> in ${t.bud_in}d</small>` : ''}`;
+    const nm = (id, n) => slimeById(id) ? `<button class="linkish" data-act="sel" data-id="${id}"><b>${esc(n)}</b></button>` : esc(n);
+    return `<div class="row between panel flat" style="margin:4px 0"><span>${nm(t.a, t.a_name)} ${f.kinds.couple.emoji} ${nm(t.b, t.b_name)} <small class="mute">bond ${t.bond}</small></span>${bud}</div>`;
+  }).join('') || '<small class="mute">No couples yet.</small>';
+  const counts = ['best_friend', 'friend', 'mentor', 'rival'].map((k) => chip(`${f.kinds[k].emoji} ${f.ties[k].length} ${esc(f.kinds[k].label.toLowerCase())}`, '')).join(' ');
   return `<div class="grid cols2">
-  <div class="stack">${['couple', 'best_friend', 'friend', 'mentor', 'rival'].map((k) => `<div class="panel stack"><h3>${f.kinds[k].emoji} ${esc(f.kinds[k].label)} <small class="mute">(${f.ties[k].length})</small></h3>${ties(k)}</div>`).join('')}</div>
+  <div class="stack"><div class="panel stack"><h3>${f.kinds.couple.emoji} ${esc(f.kinds.couple.label)} <small class="mute">(${f.ties.couple.length})</small></h3>${couples}</div>
+    <div class="panel stack"><h3>Other ties</h3><div class="row">${counts}</div>
+      <small class="mute">Friends, best friends, mentors and rivals are on each slime's card, under <b>Relationships</b>: open a slime to see whom it is close to, clashing with and related to.</small></div></div>
   <div class="stack"><div class="panel stack"><h2>🌳 Family trees</h2>
-    <p class="mute">Slimes who bond become friends and best friends; quarrels breed rivals; veterans take younger slimes under their wing; and two slimes who truly love each other can have a child — a new slime with traits, class and rarity drawn from both parents. Ties help parties (synergy, feelings) and hurt when someone is lost.</p>
+    <p class="mute">Two slimes who truly love each other can have a child — a new slime with traits, class and rarity drawn from both parents. Ties help parties (synergy, feelings) and hurt when someone is lost.</p>
     ${f.families.length ? f.families.map((r) => `<div class="panel flat">${famUnit(r)}</div>`).join('') : '<p class="mute">No children yet.</p>'}</div></div></div>`;
 }
 

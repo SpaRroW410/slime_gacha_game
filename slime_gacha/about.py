@@ -85,8 +85,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-26-playtest-recorder",
-                 text="New in the menu: a playtest recorder. Off by default; when on, every fight (where, the party and its gear, the result, deaths, health and pools left) and every Descent entry, exit, retreat and camp is written into the save, so you can export the log and share it. It makes the save bigger (up to 1.5 MB), so it asks first; clear it and switch it off when you are done.")
+WHATS_NEW = dict(id="2026-11-26-relationships-tab",
+                 text="The People tab is now Community, and its Bonds page keeps just the couples and the family trees. Every slime's card has a new Relationships tab: its partner, best friends, friends, mentor and mentees, and rivals (with the bond), who it is growing close to or clashing with, and its parents and children. Also new in the menu: an optional playtest recorder that logs every fight for you to export and share (off by default, since it makes the save bigger).")
 
 
 def build() -> Dict[str, object]:

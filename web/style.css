@@ -502,3 +502,10 @@ details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px sol
 .arena .apdots > i.on { background: #f0c419; }
 .arena .skcost { opacity: .75; margin-left: 4px; font-size: .8em; white-space: nowrap; }
 .arena .apnow { font-weight: 600; color: #c99a00; margin: 0 4px; }
+/* a slime's Relationships tab: one compact line per kind of tie */
+.tierow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 2px 0; border-bottom: 1px dashed var(--line, #0001); }
+.tierow:last-child { border-bottom: 0; }
+.tiel { min-width: 118px; font-size: .9em; }
+.tiev { display: flex; flex-wrap: wrap; gap: 4px 12px; flex: 1; }
+.tiep { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.linkish.tie { display: inline-flex; align-items: center; gap: 4px; }

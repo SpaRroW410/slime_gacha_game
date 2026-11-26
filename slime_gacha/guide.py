@@ -231,7 +231,9 @@ def build() -> list:
         _class_skills_section(),
         dict(title="Bonds, family and the Keeper", icon="💞", blurb="Relationships between slimes, and your own progress.", items=[
             dict(name="Ties", text="Friends (bond 25+), best friends (45+), rivals (sour bond and quarrels), mentors (8+ levels ahead) and "
-                                   "couples (deep bond, compatibility, affection). Reviewed once a day."),
+                                   "couples (deep bond, compatibility, affection). Reviewed once a day. Each slime's card has a "
+                                   "Relationships tab: its ties with the bond, who it is growing close to or clashing with, its parents and "
+                                   "children. Community > Couples & family lists the couples (where a couple can have a child) and the family trees."),
             dict(name="Children", text=f"A couple together {c.BUD_MIN_DAYS}+ days can have a child (rest {c.BUD_COOLDOWN_DAYS} days between). "
                                        "Traits, class and rarity come from both parents."),
             dict(name="Compatibility", text="Traits, class chemistry, shared elements, friendship and bond decide how well two slimes work "
@@ -245,7 +247,7 @@ def build() -> list:
                      f"floor {f}: gold at {g} or fewer, silver at {s_}, bronze at {b}" for f, (g, s_, b) in ((f, achievements.gentle_limits(f, 5)) for f in sorted(c.GENTLE_FLOORS)))
                  + f" (for a party of five; below floor {c.HEART_FLOOR} every limit also grows with the party size: up to {c.GENTLE_EGO_PER_SLOT} more per party slot "
                    "by floor 100, for the ego fusions an endgame party needs, so gold always leaves room for what clearing takes)"
-                 + ". Your first gold earns the title 'the Gentle'. People > Keeper shows the medals and the count; the merge screens (Town > Merge & destroy and People > Council) show how "
+                 + ". Your first gold earns the title 'the Gentle'. Community > Keeper shows the medals and the count; the merge screens (Town > Merge & destroy and Community > Council) show how "
                    "many more sacrifices the next medal allows."),
             dict(name="The Deep Hollow (floors 51-100)", text=f"Below the Parched King's throne on floor {c.HEART_FLOOR} the Descent goes on for fifty more floors, "
                  f"with ten more bosses. From there every floor is built for slimes {c.DEEP_LEVEL_STEP:g} levels stronger than the last (floor 100 for level "
@@ -286,7 +288,7 @@ def build() -> list:
                                                f"{c.HYBRID_CAPSTONE_MAX:.0%} of a pure capstone's strength (30% to 60% depending on its second proficiency, which grows "
                                                f"from its hybrid skills and training in its secondary discipline). A slime that was pure first keeps its pure "
                                                f"capstones only while it keeps practising its original discipline; neglect it and they lock, the second one first."),
-            dict(name="Vice Keeper", text=f"People > Keeper: appoint a trusted slime ({c.VICE_MIN_STARS} stars or more) as Vice Keeper. In its own group (same party and "
+            dict(name="Vice Keeper", text=f"Community > Keeper: appoint a trusted slime ({c.VICE_MIN_STARS} stars or more) as Vice Keeper. In its own group (same party and "
                                           "same dungeon or task) it can mediate quarrels and feed and tend slimes even where you cannot reach, and it settles "
                                           "quarrels by itself (at home it leaves serious ones to you). It never merges or destroys, and cannot be merged or "
                                           "destroyed while in office."),

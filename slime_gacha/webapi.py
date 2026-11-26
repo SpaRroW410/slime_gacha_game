@@ -41,7 +41,34 @@ def _train_style(g: Game, s, own: str):
     return (e or {}).get("style") or own
 
 
-def slime_view(g: Game, s) -> dict:
+def bond_index(g: Game) -> dict:
+    """Every slime's bonds and children, built once per snapshot (the Relationships tab of a slime's card)."""
+    bonds: Dict[int, list] = {}
+    for k, v in g.social.bonds.items():
+        a, b = tuple(k)
+        bonds.setdefault(a, []).append((b, v))
+        bonds.setdefault(b, []).append((a, v))
+    kids: Dict[int, list] = {}
+    for x in g.slimes():
+        for p in x.parents:
+            kids.setdefault(p, []).append(x.id)
+    return dict(bonds=bonds, kids=kids)
+
+
+def _ties_view(g: Game, s, idx: Optional[dict]) -> dict:
+    """One slime's relationships, compact: its ties (with the bond), the slimes it is growing close to or clashing with
+    (no tie yet), its parents and its children."""
+    ties = g.relations.of(s.id)
+    tied = {r["other"] for r in ties}
+    mine = [(o, v) for o, v in (idx or {}).get("bonds", {}).get(s.id, []) if o in g.roster and o not in tied]
+    return dict(relations=[dict(other=r["other"], kind=r["kind"], since=r["since"], mentor=r.get("mentor"),
+                                bond=round(g.social.bond(s.id, r["other"]))) for r in ties],
+                near=[dict(other=o, bond=round(v)) for o, v in sorted(mine, key=lambda x: -x[1])[:3] if v >= 10],
+                friction=[dict(other=o, bond=round(v)) for o, v in sorted(mine, key=lambda x: x[1])[:3] if v <= -10],
+                children=list((idx or {}).get("kids", {}).get(s.id, [])))
+
+
+def slime_view(g: Game, s, idx: Optional[dict] = None) -> dict:
     st = s.max_stats()
     a = s.arch
     party = g.parties.party_of(s.id)
@@ -90,8 +117,7 @@ def slime_view(g: Game, s) -> dict:
                         why=(awakening.why(s) if awakening.outcome(s) else ""), despair_stage=awakening.despair_stage(s),
                         life={k: round(v, 2) for k, v in awakening.scores(s).items()} if s.life and s.life.get("days") else None)
                    if awakening.candidate(s) else None),
-        relations=[dict(other=r["other"], kind=r["kind"], since=r["since"], mentor=r.get("mentor"))
-                   for r in g.relations.of(s.id)],
+        **_ties_view(g, s, idx),
         parents=list(s.parents), parent_names=list(s.parent_names), generation=s.generation,
         merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
         stamina=s.stamina, max_stamina=s.max_stamina, mana=s.mana, max_mana=s.max_mana, buffs=[dict(b) for b in s.buffs], potion_slots=attributes.potion_slots(s),
@@ -297,7 +323,8 @@ def colony_mood(g: Game) -> dict:
 
 
 def snapshot(g: Game) -> dict:
-    slimes = [slime_view(g, s) for s in g.slimes()]
+    idx = bond_index(g)
+    slimes = [slime_view(g, s, idx) for s in g.slimes()]
     parties = [dict(id=p.id, name=p.name, members=list(p.members), full=len(p.members) == g.parties.size,
                     synergy=round(g.party_synergy(p.id) - 1, 4) if len(p.members) > 1 else 0.0,
                     in_delve=p.id in g.delves, away=any(g.slime(i).busy for i in p.members), activity=g.party_activity(p.id),

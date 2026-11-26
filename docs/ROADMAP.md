@@ -460,6 +460,9 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Per-place time dilation (x3 for every dungeon except scouting, hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
 
+### M33 — Community and relationships (26 November 2026)
+- [x] The People tab is Community; its first page keeps couples and family trees; each slime's card gets a Relationships tab (ties with the bond, growing close / friction, parents and children).
+
 ### M32 — Playtest recorder (26 November 2026)
 - [x] An opt-in recorder (`playlog.py`): every fight and Descent trip event in the save, capped at 1.5 MB, exported as .json from the menu, with a warning before it is switched on (for task 1).
 

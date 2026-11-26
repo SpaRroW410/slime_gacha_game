@@ -1205,7 +1205,7 @@ class Game:
         if self.vice_challenge:
             raise InvalidAction("A challenge is already waiting for your decision.")
         self.vice_challenge = dict(challenger=s.id)
-        return f"⚔ {s.name} challenges {v.name} for the Vice Keeper's post. Approve or reject it in People > Keeper."
+        return f"⚔ {s.name} challenges {v.name} for the Vice Keeper's post. Approve or reject it in Community > Keeper."
 
     def resolve_challenge(self, approve: bool) -> List[str]:
         """The Keeper's decision. Approved: the two settle it in a friendly (non-lethal) duel; the winner holds the post."""
