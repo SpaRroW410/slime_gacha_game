@@ -393,8 +393,9 @@ def build() -> list:
                  "fighting style or to learn an element goes and does it when a place is free: a drill in its own yard (the best tier the "
                  "Training Grounds allow and it can afford) or a study session in the Library. It must be rested, fed, well and not "
                  "needed by its party. Gel for this comes only from a small allowance: "
-                 f"{c.AUTO_GEL_PER_HOUR} white gel per real hour, never more than one hour's worth saved up, so a long absence cannot "
-                 "turn into a spree; other materials follow the 66% rule. Town > Alchemy Lab shows what is left this hour."),
+                 f"{c.AUTO_GEL_PER_HOUR} white gel per real hour by default, never more than one hour's worth saved up, so a long "
+                 "absence cannot turn into a spree; other materials follow the 66% rule. A big colony can raise it (or set it to 0) "
+                 "in the menu under Helpers; Town > Alchemy Lab shows what is left this hour."),
             dict(name="Asking for things", text="Slimes ask for what they want (Colony requests, or the slime's card): a rest day, a "
                  "party, to be moved away from a grudge, a post they are made for (their class, a natural knack, or a trade they have "
                  "learned: chef, trainer, blacksmith ...), and a rival may ask for a sparring match to settle things. Granting builds "

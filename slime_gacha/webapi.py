@@ -366,7 +366,8 @@ def snapshot(g: Game) -> dict:
                                   brew_hours=potions_mod.brew_hours(i + 1)) for i in range(5)],
                      herbs={c: g.wallet.get(potions_mod.herb_key(c)) for c in config.HERBS},
                      autonomy=g.autonomy, autonomy_share=config.AUTONOMY_SHARE,
-                     auto_gel=int(g.gel_budget()), auto_gel_hour=config.AUTO_GEL_PER_HOUR),
+                     auto_gel=int(g.gel_budget()), auto_gel_hour=g.auto_gel_rate, auto_gel_choices=list(config.AUTO_GEL_CHOICES),
+                     auto_gel_max=config.AUTO_GEL_MAX),
         keeper=dict(level=g.keeper.level, xp=g.keeper.xp, xp_next=keeper_mod.xp_to_next(g.keeper.level),
                     title=keeper_mod.title(g.keeper.level, g.keeper.title_pick), points=g.keeper.points, max_level=config.KEEPER_MAX_LEVEL,
                     respec=dict(cost=g.keeper.respec_cost(), count=g.keeper.respecs),
@@ -971,6 +972,11 @@ def _talk(g, a):
 @command("autonomy")
 def _autonomy(g, a):
     return _msg(g.set_autonomy(bool(a.get("on", True))))
+
+
+@command("auto_gel")
+def _auto_gel(g, a):
+    return _msg(g.set_auto_gel(int(a.get("rate", config.AUTO_GEL_PER_HOUR))))
 
 
 @command("brew")

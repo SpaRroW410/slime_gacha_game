@@ -2205,6 +2205,11 @@ function modalHtml() {
       <h4 style="margin:6px 0 0">Helpers</h4>
       <div class="row"><button class="btn small ${S.state.auto_care ? 'primary' : ''}" data-act="autocare" title="Auto-care feeds, sleeps and rests slimes by itself">🤖 Auto-care ${S.state.auto_care ? 'on' : 'off'}</button>
         <button class="btn small ${S.state.potions.autonomy ? 'primary' : ''}" data-act="autonomy" title="Slimes use up to 66% of your stocks by themselves, and go to train or study when they want to (gel: at most ${S.state.potions.auto_gel_hour} a real hour)">🤖 Autonomy ${S.state.potions.autonomy ? 'on' : 'off'}</button></div>
+      ${(() => { const p = S.state.potions, cur = p.auto_gel_hour, custom = !p.auto_gel_choices.includes(cur);
+        return `<div class="row"><small class="mute">Gel for self-started training ${info('With autonomy on, slimes that want to get stronger or learn go to drill or study by themselves. This is the most white gel they may spend on it per real hour (one hour\'s worth at most is saved up). Raise it for a big colony, or 0 for none. Other materials always follow the 66% rule.')}</small>
+          <div class="seg small">${p.auto_gel_choices.map((x) => `<button class="${cur === x ? 'on' : ''}" data-act="auto_gel" data-rate="${x}">${x === 0 ? 'none' : x}</button>`).join('')}</div>
+          <input type="number" min="0" max="${p.auto_gel_max}" step="5" value="${cur}" data-ui="auto_gel_custom" style="width:5em" title="Any amount up to ${p.auto_gel_max}"><button class="btn small ${custom ? 'primary' : ''}" data-act="auto_gel" data-custom="1">Set</button>
+          <small class="mute">⚪ / real hour · ${p.auto_gel} left now</small></div>`; })()}
       <h4 style="margin:6px 0 0">Tutorial</h4>
       <button class="btn" data-act="tour">🎓 Replay the tutorial</button>
       <h4 style="margin:6px 0 0">Save</h4>
@@ -2271,6 +2276,7 @@ const A = {
   keeper_title: (d) => act('keeper_title', { key: d.key || '' }),
   bud: (d) => confirmThen('Have a child? It costs ' + cost(S.state.family.bud_cost) + '.', () => act('bud', { a: num(d.a), b: num(d.b) })),
   autonomy: () => act('autonomy', { on: !S.state.potions.autonomy }),
+  auto_gel: (d) => act('auto_gel', { rate: d.custom ? num(ui('auto_gel_custom', S.state.potions.auto_gel_hour), 10) : num(d.rate, 10) }),
   merge_gel: (d) => act('merge_gel', { n: d.n === 'max' ? Math.floor(S.state.wallet.white_gel / S.state.rates.gel_merge) : num(d.n) }),
   pit_lure: () => { S.ui.pit_lure = !ui('pit_lure', false); render(); },
   adv_lure: () => { S.ui.adv_lure = !ui('adv_lure', false); render(); },

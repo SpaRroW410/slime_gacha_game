@@ -102,8 +102,9 @@ class Game:
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
         self.best_floor = 0                            # deepest floor ever cleared by anyone
         self.descent_cleared = False                   # the heart of the Hollow (floor 50, the Parched King) has fallen
-        self.auto_gel = float(config.AUTO_GEL_PER_HOUR)    # autonomy: gel the slimes may still spend on training they start
-        self.auto_gel_at = time.time()                      # ... refilled by the REAL clock (config.AUTO_GEL_PER_HOUR an hour)
+        self.auto_gel_rate = config.AUTO_GEL_PER_HOUR      # autonomy: white gel an hour (REAL time) for training slimes start
+        self.auto_gel = float(self.auto_gel_rate)          # ... what is left of it now (at most one hour's worth)
+        self.auto_gel_at = time.time()
         self.playlog_on = False                         # the playtest recorder (playlog.py): off unless the player turns it on
         self.playlog: List[dict] = []
         self.deep_cleared = False                      # ... and the bottom of the Deep Hollow (floor 100, the Dry Mother)
@@ -3237,12 +3238,12 @@ class Game:
 
     # ---- autonomy: training the slimes start on their own ----------------------------------------------------------
     def gel_budget(self) -> float:
-        """Gel the slimes may still spend on training they start themselves: config.AUTO_GEL_PER_HOUR a real hour, never
-        more than one hour's worth banked (so a long absence cannot add up to a spree)."""
+        """Gel the slimes may still spend on training they start themselves: the Keeper's allowance (auto_gel_rate) a real
+        hour, never more than one hour's worth banked (so a long absence cannot add up to a spree)."""
         now = time.time()
         if now > self.auto_gel_at:
-            self.auto_gel = min(float(config.AUTO_GEL_PER_HOUR),
-                                self.auto_gel + config.AUTO_GEL_PER_HOUR * (now - self.auto_gel_at) / 3600)
+            self.auto_gel = self.auto_gel + self.auto_gel_rate * (now - self.auto_gel_at) / 3600
+        self.auto_gel = min(float(self.auto_gel_rate), self.auto_gel)
         self.auto_gel_at = now
         return self.auto_gel
 
@@ -3323,6 +3324,17 @@ class Game:
             zone = next((z for z in zones if s.power_rating() >= z.danger * config.FORAGE_SAFETY), None)
             if zone:
                 self.hunts.start(s, zone.key)
+
+    def set_auto_gel(self, rate: int) -> str:
+        """The Keeper's gel allowance for training the slimes start themselves (white gel per real hour; 0 = none)."""
+        rate = int(rate)
+        if not 0 <= rate <= config.AUTO_GEL_MAX:
+            raise InvalidAction(f"Pick an allowance from 0 to {config.AUTO_GEL_MAX} white gel an hour.")
+        self.gel_budget()                                   # settle the old rate up to now
+        self.auto_gel_rate = rate
+        self.auto_gel = min(self.auto_gel, float(rate))
+        return (f"🤖 Slimes may spend up to {rate} white gel a real hour on training they start themselves." if rate
+                else "🤖 Slimes will not spend gel on training by themselves.")
 
     def set_autonomy(self, on: bool) -> str:
         self.autonomy = bool(on)
@@ -4711,7 +4723,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, relic_progress=self.relic_progress, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, stock_peak=self.stock_peak, next_item_id=self.next_item_id, playlog_on=self.playlog_on, playlog=self.playlog, auto_gel=round(self.auto_gel, 3), auto_gel_at=self.auto_gel_at,
+                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, relic_progress=self.relic_progress, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, stock_peak=self.stock_peak, next_item_id=self.next_item_id, playlog_on=self.playlog_on, playlog=self.playlog, auto_gel=round(self.auto_gel, 3), auto_gel_at=self.auto_gel_at, auto_gel_rate=self.auto_gel_rate,
                     sacrifice_stress=round(self.sacrifice_stress, 3), shadow_tick=self.shadow_tick,
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -4827,7 +4839,8 @@ class Game:
         g.gear_peak = dict(d.get("gear_peak", {}))
         g.stock_peak = dict(d.get("stock_peak", {}))
         g.playlog_on = bool(d.get("playlog_on", False))
-        g.auto_gel = float(d.get("auto_gel", config.AUTO_GEL_PER_HOUR))
+        g.auto_gel_rate = int(d.get("auto_gel_rate", config.AUTO_GEL_PER_HOUR))
+        g.auto_gel = float(d.get("auto_gel", g.auto_gel_rate))
         g.auto_gel_at = float(d.get("auto_gel_at", time.time()))
         g.playlog = list(d.get("playlog", []))
         g.mood_rng = random.Random((((g.seed or 0) ^ 0xE70) + d.get("tick", 0)) & 0xFFFFFFFF)

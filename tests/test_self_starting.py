@@ -62,6 +62,24 @@ class TestSelfStartedTraining(unittest.TestCase):
         with mock.patch("time.time", return_value=t0 + 86400):      # a day away: still one hour's worth at most
             self.assertEqual(g.gel_budget(), config.AUTO_GEL_PER_HOUR)
 
+    def test_the_keeper_sets_the_allowance(self):
+        g, s = self._game()
+        t0 = 2_000_000.0
+        with mock.patch("time.time", return_value=t0):
+            g.auto_gel, g.auto_gel_at = 0.0, t0
+            g.set_auto_gel(100)
+        with mock.patch("time.time", return_value=t0 + 900):        # a quarter of an hour at 100 an hour
+            self.assertAlmostEqual(g.gel_budget(), 25)
+        with mock.patch("time.time", return_value=t0 + 86400):
+            self.assertEqual(g.gel_budget(), 100)                    # still one hour's worth at most
+            g.set_auto_gel(0)
+            self.assertEqual(g.gel_budget(), 0)                      # none: nobody trains on gel by themselves
+        with self.assertRaises(InvalidAction):
+            g.set_auto_gel(config.AUTO_GEL_MAX + 1)
+        from slime_gacha.game import Game
+        g.set_auto_gel(50)
+        self.assertEqual(Game.from_dict(g.to_dict()).auto_gel_rate, 50)
+
     def test_autonomy_off_or_a_tired_slime_does_not_go(self):
         g, s = self._game()
         s.goal = dict(kind="master", target=0, day=g.day, text="wants to master swordsmanship")
