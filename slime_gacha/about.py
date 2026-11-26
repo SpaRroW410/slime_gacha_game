@@ -36,7 +36,7 @@ SECTIONS: List[Dict[str, object]] = [
         "Sparring (duels, and two parties fighting as teams) builds fighting styles, class proficiency and bonds, without risk.",
     ]),
     dict(title="Dungeons", icon="🕳", items=[
-        "Hollow Descent: 50 floors in order, permadeath, leave for free only after a boss floor. Scout floors for intel (and be "
+        "Hollow Descent: 100 floors in order (the Hollow to floor 50, then the far harder Deep Hollow), permadeath, leave for free only after a boss floor. Scout floors for intel (and be "
         "rescued if you overrun), camp (limited by floor and scouting), meet floor modifiers and wayside stops, call reinforcements, "
         "or pay for an emergency retreat. Every slime must have cleared the floor above to enter a floor.",
         "Gloop Pit: the XP farm (a new theme every day; knock-outs cost morale, never XP).",
@@ -66,24 +66,27 @@ SECTIONS: List[Dict[str, object]] = [
 
 # id, group, title, what it will do - keep in step with the open tasks in docs/ROADMAP.md § 2
 ROADMAP: List[Dict[str, object]] = [
-    dict(id=1, group="Milestone", title="Floor-50 playtest and balance", status="in progress",
-         text="A real play-through of the whole Descent to floor 50, then fix what it finds. The harness and report exist."),
-    dict(id=48, group="Mobile", title="Mobile performance", status="planned",
+    dict(id=1, group="Milestone", title="Playtest and balance to floor 100", status="in progress",
+         text="A real play-through of the whole Descent (the Hollow to 50, the Deep Hollow to 100), then fix what it finds. The harness and report exist."),
+    dict(id=112, group="Web portals", title="Web-portal launch with gentle ads", status="planned",
+         text="Poki, CrazyGames, MSN Games and similar sites: a portal build with fast loading and saves that survive, opt-in rewarded ads, "
+              "ad breaks only at natural pauses and rarely, never in a fight or the tutorial, and the game unchanged if ads are blocked."),
+    dict(id=48, group="Later: mobile apps", title="Mobile performance", status="later",
          text="Faster turns, smaller replies, in-place updates, startup on low-end phones."),
-    dict(id=49, group="Mobile", title="Capacitor shell", status="planned",
+    dict(id=49, group="Later: mobile apps", title="Capacitor shell", status="later",
          text="Native saves with backups, app lifecycle, store builds."),
-    dict(id=50, group="Mobile", title="Store prep and compliance", status="planned",
+    dict(id=50, group="Later: mobile apps", title="Store prep and compliance", status="later",
          text="Odds screen, age ratings, privacy labels, listings."),
-    dict(id=51, group="Mobile", title="Monetization decision (optional)", status="planned",
+    dict(id=51, group="Later: mobile apps", title="Monetization decision (optional)", status="later",
          text="Whether real money buys gacha currency decides how much moves to a server."),
-    dict(id=52, group="Mobile", title="Beta and launch", status="planned",
+    dict(id=52, group="Later: mobile apps", title="Beta and launch", status="later",
          text="Device testing, long sessions, crash reporting, release."),
 ]
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-21-head-badges",
-                 text="Every slime now wears a small badge on its head saying what it is doing: a chef's hat for the chef, the emblem of its post, the dungeon it is in, a book with the sword, bow, orb or element it is training or studying, a basket beside the post's sign when a worker is out foraging, resting or asleep. In the Parties tab, tap a face to open that slime; an opened party lists its members as rows instead of repeating the faces.")
+WHATS_NEW = dict(id="2026-11-26-combat-resources",
+                 text="Fights now run on three pools and action points. Physical skills burn stamina, magic burns mana (it carries over between fights like stamina; Arcane potions refill it), elemental skills burn nature (half full at the start of every fight). Every turn brings 3 action points, saved up to 6: a plain skill costs 3, big area skills like Explosive Brew or Rampage cost 6, so they can no longer open a fight and end it, and saved points let a slime act twice in a turn. In fights you lead, End turn saves your points. Cooldowns are down to 'not twice a turn'. Monsters play by the same rules, and healers can no longer heal forever in a spar.")
 
 
 def build() -> Dict[str, object]:

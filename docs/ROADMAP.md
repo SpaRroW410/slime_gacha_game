@@ -23,7 +23,8 @@ As of 27 October 2026:
   what GitHub Pages serves. The next pull request (troublemakers and the Keeper's shadow, task 66) is open.
 - **Checks:** the unit tests pass (`python3 -m unittest discover -s tests`); 20 of 20 behaviour targets on 3 seeds
   (`python3 tools/minds_sim.py --seeds 3 --check`); playtest smoothness 0.129 against a 0.22 limit; balance report unchanged.
-- **Next:** the real descent to floor 50 (task 1), then the mobile work (tasks 48-52).
+- **Next:** the real descent to floor 100 (task 1), then the web-portal launch with gentle ads (task 112). The Android / iOS
+  apps (tasks 48-52) come later.
 - **Keeping this file current:** tick tasks here when they ship (the About tab's roadmap must list exactly the open ones - a test
   checks it), add a milestone line, and run `python3 tools/changelog.py` to refresh § 8.
 
@@ -31,11 +32,25 @@ As of 27 October 2026:
 
 ### Milestone
 
-- [~] **1. Floor-50 playtest and balance** — harness `tools/playtest.py` and report § 6 below are done; an AI bug that wasted opening turns on buffs is fixed.
+- [~] **1. Floor-50 playtest and balance (now to floor 100)** — harness `tools/playtest.py` and report § 6 below are done; an AI bug that wasted opening turns on buffs is fixed. The Deep Hollow (51-100) is tuned from simulations without gear only (task 93): it needs a geared playthrough too.
   Re-run on the current code (equal star levels, formations, one-day sessions): floor 50 needs level 57 / 50 / 41 / 31 / 25 for common / uncommon / rare / epic / legendary, ~130-186 real hours at x3; smoothness 0.132 (limit 0.22).
   *Done when:* the real descent to floor 50 has been played through (with gear, elements, scouting) and the follow-ups below are closed. Left: extend the harness (or a hand playthrough) to gear, relics, elements and potions.
 
-### Mobile (phase 2) — Capacitor route, from the QA and mobile planning report
+### Web portals — launch on Poki, CrazyGames, MSN Games and similar sites, with gentle ads
+
+- [ ] **112. Web-portal edition with gentle ads** — publish the browser game on web-game portals (Poki, CrazyGames, MSN Games, GameDistribution and others like them) before any app store, earning from ads that never get in the way.
+  - **Portal build:** one build per portal from `tools/build_web.py`, with that portal's SDK, running inside its iframe. It must load fast enough for the portal's rules: Pyodide is heavy, so show a loading screen with progress, then cache the runtime. Pause the clock and sound when the tab is hidden; report loading, gameplay start and gameplay stop events to the portal.
+  - **Saves:** keep the on-device save inside the portal's iframe, use the portal's cloud save where one exists, and keep save export and import.
+  - **Gentle ads, rules first:**
+    - Rewarded ads are opt-in only: the player chooses to watch one for a small bonus (an extra free pull, a little gel, faster brewing) and can always ignore the button.
+    - Ad breaks come only at natural pauses (back home from a Descent trip or a long wave session, after a day ends in turn mode), at most one every several minutes, and never in the first minutes of play.
+    - Never an ad during a fight, the tutorial, a pull animation or a confirm dialog, and never a banner over the play area.
+    - If ads fail or are blocked, the game plays exactly the same; nothing is locked behind an ad.
+    - A frequency cap and the break points live in one config, so they can be tuned per portal.
+  - **Submission:** each portal's listing (thumbnails, short description, controls), age rating, the gacha odds screen and privacy wording, then submit and follow up on each portal's QA feedback.
+  - *Done when:* the game is live on at least two portals, the ad rules above hold in a play session (checked by hand and by a test of the ad-break scheduler), and offline play without ads still works.
+
+### Later: Android and iOS (phase 2) — Capacitor route, from the QA and mobile planning report
 
 - [ ] **48. Mobile M2: performance** — engine hot spots, smaller replies, in-place page updates, lazy rosters, startup measured on low-end phones.  *Done when:* Pyodide startup and big-colony turns are acceptable on a 2 GB Android phone and an iPhone SE.
 - [ ] **49. Mobile M3: Capacitor shell** — native storage with atomic writes and rotating checksummed backups, lifecycle (save on pause, stop timers), store builds.  *Done when:* builds run on iOS and Android with safe saves.
@@ -54,6 +69,10 @@ As of 27 October 2026:
 
 ### Gameplay
 
+- [x] **108. Three resource pools** — every skill burns one pool (`pools.py`): ⚡ stamina (physical), 🔷 mana (magic without an element: heals, wards, curses, summons, Explosive Brew) or 🍃 nature (anything with an element), 5 a point of AP it costs (healing x1.5), growing with level like the pools. Splat and Defend are free. Pools refill a little each round and 10% on a Defend; stamina and mana carry over between fights (hourly, camps, rest stops), nature starts each fight half full. Arcane potions refill mana, Renewal nature; packs and autonomy use them. Monsters have 100 of each.  *Done when:* met; `tests/test_resources.py`.
+- [x] **109. Action points, several actions a turn** — +3 AP a turn, saved up to 6; a plain skill costs 3, heavy ones 4-5, big area skills 6 (two turns: no more opening wipes), buffs 2-4, Defend 1 (ends the turn). Saved points buy two actions in one turn; End turn saves them in fights you lead. Cooldowns cut to "not twice a turn"; once-a-fight skills stay.  *Done when:* met; fights now last ~5-7 rounds instead of 2-3 in the balance harness.
+- [x] **110. The AI and the balance pass** — the AI scores attacks per AP, saves up for a big skill (bracing with a Defend meanwhile), allows itself one buff a turn and only with a blow still to come, and no longer lights a weapon its foes resist. Spar stalemates now look at the pools too, and at the pace of the fight. Classes 54-76% at level 30 (§ 7), the climb stays smooth, floor 100 still needs the ego cap (legendary ~141 without gear).  *Done when:* met.
+- [x] **111. Arena and Guide for resources** — each card shows ⚡ 🔷 🍃 bars and gold AP dots (foes too, so a big attack shows coming), skill buttons show AP and pool cost and are greyed with the reason when out of reach, End turn (save N AP) and Defend are on the bar; the slime card shows mana; the Guide explains pools, action points and cooldowns.  *Done when:* checked at desktop and phone width.
 - [x] **2. More specialization paths** — three new class paths into archery, each with a signature skill and a capstone: Medic+archery = Dawn Archer, Necromancer+archery = Plague Archer, Rogue+archery = Nightstalker (12 hybrids now). Three-way hybrids, evolving specializations and slimes asking for jobs are left as later ideas.  *Done when:* met; `tests/test_hybrids.py` covers resolution, skills and capstones.
 - [x] **3. Spell mutation** — fused spells change form at set mastery levels (`spells.MUTATIONS`, effects from `fx.py`): stage 1 at required mastery +1, stage 2 at +3; heal/guard fusions share purifying forms. Academy lists the forms; the slime card marks the stage with ✦.  *Done when:* met; `tests/test_mutation.py`.
 - [x] **4. Enemy resistances and elemental floors** — monster families are weak to / resist several elements (`bestiary.FAMILY_TRAITS`, `elements.matchup`, x1.5 / x0.7); every sixth non-boss floor from floor 3 is elemental (`dungeon.is_elemental_floor`): its terrain boosts one element +25% and dampens the opposing one -20%, for both sides.  *Done when:* met; intel (fully scouted floors list weak-to / resists, elemental floors name their element), Guide and `tests/test_resist.py`.
@@ -151,6 +170,21 @@ As of 27 October 2026:
 - [x] **90. Training on the slime's card; trainers in the Academy** — a Train tab on the slime card holds its proficiency drill, a spar against a chosen partner, element study and spell learning (spells it cannot learn yet are greyed with the reason). The Academy's first screen is Facilities & trainers: each discipline's yard, arena and trainer post together, plus party training and party sparring.  *Done when:* met.
 - [x] **91. Parties fold to a summary** — each party on the Parties tab is a fold-out card; folded, it shows its status (in the Descent and on which floor, away with the time left, busy or resting at home, ready, not full), the members' faces, and one line with the leader, party power, synergy, health, average morale and any trouble (hurt, needing care, who refuses). Open all / Fold all; a lone party starts open, and a card stays open while you use it.  *Done when:* met (checked in Chromium at desktop and phone sizes).
 - [x] **92. What a slime is doing, on its head** — every slime figure carries a small badge on its head: its post (a chef's hat for the chef, the post's emblem for trainers, the librarian, blacksmith, brewer and doctor), the dungeon it is in (Descent, Pit, Rift, Quarry, Mossy Burrows, scouting, rescue, wave, stranded), hunting, studying, the Rest Area, the hospital or asleep; nothing when it is simply at home. Two signs share one badge where both matter: a book with the style being trained (⚔️ 🏹 🔮) for a drill, a spar or a party drill, a book with the element for element study (🔥 💧 🪨 🌪️), and the post's sign with a basket for a worker out foraging (the spar's style is now kept with the trip). A folded party's faces open the slime's card without opening the party, and an opened party lists its members as rows (state, health, call back, row, remove) instead of drawing the faces a second time; its status counts who is at work, out, studying or resting rather than showing one member's job.  *Done when:* met (checked in Chromium at desktop and phone sizes).
+- [x] **93. The Deep Hollow: floors 51-100** — below the Parched King the Descent goes on to floor 100 with ten more bosses (the Throne Wyrm ... the Dry Mother) and ten terrain mixes. Each floor below 50 is built for slimes two levels stronger (floor 100 for level 150) and grows harder again by x1.03 a floor: exponential. Simulated without gear, a common party cannot pass floor 70 and a legendary one needs about level 160 for floor 100. Floor 50 still ends chapter 5 and opens the Deep Hollow; chapters 6-7, two achievements and Gentle Keeper limits to floor 100 follow.  *Done when:* met.
+- [x] **94. Long wave grinds** — the wave simulation runs up to 100 waves (days) against monsters up to level 150, comes home early once a member ends a wave below a health line you pick (default 30%), and waves led by hand cost no time (the timer after a manual win is gone).  *Done when:* met.
+- [x] **95. Ego ascension to level 150** — slimes stay capped at 100; a legendary wearing an ego relic in all three slots grows to 150 (the slime card says how many ego relics it still needs).  *Done when:* met.
+- [x] **96. More gear and relics, in tiles with windows** — 19 more relic bases (every class has a weapon, an armor and a charm made for it), five more relic mods (evasion, guard, regeneration, magic resistance, spell power), ten more gear pieces and two more sets. Relics and spare gear are grids of tiles framed by rarity or tier; a relic's window shows its upgrade path (level, stars, rarity, ego) with what each step needs and what is missing (the reason a rarity could not be raised: Armory level 5), a gear window equips, sells back or merges. Guide: relic upgrading and mods.  *Done when:* met.
+- [x] **97. Each class names its spells** — a barbarian's Ember is Fire Blaze, a ranger's Fire Arrow, a bard's Burning Ballad, a druid's Wildfire Seed; casters keep the Library's names, fused spells with automatic names follow the style, spells the Keeper named keep theirs. Only the name changes.  *Done when:* met.
+- [x] **98. A manual fight on one screen, animated** — the arena fits the window with the actions pinned at the bottom (no scrolling to choose an action and a target; big parties scroll only the field and bring the target into view), compact cards with the slimes' own figures, and every action animated: spells fly as their element, blows burst and shake, drains flow back, heals sparkle, guards pop, dodges slip aside, crits shake the arena.  *Done when:* met (a whole fight played by hand in Chromium at desktop and phone sizes, five and fifteen slimes).
+- [x] **99. Rations and camping on long wave trips** — a wave trip lives like a farming session: hungry members eat (a cooked dish, else a ration; a trip packs at most 66% of the food stores), the party camps when tired, hurt or winded, and it comes home when the rations are gone and someone is hungry. Simulated: 100 waves on 25 rations and 67h of camping, nobody lost; with 10 food it packs 6 and turns back after wave 46.  *Done when:* met.
+- [x] **100. Gear to tier 5; autonomy keeps gear and relics** — six tier-4 and six tier-5 pieces and three sets (merge-only; the Armory sells 1-3; the Deep Hollow drops tier 4 on 51-75 and tier 5 below). With autonomy on slimes take clearly better spare gear, level the relics they wear and merge spare gear up a tier, never taking a stock below 34% of the most ever held.  *Done when:* met.
+- [x] **101. Skills grouped, animated by kind; the fallen shrink** — manual-fight skills are grouped (🎯 single, 💥 area, 🌀 debuff, ✨ buff, 💚 heal); area attacks sweep the whole side at once, buffs rise gold, hexes swirl purple, wards shine, summons pop in; defeated units shrink to a struck-through strip at the bottom of their column (a revived one returns full size); a fight won or lost by hand plays its last blows and a Victory/Defeat banner before the report.  *Done when:* met (played by hand in Chromium at desktop and phone sizes, 5 and 15 slimes).
+- [x] **102. Buildings to level 10; the Reliquary and the Relicsmith** — every building climbs to level 10 (levels 6-10 add half as much for the hatchery refund and barracks; the Alchemy Lab stays at grade 5 and improves its odds; the Armory sells tier 4 from level 7 and tier 5 from 9). The new Reliquary governs relics: a star needs it as high as the relic's stars; rarity needs level 3 (uncommon), 5 (rare), 8 (epic) or 10 (legendary). Its Relicsmith mends and forges relics; the Blacksmith forges gear only. Old saves start the Reliquary at their Armory level.  *Done when:* met.
+- [x] **103. Cold Storage** — a new building keeps cooked dishes: 8 more pantry servings a level, 3 dishes a level carried on each trip (eaten before raw rations), and two finer dishes (Smoked Fish Platter at 2, Royal Banquet at 4).  *Done when:* met.
+- [x] **104. Supplies in fights led by hand** — hungry and tired party slimes show 🍖 / 😴; Feed (a packed dish, else a ration), Stamina potion (from stock: breath back now, energy up) and Camp (before the next wave, or after the floor in the Descent), none costing a turn.  *Done when:* met (played in Chromium).
+- [x] **105. Gentle Keeper limits leave room for ego fusions** — below floor 50 every limit also grows with the party size by the ego fusions an endgame party needs (3 per slot by floor 100): gold on floor 100 is 50, 65 or 80 for parties of 5, 10 or 15.  *Done when:* met.
+- [x] **106. Packs for the trip; forged relics are common** — a party packs before it enters the Descent or a wave trip: raw rations, cooked dishes (up to the Cold Storage allowance, several kinds) and potions, chosen in a Pack panel or packed by the game (best dishes first, rations for the trip, a stamina potion each). Packed items leave the stores and leftovers come home; inside nothing comes from the colony. Automatic fights eat and drink from the pack best first; in a fight you lead you hand out an item to one slime or to everyone who needs it (this replaces feeding from the colony). The Relicsmith forges only common relics.  *Done when:* met (packed, handed out and checked in Chromium: the colony's food stayed untouched).
+- [x] **107. Spar stalemates end in a draw** — a duel or a party spar in which nobody's HP has moved by more than 5% of its maximum over 10 rounds (two healers, two walls) stops as a draw: both get the loser's style XP, a drawn Vice Keeper challenge leaves the post where it is. A spar that is still moving keeps going to the round cap and is decided on points as before.  *Done when:* met.
 
 ### After floor 50 (art and sound)
 
@@ -425,6 +459,12 @@ evolving specializations, and whether job skill decays like proficiency.
 ### M26 — Dungeon time (28 October 2026)
 - [x] Per-place time dilation (x3 for every dungeon except scouting, hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
+
+### M31 — Combat resources (26 November 2026)
+- [x] Stamina, mana and nature pools (108); action points with several actions a turn and minimal cooldowns (109); the AI and balance pass (110); the arena and Guide for resources (111).
+
+### M30 — The Deep Hollow (25 November 2026)
+- [x] Floors 51-100, exponentially harder (93); long wave grinds (94); ego ascension to 150 (95); more gear and relics in tiles and windows (96); spells named by class (97); manual fights on one screen, animated (98). Explosive Brew checked and left as it is: no stronger than the mage's Fire Blob. Wave rations and camping (99); gear to tier 5 and autonomous gear upkeep (100); grouped, animated skills and a finale (101). Buildings to level 10 and the Reliquary (102); Cold Storage (103); supplies in fights (104); deeper Gentle Keeper limits (105); packs for the trip and common forged relics (106); spar stalemates end in a draw (107).
 
 ### M29 — Tidier screens (21 November 2026)
 - [x] One Relics screen and a gear-only Armory (89); training on the slime card, trainers in the Academy (90); parties fold to a summary (91); activity badges on slimes' heads (92)
@@ -705,16 +745,16 @@ Seeded Pit fights, 12 trials per cell, no gear or potions.
 
 | level | depth 1 | depth 2 | depth 3 | depth 4 | depth 5 |
 |---|---|---|---|---|---|
-| 10 | 100% (2.3r) | 100% (2.4r) | 100% (2.9r) | 33% (4.0r) | 33% (6.7r) |
-| 20 | 100% (2.5r) | 100% (2.8r) | 100% (2.8r) | 92% (2.8r) | 100% (3.1r) |
-| 30 | 100% (2.2r) | 100% (2.2r) | 100% (2.2r) | 67% (3.3r) | 58% (3.3r) |
-| 40 | 100% (2.2r) | 100% (2.4r) | 100% (2.8r) | 100% (2.6r) | 100% (2.8r) |
+| 10 | 100% (4.6r) | 100% (4.8r) | 92% (5.8r) | 42% (6.3r) | 58% (7.4r) |
+| 20 | 100% (5.0r) | 100% (5.1r) | 100% (5.3r) | 100% (5.4r) | 100% (5.9r) |
+| 30 | 100% (4.5r) | 100% (4.5r) | 100% (4.8r) | 50% (6.0r) | 67% (6.6r) |
+| 40 | 100% (4.8r) | 100% (5.1r) | 100% (6.9r) | 100% (6.2r) | 83% (5.3r) |
 
 ### Rarity at equal level (balanced party, Pit depth 3)
 
 | level | common | uncommon | rare | epic | legendary |
 |---|---|---|---|---|---|
-| 10 | 100% | 100% | 100% | 100% | 100% |
+| 10 | 92% | 92% | 100% | 100% | 100% |
 | 25 | 100% | 100% | 100% | 100% | 100% |
 | 40 | 100% | 100% | 100% | 100% | 100% |
 
@@ -722,41 +762,39 @@ Seeded Pit fights, 12 trials per cell, no gear or potions.
 
 | class | lv 15 | lv 30 | lv 45 | rounds @30 |
 |---|---|---|---|---|
-| barbarian | 100% | 75% | 92% | 2.8 |
-| mage | 100% | 83% | 100% | 3.0 |
-| medic | 100% | 83% | 100% | 2.8 |
-| rogue | 100% | 83% | 92% | 2.8 |
-| ranger | 100% | 83% | 92% | 2.8 |
-| necromancer | 100% | 75% | 92% | 3.2 |
-| bard | 100% | 75% | 100% | 3.3 |
-| paladin | 100% | 83% | 92% | 2.6 |
-| alchemist | 100% | 83% | 92% | 3.3 |
-| druid | 100% | 83% | 100% | 3.4 |
+| barbarian | 100% | 67% | 92% | 5.9 |
+| mage | 100% | 50% | 92% | 5.9 |
+| medic | 83% | 50% | 92% | 5.8 |
+| rogue | 92% | 50% | 83% | 6.7 |
+| ranger | 100% | 50% | 92% | 5.9 |
+| necromancer | 92% | 42% | 92% | 9.8 |
+| bard | 92% | 50% | 92% | 7.5 |
+| paladin | 92% | 67% | 92% | 7.4 |
+| alchemist | 92% | 50% | 92% | 7.3 |
+| druid | 92% | 75% | 92% | 9.1 |
 
 ### Capstones (legendary 5-star, proficiency 100 vs 0, level 25, enemies 19 levels above; rounds to win)
 
 | class | with | without |
 |---|---|---|
-| barbarian | 100% (1.0r) | 100% (1.0r) |
-| mage | 100% (1.0r) | 100% (1.0r) |
-| medic | 100% (1.0r) | 100% (1.0r) |
-| rogue | 100% (1.0r) | 100% (1.0r) |
-| ranger | 100% (1.0r) | 100% (1.0r) |
-| necromancer | 100% (1.3r) | 100% (1.3r) |
-| bard | 100% (1.0r) | 100% (1.0r) |
-| paladin | 100% (1.0r) | 100% (1.0r) |
-| alchemist | 100% (1.0r) | 100% (1.1r) |
-| druid | 100% (1.0r) | 100% (1.0r) |
+| barbarian | 100% (2.5r) | 100% (2.5r) |
+| mage | 100% (2.4r) | 100% (2.4r) |
+| medic | 100% (2.5r) | 100% (2.5r) |
+| rogue | 100% (2.7r) | 100% (2.7r) |
+| ranger | 100% (2.6r) | 100% (2.6r) |
+| necromancer | 100% (2.3r) | 100% (2.3r) |
+| bard | 100% (2.3r) | 100% (2.3r) |
+| paladin | 100% (2.3r) | 100% (2.3r) |
+| alchemist | 100% (2.3r) | 100% (2.3r) |
+| druid | 100% (2.3r) | 100% (2.3r) |
 
 ### Reading the report
 
-- **Classes** stay within about 10 points of each other at every level: no class is a trap or a must-have in a mixed party.
-- **Pit depth 1-3** is a formality at level parity (about 2 rounds); only depth 4-5 near a stage cap (levels 10 and 30) bites.
-- **Rarity** barely matters in the Pit at equal level; it matters in the Descent, where the playtest report (§ 6) is the guide.
-- **Legendary 5-star** parties clear Pit waves in about one round even far above their level: the Pit stops being a test long before then.
+- **Classes** sit within about 20 points of each other (paladin and druid, the sustain classes, lead now that fights are longer): none is a trap or a must-have in a mixed party.
+- **Pit depth 1-3** is a formality at level parity (about 5 rounds since action points pace the big skills); only depth 4-5 near a stage cap (levels 10 and 30) bites.
+- **Rarity** barely matters in the Pit at equal level; it matters in the Descent, where the playtest report (docs/ROADMAP.md § 6) is the guide.
+- **Legendary 5-star** parties clear Pit waves in two or three rounds even far above their level: the Pit stops being a test long before then.
   The Descent, not the Pit, is where capstones are tuned; if the Pit should stay relevant late, scale `dungeon.grind_level` with depth.
-
-*Re-generated 28 October 2026 (`python3 tools/balance.py`): identical to the report above.*
 
 ## 8. Commit history, first to last
 
@@ -765,7 +803,7 @@ Every commit since the first, oldest first, grouped by the pull request (or dire
 
 <!-- changelog:start -->
 
-188 commits, oldest first. Generated by `python3 tools/changelog.py` at `9c9d3d1`.
+209 commits, oldest first. Generated by `python3 tools/changelog.py` at `2df188d`.
 
 ### Straight to the main line (2026-10-10)
 
@@ -1045,10 +1083,34 @@ Every commit since the first, oldest first, grouped by the pull request (or dire
 - `3263d79` 2026-11-21 — Parties fold to a summary: status, faces, power, synergy, health and morale
 - `03a2842` 2026-11-21 — Commit history in ROADMAP.md includes the folding parties
 
-### Not merged yet: branch `claude/elegant-meitner-beippt`
+### Pull request #31 (merged 2026-11-21)
 
 - `13e0cc2` 2026-11-21 — Activity badges on slimes' heads; party faces open the slime and are not drawn twice
 - `8b67dee` 2026-11-21 — Commit history in ROADMAP.md includes the head badges
 - `9c9d3d1` 2026-11-21 — Two-sign head badges: a book with the style or element being trained, a post with a basket when foraging
+- `22b48bb` 2026-11-21 — Commit history in ROADMAP.md includes the two-sign badges
+
+### Not merged yet: branch `claude/elegant-meitner-beippt`
+
+- `6ea633e` 2026-11-25 — Long wave grinds, ego ascension to 150, more gear and relics, and relic and gear windows
+- `94189e4` 2026-11-25 — The Deep Hollow: the Descent goes on to floor 100, exponentially harder below floor 50
+- `926edd6` 2026-11-25 — Each class names its spells in its own way
+- `c06d64d` 2026-11-25 — Manual fights fit the screen, and the arena animates every action
+- `aee3cb4` 2026-11-25 — Roadmap tasks 93-98 and milestone M30; What's new for the Deep Hollow
+- `40f82fa` 2026-11-25 — Commit history in ROADMAP.md includes the Deep Hollow
+- `786bc7f` 2026-11-25 — Wave rations and camping, gear tiers 4 and 5, and autonomous gear and relic upkeep
+- `be760b7` 2026-11-25 — Grouped skills with animations by kind, the fallen shrink away, and a finale for fights led by hand
+- `04603cb` 2026-11-25 — Commit history in ROADMAP.md includes grouped skills and wave rations
+- `1cb990d` 2026-11-25 — Buildings climb to level 10; the Reliquary and the Relicsmith take over relics
+- `e9f4537` 2026-11-25 — Cold Storage for finer trip food; Gentle Keeper limits leave room for ego fusions in the Deep Hollow
+- `a263494` 2026-11-25 — Supplies in fights led by hand: hunger and energy warnings, feed, stamina potion and camp
+- `98a031f` 2026-11-25 — Commit history in ROADMAP.md includes buildings to level 10 and fight supplies
+- `e2640e6` 2026-11-25 — Packs for the trip: food, dishes and potions chosen before departure; forged relics are common
+- `f9d6f28` 2026-11-25 — Commit history in ROADMAP.md includes packs for the trip
+- `08339d5` 2026-11-25 — Spar stalemates end in a draw; the combat-resource plan joins the open tasks
+- `8940016` 2026-11-25 — Commit history in ROADMAP.md includes spar draws and the resource plan
+- `fe451a7` 2026-11-26 — Fights run on stamina, mana and nature pools and action points
+- `b2c0d18` 2026-11-26 — Commit history in ROADMAP.md includes combat resources
+- `2df188d` 2026-11-26 — Roadmap: a web-portal launch with gentle ads comes next, the mobile apps later
 
 <!-- changelog:end -->

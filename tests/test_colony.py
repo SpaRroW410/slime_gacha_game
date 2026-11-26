@@ -238,7 +238,7 @@ class TestRestArea(unittest.TestCase):
 class TestBuildings(unittest.TestCase):
     def test_buildings_start_at_level_one(self):
         g = rich()
-        self.assertEqual(set(BUILDINGS.keys()), {"rest_area", "training_grounds", "library", "barracks", "armory", "chamber", "alchemy", "kitchen", "hatchery", "hospital", "blade_yard", "archery_range", "mana_pool", "spar_sword", "spar_archery", "spar_magic", "spar_party", "party_yard"})
+        self.assertEqual(set(BUILDINGS.keys()), {"rest_area", "training_grounds", "library", "barracks", "armory", "chamber", "alchemy", "kitchen", "hatchery", "hospital", "blade_yard", "archery_range", "mana_pool", "spar_sword", "spar_archery", "spar_magic", "spar_party", "party_yard", "reliquary", "cold_storage"})
         self.assertTrue(all(g.buildings.level(k) == 1 for k in BUILDINGS.keys()))
 
     def test_upgrade_pays_and_caps(self):
@@ -247,9 +247,12 @@ class TestBuildings(unittest.TestCase):
         cost = g.buildings.next_cost("rest_area")
         g.upgrade_building("rest_area")
         self.assertEqual(g.wallet.get("white_gel"), gel - cost["white_gel"])
-        for _ in range(3):
+        g.wallet.add("white_gel", 10 ** 6)
+        g.wallet.add("essence", 10 ** 5)
+        g.wallet.add("purple_gel", 10 ** 3)
+        for _ in range(8):                                     # every building climbs to level 10
             g.upgrade_building("rest_area")
-        self.assertEqual(g.buildings.level("rest_area"), 5)
+        self.assertEqual(g.buildings.level("rest_area"), 10)
         with self.assertRaises(InvalidAction):
             g.upgrade_building("rest_area")
         with self.assertRaises(InvalidAction):

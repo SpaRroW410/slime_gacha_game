@@ -26,7 +26,7 @@ def quiet(g):
 class TestPosts(unittest.TestCase):
     def test_every_post_has_a_building_and_the_rules_hold(self):
         self.assertEqual({j.building for j in jobs.JOBS.values()},
-                         {"training_grounds", "library", "armory", "alchemy", "kitchen", "hospital"})
+                         {"training_grounds", "library", "armory", "reliquary", "alchemy", "kitchen", "hospital"})
         self.assertEqual(sorted(jobs.TRAINERS), ["archery", "magic", "sword"])
         g = quiet(rich(91))
         young, ok = slime(g, "barbarian", stars=1), slime(g, "barbarian", stars=2)
@@ -183,22 +183,41 @@ class TestLibrarian(unittest.TestCase):
 
 
 class TestBlacksmith(unittest.TestCase):
-    def test_mends_gear_and_slowly_forges_a_weapon_then_a_relic(self):
+    def test_the_blacksmith_forges_gear_and_the_relicsmith_mends_and_forges_relics(self):
         g = quiet(rich(104))
-        smith, owner = slime(g, "barbarian"), slime(g)
+        g.autonomy = False                                         # nobody mends its own relic here
+        smith, relicsmith, owner = slime(g, "barbarian"), slime(g, "paladin"), slime(g)
         it = items.Item(7, "iron_sword")
         it.durability = 1
         owner.items["weapon"] = it
         g.wallet.add("scrap", 50)
         g.assign_job(smith.id, "blacksmith")
         g.tick(jobs.SHIFT_HOURS)
-        self.assertGreater(it.durability, 1)                       # mended for free
+        self.assertEqual(it.durability, 1)                         # the blacksmith does not touch relics any more
         stock = sum(g.inventory.items.values())
-        vault = len(g.vault)
-        g.tick(jobs.SHIFT_HOURS * (config.CRAFT_SHIFTS - 1))
-        self.assertGreater(sum(g.inventory.items.values()), stock)  # a weapon came out of the forge
         g.tick(jobs.SHIFT_HOURS * config.CRAFT_SHIFTS)
-        self.assertGreater(len(g.vault), vault)                    # then a relic
+        self.assertGreater(sum(g.inventory.items.values()), stock)  # gear came out of the forge
+        vault = len(g.vault)
+        g.assign_job(relicsmith.id, "relicsmith")
+        g.tick(jobs.SHIFT_HOURS)
+        self.assertGreater(it.durability, 1)                       # the relicsmith mends it for free
+        for _ in range(4 * config.CRAFT_SHIFTS):
+            if len(g.vault) > vault:
+                break
+            relicsmith.needs.v["energy"] = 100.0                    # this quiet colony never sends it to bed
+            if relicsmith.state == "idle":
+                relicsmith.state = "working"
+            g.tick(jobs.SHIFT_HOURS)
+        self.assertGreater(len(g.vault), vault)                    # and forges a relic
+
+    def test_old_saves_start_the_reliquary_at_the_armory_level(self):
+        g = rich(105)
+        g.buildings.levels["armory"] = 5
+        d = g.to_dict()
+        d["buildings"].pop("reliquary", None)
+        self.assertEqual(Game.from_dict(d).buildings.level("reliquary"), 5)
+        self.assertEqual(g.buildings.relic_rarity_max(5), "rare")
+        self.assertEqual(g.buildings.relic_rarity_max(10), "legendary")
 
     def test_without_materials_nothing_is_forged(self):
         g = quiet(rich(105))
@@ -255,7 +274,7 @@ class TestKitchen(unittest.TestCase):
 
     def test_the_pantry_is_capped_by_the_kitchen_level_and_hunger_is_counted(self):
         g = quiet(rich(109))
-        self.assertEqual(jobs.pantry_cap(g), config.PANTRY_PER_LEVEL)
+        self.assertEqual(jobs.pantry_cap(g), config.PANTRY_PER_LEVEL + config.COLD_SERVINGS_PER_LEVEL)   # kitchen + cold storage, level 1 each
         g.pantry["porridge"] = jobs.pantry_cap(g)
         chef = slime(g, "medic")
         g.assign_job(chef.id, "chef")
@@ -463,3 +482,35 @@ class TestDayPlans(unittest.TestCase):
         self.assertIn(chef.state, ("working", "hunting"))               # ... then goes back to the post
         with self.assertRaises(InvalidAction):
             g.set_plan("chef", ["dance"] * 8, [])
+
+
+class TestColdStorage(unittest.TestCase):
+    def test_finer_dishes_need_the_cold_storage_and_trips_carry_dishes_first(self):
+        g = quiet(rich(301))
+        chef = slime(g, "medic")
+        chef.job_xp["chef"] = 10 ** 6                                # a master chef
+        g.wallet.add_many({"food": 50, "herb_blue": 5, "herb_yellow": 5, "essence": 20})
+        self.assertNotIn("banquet", [r.key for r in [jobs.pick_recipe(g, chef)] if r])
+        g.buildings.levels["cold_storage"] = 4
+        self.assertEqual(jobs.pick_recipe(g, chef).key, "banquet")
+        self.assertEqual(jobs.pantry_cap(g), config.PANTRY_PER_LEVEL + 4 * config.COLD_SERVINGS_PER_LEVEL)
+        g.pantry["banquet"] = 20
+        taken = g._take_pack({"dish:banquet": 50, "food": 2}, 5, 24)
+        self.assertEqual(taken["dish:banquet"], g.pack_allowance())     # only as many dishes as the Cold Storage lets travel
+        s = slime(g)
+        s.needs.set("food", 10)
+        g._pack_auto(taken, [s])
+        self.assertEqual(taken["dish:banquet"], g.pack_allowance() - 1) # the most nourishing food first
+        self.assertEqual(taken["food"], 2)
+
+
+class TestForgedRelicsAreCommon(unittest.TestCase):
+    def test_the_relicsmith_forges_only_common_relics(self):
+        g = quiet(rich(311))
+        g.wallet.add("scrap", 500)
+        smith = slime(g, "paladin")
+        for _ in range(12):
+            g.relic_progress = config.CRAFT_SHIFTS
+            jobs._relic_craft(g, smith, [])
+        self.assertTrue(g.vault)
+        self.assertEqual({it.rarity for it in g.vault.values()}, {"common"})

@@ -22,9 +22,20 @@ def _count(g, pred) -> int:
 
 
 # ---- Gentle Keeper badges: a milestone floor cleared with few slimes merged or destroyed ---------------------------------------------------
-def gentle_grade(floor: int, sacrifices: int) -> str:
+def gentle_limits(floor: int, party_size: int = 5):
+    """(gold, silver, bronze) for a milestone floor. Below floor 50 each grade also allows the ego fusions the Deep Hollow
+    asks for (GENTLE_EGO_PER_SLOT per party slot by floor 100), so gold is always above what clearing it requires."""
+    base = config.GENTLE_FLOORS.get(floor)
+    if not base:
+        return None
+    deep = max(0, floor - config.HEART_FLOOR) / max(1, 100 - config.HEART_FLOOR)
+    extra = round(config.GENTLE_EGO_PER_SLOT * party_size * deep)
+    return tuple(x + extra for x in base)
+
+
+def gentle_grade(floor: int, sacrifices: int, party_size: int = 5) -> str:
     """"gold", "silver", "bronze" or "" for clearing `floor` (a milestone in config.GENTLE_FLOORS) after `sacrifices` sacrifices."""
-    limits = config.GENTLE_FLOORS.get(floor)
+    limits = gentle_limits(floor, party_size)
     if not limits or sacrifices < 0:
         return ""
     return next((name for (name, _), most in zip(GRADES, limits) if sacrifices <= most), "")
@@ -34,9 +45,11 @@ def gentle_badges(g) -> List[dict]:
     """One row per milestone floor: the sacrifices when it was first cleared (None: not yet; -1: before the colony counted them),
     the grade it earned and the limits for each grade."""
     out = []
-    for floor, limits in sorted(config.GENTLE_FLOORS.items()):
+    size = g.parties.size
+    for floor in sorted(config.GENTLE_FLOORS):
+        limits = gentle_limits(floor, size)
         n = g.milestones.get(floor)
-        grade = gentle_grade(floor, n) if n is not None else ""
+        grade = gentle_grade(floor, n, size) if n is not None else ""
         out.append(dict(floor=floor, sacrifices=n, grade=grade, emoji=dict(GRADES).get(grade, ""),
                         limits=dict(zip((x for x, _ in GRADES), limits))))
     return out
@@ -52,12 +65,14 @@ ACHIEVEMENTS: Dict[str, Achievement] = {a.key: a for a in [
     Achievement("legend", "A Legend Hatches", "🌟", "Own a legendary slime.", "Legend-Keeper", lambda g: _count(g, lambda s: s.rarity == "legendary") > 0),
     Achievement("floor_10", "Ten Floors Down", "🕳️", "Clear floor 10 of the Descent.", "the Delver", lambda g: g.best_floor >= 10),
     Achievement("floor_30", "Deep Delver", "⛏️", "Clear floor 30 of the Descent.", "Deepwalker", lambda g: g.best_floor >= 30),
-    Achievement("floor_50", "Bottom of the Hollow", "👑", "Defeat the final boss of the Descent.", "Hollow-Breaker", lambda g: bool(g.descent_cleared)),
+    Achievement("floor_50", "Heart of the Hollow", "👑", "Defeat the Parched King on floor 50.", "Hollow-Breaker", lambda g: bool(g.descent_cleared)),
+    Achievement("floor_75", "Into the Deep", "🌑", "Clear floor 75 of the Deep Hollow.", "the Deep-Diver", lambda g: g.best_floor >= 75),
+    Achievement("floor_100", "Bottom of the Hollow", "🏺", "Defeat the Dry Mother on floor 100.", "Thirst-Breaker", lambda g: bool(getattr(g, "deep_cleared", False))),
     Achievement("friends", "Good Friends", "💞", "Have 10 pairs of slimes who are close friends.", "the Matchmaker", lambda g: sum(1 for v in g.social.bonds.values() if v >= 20) >= 10),
     Achievement("builder", "Master Builder", "🏗️", "Raise any building to level 5.", "the Builder", lambda g: any(g.buildings.level(k) >= 5 for k in g.buildings.levels)),
     Achievement("keeper_15", "Seasoned Keeper", "🧙", "Reach Keeper level 15.", "", lambda g: g.keeper.level >= 15),
     Achievement("grave", "Remembered", "🪦", "Lose 10 slimes. They are remembered.", "the Mourner", lambda g: len(g.graveyard) >= 10),
-    Achievement("gentle_bronze", "A Light Hand", "🥉", "Clear a milestone floor (10, 20, 30, 40, 50) with few slimes merged or destroyed: a bronze Gentle Keeper badge.",
+    Achievement("gentle_bronze", "A Light Hand", "🥉", "Clear a milestone floor (10, 20 ... 100) with few slimes merged or destroyed: a bronze Gentle Keeper badge.",
                 "", lambda g: any(b["grade"] for b in gentle_badges(g))),
     Achievement("gentle_gold", "Gentle Keeper", "🥇", "Earn a gold Gentle Keeper badge: a milestone floor cleared with almost no slime merged or destroyed.",
                 "the Gentle", lambda g: _gentle(g, "gold")),

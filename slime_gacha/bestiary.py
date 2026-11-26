@@ -19,7 +19,7 @@ from .abilities import Ability, register_ability
 from .battle import Enemy
 from .registry import Registry
 
-MAX_FLOOR = 50
+MAX_FLOOR = 100                     # floors 51-100 lie below the Parched King's throne (the Deep Hollow)
 
 
 # ---- monster moves ---------------------------------------------------------------------------------
@@ -255,6 +255,37 @@ _boss(Boss("morrowhex", "Morrowhex the Lich Regent", "🧛", 45, "", "ruined_cry
 _boss(Boss("parched_king", "The Parched King", "🏜️", 50, "fire", "dust_throne", (12.0, 2.0, 1.6, 2.0, 1.1),
            ("smash", "rampage", "arcane_surge", "dry_curse", "summon_guards"), ("hollow", "ogre", "undead"),
            xp=12.0, purple=0.5, purple_amount=2, lore="The Dry Tide's avatar. Beat him and the Mother may wake."))
+# ---- the Deep Hollow (floors 51-100): below the throne, where the Mother Gloop dreams
+_boss(Boss("throne_wyrm", "The Throne Wyrm", "🐉", 55, "fire", "magma_shelf", (12.5, 2.0, 1.7, 1.9, 1.0),
+           ("flame_breath", "lava_spit", "wing_buffet", "regenerate"), ("dragonkin", "imp"), xp=12.0, purple=0.45,
+           lore="It coiled under the Parched King's throne and kept it warm."))
+_boss(Boss("spore_mother", "The Spore Mother", "🍄", 60, "earth", "fungal_caverns", (13.0, 1.6, 1.5, 2.1, 0.9),
+           ("spore_cloud", "needle_burst", "summon_scarabs", "mend"), ("fungus", "swamp"), xp=12.5, purple=0.45,
+           lore="Half the caverns are her, and the other half are listening."))
+_boss(Boss("tidewraith", "The Tidewraith", "🌊", 65, "water", "tidal_flats", (13.0, 1.8, 1.4, 2.2, 1.3),
+           ("tidal_wave", "siren_song", "frost_lance", "toxic_lash"), ("sea", "spirit"), xp=13.0, purple=0.45,
+           lore="A drowned queen who still keeps the tides' ledger."))
+_boss(Boss("crystal_colossus", "The Crystal Colossus", "💎", 70, "earth", "crystal_canyon", (15.0, 2.0, 2.2, 1.4, 0.7),
+           ("shard_lance", "shard_burst", "ground_pound", "war_cry"), ("golem", "giant"), xp=13.5, purple=0.5,
+           lore="Every facet remembers a slime that tried to climb it."))
+_boss(Boss("stormherald", "The Stormherald", "⛈️", 75, "wind", "storm_plains", (13.5, 2.1, 1.4, 2.3, 1.6),
+           ("chain_lightning", "thunder_charge", "storm_dive", "gale_slash"), ("aerial", "elemental"), xp=14.0, purple=0.5,
+           lore="Thunderwing's elder, and far less patient."))
+_boss(Boss("bone_choir", "The Bone Choir", "🎻", 80, "", "ruined_crypt", (14.0, 1.7, 1.6, 2.5, 1.1),
+           ("raise_dead", "hex_bolt", "shadow_bolt", "curse"), ("undead", "spirit"), xp=14.5, purple=0.5,
+           lore="A hundred skeletons singing one long, wrong note."))
+_boss(Boss("frost_tyrant", "The Frost Tyrant", "❄️", 85, "water", "glacier_hall", (15.5, 2.2, 2.0, 2.0, 0.9),
+           ("blizzard", "avalanche", "frost_nova", "regenerate"), ("giant", "troll"), xp=15.0, purple=0.55,
+           lore="The Glacial Jarl was only its herald."))
+_boss(Boss("ash_sovereign", "The Ash Sovereign", "🌋", 90, "fire", "ashlands", (16.0, 2.3, 1.8, 2.3, 1.1),
+           ("flame_breath", "fire_bomb", "rampage", "summon_guards"), ("imp", "dragonkin", "ogre"), xp=15.5, purple=0.55,
+           lore="It burned the old kingdom, then sat down in the cinders and called it home."))
+_boss(Boss("hollow_echo", "The Hollow Echo", "🪞", 95, "", "hollow_halls", (16.5, 2.3, 2.0, 2.4, 1.3),
+           ("arcane_surge", "smash", "dry_curse", "summon_guards", "war_cry"), ("hollow", "spirit"), xp=16.0, purple=0.6,
+           lore="Your own colony, played back wrong."))
+_boss(Boss("dry_mother", "The Dry Mother", "🏺", 100, "earth", "dust_throne", (19.0, 2.5, 2.2, 2.6, 1.2),
+           ("sand_blast", "dry_curse", "arcane_surge", "raise_dead", "rampage", "regenerate"), ("hollow", "undead", "scarab"),
+           xp=20.0, purple=0.7, purple_amount=3, lore="The Dry Tide's heart: the thirst that made the Hollow. Below her, the Mother Gloop."))
 
 
 def boss_for(floor: int) -> Optional[Boss]:
@@ -276,13 +307,23 @@ def player_curve(level: float) -> float:
 def difficulty(floor: float, pit: bool = False) -> float:
     """The Descent is deliberately rough: monsters reach 1.65x the power of a typical same-level slime by floor 8
     (simulated: an unequipped, un-scouted party of the right level wins ordinary floors with a loss or two and
-    loses to bosses about half the time; gear, styles, elements, synergy and intel tip it). The Pit is a fair fight."""
-    return 1.0 if pit else 1 + 0.65 * min(1.0, (floor - 1) / 7)
+    loses to bosses about half the time; gear, styles, elements, synergy and intel tip it). Below the heart of the
+    Hollow (floor 50) it grows exponentially: x DEEP_GROWTH per floor. The Pit is a fair fight."""
+    if pit:
+        return 1.0
+    return (1 + 0.65 * min(1.0, (floor - 1) / 7)) * config.DEEP_GROWTH ** max(0.0, floor - config.HEART_FLOOR)
+
+
+def floor_level(floor: float) -> float:
+    """The slime level a Descent floor is built for: the floor number down to the heart of the Hollow, then
+    DEEP_LEVEL_STEP levels a floor (floor 100 is built for level 150, past the usual cap of 100)."""
+    return floor if floor <= config.HEART_FLOOR else config.HEART_FLOOR + config.DEEP_LEVEL_STEP * (floor - config.HEART_FLOOR)
 
 
 def growth(floor: float, pit: bool = False) -> float:
-    """The depth curve g(f) = difficulty x typical slime power at level f (floor f is built for level-f slimes)."""
-    return difficulty(floor, pit) * player_curve(floor)
+    """The depth curve g(f) = difficulty x typical slime power at the floor's level (floor f is built for level-f slimes
+    down to floor 50, stronger ones below; in the Pit and the wave simulation `floor` is simply the monsters' level)."""
+    return difficulty(floor, pit) * player_curve(floor if pit else floor_level(floor))
 
 
 def unit(floor: float, pit: bool = False) -> Dict[str, float]:

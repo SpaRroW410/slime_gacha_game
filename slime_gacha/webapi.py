@@ -27,6 +27,12 @@ from .social import SocialEngine
 
 
 # ---- views -------------------------------------------------------------------------------------
+def _take_battle_end(g: Game):
+    """The last view of a fight just finished by hand, sent once so the arena can play its final blows."""
+    v, g.battle_end = getattr(g, "battle_end", None), None
+    return v
+
+
 def _train_style(g: Game, s, own: str):
     """The fighting style a slime away at the Training Grounds is working on: the spar's style, or its own field in a party drill."""
     if s.in_dungeon != "train":
@@ -65,9 +71,9 @@ def slime_view(g: Game, s) -> dict:
         hobby=routine_mod.hobby(s)[1], hatch_in=rituals_mod.next_hatch_in(g, s), coping=coping_mod.STYLE_TEXT[coping_mod.style(s)], coping_healthy=coping_mod.style(s) not in ("vent", "dwell"), burnt=meaning_mod.burned_out(s),
         meaning=({k: round(v, 2) for k, v in meaning_mod.scores(s).items()} if s.life and s.life.get("days") else None),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
-        abilities=[dict(key=k, name=get_ability(k).name, element=get_ability(k).element,
+        abilities=[dict(key=k, name=spells.class_name(get_ability(k), s.archetype), element=get_ability(k).element,
                         kind=get_ability(k).kind) for k in s.known_abilities()],
-        spells=list(s.spells), spell_stage={k: spells.mutation_stage(get_ability(k), elements.slime_mastery(s, get_ability(k).element)) for k in s.spells if get_ability(k).element},
+        spells=list(s.spells), spell_names=spells.names_for(s), spell_style=spells.name_style(s.archetype), spell_stage={k: spells.mutation_stage(get_ability(k), elements.slime_mastery(s, get_ability(k).element)) for k in s.spells if get_ability(k).element},
         attuned=list(s.attuned),
         mastery={b: elements.basic_level(s, b) for b in s.attuned},
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
@@ -88,7 +94,7 @@ def slime_view(g: Game, s) -> dict:
                    for r in g.relations.of(s.id)],
         parents=list(s.parents), parent_names=list(s.parent_names), generation=s.generation,
         merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
-        stamina=s.stamina, max_stamina=s.max_stamina, buffs=[dict(b) for b in s.buffs], potion_slots=attributes.potion_slots(s),
+        stamina=s.stamina, max_stamina=s.max_stamina, mana=s.mana, max_mana=s.max_mana, buffs=[dict(b) for b in s.buffs], potion_slots=attributes.potion_slots(s),
         star_attrs=attributes.star_attributes(s),
         next_star_attr=next(({"star": i + 2, "label": attributes.ATTR_LABEL[k], "value": v}
                              for i, (k, v) in enumerate(attributes.STAR_ATTRS.get(s.archetype, []))
@@ -249,11 +255,13 @@ def _jobs_view(g: Game) -> dict:
         kitchen=dict(pref=g.recipe_pref, pantry=dict(g.pantry), total=jobs_mod.pantry_total(g), cap=jobs_mod.pantry_cap(g),
                      hungry=len(hungry), hungry_names=[s.name for s in hungry[:8]], hungry_list=[dict(id=s.id, name=s.name, food=round(s.needs.get("food"))) for s in hungry], chef_level=(jobs_mod.level(chef, "chef") if chef else 0),
                      recipes=[dict(key=r.key, name=r.name, emoji=r.emoji, cost=r.cost, nutrition=r.nutrition, servings=r.servings,
-                                   morale=r.morale, level=r.level, stock=g.pantry.get(r.key, 0)) for r in jobs_mod.RECIPES.values()]),
+                                   morale=r.morale, level=r.level, cold=r.cold, stock=g.pantry.get(r.key, 0)) for r in jobs_mod.RECIPES.values()]),
         hospital=dict(injured=len(hurt), wounded=len(wounded), names=[s.name for s in sorted(hurt, key=lambda s: s.hp / s.max_hp)[:8]],
                       rate=round(config.HOSPITAL_HEAL[g.buildings.level("hospital") - 1] * 100), on_duty=bool(jobs_mod.holder(g, "doctor")),
                       beds=config.HOSPITAL_BEDS[g.buildings.level("hospital") - 1], used=g.ward_count()),
-        forge=dict(progress=g.forge_progress, shifts=config.CRAFT_SHIFTS, next=g.forge_next, relic_cost=dict(config.CRAFT_RELIC_COST),
+        forge=dict(progress=int(g.forge_progress), shifts=config.CRAFT_SHIFTS, next="weapon", relic_cost=dict(config.CRAFT_RELIC_COST),
+                   relic_progress=int(g.relic_progress), reliquary=g.buildings.level("reliquary"),
+                   rarity_max=g.buildings.relic_rarity_max(), rarity_levels=dict(config.RELIC_RARITY_LEVEL),
                    share=config.CRAFT_COST_SHARE),
     )
 
@@ -305,7 +313,13 @@ def snapshot(g: Game) -> dict:
         vice_challenge=(lambda c: dict(id=c["challenger"], name=g.roster[c["challenger"]].name)
                         if c and c["challenger"] in g.roster else None)(g.vice_challenge),
         vice_hunt_max=config.VICE_HUNT_MAX_PARTIES,
-        battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid")) if run else None),
+        battle=(dict(run.view(), kind=g.flow["kind"], pid=g.flow.get("pid"), camp_next=bool(g.flow.get("camp_next")),
+                     pack=[dict(key=k, n=n, label=g.pack_label(k)) for k, n in sorted((g.pack_of(g.flow.get("pid")) or {}).items())]) if run else None),
+        pack_stock=dict(food=g.wallet.get("food"), allowance=g.pack_allowance(),
+                        dishes=[dict(key="dish:" + k, n=n, label=g.pack_label("dish:" + k), nutrition=jobs_mod.RECIPES[k].nutrition)
+                                for k, n in sorted(g.pantry.items()) if n > 0 and k in jobs_mod.RECIPES],
+                        potions=[dict(key="potion:" + k, n=n, label=g.pack_label("potion:" + k)) for k, n in sorted(g.potions.items()) if n > 0]),
+        battle_end=_take_battle_end(g),
         tick=g.tick_count, day=g.day, wallet=g.wallet.to_dict(), party_size=g.parties.size,
         free_pull=dict(available=g.free_pull_available(), hours=g.hours_to_free_pull()),
         potions=dict(stock=[dict(kind=k.split(':')[0], grade=int(k.split(':')[1]), n=n) for k, n in sorted(g.potions.items())],
@@ -359,6 +373,7 @@ def snapshot(g: Game) -> dict:
             max_floor=dungeon.MAX_FLOOR, cleared=g.descent_cleared,
             pit=dict(_pit_view(g), lure_cost=config.PIT_LURE_COST, lure_xp=config.PIT_LURE_XP, lure_gear=config.PIT_LURE_GEAR),
             delves={str(pid): dict(floor=d["floor"], start=d["start"], hours=d["hours"],
+                                   pack=[dict(key=k, n=n, label=g.pack_label(k)) for k, n in sorted((d.get("pack") or {}).items())],
                                    boss_floor=g._checkpoint_after(d["floor"]), can_leave=g.can_leave(pid),
                                    knowledge=g._knowledge(d["floor"]),
                                    retreat=dict(cost=g.retreat_cost(pid), ambush=round(g.retreat_ambush_chance(pid), 2)),
@@ -372,7 +387,7 @@ def snapshot(g: Game) -> dict:
                                    members=[m.id for m in g._members_in("main", pid)])
                     for pid, d in g.delves.items()},
             session=dict(max_hours=config.SESSION_MAX_HOURS, grind_ticks=config.GRIND_TICKS, grind_runs=config.GRIND_MAX_RUNS,
-                         adv_ticks=config.ADV_TICKS, adv_runs=config.ADV_MAX_RUNS, wave_ticks=config.WAVE_TICKS, wave_max=config.WAVE_MAX_WAVES),
+                         adv_ticks=config.ADV_TICKS, adv_runs=config.ADV_MAX_RUNS, wave_ticks=config.WAVE_TICKS, wave_max=config.WAVE_MAX_WAVES, wave_level=config.WAVE_MAX_LEVEL, wave_stop=config.WAVE_STOP_HP),
             grind_depths=config.GRIND_DEPTHS, scout_hours=[config.SCOUT_MIN_HOURS, config.SCOUT_MAX_HOURS],
             scout_max_floors=config.SCOUT_MAX_FLOORS, scout_food=config.SCOUT_FOOD_PER_HOUR,
             rescue_tailwind=dict(each=config.RESCUE_TAILWIND_SPEED, max=config.RESCUE_TAILWIND_MAX),
@@ -423,6 +438,8 @@ def snapshot(g: Game) -> dict:
                       recipes=[dict(a=sorted(k)[0], b=sorted(k)[1], result=v) for k, v in elements.RECIPES.items()],
                       beats=dict(elements.BEATS)),
         library=dict(catalog=[ability_view(a) for a in g.library.catalog()],
+                     style_names={st: {a.key: spells.style_name(a, st) for a in g.library.catalog() if spells.style_name(a, st) != a.name}
+                                  for st in spells.STYLE_NAMES},
                      slots=g.library.spell_slots(), tier3=g.buildings.tier3_open(),
                      tier_mastery=config.SPELL_TIER_MASTERY, learn_cost=config.SPELL_LEARN_COST,
                      research_cost=config.RESEARCH_COST, study_cost=config.STUDY_COST),
@@ -951,7 +968,13 @@ def _council(g, a):
 @command("enter_dungeon")
 def _enter(g, a):
     start = a.get("start")
-    return _msg(g.enter_dungeon(_i(a, "pid"), int(start) if start not in (None, "") else None, bool(a.get("recall"))))
+    return _msg(g.enter_dungeon(_i(a, "pid"), int(start) if start not in (None, "") else None, bool(a.get("recall")), _pack_arg(a)))
+
+
+def _pack_arg(a):
+    """A pack chosen in the page ({key: count}), or None for the automatic one."""
+    p = a.get("pack")
+    return {str(k): int(v) for k, v in p.items() if str(v).lstrip("-").isdigit()} if isinstance(p, dict) else None
 
 
 @command("retreat")
@@ -1141,6 +1164,23 @@ def _battle_auto_turn(g, a):
     return _flow_result(g, kind, g.battle_auto_turn())
 
 
+@command("battle_end_turn")
+def _battle_end_turn(g, a):
+    kind = g.flow["kind"] if g.flow else None
+    return _flow_result(g, kind, g.battle_end_turn())
+
+
+@command("battle_give")
+def _battle_give(g, a):
+    sid = a.get("id")
+    return g.battle_give(str(a.get("key", "")), None if sid in (None, "", "all") else int(sid)), {}
+
+
+@command("battle_camp_next")
+def _battle_camp_next(g, a):
+    return _msg(g.battle_camp_next(bool(a.get("on", True))))
+
+
 @command("battle_manual")
 def _battle_manual(g, a):
     kind = g.flow["kind"] if g.flow else None
@@ -1180,7 +1220,7 @@ def _grind(g, a):
 @command("skirmish")
 def _skirmish(g, a):
     return _flow_result(g, "skirmish", g.battle(_i(a, "pid"), _i(a, "tier", 1), _manual(a), a.get("lo") and _i(a, "lo"), a.get("hi") and _i(a, "hi"), _i(a, "waves", 1),
-                                                bool(a.get("recall"))))
+                                                bool(a.get("recall")), None if a.get("stop_hp") is None else _i(a, "stop_hp"), _pack_arg(a)))
 
 
 SESSION_TITLES = dict(send_groups="Expeditions", grind="The Gloop Pit", adventure="The Wayfarer's Rift", quarry="The Starfall Quarry", explore="An expedition", skirmish="Wave simulation",
@@ -1188,7 +1228,7 @@ SESSION_TITLES = dict(send_groups="Expeditions", grind="The Gloop Pit", adventur
 
 
 # ---- session -----------------------------------------------------------------------------------------------
-BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift"}
+BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_end_turn", "battle_manual", "commander_gift", "battle_camp_next", "battle_give"}
 
 
 class Session:

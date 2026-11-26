@@ -14,7 +14,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
+from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, pools, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from . import achievements, passives, places, story, sanity, memory, meaning, mind, grief, coping, voice, routine, rituals, appraisal
 from .buildings import BUILDINGS, BuildingManager
@@ -101,7 +101,8 @@ class Game:
         self.shadow_tick: Optional[int] = None         # when the Keeper last removed a troublemaker (the Keeper's shadow)
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
         self.best_floor = 0                            # deepest floor ever cleared by anyone
-        self.descent_cleared = False                   # the final boss (floor 50) has fallen
+        self.descent_cleared = False                   # the heart of the Hollow (floor 50, the Parched King) has fallen
+        self.deep_cleared = False                      # ... and the bottom of the Deep Hollow (floor 100, the Dry Mother)
         self.bounties: set = set()                     # boss floors whose purple-gel bounty is already paid
         self.sacrifices = 0                            # slimes merged away, destroyed in the chamber or fused into a relic, ever
         self.sacrifices_tracked = True                 # False for a colony saved before the count existed: no Gentle Keeper badges
@@ -130,7 +131,9 @@ class Game:
         self.ward: List[int] = []                      # slimes admitted to the Hospital ward (they are 'resting', in the ward)
         self.pantry: Dict[str, int] = {}               # cooked servings by recipe (jobs.py: chef and kitchen)
         self.recipe_pref = "auto"                      # the recipe the chef cooks ("auto" = the best one)
-        self.forge_progress, self.forge_next = 0, "weapon"   # the blacksmith's slow forging (jobs._craft)
+        self.forge_progress, self.forge_next = 0, "weapon"   # the blacksmith's slow forging of gear (jobs._craft)
+        self.relic_progress = 0.0                              # the relicsmith's slow forging of relics (jobs._relic_craft)
+        self.wave_packs: Dict[int, Dict[str, int]] = {}         # what a party on a wave trip carries (returned when it ends)
         self.stranded: List[dict] = []                 # overdue scouts waiting for a rescue party (see scout / rescue)
         self.next_stranded = 1
         self._owed = 0.0                               # hours the current session still has to pay (live mode)
@@ -144,6 +147,8 @@ class Game:
         self.mood_rng = random.Random(((seed or 0) ^ 0xE70) & 0xFFFFFFFF)   # feelings never disturb the main dice
         self.vault_peak = 0                            # relics: slimes leave 34% of the most ever held
         self.gear_peak: Dict[str, int] = {}
+        self.battle_end: Optional[dict] = None           # the last moment of a fight led by hand, for the arena's finale (never saved)
+        self.stock_peak: Dict[str, int] = {}             # materials and gel: the most ever held (autonomy keeps 34% of it)
         self.forage = False                            # slimes with no party and nothing to do go foraging (a new web/CLI game turns it on)
         self.autonomy = True                           # slimes may use up to 66% of the stock by themselves
         self.vice: Optional[int] = None                # id of the Vice Keeper, if one is appointed
@@ -922,6 +927,7 @@ class Game:
         for s in self.slimes():
             lull = 1 + 0.2 * self.keeper.rank("lullaby") if s.state in ("sleeping", "resting") else 1.0
             s.stamina_frac = min(1.0, s.stamina_frac + attributes.hourly_regen(s) * lull * places.dilation(s.in_dungeon))   # away: dungeon hours
+            s.mana_frac = min(1.0, s.mana_frac + attributes.hourly_regen(s) * lull * places.dilation(s.in_dungeon))   # mana too
             if s.buffs:
                 for b in s.buffs:
                     b["hours"] -= 1
@@ -1218,6 +1224,9 @@ class Game:
                 raise InvalidAction(f"{x.name} is away ({x.in_dungeon or x.state}); wait until they are home.")
         rep = self.battles.duel(v, s)
         self.vice_challenge = None
+        if rep.winner_slime is None:                          # a stalemate: the challenge fails, the post stays
+            self.social.shift_morale(s, -2)
+            return list(rep.log[-3:]) + [f"🤝 A draw: {v.name} keeps the post of Vice Keeper."]
         winner = rep.winner_slime
         loser = s if winner is v else v
         self.social.shift_morale(winner, 8)
@@ -1536,15 +1545,16 @@ class Game:
         rep = self.battles.team_spar(team_a, team_b, syn_a, syn_b)
         res.reports.append(rep)
         names = (self.parties.get(pid_a).name, self.parties.get(pid_b).name)
-        winner = 0 if rep.winner == "party" else 1
-        res.summary.append(f"{d.emoji} {names[winner]} beat {names[1 - winner]} in {rep.rounds} rounds")
+        winner = 0 if rep.winner == "party" else 1 if rep.winner == "foes" else None
+        res.summary.append(f"{d.emoji} {names[winner]} beat {names[1 - winner]} in {rep.rounds} rounds" if winner is not None
+                           else f"{d.emoji} {names[0]} and {names[1]} fight to a draw after {rep.rounds} rounds")
         for i, team in enumerate((team_a, team_b)):
             before = self.social.synergy(team)
             for x in range(len(team)):                    # teamwork: every pair in the party grows closer
                 for y in range(x + 1, len(team)):
                     self.social.add_bond(team[x], team[y], config.SPAR_PARTY_BOND)
             for s in team:
-                self._spar_reward(res, s, d, i == winner, cap)
+                self._spar_reward(res, s, d, None if winner is None else i == winner, cap)
             res.summary.append(f"   {names[i]}'s synergy {before - 1:+.1%} -> {self.social.synergy(team) - 1:+.1%}")
         events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train", bld.PARTY_ARENA, d.key)
         res.summary.extend("   " + e for e in events if "died" in e)
@@ -1591,11 +1601,16 @@ class Game:
         for a, b in pairs:
             rep = self.battles.duel(a, b)
             res.reports.append(rep)
-            win, lose = (a, b) if rep.winner == "party" else (b, a)
-            res.summary.append(f"{d.emoji} {win.name} beat {lose.name} in {rep.rounds} rounds "
-                               f"({lose.name} left at {lose.hp} HP)")
-            self._spar_reward(res, win, d, True, cap)
-            self._spar_reward(res, lose, d, False, cap)
+            if rep.winner is None:                            # a stalemate (two healers ...): a draw, both learn a little
+                res.summary.append(f"{d.emoji} {a.name} and {b.name} fight to a draw after {rep.rounds} rounds")
+                self._spar_reward(res, a, d, None, cap)
+                self._spar_reward(res, b, d, None, cap)
+            else:
+                win, lose = (a, b) if rep.winner == "party" else (b, a)
+                res.summary.append(f"{d.emoji} {win.name} beat {lose.name} in {rep.rounds} rounds "
+                                   f"({lose.name} left at {lose.hp} HP)")
+                self._spar_reward(res, win, d, True, cap)
+                self._spar_reward(res, lose, d, False, cap)
             self.social.add_bond(a, b, config.SPAR_BOND)
         events = self._occupy([x for x in everyone if x.id in self.roster], config.SPAR_TICKS, "train", arena, d.key)
         res.summary.extend("   " + e for e in events if "died" in e)
@@ -2103,13 +2118,15 @@ class Game:
 
     # ---- battle -----------------------------------------------------------------
     def battle(self, pid: int, tier: int = 1, manual: bool = False, lo: Optional[int] = None, hi: Optional[int] = None,
-               waves: int = 1, recall: bool = False):
+               waves: int = 1, recall: bool = False, stop_hp: Optional[int] = None, pack: Optional[Dict[str, int]] = None):
         """The wave simulation: a full party fights `waves` waves of monsters (one per party slot) as a drill. Nobody dies
-        and there is no loot. Monsters are of a level between `lo` and `hi` (a floor-equivalent, 1-50); the XP is fixed by
+        and there is no loot. Monsters are of a level between `lo` and `hi` (1-WAVE_MAX_LEVEL); the XP is fixed by
         the monsters and their level (no randomness, no rarity factor). Without lo/hi it uses the monsters of `tier` (4 is a
         boss). It also trains battle proficiency and teamwork. With manual=True it pauses for orders (returns None until
-        it ends)."""
-        return self._play(self._skirmish_gen(pid, tier, lo, hi, waves, recall), "skirmish", manual, pid)
+        it ends). A long trip (up to WAVE_MAX_WAVES) comes home early once a member ends a wave below `stop_hp`% of its HP;
+        only the waves the slimes fought on their own cost time - those you led by hand need no waiting."""
+        stop = config.WAVE_STOP_HP if stop_hp is None else max(0, min(95, int(stop_hp)))
+        return self._play(self._skirmish_gen(pid, tier, lo, hi, waves, recall, stop, pack), "skirmish", manual, pid)
 
     def wave_enemies(self, tier: int, lo: Optional[int], hi: Optional[int]):
         if lo is None and hi is None:
@@ -2124,25 +2141,58 @@ class Game:
         return out
 
     def _skirmish_gen(self, pid: int, tier: int, lo: Optional[int] = None, hi: Optional[int] = None, waves: int = 1,
-                      recall: bool = False):
+                      recall: bool = False, stop_hp: int = 0, pack: Optional[Dict[str, int]] = None):
         self._require_full(pid)
         waves = max(1, min(config.WAVE_MAX_WAVES, int(waves)))
         party = self._ready_party(pid, recall)
+        self.wave_packs[pid] = self._take_pack(pack, len(party), config.WAVE_TICKS * waves)
         total_xp, won, log = 0, 0, []
         report = None
         self._owed = 0.0
         self._set_flag(party, "wave")
         try:
-            report = yield from self._wave_rounds(party, tier, lo, hi, waves, total_xp, won, log)
+            report = yield from self._wave_rounds(party, tier, lo, hi, waves, total_xp, won, log, stop_hp)
         finally:
             self._release(party)
         return report
 
-    def _wave_rounds(self, party, tier, lo, hi, waves, total_xp, won, log):
+    def _wave_rounds(self, party, tier, lo, hi, waves, total_xp, won, log, stop_hp: int = 0):
+        """The waves of one trip. A trip lives like a farming session: the waves the slimes fight on their own cost their
+        hours (needs included), hungry members eat (a cooked dish, else a ration from the packed food: at most 66% of the
+        stores), and the party camps when tired, hurt or winded. It comes home early below the health line, when the rations
+        are gone and someone is hungry, or when someone is too worn out to go on. Waves led by hand cost no time at all."""
         report = None
+        auto_waves, home_early, camped = 0, "", 0
+        pid = (self.flow or {}).get("pid")
+        pack = self.wave_packs.get(pid, {})
+        used = [0]
         for w in range(waves):
+            members = [s for s in party if s.id in self.roster]
+            camp_now = bool(self.flow and self.flow.pop("camp_next", False))   # asked for by hand (battle_camp_next)
+            if w and (not self._by_hand() or camp_now):              # between waves: eat and drink from the pack, and rest
+                used[0] += self._pack_auto(pack, members)
+                if camp_now or self._needs_camp(members):
+                    h = self._camp(members, 24)
+                    camped += h
+                    used[0] += self._pack_auto(pack, members)
+                hungry = [s.name for s in members if s.needs.get("food") < config.AUTO_EAT_BELOW / 2]
+                if hungry and not any(k == "food" or k.startswith("dish:") for k in pack):
+                    home_early = (f"🍖 The pack has no food left and {', '.join(hungry[:3])} {'is' if len(hungry) == 1 else 'are'} hungry: "
+                                  f"the party comes home after wave {w} of {waves}.")
+                    break
+                if (why := self._field_unfit(members)):
+                    home_early = f"🏠 {why}: the party comes home after wave {w} of {waves}."
+                    break
+                for s in members:
+                    if s.state in ("sleeping", "resting"):
+                        s.state = "idle"
             enemies = self.wave_enemies(tier, lo, hi)
             report = yield from self._battle_gen(party, enemies, permadeath=False, split_xp=True, xp_mult=config.WAVE_XP_MULT, loot=False)
+            if not self._by_hand():                                 # a wave you led yourself costs no waiting
+                auto_waves += 1
+                ev = self._spend(config.WAVE_TICKS, "wave")
+                self._field_hours([s for s in party if s.id in self.roster], config.WAVE_TICKS, False, ev)
+                self.journal.extend(ev)
             self._after_battle(party, report, scale=0.5, wear=False)     # morale and feelings react; gear is not worn by a drill
             total_xp += report.xp
             log.extend([f"🌊 Wave {w + 1}/{waves}"] + report.log if waves > 1 else report.log)
@@ -2152,6 +2202,13 @@ class Game:
             if not report.victory:
                 break
             won += 1
+            low = [s for s in party if s.id in self.roster and s.hp < s.max_hp * stop_hp / 100]
+            if stop_hp and low and w + 1 < waves:
+                home_early = (f"🏠 {', '.join(s.name for s in low[:3])} {'is' if len(low) == 1 else 'are'} below {stop_hp}% health: "
+                              f"the party comes home after wave {w + 1} of {waves}.")
+                break
+        if home_early:
+            log.append(home_early)
         report.log = log
         report.xp = total_xp
         events: List[str] = []
@@ -2165,7 +2222,13 @@ class Game:
             for b in party[i + 1:]:
                 self.social.add_bond(a, b, config.WAVE_BOND * won)
         report.log.append(f"🧪 Simulation over ({won}/{waves} waves won): nobody is hurt for real - {total_xp} XP and battle proficiency gained.")
-        events.extend(self._spend(config.WAVE_TICKS * waves, "wave"))
+        if used[0] or camped:
+            report.log.append(f"🎒 On the way: {used[0]} item{'s' if used[0] != 1 else ''} used from the pack"
+                              + (f", {camped}h camped to rest" if camped else "") + ".")
+        if (back := self._return_pack(self.wave_packs.pop(pid, None))):
+            report.log.append(back)
+        if not auto_waves and won:
+            events.append("   ⏱ You led these waves yourself: no waiting, the party is home.")
         report.log.extend(events)
         self.journal.extend(events)
         return report
@@ -2216,6 +2279,8 @@ class Game:
             yield run
         if flow is not None:
             flow["run"] = None
+            if run.manual:                                   # a fight led by hand: the arena shows how it ended (display only)
+                self.battle_end = dict(run.view(), kind=flow["kind"], pid=flow.get("pid"), victory=bool(run.report and run.report.victory))
         return run.report
 
     def _run_battle(self, party, enemies, intel: float = 1.0, **opts) -> BattleReport:
@@ -2265,6 +2330,14 @@ class Game:
             raise InvalidAction(str(e))
         return self._pump()
 
+    def battle_end_turn(self):
+        """The slime waiting for orders stops and saves its remaining action points."""
+        run = self.battle_run()
+        if run is None or run.waiting is None:
+            raise InvalidAction("No slime is waiting for orders.")
+        run.end_turn()
+        return self._pump()
+
     def battle_auto_turn(self):
         run = self.battle_run()
         if run is None or run.waiting is None:
@@ -2282,6 +2355,208 @@ class Game:
         if run is not None:
             run.set_manual(manual)
         return self._pump()
+
+
+    # ---- trip packs: what a party carries (food, cooked dishes, potions), chosen before it leaves ---------------------------
+    # Keys: "food" (a ration of raw food), "dish:<recipe>" (a cooked dish; the Cold Storage sets how many travel) and
+    # "potion:<kind>:<grade>". Packed items leave the stores at departure; what is left comes home with the party (and is lost
+    # with it). Inside, nothing is sent from the colony: automatic fights eat and drink from the pack, best first; in a fight
+    # you lead you hand items out yourself.
+    def pack_allowance(self) -> int:
+        """Cooked dishes one trip may carry (the Cold Storage keeps them fresh)."""
+        return config.COLD_PACK_PER_LEVEL * self.buildings.level("cold_storage")
+
+    def auto_pack(self, members: int, hours: float) -> Dict[str, int]:
+        """A sensible pack: the best dishes first (as many as may travel), raw rations for the rest of the meals the trip
+        needs (at most 66% of the food stores), and a stamina potion per member while 66% of them is left, highest grade first."""
+        meals = max(members, math.ceil(members * hours * config.NEED_DECAY["food"] / config.FOOD_NUTRITION))
+        out: Dict[str, int] = {}
+        room = self.pack_allowance()
+        for r in sorted(jobs.RECIPES.values(), key=lambda r: -r.nutrition):
+            n = min(self.pantry.get(r.key, 0), room, meals)
+            if n > 0:
+                out["dish:" + r.key] = n
+                room -= n
+                meals -= n
+        food = min(meals, int(self.wallet.get("food") * self.share))
+        if food > 0:
+            out["food"] = food
+        left = members
+        for k in sorted((k for k in self.potions if k.startswith("stamina:")), key=lambda k: -int(k.split(":")[1])):
+            n = min(left, int(self.potions[k] * self.share))
+            if n > 0:
+                out["potion:" + k] = n
+                left -= n
+        return out
+
+    def _take_pack(self, items: Optional[Dict[str, int]], members: int, hours: float) -> Dict[str, int]:
+        """Take the chosen items out of the stores (as much as there is; dishes up to the Cold Storage allowance)."""
+        items = self.auto_pack(members, hours) if items is None else items
+        out: Dict[str, int] = {}
+        room = self.pack_allowance()
+        for k, n in items.items():
+            try:
+                n = int(n)
+            except (TypeError, ValueError):
+                continue
+            if n <= 0:
+                continue
+            if k == "food":
+                n = min(n, self.wallet.get("food"))
+                if n > 0:
+                    self.wallet.spend("food", n)
+            elif k.startswith("dish:"):
+                n = min(n, self.pantry.get(k[5:], 0), room)
+                room -= max(0, n)
+                if n > 0:
+                    self.pantry[k[5:]] -= n
+                    if self.pantry[k[5:]] <= 0:
+                        del self.pantry[k[5:]]
+            elif k.startswith("potion:"):
+                n = min(n, self.potions.get(k[7:], 0))
+                if n > 0:
+                    self.potions[k[7:]] -= n
+                    if self.potions[k[7:]] <= 0:
+                        del self.potions[k[7:]]
+            else:
+                continue
+            if n > 0:
+                out[k] = out.get(k, 0) + n
+        return out
+
+    def _return_pack(self, pack: Optional[Dict[str, int]]) -> str:
+        """What is left of a pack goes back to the stores."""
+        back = []
+        for k, n in (pack or {}).items():
+            if n <= 0:
+                continue
+            if k == "food":
+                self.wallet.add("food", n)
+            elif k.startswith("dish:"):
+                self.pantry[k[5:]] = self.pantry.get(k[5:], 0) + n
+            elif k.startswith("potion:"):
+                self.potions[k[7:]] = self.potions.get(k[7:], 0) + n
+            back.append(f"{n} {self.pack_label(k)}")
+        return f"🎒 Back in the stores from the pack: {', '.join(back)}." if back else ""
+
+    @staticmethod
+    def pack_label(k: str) -> str:
+        if k == "food":
+            return "🍖 Ration"
+        if k.startswith("dish:"):
+            r = jobs.RECIPES.get(k[5:])
+            return f"{r.emoji} {r.name}" if r else k
+        if k.startswith("potion:"):
+            kind, g = k[7:].split(":")
+            p = potions.KINDS.get(kind)
+            return f"{p.emoji if p else '🧪'} {p.name if p else kind} G{g}"
+        return k
+
+    def pack_of(self, pid: Optional[int]) -> Optional[Dict[str, int]]:
+        """The pack a party carries now (inside the Descent, or on a wave trip), or None."""
+        if pid in self.delves:
+            return self.delves[pid].setdefault("pack", {})
+        return self.wave_packs.get(pid)
+
+    def _use_pack_item(self, pack: Dict[str, int], s: Slime, k: str) -> str:
+        """One item from the pack for one slime."""
+        pack[k] -= 1
+        if pack[k] <= 0:
+            del pack[k]
+        if k == "food":
+            s.needs.add("food", config.FOOD_NUTRITION)
+            return f"🍖 {s.name} eats a ration from the pack."
+        if k.startswith("dish:"):
+            r = jobs.RECIPES[k[5:]]
+            s.needs.add("food", r.nutrition)
+            if r.morale:
+                self.social.shift_morale(s, r.morale)
+                emotions.feel(s, "joy", r.morale)
+            return f"{r.emoji} {s.name} eats a {r.name} from the pack."
+        kind, g = k[7:].split(":")
+        msg = self._drink(s, kind, int(g))
+        run = self.battle_run()
+        for c in (run.everyone if run else []):         # in this very fight: stamina is a second wind, arcane refills mana,
+            if c.source is s:                            # renewal refills nature
+                run.refresh(s)
+                pool = {"stamina": "stamina", "arcane": "mana", "renewal": "nature"}.get(kind)
+                if pool and getattr(c, pool + "_max"):
+                    setattr(c, pool, getattr(c, pool + "_max"))
+        return msg
+
+    def _pack_auto(self, pack: Optional[Dict[str, int]], members, out: Optional[List[str]] = None) -> int:
+        """Automatic upkeep from a pack: the hungry eat the most nourishing food first, the tired drink the highest-grade
+        stamina potion. Returns how many items were used."""
+        if not pack:
+            return 0
+        used = 0
+        for s in members:
+            n = 0
+            while s.id in self.roster and s.needs.get("food") < config.AUTO_EAT_BELOW and n < 3:
+                foods = [k for k in pack if k == "food" or k.startswith("dish:")]
+                if not foods:
+                    break
+                k = max(foods, key=lambda k: config.FOOD_NUTRITION if k == "food" else jobs.RECIPES[k[5:]].nutrition)
+                line = self._use_pack_item(pack, s, k)
+                if out is not None:
+                    out.append(line)
+                n += 1
+                used += 1
+            for kind, low in (("stamina", s.needs.get("energy") < config.FIGHT_WARN_BELOW),
+                              ("arcane", s.mana_frac < config.STAMINA_CAMP_AT)):     # the tired drink stamina, the drained arcane
+                tonics = [k for k in pack if k.startswith(f"potion:{kind}:")]
+                if s.id in self.roster and low and tonics and not any(b["kind"] == kind for b in s.buffs):
+                    line = self._use_pack_item(pack, s, max(tonics, key=lambda k: int(k.split(":")[-1])))
+                    if out is not None:
+                        out.append(line)
+                    used += 1
+        return used
+
+    def battle_give(self, key: str, sid: Optional[int] = None) -> List[str]:
+        """In a fight you lead: hand an item from the party's pack to one slime, or to everyone who needs it (food to the
+        hungry, stamina potions to the tired, vigor to the hurt, other potions to all). Costs no turn; nothing comes from
+        the colony's stores."""
+        party = self._fight_party()
+        if sid is not None:
+            party = [s for s in party if s.id == sid]
+            if not party:
+                raise InvalidAction("That slime is not in this fight.")
+        out = []
+        for s in party:
+            p = self.parties.party_of(s.id)
+            pack = self.pack_of(p.id if p else None) or {}
+            if pack.get(key, 0) <= 0:
+                continue
+            if sid is None:
+                need = (s.needs.get("food") < config.HUNGRY_BELOW if key == "food" or key.startswith("dish:")
+                        else s.needs.get("energy") < config.HUNGRY_BELOW if key.startswith("potion:stamina:")
+                        else s.hp < s.max_hp * 0.6 if key.startswith("potion:vigor:") else True)
+                if not need:
+                    continue
+            if key.startswith("potion:"):
+                kind = key.split(":")[1]
+                if not any(b["kind"] == kind for b in s.buffs) and len(s.buffs) >= attributes.potion_slots(s):
+                    out.append(f"{s.name} cannot take another potion now ({len(s.buffs)}/{attributes.potion_slots(s)}).")
+                    continue
+            out.append(self._use_pack_item(pack, s, key))
+        if not out:
+            raise InvalidAction("Nobody needs that (or the pack has none left).")
+        return out
+
+    # ---- supplies in a fight led by hand ---------------------------------------------------------------------------------
+    def _fight_party(self) -> List[Slime]:
+        run = self.battle_run()
+        if run is None:
+            raise InvalidAction("There is no fight going on.")
+        return [s for s in run.party if s.id in self.roster and s.alive]
+
+    def battle_camp_next(self, on: bool) -> str:
+        """Ask the party to camp before its next wave (wave simulation), even when you lead it by hand; it rests until the
+        hurt are mended and the tired have slept, which costs time."""
+        if self.flow is None:
+            raise InvalidAction("There is no fight going on.")
+        self.flow["camp_next"] = bool(on)
+        return "⛺ The party will camp before the next wave." if on else "⛺ No camp before the next wave."
 
     def abandon_battle(self) -> None:
         """Drop a battle nobody will finish (a session restore): no HP was written, so nothing happened."""
@@ -2401,10 +2676,20 @@ class Game:
             raise InvalidAction(f"{s.name} is away ({s.in_dungeon or s.state}).")
         return self.inventory.unequip(s, slot)
 
+    @staticmethod
+    def floor_gear_tier(floor: int) -> int:
+        """The tier of gear a Descent floor drops: 1-3 down to floor 50 (as before), tier 4 in the upper Deep Hollow
+        (51-75) and tier 5 at the bottom (76-100)."""
+        if floor > config.HEART_FLOOR + 25:
+            return 5
+        if floor > config.HEART_FLOOR:
+            return 4
+        return min(3, 1 + (floor - 1) // config.MAIN_BOSS_EVERY)
+
     def _gear_drop(self, tier: int, chance: float, log: List[str], guaranteed: bool = False) -> None:
         if not guaranteed and self.rng.random() >= chance:
             return
-        pool = [g for g in equipment.GEAR if g.tier == max(1, min(3, tier))]
+        pool = [g for g in equipment.GEAR if g.tier == max(1, min(equipment.MAX_TIER, tier))]
         if pool:
             g = self.rng.choice(pool)
             self.inventory.add(g.key)
@@ -2799,16 +3084,17 @@ class Game:
             if best and best_sc > cur_score * 1.25 and (cur is not None or self._relic_free()):
                 log.append("🎒 " + self.equip_item(s.id, best.uid).splitlines()[0])
                 continue
-            if not cur and not legacy:                          # plain armory gear for an empty slot
-                keys = [k for k in self.inventory.items if equipment.GEAR.get(k).slot == slot and self._gear_free(k)]
-                if keys:
-                    k = max(keys, key=lambda k: sum(equipment.GEAR.get(k).stats.values()))
+            worth = lambda k: sum(equipment.GEAR.get(k).stats.values())
+            keys = [k for k in self.inventory.items if self.inventory.items[k] > 0 and equipment.GEAR.get(k).slot == slot and self._gear_free(k)]
+            if keys:                                            # plain armory gear: fill the slot or take clearly better gear
+                k = max(keys, key=worth)
+                if not legacy or worth(k) > worth(legacy) * 1.15:
                     log.append("🎒 " + self.inventory.equip(s, k))
 
     def brew_for_post(self, brewer: Slime) -> List[str]:
         """The appointed brewer's shift: brew the basic or mixed potion the colony is shortest of, within its means
         (at most 66% of each ingredient stock, like slimes helping themselves)."""
-        lab = self.buildings.level("alchemy")
+        lab = min(5, self.buildings.level("alchemy"))
         wanted = []
         for s in self.slimes():
             wanted += list(self._LIKES.get(s.archetype, ()))
@@ -2826,7 +3112,7 @@ class Game:
     def _auto_brew(self, log: List[str]) -> None:
         """Once a day a free slime (magical ones first) brews a potion the colony is short of, spending at most 66%
         of each ingredient stock."""
-        lab = self.buildings.level("alchemy")
+        lab = min(5, self.buildings.level("alchemy"))
         free = [s for s in self.slimes() if not s.busy and s.state == "idle" and s.hp > 0]
         if not free:
             return
@@ -2857,6 +3143,41 @@ class Game:
                 if self._auto_drink(s, kind, log):
                     n += 1
 
+    def _stock_free(self, cost: Dict[str, int]) -> bool:
+        """May the slimes spend this by themselves? Only while at least 34% of the most ever held of each stock remains
+        afterwards (the same rule as potions, relics and gear)."""
+        for k, v in cost.items():
+            have = self.wallet.get(k)
+            self.stock_peak[k] = peak = max(self.stock_peak.get(k, 0), have)
+            if have - v < math.ceil(peak * (1 - self.share)):
+                return False
+        return True
+
+    def _auto_merge_gear(self, log: List[str]) -> None:
+        """Spare gear is merged up a tier when the three pieces are within 66% of the spares of that kind (gear in use is
+        never touched); the new piece keeps the old one's leaning (strength, magic, speed ...)."""
+        n = config.GEAR_MERGE_COUNT
+        for key in sorted(self.inventory.items, key=lambda k: equipment.GEAR.get(k).tier):
+            have = self.inventory.items.get(key, 0)
+            g = equipment.GEAR.get(key)
+            ups = [u for u in equipment.GEAR if u.slot == g.slot and u.tier == g.tier + 1]
+            if not ups or have < n or n > have * self.share:
+                continue
+            up = max(ups, key=lambda u: (len(set(u.stats) & set(g.stats)), sum(u.stats.get(k, 0) for k in g.stats)))
+            log.append("🛠️ The slimes merge spare gear by themselves: " + self.merge_gear(key, up.key))
+
+    def _auto_level_relics(self, s: Slime, log: List[str]) -> None:
+        """A slime levels the relics it wears (one level an hour) with materials it may take: 66% of the stocks."""
+        for it in list(s.items.values()):
+            if it.level >= config.ITEM_MAX_LEVEL or it.broken:
+                continue
+            cost = it.level_cost()
+            if self._stock_free(cost):
+                self.wallet.spend_many(cost)
+                it.level += 1
+                log.append(f"⬆ {s.name} levels {it.label()} by itself.")
+                return
+
     def _autonomy_tick(self, log: List[str]) -> None:
         """Hourly: tired slimes drink stamina potions, hurt ones vigor, worn gear gets mended - all unasked."""
         if not self.autonomy:
@@ -2866,12 +3187,16 @@ class Game:
                 continue
             if s.stamina_frac < config.AUTONOMY_STAMINA_BELOW:
                 self._auto_drink(s, "stamina", log)
+            if s.mana_frac < config.AUTONOMY_STAMINA_BELOW and pools.MANA_BASE.get(s.archetype, 0) >= 100:
+                self._auto_drink(s, "arcane", log)                   # a drained caster drinks an arcane potion
             if s.hp < s.max_hp * config.AUTONOMY_HP_BELOW:
                 self._auto_drink(s, "vigor", log)
             self._auto_repair(s, log)
             self._auto_equip(s, log)
+            self._auto_level_relics(s, log)
         if self.tick_count % 24 == config.AUTONOMY_BREW_HOUR:
             self._auto_brew(log)
+            self._auto_merge_gear(log)
 
     def _auto_repair(self, s: Slime, log: List[str]) -> None:
         for it in list(s.items.values()):
@@ -2906,7 +3231,7 @@ class Game:
 
     def set_autonomy(self, on: bool) -> str:
         self.autonomy = bool(on)
-        return "Slimes will help themselves to up to 66% of potions, relics, gear and materials - and brew on their own." if on else \
+        return "Slimes will help themselves to up to 66% of potions, relics, gear and materials: they dress, level their relics, merge spare gear and brew on their own." if on else \
             "Slimes will wait for your orders."
 
     def potion_count(self, kind: str, grade: int) -> int:
@@ -2923,13 +3248,13 @@ class Game:
         if not 1 <= grade <= 5:
             raise InvalidAction("Grade must be 1-5.")
         lab = self.buildings.level("alchemy")
-        if grade > lab:
-            raise InvalidAction(f"The Alchemy Lab is level {lab}: it brews up to grade {lab}.")
+        if grade > min(lab, 5):
+            raise InvalidAction(f"The Alchemy Lab is level {lab}: it brews up to grade {min(lab, 5)}.")
         c = potions.cost(kind, grade)
         self.wallet.spend_many(c)
         chance = potions.success_chance(s, grade, lab, kind)
         ok = self.rng.random() < chance
-        crit = ok and grade < 5 and grade + 1 <= lab and self.rng.random() < config.BREW_CRIT
+        crit = ok and grade < 5 and grade + 1 <= min(lab, 5) and self.rng.random() < config.BREW_CRIT
         if wait:
             self._occupy([s], potions.brew_hours(grade), "lab")
         pk = potions.KINDS[kind]
@@ -2969,6 +3294,9 @@ class Game:
         pk = potions.KINDS[kind]
         if kind == "stamina":
             s.stamina_frac = min(1.0, s.stamina_frac + 0.25)
+            s.needs.add("energy", config.STAMINA_POTION_ENERGY * grade)      # it wakes a tired slime up too
+        elif kind == "arcane":
+            s.mana_frac = min(1.0, s.mana_frac + config.ARCANE_MANA * grade)  # it refills mana
         elif kind == "vigor":
             s.hp += int(s.max_hp * potions.bonus(grade) / (1 + potions.bonus(grade)))
         return (f"{pk.emoji} {s.name} drinks a grade {grade} {pk.name}: {pk.effect} "
@@ -3090,7 +3418,7 @@ class Game:
             raise InvalidAction("Only a level-10 relic can ascend a star.")
         if it.stars >= config.MAX_STARS:
             raise InvalidAction("Already five stars - try raising its rarity.")
-        if self.buildings.level("armory") < it.stars:
+        if self.buildings.level("reliquary") < it.stars:
             raise InvalidAction(f"The Armory must be level {it.stars} to forge {it.stars + 1} stars.")
         self.wallet.spend_many(it.star_cost())
         it.stars += 1
@@ -3107,8 +3435,9 @@ class Game:
             raise InvalidAction("It is already legendary.")
         if it.stars < config.MAX_STARS or it.level < config.ITEM_MAX_LEVEL:
             raise InvalidAction("Rarity can be raised only at 5 stars and level 10.")
-        if self.buildings.level("armory") < 5:
-            raise InvalidAction("The Armory must be level 5 to raise a relic's rarity.")
+        need = config.RELIC_RARITY_LEVEL.get(up, 10)
+        if self.buildings.level("reliquary") < need:
+            raise InvalidAction(f"The Reliquary must be level {need} to raise a relic to {up} (it is {self.buildings.level('reliquary')}).")
         self.wallet.spend_many(it.rarity_cost())
         it.rarity = up
         if items_mod.wants_title(it):
@@ -3428,7 +3757,8 @@ class Game:
         return [1] + [c + 1 for c in range(config.MAIN_BOSS_EVERY, low + 1, config.MAIN_BOSS_EVERY)
                       if c < dungeon.MAX_FLOOR]
 
-    def enter_dungeon(self, pid: int, start: Optional[int] = None, recall: bool = False) -> str:
+    def enter_dungeon(self, pid: int, start: Optional[int] = None, recall: bool = False,
+                      pack: Optional[Dict[str, int]] = None) -> str:
         """Enter the Hollow Descent at `start` (default: as deep as every member's progress allows).
         Inside, you may only leave at a checkpoint (after a boss floor)."""
         if pid in self.delves:
@@ -3443,8 +3773,10 @@ class Game:
         pre: List[str] = []
         self._autonomy_prepare(party, pre)
         self._set_flag(party, "main")
-        self.delves[pid] = dict(floor=start, start=start, hours=0)
+        self.delves[pid] = dict(floor=start, start=start, hours=0, pack=self._take_pack(pack, len(party), 24))
         nxt = self._checkpoint_after(start)
+        carried = self.delves[pid]["pack"]
+        pre.append("🎒 The pack: " + (", ".join(f"{n} {self.pack_label(k)}" for k, n in carried.items()) or "nothing at all") + ".")
         return (f"🕳 {self.parties.get(pid).name} enters the Hollow Descent at floor {start} "
                 f"(knowledge {self._knowledge(start):.0f}%). The next exit is after the boss on floor {nxt}."
                 + "".join("\n   " + x for x in pre))
@@ -3468,10 +3800,11 @@ class Game:
                                 f"falls - or the whole party does.")
         party = self._members_in("main", pid)
         self._clear_flag(party)
+        back = self._return_pack(d.get("pack"))
         del self.delves[pid]
         for s in party:
             self.social.shift_morale(s, 2)
-        return f"{self.parties.get(pid).name} climbs out of the Hollow Descent after {d['hours']}h."
+        return f"{self.parties.get(pid).name} climbs out of the Hollow Descent after {d['hours']}h." + (f"\n{back}" if back else "")
 
     def retreat_cost(self, pid: int) -> int:
         """Purple gel an emergency retreat costs: a base fee plus one per segment of depth."""
@@ -3505,6 +3838,8 @@ class Game:
             s.needs.add("esteem", -10)
             s.stamina_frac = min(s.stamina_frac, 0.3)
         self._clear_flag(survivors)
+        if survivors and (back := self._return_pack(d.get("pack"))):
+            out.append("   " + back)
         self.delves.pop(pid, None)
         if survivors:
             out.append(f"   {len(survivors)} slime(s) stumble out, shaken and exhausted.")
@@ -3599,6 +3934,9 @@ class Game:
         info = dungeon.floor_info(self.dungeon_seed, floor, self.parties.size)
         enemies = info.enemies
         delver_share = sum(outlook.has(s, "delve") for s in party) / max(1, len(party))
+        if not self._by_hand():                                # an automatic floor: the hungry eat from their pack, the tired drink
+            for q in pids:
+                self._pack_auto(self.delves[q].get("pack"), self._members_in("main", q))
         boons = [tuple(b) for q in pids for b in self.delves[q].get("boons", [])]
         for q in pids:
             self.delves[q]["boons"] = []                      # supplies from a wayside stop last one fight
@@ -3621,7 +3959,7 @@ class Game:
             for s in survivors:
                 s.progress = max(s.progress, floor)         # they have now visited this floor
                 outlook.bump(s, "delve")
-            self._gear_drop(1 + (floor - 1) // config.MAIN_BOSS_EVERY, config.GEAR_DROP_MAIN, events, boss)
+            self._gear_drop(self.floor_gear_tier(floor), config.GEAR_DROP_MAIN, events, boss)
             if boss:                                           # a guardian's hoard holds ascension stones
                 n = self.rng.randint(3, 6) * (1 + (floor - 1) // config.MAIN_BOSS_EVERY)
                 self.wallet.add("stone_common", n)
@@ -3633,10 +3971,14 @@ class Game:
                 self.delves[q]["floor"] = floor + 1
                 self.delves[q]["camped"] = 0
             self._xp("floor", config.KEEPER_XP["floor"] + floor // 5)
-            if floor == dungeon.MAX_FLOOR:
+            if floor == config.HEART_FLOOR and not self.descent_cleared:
                 self.descent_cleared = True
                 events.append("👑 THE PARCHED KING FALLS! The Dry Tide shudders and begins to recede - the Mother Gloop "
-                              "stirs. You have cleared the Hollow Descent.")
+                              "stirs. Below the throne a second stair opens: the Deep Hollow, fifty floors more.")
+            if floor == dungeon.MAX_FLOOR:
+                self.deep_cleared = True
+                events.append("🏺 THE DRY MOTHER CRUMBLES! The thirst at the heart of the Hollow is gone, and the Mother Gloop "
+                              "wakes. You have cleared the whole Descent.")
             if boss:
                 self.feast = f"the fall of the boss of floor {floor}"           # tonight's dinner is a feast (rituals.py)
                 events.append(f"🔓 The boss of floor {floor} is down. This is a checkpoint: the party may climb out "
@@ -3714,6 +4056,7 @@ class Game:
         for s in party:
             s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.STOP_REST_HEAL))
             s.stamina_frac = min(1.0, s.stamina_frac + 0.3)
+            s.mana_frac = min(1.0, s.mana_frac + 0.3)
         st["rested"] = True
         self._owed = 0.0
         self._spend(config.STOP_REST_HOURS, "main")
@@ -4135,7 +4478,7 @@ class Game:
         k = s.in_dungeon
         if not k:
             return False
-        if k in ("grind", "adventure", "quarry"):
+        if k in ("grind", "adventure", "quarry", "wave"):            # a wave trip pays its own hours too (_wave_rounds)
             return True
         p = places.PLACES.get(k)
         return bool(p and p.kind == "expedition")
@@ -4165,7 +4508,7 @@ class Game:
 
     def _needs_camp(self, members) -> bool:
         """Does a session party have to stop and rest: someone hurt, winded, or too tired to carry on?"""
-        return any(s.hp < s.max_hp * config.GRIND_MIN_HP or s.stamina_frac < config.STAMINA_CAMP_AT
+        return any(s.hp < s.max_hp * config.GRIND_MIN_HP or min(s.stamina_frac, s.mana_frac) < config.STAMINA_CAMP_AT
                    or s.needs.get("energy") < config.AUTO_SLEEP_BELOW for s in members)
 
     def _field_unfit(self, members) -> str:
@@ -4189,6 +4532,7 @@ class Game:
                 if s.id in self.roster:
                     s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR))
                     s.stamina_frac = min(1.0, s.stamina_frac + 0.1 * config.STAMINA_SLEEP_MULT)
+                    s.mana_frac = min(1.0, s.mana_frac + 0.1 * config.STAMINA_SLEEP_MULT)
                     if s not in field:                           # a step-by-step party sleeps off its tiredness too (its food and
                         s.needs.add("energy", config.SLEEP_ENERGY_GAIN)    # energy decay is paid by the clock as time passes)
         else:                                                    # a session's party is skipped by the colony's tick: mend it here
@@ -4196,6 +4540,7 @@ class Game:
                 if s.id in self.roster:
                     s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR))
                     s.stamina_frac = min(1.0, s.stamina_frac + 0.1 * config.STAMINA_SLEEP_MULT)
+                    s.mana_frac = min(1.0, s.mana_frac + 0.1 * config.STAMINA_SLEEP_MULT)
         if passives.party_has(self, members, "hearth"):                 # Hearth (fire mastered): the party mends more at camp
             for s in members:
                 if s.id in self.roster:
@@ -4211,7 +4556,7 @@ class Game:
         tired = any(s.needs.get("energy") < config.AUTO_SLEEP_BELOW for s in members)
         while hours < max_hours:
             members = [s for s in members if s.id in self.roster]
-            if not members or all(s.hp >= s.max_hp * 0.85 and s.stamina_frac >= 0.7
+            if not members or all(s.hp >= s.max_hp * 0.85 and min(s.stamina_frac, s.mana_frac) >= 0.7
                                   and (not tired or s.needs.get("energy") >= config.FIELD_REST_ENERGY) for s in members):
                 break
             for s in members:
@@ -4251,14 +4596,14 @@ class Game:
     # ---- persistence -----------------------------------------------------------
     def to_dict(self) -> dict:
         return dict(version=config.SAVE_VERSION, seed=self.seed, tick=self.tick_count,
-                    bounties=sorted(self.bounties), descent_cleared=self.descent_cleared, sacrifices=self.sacrifices,
+                    bounties=sorted(self.bounties), descent_cleared=self.descent_cleared, deep_cleared=self.deep_cleared, sacrifices=self.sacrifices,
                     sacrifices_tracked=self.sacrifices_tracked, milestones={str(k): v for k, v in self.milestones.items()}, custom_spells=spells.custom_records(),
                     buildings=self.buildings.to_dict(), best_floor=self.best_floor,
                     delves={str(k): v for k, v in self.delves.items()},
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, next_item_id=self.next_item_id,
+                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, relic_progress=self.relic_progress, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, stock_peak=self.stock_peak, next_item_id=self.next_item_id,
                     sacrifice_stress=round(self.sacrifice_stress, 3), shadow_tick=self.shadow_tick,
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -4341,8 +4686,11 @@ class Game:
             sysobj.wallet = g.wallet
         g.gacha.load(d.get("gacha", {}))
         g.buildings.load(d.get("buildings"))
+        if "reliquary" not in (d.get("buildings") or {}):         # saves from before the Reliquary: relic work happened at the Armory
+            g.buildings.levels["reliquary"] = g.buildings.level("armory")
         g.best_floor = d.get("best_floor", 0)
         g.descent_cleared = d.get("descent_cleared", False)
+        g.deep_cleared = d.get("deep_cleared", False)
         g.intel = {int(k): v for k, v in d.get("intel", {}).items()}
         if d.get("version", 0) < 7:                          # v6 knew intel per 5-floor segment, progress globally
             seg_intel = g.intel
@@ -4369,6 +4717,7 @@ class Game:
         g._apply_keeper()
         g.vault_peak = d.get("vault_peak", 0)
         g.gear_peak = dict(d.get("gear_peak", {}))
+        g.stock_peak = dict(d.get("stock_peak", {}))
         g.mood_rng = random.Random((((g.seed or 0) ^ 0xE70) + d.get("tick", 0)) & 0xFFFFFFFF)
         if g.wallet.get("herb"):                              # v10 saves had one kind of herb: share it out
             n = g.wallet.get("herb")
@@ -4422,6 +4771,7 @@ class Game:
         g.plans = {k: v for k, v in (d.get("plans") or {}).items() if k in jobs.JOBS}
         g.recipe_pref = d.get("recipe_pref", "auto")
         g.forge_progress, g.forge_next = d.get("forge_progress", 0), d.get("forge_next", "weapon")
+        g.relic_progress = d.get("relic_progress", 0.0)
         g.stranded = [e for e in d.get("stranded", []) if any(i in g.roster for i in e["ids"])]
         g.next_stranded = d.get("next_stranded", 1)
         g.journal = d.get("journal", [])

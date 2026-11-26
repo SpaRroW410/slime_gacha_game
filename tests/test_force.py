@@ -468,3 +468,358 @@ class TestWaveSimulationCallBack(unittest.TestCase):
         r = g.battle(pid, 1, recall=True)
         self.assertIsNotNone(r)
         self.assertLess(m.morale, 100)
+
+
+class TestLongWaveGrinds(unittest.TestCase):
+    """The wave simulation runs up to 100 waves against monsters past level 100, comes home early below a health line,
+    and charges time only for the waves the slimes fought on their own."""
+    def setUp(self):
+        self.g = rich(171)
+        self.pid = party(self.g, strong=True)
+
+    def test_limits_reach_a_hundred_waves_and_level_one_fifty(self):
+        self.assertEqual(config.WAVE_MAX_WAVES, 100)
+        self.assertEqual(config.WAVE_MAX_LEVEL, 150)
+        foes = self.g.wave_enemies(1, 140, 150)
+        self.assertTrue(foes)
+        weak = self.g.wave_enemies(1, 10, 10)
+        self.assertGreater(min(e.stats["hp"] for e in foes), max(e.stats["hp"] for e in weak))
+
+    def test_a_long_grind_comes_home_below_the_health_line(self):
+        m = members(self.g, self.pid)[0]
+        m.hp = m.max_hp // 2                                      # already below the line: home after the first wave
+        r = self.g.battle(self.pid, waves=100, lo=1, hi=1, stop_hp=60)
+        self.assertEqual(sum(1 for l in r.log if l.startswith("🌊 Wave")), 1)
+        self.assertTrue(any("comes home after wave 1 of 100" in l for l in r.log))
+
+    def test_with_no_line_a_strong_party_fights_every_wave(self):
+        r = self.g.battle(self.pid, waves=12, lo=1, hi=1, stop_hp=0)
+        self.assertEqual(sum(1 for l in r.log if l.startswith("🌊 Wave")), 12)
+
+    def test_waves_led_by_hand_cost_no_time(self):
+        g, pid = self.g, self.pid
+        t = g.tick_count
+        g.battle(pid, waves=1, lo=1, hi=1, manual=True)
+        while g.battle_run() is not None:
+            g.battle_auto_turn()
+        self.assertEqual(g.tick_count, t)
+        self.assertTrue(all(not s.in_dungeon for s in members(g, pid)))
+
+    def test_automatic_waves_cost_their_hours(self):
+        g, pid = self.g, self.pid
+        t = g.tick_count
+        g.battle(pid, waves=2, lo=1, hi=1, stop_hp=0)
+        self.assertGreater(g.tick_count, t)
+
+
+class TestEgoAscension(unittest.TestCase):
+    """The usual level cap is 100; a legendary wearing an ego relic in every slot grows on to 150."""
+    def test_three_ego_relics_on_a_legendary_lift_the_cap(self):
+        from slime_gacha import items as items_mod
+        g = rich(181)
+        s = g.gacha.make_slime("legendary", "barbarian", stars=5)
+        g.roster[s.id] = s
+        s.stage = len(config.LEVEL_CAPS) - 1
+        self.assertEqual(s.level_cap, 100)
+        for i, sl in enumerate(config.EGO_SLOTS):
+            it = next(x for x in (items_mod.roll_item(g.rng, 900 + n, False, "legendary") for n in range(200)) if x.slot == sl)
+            it.ego = dict(name=f"Soul {i}", level=50, archetype="barbarian")
+            s.items[sl] = it
+            self.assertEqual(s.level_cap, 150 if i == len(config.EGO_SLOTS) - 1 else 100)
+        s.rarity = "epic"
+        self.assertEqual(s.level_cap, 100)                    # only a legendary
+        s.rarity = "legendary"
+        s.stage = 1
+        self.assertEqual(s.level_cap, config.LEVEL_CAPS[1])     # only at the last evolution stage
+
+
+class TestRelicVariety(unittest.TestCase):
+    def test_every_class_has_a_weapon_an_armor_and_a_charm_made_for_it(self):
+        from slime_gacha import items as items_mod
+        from slime_gacha.archetypes import all_archetypes
+        for a in all_archetypes():
+            slots = {b.slot for b in items_mod.BASES if a.key in b.fits}
+            self.assertEqual(slots, set(items_mod.SLOTS), a.key)
+
+    def test_the_new_mod_kinds_reach_the_battle(self):
+        from slime_gacha import items as items_mod
+        g = rich(191)
+        s = g.gacha.make_slime("rare", "mage", stars=3)
+        g.roster[s.id] = s
+        it = items_mod.roll_item(g.rng, 991, False, "common")
+        it.mods = [dict(kind=k, value=0.05) for k in ("evasion", "guard", "regen", "resist", "spell_power")]
+        s.items[it.slot] = it
+        mods = items_mod.battle_mods(s)
+        for k in ("evasion", "guard", "regen", "resist", "spell_power"):
+            self.assertGreater(mods.get(k, 0), 0, k)
+        self.assertTrue(all(it.mod_text(m) for m in it.mods))
+
+
+class TestSpellNamesByClass(unittest.TestCase):
+    """The Library sells one spell; a barbarian calls Ember 'Fire Blaze', a ranger 'Fire Arrow', a mage 'Ember'."""
+    def test_names_follow_the_class(self):
+        from slime_gacha import spells
+        from slime_gacha.abilities import get_ability
+        ember = get_ability("ember")
+        self.assertEqual(spells.class_name(ember, "barbarian"), "Fire Blaze")
+        self.assertEqual(spells.class_name(ember, "ranger"), "Fire Arrow")
+        self.assertEqual(spells.class_name(ember, "bard"), "Burning Ballad")
+        self.assertEqual(spells.class_name(ember, "mage"), "Ember")
+        for style, names in spells.STYLE_NAMES.items():                 # every tier-1 spell has a name in every style
+            self.assertEqual(set(names), {a.key for a in spells.base_spells()}, style)
+
+    def test_fused_spells_keep_a_keepers_name_but_rename_an_automatic_one(self):
+        from slime_gacha import spells
+        from slime_gacha.abilities import get_ability
+        auto = spells.design_fusion(get_ability("ember"), get_ability("gust"))
+        named = spells.design_fusion(get_ability("ember"), get_ability("gust"), name="Zappo")
+        self.assertNotEqual(spells.class_name(auto, "barbarian"), auto.name)
+        self.assertTrue(spells.class_name(auto, "barbarian").endswith("Strike"))
+        self.assertEqual(spells.class_name(named, "barbarian"), "Zappo")
+        self.assertEqual(spells.class_name(auto, "mage"), auto.name)
+
+    def test_a_barbarian_casts_fire_blaze_in_battle(self):
+        from slime_gacha.battle import BattleSystem
+        g = rich(201)
+        s = g.gacha.make_slime("rare", "barbarian", stars=3)
+        g.roster[s.id] = s
+        s.attuned, s.spells = ["fire"], ["ember"]
+        c = BattleSystem.from_slime(s)
+        self.assertEqual(c.spell_names, {"ember": "Fire Blaze"})
+        from slime_gacha.webapi import slime_view
+        self.assertIn("Fire Blaze", [a["name"] for a in slime_view(g, s)["abilities"]])
+
+
+class TestArenaEvents(unittest.TestCase):
+    """A fight records who acted on whom (for the arena's animations), numbered so the page plays only new ones."""
+    def test_a_manual_fight_reports_its_actions_and_party_slime_ids(self):
+        g = rich(211)
+        pid = party(g, strong=True)
+        g.enter_dungeon(pid)
+        g.delve_next(pid, manual=True)
+        self.assertIsNotNone(g.battle_run())
+        seen, units = [], None
+        while g.battle_run() is not None:
+            run = g.battle_run()
+            g.battle_auto_turn()                                   # one turn; the run's view now holds what happened
+            v = run.view()
+            units = units or v["units"]
+            seen.extend(e for e in v["fx"] if not seen or e["n"] > seen[-1]["n"])
+        self.assertTrue(seen)
+        ns = [e["n"] for e in seen]
+        self.assertEqual(ns, sorted(ns))
+        for e in seen:
+            self.assertIn(e["k"], ("hit", "spell", "drain", "heal", "guard", "poison", "dodge", "buff", "debuff", "summon"))
+            self.assertTrue(0 <= e["a"] < len(units) + 4 and 0 <= e["t"] < len(units) + 4)   # summons may join the field
+        ids = {u["sid"] for u in units if u["side"] == "party" and not u["minion"]}
+        self.assertEqual(ids, set(g.parties.get(pid).members))
+
+
+class TestWaveRations(unittest.TestCase):
+    """A long wave trip eats rations (at most 66% of the food stores), camps to rest, and comes home when the rations run out."""
+    def _trip(self, food, waves=100):
+        g = rich(5)
+        pid = party(g, strong=True)
+        g.needs.auto_care = False
+        g.wallet.spend("food", g.wallet.get("food"))
+        g.wallet.add("food", food)
+        n = len(g.roster)
+        r = g.battle(pid, waves=waves, lo=1, hi=3, stop_hp=0)
+        return g, r, n
+
+    def test_a_well_fed_party_finishes_a_hundred_waves_alive(self):
+        g, r, n = self._trip(300)
+        self.assertEqual(sum(1 for l in r.log if l.startswith("🌊 Wave")), 100)
+        self.assertEqual(len(g.roster), n)
+        self.assertLess(g.wallet.get("food"), 300)
+        self.assertTrue(any("used from the pack" in l and "camped" in l for l in r.log))
+
+    def test_it_packs_at_most_two_thirds_of_the_food_and_comes_home_hungry(self):
+        g, r, n = self._trip(10)
+        self.assertGreaterEqual(g.wallet.get("food"), 10 - int(10 * g.share))
+        self.assertTrue(any("pack has no food left" in l for l in r.log))
+        self.assertEqual(len(g.roster), n)
+
+
+class TestAutonomyUpkeep(unittest.TestCase):
+    """With autonomy on, slimes merge spare gear, level the relics they wear and take better gear, always leaving 34%."""
+    def test_spare_gear_is_merged_when_three_are_within_two_thirds(self):
+        g = rich(221)
+        g.autonomy = True
+        for _ in range(5):
+            g.inventory.add("wooden_club")
+        log = []
+        g._auto_merge_gear(log)
+        self.assertEqual(g.inventory.items.get("wooden_club", 0), 2)
+        self.assertTrue(any("merge spare gear" in l for l in log))
+        self.assertEqual(sum(1 for k, n in g.inventory.items.items() if n and __import__("slime_gacha").equipment.GEAR.get(k).tier == 2), 1)
+        log = []
+        g._auto_merge_gear(log)                                   # only two left: 3 > 66% of 2, nothing happens
+        self.assertFalse(log)
+
+    def test_the_tier_ladder_reaches_five(self):
+        from slime_gacha import equipment
+        for slot in ("weapon", "armor", "charm"):
+            self.assertEqual(sorted({x.tier for x in equipment.GEAR if x.slot == slot}), [1, 2, 3, 4, 5], slot)
+        self.assertEqual(Game_tier(30), 3)
+        self.assertEqual(Game_tier(60), 4)
+        self.assertEqual(Game_tier(90), 5)
+
+    def test_worn_relics_level_up_within_the_rule(self):
+        from slime_gacha import items as items_mod
+        g = rich(222)
+        g.autonomy = True
+        s = g.gacha.make_slime("rare", "barbarian", stars=3)
+        g.roster[s.id] = s
+        it = items_mod.roll_item(g.rng, 777, False, "common")
+        it.level = 1
+        s.items[it.slot] = it
+        g.wallet.spend("scrap", g.wallet.get("scrap"))
+        g.wallet.add("scrap", 100)
+        log = []
+        for _ in range(30):
+            g._auto_level_relics(s, log)
+        self.assertGreater(it.level, 1)
+        self.assertGreaterEqual(g.wallet.get("scrap"), 34)         # 34% of the most ever held stays untouched
+
+
+def Game_tier(floor):
+    from slime_gacha.game import Game
+    return Game.floor_gear_tier(floor)
+
+
+class TestArenaFinaleAndSkillData(unittest.TestCase):
+    def test_a_fight_led_by_hand_leaves_its_last_view_once(self):
+        from slime_gacha.webapi import Session
+        se = Session()
+        se.new_game(9)
+        g = se.game
+        g.wallet.add("white_gel", 20000)
+        se.call("pull", dict(n=10, pay="white_gel"))
+        se.call("party_create", dict(name="P"))
+        pid = se.call("state", {})["state"]["parties"][0]["id"]
+        se.call("party_fill", dict(pid=pid))
+        se.call("enter_dungeon", dict(pid=pid))
+        r = se.call("delve_next", dict(pid=pid, manual=True))
+        self.assertTrue(r["state"]["battle"]["abilities"])
+        self.assertTrue(all("fx" in a and "desc" in a for a in r["state"]["battle"]["abilities"]))   # for grouping the skills
+        while r["state"]["battle"]:
+            r = se.call("battle_auto_turn", {})
+        end = r["state"]["battle_end"]
+        self.assertTrue(end and end["fx"] and "victory" in end)
+        self.assertIsNone(se.call("state", {})["state"]["battle_end"])                              # sent once
+
+
+class TestFightSupplies(unittest.TestCase):
+    """In a fight led by hand the party can eat, drink a stamina potion (which wakes it up) and ask to camp."""
+    def _fight(self, pack=None):
+        g = rich(231)
+        pid = party(g, strong=True)
+        g.potions["stamina:1"] = 2
+        g.potions["stamina:3"] = 1
+        g.pantry["stew"] = 4
+        g.enter_dungeon(pid, pack=pack if pack is not None else {"food": 3, "dish:stew": 2, "potion:stamina:1": 2})
+        for s in members(g, pid):
+            s.needs.set("food", 30)
+            s.needs.set("energy", 32)
+        g.delve_next(pid, manual=True)
+        self.assertIsNotNone(g.battle_run())
+        return g, pid
+
+    def test_the_pack_is_taken_at_the_door_and_handed_out_by_the_keeper(self):
+        g, pid = self._fight()
+        self.assertEqual(g.pantry.get("stew"), 2)                         # two stews left home in the pack
+        self.assertEqual(g.potions.get("stamina:1"), None)
+        u = [x for x in g.battle_run().view()["units"] if x["side"] == "party"][0]
+        self.assertTrue(u["hungry"] and u["tired"])
+        food = g.wallet.get("food")
+        a = members(g, pid)[0]
+        out = g.battle_give("dish:stew", a.id)                           # the keeper picks the item and the slime
+        self.assertEqual(len(out), 1)
+        self.assertGreater(a.needs.get("food"), 30)
+        out = g.battle_give("food")                                       # everyone hungry gets a ration, while they last
+        self.assertEqual(sum(1 for l in out if "ration" in l), 3)
+        self.assertEqual(g.wallet.get("food"), food)                      # nothing comes from the colony's stores
+        out = g.battle_give("potion:stamina:1")
+        self.assertEqual(sum(1 for l in out if "drinks" in l), 2)
+        self.assertEqual(g.pack_of(pid), {"dish:stew": 1})
+        with self.assertRaises(InvalidAction):
+            g.battle_give("potion:stamina:1")                             # the pack has none left
+        g.potions.pop("stamina:3")
+        while g.battle_run() is not None:
+            g.battle_auto_turn()
+
+    def test_automatic_floors_eat_the_best_first_and_leftovers_come_home(self):
+        g = rich(233)
+        pid = party(g, strong=True)
+        g.pantry.update(porridge=3, feast=2)
+        g.enter_dungeon(pid, pack={"food": 5, "dish:porridge": 3, "dish:feast": 2})
+        for s in members(g, pid):
+            s.needs.set("food", 20)
+        g.delve_next(pid)                                                 # an automatic floor: feasts first
+        pack = g.pack_of(pid)
+        self.assertNotIn("dish:feast", pack)
+        food = g.wallet.get("food")
+        g.delves[pid]["floor"] = 6                                        # at a checkpoint: climb out
+        g.leave_dungeon(pid)
+        self.assertGreater(g.wallet.get("food") + sum(g.pantry.values()), food)
+
+    def test_automatic_packs_take_the_best_and_respect_the_cold_storage(self):
+        g = rich(234)
+        g.pantry.update(feast=10, porridge=10)
+        p = g.auto_pack(5, 24)
+        self.assertEqual(p.get("dish:feast"), g.pack_allowance())         # the best dishes, as many as may travel
+        self.assertNotIn("dish:porridge", p)
+
+    def test_a_wave_trip_led_by_hand_camps_when_asked(self):
+        g = rich(232)
+        pid = party(g, strong=True)
+        g.battle(pid, waves=3, lo=1, hi=1, manual=True, stop_hp=0)
+        for s in members(g, pid):
+            s.needs.set("energy", 20)                                     # worn out after the first wave
+        g.battle_camp_next(True)
+        t = g.tick_count
+        while g.battle_run() is not None:
+            g.battle_auto_turn()
+        self.assertGreater(g.tick_count, t)                               # the camp took time even though the waves did not
+        self.assertTrue(all(s.needs.get("energy") > 20 for s in members(g, pid)))
+
+
+class TestSparStalemate(unittest.TestCase):
+    """A spar in which nobody's health really moves for 10 rounds (two healers, two walls) ends in a draw."""
+    def test_two_fighters_that_barely_scratch_each_other_draw_after_ten_rounds(self):
+        import random as _r
+        from slime_gacha.battle import BattleSystem, Combatant
+        bs = BattleSystem(_r.Random(1))
+        walls = [Combatant(n, "🧱", side, dict(hp=1000, atk=1, defense=200, mag=1, spd=5), 1000.0, ["splat"]) for n, side in (("A", "party"), ("B", "foes"))]
+        for c in walls:
+            c.nonlethal = True
+        log = []
+        rounds, winner = bs._simulate(walls, log, config.DUEL_ROUND_CAP, config.SPAR_STALL_ROUNDS)
+        self.assertIsNone(winner)
+        self.assertEqual(rounds, config.SPAR_STALL_ROUNDS + 1)
+        self.assertTrue(any("neither side can break the other" in l for l in log))
+
+    def test_a_drawn_spar_rewards_both_and_names_no_winner(self):
+        from unittest import mock
+        from slime_gacha.battle import BattleReport
+        g = rich(243)
+        a = g.gacha.make_slime("rare", "medic", stars=3)
+        b = g.gacha.make_slime("rare", "medic", stars=3)
+        for s in (a, b):
+            g.roster[s.id] = s
+            s.hp = s.max_hp
+        draw = BattleReport(["🤝 draw"], None, 11)
+        draw.winner_slime = None
+        with mock.patch.object(g.battles, "duel", lambda x, y: draw):
+            res = g.spar(a.id, b.id, "magic")
+        self.assertTrue(any("draw" in l for l in res.summary))
+
+    def test_a_real_fight_is_not_cut_short(self):
+        g = rich(242)
+        a = g.gacha.make_slime("rare", "barbarian", stars=3)
+        b = g.gacha.make_slime("rare", "mage", stars=3)
+        for s in (a, b):
+            g.roster[s.id] = s
+            s.hp = s.max_hp
+        self.assertIsNotNone(g.battles.duel(a, b).winner)

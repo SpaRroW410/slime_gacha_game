@@ -33,6 +33,67 @@ _AOE_SUFFIX = {"damage": "Burst", "drain": "Vortex", "heal": "Bloom", "guard": "
 CUSTOM: Dict[str, dict] = {}        # key -> serialisable record of fused spells (saved with the game)
 
 
+# ---- what a spell is called depends on who casts it ----------------------------------------------------
+# A barbarian does not cast "Ember": it sets its axe ablaze. The Library sells one spell; each class names it in its
+# own way. Only the name changes (stats, element, mastery and forms are the spell's own). Casters keep the Library names.
+NAME_STYLE = dict(barbarian="blade", paladin="blade", rogue="blade", ranger="bow", bard="song", druid="nature")
+STYLE_NAMES: Dict[str, Dict[str, str]] = {
+    "blade": dict(ember="Fire Blaze", flame_wave="Blazing Sweep", water_jet="Tide Slash", rain_mend="Cooling Rain",
+                  rock_toss="Stone Cleaver", stone_skin="Iron Hide", gust="Gale Cut", cutting_wind="Cyclone Slash"),
+    "bow": dict(ember="Fire Arrow", flame_wave="Fire Volley", water_jet="Torrent Shot", rain_mend="Healing Drizzle",
+                rock_toss="Boulder Shot", stone_skin="Bark Hide", gust="Wind Arrow", cutting_wind="Arrow Storm"),
+    "song": dict(ember="Burning Ballad", flame_wave="Firestorm Chorus", water_jet="Tidal Note", rain_mend="Soothing Shanty",
+                 rock_toss="Rumbling Bass", stone_skin="Stone Hymn", gust="Whistling Note", cutting_wind="Gale Chorus"),
+    "nature": dict(ember="Wildfire Seed", flame_wave="Brushfire", water_jet="Spring Burst", rain_mend="Monsoon Bloom",
+                   rock_toss="Stone Thorn", stone_skin="Barkskin", gust="Leaf Gust", cutting_wind="Thorn Squall"),
+}
+# fused spells the Keeper did not name: "<Element> <suffix>" in the caster's own style (single target, area)
+STYLE_SUFFIX: Dict[str, tuple] = {
+    "blade": (dict(damage="Strike", drain="Reaver", heal="Rally", guard="Bulwark", poison="Rend"),
+              dict(damage="Whirlwind", drain="Maelstrom", heal="War Rally", guard="Shield Wall", poison="Rending Storm")),
+    "bow": (dict(damage="Shot", drain="Leech Shot", heal="Balm Arrow", guard="Screen", poison="Barb"),
+            dict(damage="Volley", drain="Leech Volley", heal="Balm Rain", guard="Smoke Screen", poison="Barbed Rain")),
+    "song": (dict(damage="Note", drain="Lament", heal="Hymn", guard="Canon", poison="Dirge"),
+             dict(damage="Chorus", drain="Requiem", heal="Anthem", guard="Harmony", poison="Dissonance")),
+    "nature": (dict(damage="Thorn", drain="Root", heal="Blossom", guard="Bark", poison="Spore"),
+               dict(damage="Squall", drain="Overgrowth", heal="Grove", guard="Thicket", poison="Spore Cloud")),
+}
+
+
+def name_style(archetype: str) -> str:
+    return NAME_STYLE.get(archetype, "magic")
+
+
+def class_name(ab: Ability, archetype: str) -> str:
+    """What a slime of this class calls the spell (the Library's name for casters, and for spells the Keeper named)."""
+    return style_name(ab, name_style(archetype))
+
+
+def style_name(ab: Ability, style: str) -> str:
+    if style == "magic" or not ab.element:
+        return ab.name
+    own = STYLE_NAMES[style].get(ab.key)
+    if own:
+        return own
+    if ab.tier >= 2:
+        el = elements.get(ab.element)
+        aoe = ab.target.startswith("all_")
+        if ab.name == f"{el.name} {(_AOE_SUFFIX if aoe else _SUFFIX).get(ab.kind, '')}":     # an automatic name
+            return f"{el.name} {STYLE_SUFFIX[style][1 if aoe else 0].get(ab.kind, '')}"
+    return ab.name
+
+
+def names_for(slime) -> Dict[str, str]:
+    """The slime's own names for its learned spells, where they differ from the Library's."""
+    out = {}
+    for k in getattr(slime, "spells", []):
+        if k in ABILITIES.keys():
+            n = class_name(get_ability(k), slime.archetype)
+            if n != get_ability(k).name:
+                out[k] = n
+    return out
+
+
 def base_spells() -> List[Ability]:
     """Spells always on sale: every registered tier-1 elemental ability."""
     return [a for a in ABILITIES if a.tier == 1 and a.element]

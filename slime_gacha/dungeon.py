@@ -1,4 +1,4 @@
-"""Dungeons: floor plans for the Hollow Descent (50 floors) and daily themes for the Gloop Pit.
+"""Dungeons: floor plans for the Hollow Descent (100 floors: the Hollow to 50, the Deep Hollow below) and daily themes for the Gloop Pit.
 
 Every floor has a TERRAIN (valleys, dunes, islands, volcano ash, swamp ...) and a MIXED wave of monsters
 (goblins riding with direwolves, orcs and ogres, undead and scarabs ...). Floors are generated once per dungeon
@@ -31,6 +31,17 @@ SEGMENT_TERRAINS: List[Tuple[str, ...]] = [
     ("sky_cliffs", "thunder_peaks", "storm_plains", "golden_steppe", "echo_valley"),       # 36-40
     ("bone_barrens", "ruined_crypt", "ashlands", "glass_desert", "mire"),                  # 41-45
     ("ashlands", "magma_shelf", "hollow_halls", "ruined_crypt", "bone_barrens"),           # 46-50
+    # the Deep Hollow: the same lands again, deeper, drier and stranger
+    ("magma_shelf", "ashlands", "glass_desert", "red_mesa", "crystal_vault"),              # 51-55
+    ("fungal_caverns", "mire", "mangrove_maze", "glowworm_grotto", "fern_gorge"),          # 56-60
+    ("tidal_flats", "coral_isles", "floating_isles", "mangrove_maze", "glacier_hall"),     # 61-65
+    ("crystal_canyon", "crystal_vault", "red_mesa", "sky_cliffs", "echo_valley"),          # 66-70
+    ("storm_plains", "thunder_peaks", "sky_cliffs", "golden_steppe", "floating_isles"),    # 71-75
+    ("ruined_crypt", "bone_barrens", "hollow_halls", "mire", "glass_desert"),              # 76-80
+    ("glacier_hall", "frozen_tundra", "crystal_canyon", "sky_cliffs", "storm_plains"),     # 81-85
+    ("ashlands", "magma_shelf", "ember_valley", "bone_barrens", "dune_sea"),               # 86-90
+    ("hollow_halls", "echo_valley", "ruined_crypt", "crystal_vault", "glass_desert"),      # 91-95
+    ("dust_throne", "dune_sea", "bone_barrens", "ashlands", "hollow_halls"),               # 96-100
 ]
 
 

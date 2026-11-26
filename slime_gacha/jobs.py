@@ -11,7 +11,8 @@ level in that trade (earned per shift, kept when switching), a natural talent (+
                                     gains for drills and spars in their discipline, but only for pupils whose own proficiency
                                     in it is lower than the trainer's
   Librarian      Library            hurries students along and gives attuned slimes mastery
-  Blacksmith     Armory             mends worn gear and, slowly, forges weapons and relics from the colony's materials
+  Blacksmith     Armory             slowly forges gear (the best tier the Armory sells) from the colony's materials
+  Relicsmith     Reliquary          mends worn relics and, slowly, forges new relics
   Brewer         Alchemy Lab        brews basic potions from herbs the colony holds
   Chef           Kitchen            cooks the recipe you pick into the pantry; hungry slimes eat from it
   Doctor         Hospital           a medic only: heals injured slimes at home every hour
@@ -53,8 +54,10 @@ JOBS: Dict[str, Job] = {j.key: j for j in (
         ("mage", "necromancer"), 2, (), "magic"),
     Job("librarian", "Librarian", "📚", "library", "Hurries students along and catalogues lore: attuned slimes at home gain mastery.",
         ("mage", "necromancer")),
-    Job("blacksmith", "Blacksmith", "🔨", "armory", "Mends worn gear and, slowly, forges weapons and relics from the colony's materials.",
+    Job("blacksmith", "Blacksmith", "🔨", "armory", "Slowly forges gear (the best tier the Armory sells) from the colony's materials; a skilled smith works faster.",
         ("barbarian", "ranger"), forages=True),
+    Job("relicsmith", "Relicsmith", "🗝️", "reliquary", "Mends worn relics carried by slimes at home and, slowly, forges new common relics from scrap and gel (rarity is raised at the Reliquary).",
+        ("alchemist", "paladin"), forages=True),
     Job("brewer", "Brewer", "⚗️", "alchemy", "Brews basic potions from the herbs the colony holds.",
         ("medic", "necromancer"), forages=True),
     Job("chef", "Chef", "🍳", "kitchen", "Cooks the chosen recipe into the pantry; hungry slimes eat from it.",
@@ -63,7 +66,7 @@ JOBS: Dict[str, Job] = {j.key: j for j in (
         ("medic",), 1, ("medic",), forages=True),
 )}
 TRAINERS = {j.discipline: j.key for j in JOBS.values() if j.discipline}
-TRADE_PASSIVE = dict(chef="chef_master", blacksmith="blacksmith_master", doctor="doctor_master", librarian="librarian_master")   # output passives (passives.py)
+TRADE_PASSIVE = dict(chef="chef_master", blacksmith="blacksmith_master", relicsmith="relicsmith_master", doctor="doctor_master", librarian="librarian_master")   # output passives (passives.py)
 
 
 def get(key: str) -> Job:
@@ -390,9 +393,15 @@ def _lore(game, librarian, events: List[str]) -> bool:
 
 # ---- blacksmith ------------------------------------------------------------------------------------------------------
 def _forge(game, smith, events: List[str]) -> bool:
-    p = power(smith, "blacksmith", game)
+    """The blacksmith's shift: work on the next piece of gear (a skilled smith gets further each shift)."""
+    return _craft(game, smith, events, power(smith, "blacksmith", game))
+
+
+def _relicsmith(game, smith, events: List[str]) -> bool:
+    """The relicsmith's shift: mend the relics slimes at home carry, and work on the next relic."""
+    p = power(smith, "relicsmith", game)
     share = config.SMITH_MEND_SHARE * p
-    left = config.SMITH_ITEMS + level(smith, "blacksmith") // 2
+    left = config.SMITH_ITEMS + level(smith, "relicsmith") // 2
     fixed = []
     for o in sorted(at_home(game), key=lambda o: o.id):
         for it in o.items.values():
@@ -404,40 +413,45 @@ def _forge(game, smith, events: List[str]) -> bool:
             fixed.append(f"{o.name}'s {it.label()}")
             left -= 1
     if fixed:
-        events.append(f"🔨 {smith.name} mends {', '.join(fixed[:3])}{' and more' if len(fixed) > 3 else ''}.")
-    made = _craft(game, smith, events)
+        events.append(f"🗝️ {smith.name} mends {', '.join(fixed[:3])}{' and more' if len(fixed) > 3 else ''}.")
+    made = _relic_craft(game, smith, events, p)
     return bool(fixed) or made
 
 
-def _craft(game, smith, events: List[str]) -> bool:
-    """Slowly forge a weapon or a relic when the colony has the materials (every CRAFT_SHIFTS shifts, alternating)."""
-    game.forge_progress += 1
+def _relic_craft(game, smith, events: List[str], step: float = 1.0) -> bool:
+    """Slowly forge a relic when the colony has the materials (every CRAFT_SHIFTS shifts' worth of work)."""
+    game.relic_progress += step
+    if game.relic_progress < config.CRAFT_SHIFTS:
+        return True
+    try:
+        game.wallet.spend_many(dict(config.CRAFT_RELIC_COST))
+    except NotEnoughResources:
+        game.relic_progress = config.CRAFT_SHIFTS - 0.01          # waits for the materials
+        return False
+    it = game.new_item(False, rarity="common")                    # a forge makes plain relics: rarity is raised at the Reliquary
+    events.append(f"⚒️ {smith.name} forges a relic: {it.label()}.")
+    game.relic_progress = 0.0
+    return True
+
+
+def _craft(game, smith, events: List[str], step: float = 1.0) -> bool:
+    """Slowly forge a piece of gear when the colony has the materials (every CRAFT_SHIFTS shifts' worth of work)."""
+    game.forge_progress += step
     if game.forge_progress < config.CRAFT_SHIFTS:
         return True                                                 # work in progress
-    kind = game.forge_next
     try:
-        if kind == "weapon":
-            tier = game.buildings.gear_tier()
-            options = [g for g in equipment.GEAR if g.tier <= tier]
-            if not options:
-                raise NotEnoughResources("nothing to forge")
-            options.sort(key=lambda g: (-g.tier, g.key))
-            pick = next((g for g in options if game.wallet.can_afford(_craft_cost(g.cost))), None)
-            if not pick:
-                raise NotEnoughResources("no materials")
-            game.wallet.spend_many(_craft_cost(pick.cost))
-            game.inventory.add(pick.key)
-            events.append(f"⚒️ {smith.name} forges a {pick.emoji}{pick.name}.")
-        else:
-            cost = dict(config.CRAFT_RELIC_COST)
-            game.wallet.spend_many(cost)
-            it = game.new_item(False)
-            events.append(f"⚒️ {smith.name} forges a relic: {it.label()}.")
+        tier = game.buildings.gear_tier()
+        options = sorted((g for g in equipment.GEAR if g.tier <= tier), key=lambda g: (-g.tier, g.key))
+        pick = next((g for g in options if game.wallet.can_afford(_craft_cost(g.cost))), None)
+        if not pick:
+            raise NotEnoughResources("no materials")
+        game.wallet.spend_many(_craft_cost(pick.cost))
+        game.inventory.add(pick.key)
+        events.append(f"⚒️ {smith.name} forges a {pick.emoji}{pick.name}.")
     except NotEnoughResources:
         game.forge_progress = config.CRAFT_SHIFTS - 1              # keeps waiting for materials
         return False
     game.forge_progress = 0
-    game.forge_next = "relic" if kind == "weapon" else "weapon"
     return True
 
 
@@ -464,6 +478,7 @@ class Recipe:
     servings: int
     morale: int                     # morale each serving gives
     level: int                      # chef level needed
+    cold: int = 0                   # Cold Storage level needed (finer dishes keep only on ice)
 
 
 RECIPES: Dict[str, Recipe] = {r.key: r for r in (
@@ -471,11 +486,14 @@ RECIPES: Dict[str, Recipe] = {r.key: r for r in (
     Recipe("stew", "Hearty Stew", "🍲", {"food": 2, "herb_green": 1}, 55, 4, 3, 2),
     Recipe("pie", "Berry Pie", "🥧", {"food": 2, "herb_red": 1}, 40, 4, 7, 3),
     Recipe("feast", "Feast", "🍗", {"food": 4, "essence": 1}, 70, 6, 9, 5),
+    Recipe("fish_platter", "Smoked Fish Platter", "🐟", {"food": 4, "herb_blue": 1}, 80, 5, 8, 6, 2),
+    Recipe("banquet", "Royal Banquet", "🍱", {"food": 6, "essence": 2, "herb_yellow": 1}, 100, 8, 12, 8, 4),
 )}
 
 
 def pantry_cap(game) -> int:
-    return config.PANTRY_PER_LEVEL * game.buildings.level("kitchen")
+    return (config.PANTRY_PER_LEVEL * game.buildings.level("kitchen")
+            + config.COLD_SERVINGS_PER_LEVEL * game.buildings.level("cold_storage"))
 
 
 def pantry_total(game) -> int:
@@ -490,7 +508,8 @@ def hungry(game) -> List:
 def pick_recipe(game, chef) -> Optional[Recipe]:
     lvl = level(chef, "chef")
     pref = game.recipe_pref
-    options = [r for r in RECIPES.values() if r.level <= lvl and game.wallet.can_afford(r.cost)]
+    cold = game.buildings.level("cold_storage")
+    options = [r for r in RECIPES.values() if r.level <= lvl and r.cold <= cold and game.wallet.can_afford(r.cost)]
     if pref != "auto":
         r = RECIPES.get(pref)
         return r if r in options else None
@@ -553,4 +572,4 @@ def _doctor_shift(game, doctor, events: List[str]) -> bool:
 
 
 RUNNERS = {"trainer_sword": _teach, "trainer_archery": _teach, "trainer_magic": _teach, "librarian": _lore,
-           "blacksmith": _forge, "brewer": _brew, "chef": _cook, "doctor": _doctor_shift}
+           "blacksmith": _forge, "relicsmith": _relicsmith, "brewer": _brew, "chef": _cook, "doctor": _doctor_shift}

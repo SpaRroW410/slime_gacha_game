@@ -100,6 +100,8 @@ PEACEMAKER_CHANCE = 0.5           # once a day, a friend of both at home tries t
 
 # ---- Growth ---------------------------------------------------------------
 LEVEL_CAPS = [10, 30, 100]          # per evolution stage
+EGO_LEVEL_CAP = 150                 # ... and a legendary wearing an ego relic in every slot grows on to this level
+EGO_SLOTS = ("weapon", "armor", "charm")
 STAGE_STAT_MULT = [1.0, 1.5, 2.1]
 EVOLVE_ESSENCE_BASE = 50            # * (stage + 1)
 MERGE_XP_RATIO = 1.0              # a merge hands over the XP the donor collected (no more, no less)
@@ -110,7 +112,7 @@ SOFT_LEVEL = 50                     # above this level each level adds only SOFT
 SOFT_LEVEL_RATE = 0.6
 
 def stat_level(level: float) -> float:
-    """The level stats are computed from: linear to 50, then diminishing (level 100 counts as 80)."""
+    """The level stats are computed from: linear to 50, then diminishing (level 100 counts as 80, 150 as 110)."""
     return level if level <= SOFT_LEVEL else SOFT_LEVEL + (level - SOFT_LEVEL) * SOFT_LEVEL_RATE
 
 PIT_RUNS_PER_LEVEL = 3.5          # Pit runs a COMMON party needs per level (rarer slimes need more, see pit_xp_per_run)
@@ -158,12 +160,18 @@ CRIT_CHANCE = 0.08
 CRIT_MULT = 1.5
 ROUND_CAP = 30
 DUEL_ROUND_CAP = 80            # sparring continues until somebody yields
+SPAR_STALL_ROUNDS = 10         # ... but if nobody's HP has moved for this many rounds (two healers, say), it is a draw
+SPAR_STALL_SHARE = 0.10        # a pool 'moved' = by more than this share of its max, net, over those rounds; health
+                               # 'moves' when, at the pace of those rounds, somebody would fall before the round cap
 PARTY_SIZE = 5           # fixed party size: must be a multiple of 5 (5, 10, 15 ...)
 GUARD_REDUCTION = 0.5
 
 # ---- Dungeons -----------------------------------------------------------------
 # Main dungeon ("The Hollow Descent"): floor after floor, brutal, permadeath, rare purple gel.
 MAIN_BOSS_EVERY = 5
+HEART_FLOOR = 50                 # the Parched King: the heart of the Hollow (the story's first ending)
+DEEP_LEVEL_STEP = 2.0            # below it, every floor is built for slimes this many levels stronger (floor 100 = level 150)
+DEEP_GROWTH = 1.03               # ... and grows this much harder again per floor: exponential (x4.4 by floor 100)
 MAIN_STAT_STEP = 0.15           # enemy stats +15% per floor (compounding on tier pools)
 MAIN_LOOT_STEP = 0.25           # loot ranges +25% per floor
 MAIN_PURPLE_STEP = 0.15         # purple-gel drop chance +15% (relative) per floor, capped
@@ -190,7 +198,8 @@ SPAR_DUMMY_MULT = 0.5           # odd slime out trains on a dummy at half rate (
 SPAR_MIN_HP = 0.4
 SPAR_BOND = 3
 WAVE_PROF, WAVE_BOND, WAVE_TICKS = 2.0, 1.0, 2
-WAVE_MAX_LEVEL, WAVE_MAX_WAVES, WAVE_XP_MULT = 50, 5, 1.0   # wave simulation: top monster level, most waves, XP vs the monsters' worth   # wave simulation: class proficiency per member (x(1+0.5 per tier above 1)), bond per pair, hours
+WAVE_MAX_LEVEL, WAVE_MAX_WAVES, WAVE_XP_MULT = 150, 100, 1.0   # wave simulation: top monster level (past the slimes' own cap), most waves in one trip, XP vs the monsters' worth
+WAVE_STOP_HP = 30               # default safety line: the party comes home once a member ends a wave below this % of its HP (0 = fight on)   # wave simulation: class proficiency per member (x(1+0.5 per tier above 1)), bond per pair, hours
 # A TROUBLEMAKER (merging or destroying it costs no morale and no sacrifice stress): a slime that came to blows with more
 # different slimes in the last NUISANCE_DAYS days than NUISANCE_SHARE of the colony (rounded down, never under NUISANCE_MIN),
 # or one most of the colony dislikes. A slime that was only snapped at does not count the fight against it.
@@ -254,7 +263,7 @@ SACRIFICE_TARGET_PENALTY_MAX = 30
 # Rest Area: heals fast; capacity and speed depend on its level (see buildings.py)
 REST_ENERGY_GAIN = 10
 POWER_DISPLAY_MAX = 20000       # total power that shows as 999 on the roster (a square-root scale: weak slimes still read 001-050)
-REST_ENERGY = [26, 34, 42, 52, 64]      # energy per hour in the Rest Area by level (HP heals at the base sleeping rate)
+REST_ENERGY = [26, 34, 42, 52, 64, 70, 76, 82, 88, 96]      # energy per hour in the Rest Area by level (HP heals at the base sleeping rate)
 AUTO_REST_BELOW = 0.5           # auto-care sends slimes under 50% HP to the Rest Area if there is room
 # Library / mastery
 TASK_MIN_ENERGY = 25
@@ -280,10 +289,15 @@ TRAINER_BONUS, TRAINER_BONUS_PER_LEVEL = 0.15, 0.03   # a trainer's proficiency 
 TRAINER_LESSON_GAIN, TRAINER_LESSON_OTHER = 0.15, 0.05  # a trainer's own proficiency gain per lesson given (teaching sharpens the teacher a little)
 CRAFT_SHIFTS, CRAFT_COST_SHARE = 4, 0.6       # a blacksmith forges every 4 shifts, at this share of the shop price
 CRAFT_RELIC_COST = {"scrap": 6, "white_gel": 15}
+RELIC_RARITY_LEVEL = {"uncommon": 3, "rare": 5, "epic": 8, "legendary": 10}   # Reliquary level needed to raise a relic to that rarity
+FIGHT_WARN_BELOW = 35             # in a fight, a party slime below this food or energy shows a warning (🍖 hungry, 😴 tired)
+STAMINA_POTION_ENERGY = 15        # a stamina potion also wakes a tired slime up: this much energy per grade
+COLD_SERVINGS_PER_LEVEL = 8       # Cold Storage: extra pantry servings kept fresh, per level
+COLD_PACK_PER_LEVEL = 3           # ... and cooked dishes a party may carry on one trip, per level (then raw rations)
 PANTRY_PER_LEVEL, HUNGRY_BELOW = 12, 50       # servings the pantry holds per Kitchen level; food need below which a slime counts as hungry
-HOSPITAL_BEDS = [2, 4, 6, 8, 10]                 # slimes the Hospital ward holds, by level
+HOSPITAL_BEDS = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]                 # slimes the Hospital ward holds, by level
 WARD_DOCTOR_BONUS, WARD_NO_DOCTOR_BONUS = 0.30, 0.05   # patients in the ward heal this much faster than in the Rest Area (with / without a doctor on duty)
-HOSPITAL_HEAL = [0.04, 0.06, 0.08, 0.10, 0.12]    # share of max HP a doctor heals every injured slime each hour, by Hospital level
+HOSPITAL_HEAL = [0.04, 0.06, 0.08, 0.10, 0.12, 0.13, 0.14, 0.15, 0.16, 0.18]    # share of max HP a doctor heals every injured slime each hour, by Hospital level
 LIBRARIAN_LORE_XP = 6.0         # mastery XP a round of cataloguing gives one attuned slime (x power)
 TRAINER_PUPILS, TRAINER_GAIN = 1, 3.0      # pupils per round (+1 per 4 levels); base class-proficiency gain
 MASTERY_MIN_STARS = 3           # elemental mastery unlocks at 3 stars, for ANY class
@@ -323,7 +337,9 @@ RESCUE_DEADLINE_HOURS, RESCUE_BASE_HOURS, RESCUE_BASE_CHANCE = 24, 4, 0.35   # t
 # ---- Gentle Keeper badges (achievements.py): a milestone floor of the Descent cleared while merging or destroying few slimes --------
 # floor -> most sacrifices (merges, chamber destroys, ego fusions, ever) for (gold, silver, bronze) when that floor is first cleared.
 # The game is meant to need sacrifices; clearing deep with few of them is the feat.
-GENTLE_FLOORS = {10: (0, 3, 8), 20: (2, 8, 20), 30: (5, 15, 35), 40: (8, 25, 55), 50: (12, 35, 80)}
+GENTLE_FLOORS = {10: (0, 3, 8), 20: (2, 8, 20), 30: (5, 15, 35), 40: (8, 25, 55), 50: (12, 35, 80),
+                 60: (18, 48, 105), 70: (24, 60, 130), 80: (28, 70, 150), 90: (32, 78, 165), 100: (35, 85, 180)}
+GENTLE_EGO_PER_SLOT = 3          # below floor 50 the limits also allow the ego fusions an endgame party needs: up to 3 per party slot by floor 100
 
 # ---- passive skills (passives.py) -------------------------------------------------------------------------------------------------
 HEARTH_HEAL = 0.25               # Hearth (fire mastered): the party mends this much more at each camp hour
@@ -430,7 +446,8 @@ ITEM_SALVAGE_BASE = 2
 ITEM_ASCEND_STAR = 15            # materials of the item's own tier = this x current star ...
 ITEM_ASCEND_RARITY = 150         # ... and for a rarity step
 ITEM_MOD_RANGE = {"crit_rate": (0.03, 0.06), "crit_dmg": (0.10, 0.25), "elem_dmg": (0.08, 0.18),
-                  "lifesteal": (0.03, 0.08)}
+                  "lifesteal": (0.03, 0.08), "evasion": (0.02, 0.05), "guard": (0.03, 0.06), "regen": (0.008, 0.015),
+                  "resist": (0.04, 0.08), "spell_power": (0.05, 0.12)}
 ITEM_COMPAT_MIN, ITEM_COMPAT_MAX = 0.85, 1.15    # stat multiplier from slime <-> item compatibility
 EGO_BASE_MULT = 1.5              # an ego relic is a 5-star legendary fused with a 5-star legendary slime
 EGO_LEVEL_MULT = 0.02            # + 2% per level of the sacrificed slime
@@ -461,6 +478,22 @@ STAMINA_HOUR_REGEN = 0.10        # fraction of max stamina per hour awake ...
 STAMINA_SLEEP_MULT = 2.5         # ... faster asleep / in the Rest Area
 STAMINA_WINDED_MULT = 0.6        # damage and healing of an exhausted slime
 STAMINA_CAMP_AT = 0.35           # a Pit / Rift / Quarry party camps when anyone is below this
+# ---- combat resources: pools and action points (pools.py) -------------------------------------------------------------
+AP_PER_TURN = 3                  # action points every turn brings; a plain skill costs this much
+AP_MAX = 6                       # unspent AP is saved up to this (a big area skill costs it all)
+AP_DEFEND = 1                    # Defend costs this, ends the turn, and catches breath
+AP_TURN_ACTIONS = 4              # at most this many actions in one turn
+POOL_PER_AP = 5                  # pool units a skill burns per AP it costs (stamina, mana or nature)
+POOL_LEVEL_GROWTH = 0.025        # pools and their costs grow 2.5% per (stat) level
+MANA_ROUND_REGEN = 0.04          # share of max mana back each round
+HEAL_POOL_MULT = 1.5             # healing burns half as much again (it is what makes fights endless)
+NATURE_ROUND_REGEN = 0.06        # share of max nature back each round
+NATURE_START = 0.5               # every fight starts with nature half full (it is drawn from the surroundings)
+NATURE_PER_MASTERY = 0.06        # the top elemental mastery level widens the nature pool
+POOL_DEFEND = 0.10               # Defend refills this share of every pool
+FOE_POOL = 100.0                 # a monster's stamina, mana and nature
+ARCANE_MANA = 0.25               # an Arcane Potion refills this share of mana per grade (in a fight: all of it)
+WINDED_BELOW = 0.10              # a slime under this share of max stamina is winded (physical blows weaker)
 HERB_DROP = {"grind": 0.35, "adventure": 0.10, "quarry": 0.10}   # per foe, 1-3 herbs
 POTION_BONUS = [0.10, 0.15, 0.20, 0.30, 0.40]                    # grade 1..5
 POTION_HERBS = [3, 8, 20, 50, 120]
@@ -604,7 +637,7 @@ LIVE_SCALES = (1, 6, 60)         # speed presets multiplying both rates
 LIVE_CATCHUP_MAX_HOURS = 48      # offline progress is capped (game hours)
 
 # upgrades take game time when time passes for real (live / deferred turns); instant in the CLI and tests
-CONSTRUCTION_HOURS = [6, 12, 24, 36]            # building level 1->2 ... 4->5
+CONSTRUCTION_HOURS = [6, 12, 24, 36, 48, 60, 72, 96, 120]    # building level 1->2 ... 9->10
 HATCHERY_REFUND = 0.05                           # per Hatchery level above 1: share of the gel of a pull given back
 
 # Phoenix Feather: a consumable that lifts a slime that would die in battle back to its feet

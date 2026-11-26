@@ -77,7 +77,7 @@ label.f { display: flex; gap: 6px; align-items: center; font-size: .9rem; color:
 /* ---- bars */
 .bar { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
 .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .3s; }
-.bar.xp > i { background: var(--blue); } .bar.morale > i { background: var(--warn); } .bar.know > i { background: var(--purple); }
+.bar.xp > i { background: var(--blue); } .bar.morale > i { background: var(--warn); } .bar.know > i { background: var(--purple); } .bar.mana > i { background: var(--blue); }
 .bar.lvl-ok > i { background: var(--good); } .bar.lvl-mid > i { background: var(--warn); } .bar.lvl-low > i { background: var(--bad); }
 .scard .blob, .pull-card .blob { margin: 0 auto 2px; }
 .lab { display: flex; justify-content: space-between; font-size: .78rem; color: var(--mute); margin: 5px 0 2px; }
@@ -201,44 +201,110 @@ header.top { gap: 8px; } header.top .res { display: flex; gap: 6px; flex-wrap: w
 main h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
 
 /* battle arena (ARENA.render in app.js draws it; the animation below is pure CSS and never touches the rules) */
+/* The arena: a column that fits the screen. The header, the turn order and the command bar stay put; only the field
+   scrolls (and only when a big party does not fit), so choosing an action and then a target needs no scrolling. */
 .arena-wrap { position: fixed; inset: 0; z-index: 71; display: flex; align-items: center; justify-content: center; padding: 8px; pointer-events: none; }
-.arena { pointer-events: auto; width: min(900px, 98vw); max-height: 96vh; overflow-y: auto; }
-.arena .field { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: start; margin: 8px 0; }
+.arena { pointer-events: auto; position: relative; width: min(900px, 98vw); height: auto; max-height: min(96vh, 900px); display: flex; flex-direction: column; gap: 6px; overflow: hidden; padding: 10px 12px; }
+.arena .ahead, .arena .turns { flex: none; }
+.arena .ahead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.arena .field { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: start; padding: 4px 2px; overscroll-behavior: contain; }
 .arena .side { display: grid; gap: 6px; } .arena .vs { align-self: center; color: var(--mute); font-weight: 700; }
-.arena .rows { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: start; } .arena .rowcol { display: grid; gap: 6px; }
-.arena .unit { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; background: var(--card); }
+.arena .rows { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: start; } .arena .rowcol { display: grid; gap: 6px; align-content: start; }
+.arena .unit { position: relative; border: 1px solid var(--line); border-radius: 10px; padding: 5px 7px; background: var(--card); display: grid; gap: 3px; }
+.arena .uhead { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.arena .uname { font-weight: 600; font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arena .urow, .arena .uel { font-size: 11px; color: var(--mute); }
+.arena .foefig { display: grid; place-items: center; width: 30px; height: 30px; flex: none; font-size: 20px; border-radius: 50%; background: color-mix(in srgb, var(--bad) 12%, var(--card2)); }
+.blob.xs { width: 30px; height: 30px; flex: none; } .blob.xs .body { --w: 25px; --h: 21px; } .blob.xs i { width: 4px; height: 5px; } .blob.xs .em { font-size: .6rem; right: -4px; bottom: -3px; }
+.blob.xs .mouth { width: 7px; height: 4px; border-width: 1.5px; } .blob.xs .gear-front, .blob.xs .gear-back { transform: scale(.65); transform-origin: 50% 60%; }
+.arena .bar { height: 6px; margin: 0; }
+.arena .unum { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--mute); font-variant-numeric: tabular-nums; }
+.arena .ustat { display: flex; gap: 3px; margin-left: auto; } .arena .ustat span { animation: pop .3s ease-out; }
 .arena .unit.dead { opacity: .35; } .arena .unit.acting { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
 .arena .unit.targetable { cursor: pointer; border-color: var(--bad); animation: pulse 1s infinite alternate; }
 .arena .side.party .unit.targetable { border-color: var(--good); }
-.arena .uname { font-weight: 600; font-size: 14px; } .arena .ustat { display: flex; gap: 4px; min-height: 0; }
-.arena .turns { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
-.arena .ord { padding: 2px 6px; border-radius: 99px; border: 1px solid var(--line); font-size: 14px; }
+.arena .turns { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.arena .ord { padding: 1px 6px; border-radius: 99px; border: 1px solid var(--line); font-size: 13px; flex: none; }
 .arena .ord.foes { border-color: var(--bad); } .arena .ord.party { border-color: var(--good); } .arena .ord.now { background: var(--accent); }
-.arena .cmd { border-top: 1px solid var(--line); padding-top: 8px; }
-.arena .arena-log { max-height: 150px; overflow-y: auto; margin-top: 8px; }
-.arena .unit { position: relative; }
-.arena .unit.alive .blob { display: inline-block; animation: bob 2.4s ease-in-out infinite; transform-origin: 50% 100%; }
-.arena .unit:nth-child(2n) .blob { animation-delay: -.8s; } .arena .unit:nth-child(3n) .blob { animation-delay: -1.5s; }
-.arena .unit.acting .blob { animation: lunge .8s ease-in-out infinite; }
-.arena .side.foes .unit.acting .blob { animation-name: lungeL; }
-.arena .unit.hit { animation: hitflash .5s ease-out; } .arena .unit.hit .blob { animation: shake .4s; }
-.arena .unit.healed { animation: healglow .7s ease-out; }
-.arena .unit.dead .blob { animation: squash .6s forwards; }
-.arena .float { position: absolute; right: 8px; top: -2px; font-weight: 800; pointer-events: none; animation: floatup 1s ease-out forwards; }
+.arena .cmd { flex: none; border-top: 1px solid var(--line); padding-top: 6px; display: grid; gap: 6px; }
+.arena .cmdline { font-size: 14px; }
+.arena .abil { display: flex; flex-wrap: wrap; gap: 6px; }
+.arena .abil .btn { padding: 8px 10px; }
+.arena .cmdmore { gap: 6px; }
+.arena .agift > summary { cursor: pointer; font-size: 13px; }
+.arena .agift[open] { max-height: 30vh; overflow-y: auto; }
+.arena .arena-log { max-height: 4.6em; overflow: hidden; margin: 0; font-size: 12px; line-height: 1.15em; }
+.arena .arena-log.open { max-height: 30vh; overflow-y: auto; }
+/* motion: idle bob, the actor lunges, hits shake, heals glow, the fallen squash; actions fly across the field */
+.arena .unit.alive .foefig, .arena .unit.alive .blob.xs { animation: bob 2.4s ease-in-out infinite; transform-origin: 50% 100%; }
+.arena .unit:nth-child(2n) .foefig, .arena .unit:nth-child(2n) .blob.xs { animation-delay: -.8s; }
+.arena .unit:nth-child(3n) .foefig, .arena .unit:nth-child(3n) .blob.xs { animation-delay: -1.5s; }
+.arena .unit.acting .foefig, .arena .unit.acting .blob.xs { animation: lunge .8s ease-in-out infinite; }
+.arena .side.foes .unit.acting .foefig { animation-name: lungeL; }
+.arena .unit.hit { animation: hitflash .5s ease-out; }
+.arena .unit.healed, .arena .unit.glow { animation: healglow .7s ease-out; }
+.arena .unit.dead .foefig, .arena .unit.dead .blob.xs { animation: squash .6s forwards; }
+.arena .unit.shake { animation: shake .4s; }
+.arena .unit.lunge-r { animation: hopR .32s ease-out; } .arena .unit.lunge-l { animation: hopL .32s ease-out; }
+.arena .unit.dodge { animation: dodge .4s ease-out; }
+.arena.quake { animation: quake .38s; }
+.arena .float { position: absolute; right: 8px; top: -2px; font-weight: 800; pointer-events: none; animation: floatup 1s ease-out forwards; z-index: 2; }
 .arena .float.dmg { color: var(--bad); } .arena .float.heal { color: var(--good); }
-.arena .ustat span { animation: pop .3s ease-out; }
-@keyframes bob { 50% { transform: translateY(-3px) scale(1.06, .94); } }
-@keyframes lunge { 50% { transform: translateX(8px) scale(1.15); } }
-@keyframes lungeL { 50% { transform: translateX(-8px) scale(1.15); } }
-@keyframes shake { 25% { transform: translateX(-4px) rotate(-6deg); } 75% { transform: translateX(4px) rotate(6deg); } }
+.arena .fxlayer { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.arena .fxg { position: absolute; transform: translate(-50%, -50%); font-size: 22px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35)); }
+.arena .fxg.burst { animation: burst .6s ease-out forwards; font-size: 26px; } .arena .fxg.burst.small { font-size: 18px; }
+.arena .fxg.sparkle { animation: sparkle .65s ease-out forwards; } .arena .fxg.pop { animation: burst .6s ease-out forwards; }
+.arena .fxg.missword, .arena .fxg.critword { font-size: 13px; font-weight: 800; color: var(--mute); animation: floatup .8s ease-out forwards; }
+.arena .fxg.critword { color: var(--warn); font-size: 15px; }
+@keyframes bob { 50% { transform: translateY(-2px) scale(1.06, .94); } }
+@keyframes lunge { 50% { transform: translateX(6px) scale(1.12); } }
+@keyframes lungeL { 50% { transform: translateX(-6px) scale(1.12); } }
+@keyframes hopR { 40% { transform: translateX(10px); } } @keyframes hopL { 40% { transform: translateX(-10px); } }
+@keyframes shake { 20% { transform: translateX(-4px) rotate(-2deg); } 60% { transform: translateX(4px) rotate(2deg); } }
+@keyframes dodge { 40% { transform: translateY(-8px) translateX(6px); opacity: .6; } }
+@keyframes quake { 20% { transform: translate(-3px, 2px); } 40% { transform: translate(3px, -2px); } 60% { transform: translate(-2px, -1px); } 80% { transform: translate(2px, 1px); } }
+@keyframes burst { 0% { transform: translate(-50%, -50%) scale(.4); opacity: 0; } 30% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; } }
+@keyframes sparkle { 0% { transform: translate(-50%, -30%) scale(.6); opacity: 0; } 40% { opacity: 1; } 100% { transform: translate(-50%, -120%) scale(1.2); opacity: 0; } }
 @keyframes hitflash { 0% { background: color-mix(in srgb, var(--bad) 45%, var(--card)); } }
 @keyframes healglow { 0% { background: color-mix(in srgb, var(--good) 40%, var(--card)); } }
 @keyframes squash { to { transform: scale(1.3, .3); filter: grayscale(1); } }
 @keyframes floatup { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-22px); opacity: 0; } }
 @keyframes pop { from { transform: scale(0); } }
-@media (prefers-reduced-motion: reduce) { .arena .unit *, .arena .unit { animation: none !important; } }
 @keyframes pulse { to { box-shadow: 0 0 10px 1px var(--bad); } }
-@media (max-width: 640px) { .arena .field { grid-template-columns: 1fr 1fr; } .arena .vs { display: none; } }
+/* skills grouped by what they do, each group with its own colour */
+.arena .abil { display: flex; flex-direction: column; gap: 4px; }
+.arena .skgroup { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.arena .sklabel { font-size: 11px; font-weight: 700; min-width: 64px; color: var(--sk, var(--mute)); }
+.sk-single { --sk: var(--bad); } .sk-area { --sk: #f08a3c; } .sk-debuff { --sk: var(--purple); } .sk-buff { --sk: #e9b949; } .sk-heal { --sk: var(--good); }
+.arena .skgroup .btn { border-left: 3px solid var(--sk, var(--line)); }
+/* the fallen shrink to a slim strip at the bottom of their column; a revived one comes back full size */
+.arena .unit.dead { order: 1; padding: 2px 6px; gap: 0; opacity: .45; }
+.arena .unit.dead .bar, .arena .unit.dead .unum { display: none; }
+.arena .unit.dead .foefig, .arena .unit.dead .blob.xs { width: 18px; height: 18px; font-size: 12px; }
+.arena .unit.dead .uname { font-size: 11px; text-decoration: line-through; }
+.arena .unit.alive { transition: padding .2s; }
+/* more motion: buffs rise, hexes swirl purple, wards shine, summons pop in, area attacks sweep across */
+.arena .unit.empowered { animation: empower .7s ease-out; } .arena .unit.hexed { animation: hex .7s ease-out; }
+.arena .unit.warded { animation: ward .7s ease-out; } .arena .unit.arrive { animation: arrive .5s ease-out; }
+.arena .fxg.rise { animation: rise .7s ease-out forwards; } .arena .fxg.swirl { animation: swirl .7s ease-out forwards; }
+.arena .fxg.sparkle.late { animation-delay: .15s; opacity: 0; }
+.arena .fxg.sweep { width: 40px; border-radius: 40px; display: grid; place-items: center; font-size: 26px;
+  background: radial-gradient(ellipse at center, rgba(255, 170, 80, .35), transparent 70%); }
+@keyframes empower { 0% { box-shadow: 0 0 0 0 rgba(233, 185, 73, .9) inset; } 50% { box-shadow: 0 0 14px 2px rgba(233, 185, 73, .7); } }
+@keyframes hex { 0% { background: color-mix(in srgb, var(--purple) 40%, var(--card)); } }
+@keyframes ward { 0% { box-shadow: 0 0 0 3px var(--blue); } }
+@keyframes arrive { from { transform: scale(.3); opacity: 0; } }
+@keyframes rise { 0% { transform: translate(-50%, 0) scale(.6); opacity: 0; } 40% { opacity: 1; } 100% { transform: translate(-50%, -150%) scale(1.1); opacity: 0; } }
+@keyframes swirl { 0% { transform: translate(-50%, -50%) rotate(0) scale(.5); opacity: 0; } 40% { opacity: 1; } 100% { transform: translate(-50%, -50%) rotate(540deg) scale(1.4); opacity: 0; } }
+@media (max-width: 640px) { .arena .sklabel { min-width: 0; font-size: 10px; } .arena .abil { flex-direction: row; flex-wrap: wrap; gap: 4px 10px; } }
+@media (prefers-reduced-motion: reduce) { .arena .unit *, .arena .unit, .arena.quake, .arena .fxg { animation: none !important; } }
+/* phones: each side is one column (front row first), the two sides stand side by side */
+@media (max-width: 640px) {
+  .arena { padding: 8px; }
+  .arena .field { grid-template-columns: 1fr 1fr; gap: 6px; } .arena .vs { display: none; }
+  .arena .rows { grid-template-columns: 1fr; } .arena .rows.party .rowcol.front { order: -1; }
+  .arena .abil .btn { padding: 8px 8px; font-size: 13px; }
+}
 
 .awaybar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 6px 16px; max-width: 1280px; margin: 0 auto; font-size: .82rem; }
 .eta { font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -375,3 +441,64 @@ details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px sol
 .blob .actb.duo .ab-sub { font-size: .92em; }
 .blob .actb.duo svg { width: 13px; height: 13px; }
 .blob.big .actb.duo svg { width: 18px; height: 18px; }
+/* Relics and gear as tiles: the icon framed in its rarity (relics) or tier (gear); tap for its window. */
+.rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.rtile { --rc: var(--line); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 6px 8px; text-align: center; cursor: pointer;
+  background: var(--card); color: inherit; font: inherit; border: 1px solid var(--line); border-top: 3px solid var(--rc); border-radius: 12px; }
+.rtile:hover, .rtile:focus-visible { background: var(--card2); }
+.rtile .rname { font-size: .85rem; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rtile .rstars { font-size: .72rem; color: #e9b949; }
+.rtile .rstars .mute { color: var(--line); }
+.rtile .rmeta { font-size: .7rem; color: var(--mute); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rtile .rdur { width: 80%; height: 4px; border-radius: 2px; background: var(--card2); overflow: hidden; }
+.rtile .rdur i { display: block; height: 100%; background: var(--good); }
+.rtile .rdur.warn i { background: var(--warn); } .rtile .rdur.bad i { background: var(--bad); }
+.ricon { --rc: var(--line); position: relative; display: grid; place-items: center; width: 46px; height: 46px; font-size: 1.6rem; border-radius: 12px;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--rc) 28%, transparent), transparent 70%); border: 2px solid var(--rc); }
+.ricon.big { width: 56px; height: 56px; font-size: 2rem; } .ricon.sm { width: 34px; height: 34px; font-size: 1.15rem; border-radius: 9px; }
+.ricon .egob { position: absolute; right: -6px; top: -6px; font-style: normal; font-size: .8rem; }
+.ricon .gcount { position: absolute; right: -8px; bottom: -6px; font-style: normal; font-size: .68rem; font-weight: 700; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0 4px; }
+.r-common { --rc: #9aa8a1; } .r-uncommon { --rc: var(--good); } .r-rare { --rc: var(--blue); } .r-epic { --rc: var(--purple); } .r-legendary { --rc: #ffd45a; }
+.rtile.ego { box-shadow: 0 0 0 1px #ffd45a inset, 0 0 12px rgba(255, 212, 90, .35); }
+.t1 { --rc: #9aa8a1; } .t2 { --rc: var(--blue); } .t3 { --rc: var(--purple); } .t4 { --rc: #ffd45a; } .t5 { --rc: #ff6fb1; }
+.tierb { display: inline-block; padding: 0 5px; border-radius: 6px; border: 1px solid var(--rc); color: var(--rc); font-size: .68rem; font-weight: 700; }
+.shoplist { display: flex; flex-direction: column; gap: 6px; }
+.shoprow { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+/* A relic's upgrade path: four steps, done / now / later. */
+.ppath { display: flex; flex-direction: column; gap: 8px; }
+.pstep { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; opacity: .6; }
+.pstep.now, .pstep.done { opacity: 1; }
+.pstep .pnum { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); font-size: .78rem; font-weight: 700; }
+.pstep.done .pnum { background: var(--good); border-color: var(--good); color: var(--bg); }
+.pstep.now .pnum { border-color: var(--accent); color: var(--accent); }
+.pstep.now > div > b { color: var(--accent); }
+.pstep .row, .pstep > div > div { margin-top: 3px; }
+/* the end of a fight led by hand: its last blows play, then a banner, then the report */
+.arena .finale { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 6; display: grid; gap: 2px; padding: 14px 26px;
+  border-radius: 16px; border: 2px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-size: 1.5rem; font-weight: 800;
+  box-shadow: var(--shadow); cursor: pointer; animation: finalein .5s ease-out .6s both; }
+.arena .finale small { font-size: .72rem; font-weight: 400; color: var(--mute); }
+.arena .finale.won { border-color: #e9b949; } .arena .finale.lost { border-color: var(--bad); }
+@keyframes finalein { from { transform: translate(-50%, -50%) scale(.4); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .arena .finale { animation: none; } }
+/* supplies in a fight: warnings on the cards and a row of free actions */
+.arena .warnb { animation: warnpulse 1.4s ease-in-out infinite; }
+@keyframes warnpulse { 50% { transform: scale(1.25); } }
+.arena .supplies { gap: 6px; align-items: center; }
+@media (prefers-reduced-motion: reduce) { .arena .warnb { animation: none; } }
+/* the pack a party carries */
+.packbox { margin-top: 6px; } .packbox > summary { cursor: pointer; }
+.packgrid { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 6px 0; }
+.packf { display: inline-flex; align-items: center; gap: 4px; }
+.arena .supplies select { max-width: 46%; }
+@media (max-width: 640px) { .arena .supplies select { max-width: 100%; } }
+/* combat resources: pool bars and action-point dots on each fighter, costs on the skill buttons */
+.arena .upools { display: flex; align-items: center; gap: 2px; margin-top: 2px; }
+.arena .pool { flex: 1; height: 4px; border-radius: 2px; background: var(--line, #3334); overflow: hidden; min-width: 10px; }
+.arena .pool > i { display: block; height: 100%; }
+.arena .pool.sta > i { background: #e0b43a; } .arena .pool.mana > i { background: #4a8fe0; } .arena .pool.nat > i { background: #4cb86a; }
+.arena .apdots { display: inline-flex; gap: 1px; margin-left: 3px; }
+.arena .apdots > i { width: 5px; height: 5px; border-radius: 50%; border: 1px solid #c9a227; display: inline-block; }
+.arena .apdots > i.on { background: #f0c419; }
+.arena .skcost { opacity: .75; margin-left: 4px; font-size: .8em; white-space: nowrap; }
+.arena .apnow { font-weight: 600; color: #c99a00; margin: 0 4px; }

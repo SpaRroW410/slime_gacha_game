@@ -66,6 +66,7 @@ class TestInBattle(unittest.TestCase):
         a.mastery = {"fire": mastery, "earth": mastery}
         bs.choose_ability = lambda *x: ab
         log = []
+        a.ap = config.AP_MAX                           # a full bank of action points
         bs._turn(a, [a, t], log)
         return t, log
 
@@ -82,6 +83,7 @@ class TestInBattle(unittest.TestCase):
         a, t = mk("A", "party", abilities=(ab.key,)), mk("T", "foes", hp=2000)
         a.mastery = {"fire": 8, "earth": 2}
         bs.choose_ability = lambda *x: ab
+        a.ap = config.AP_MAX                           # a full bank of action points
         bs._turn(a, [a, t], [])
         self.assertEqual(len(t.bleed), 0)
 

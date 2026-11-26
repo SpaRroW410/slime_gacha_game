@@ -87,6 +87,7 @@ class TestHybridSkills(unittest.TestCase):
         bs.choose_ability = lambda *x: get_ability("stolen_spell")
         a.abilities = ["stolen_spell"]
         log = []
+        a.ap = config.AP_MAX                           # a full bank of action points
         bs._turn(a, [a, t], log)
         self.assertTrue(any("copies" in l for l in log))
 
