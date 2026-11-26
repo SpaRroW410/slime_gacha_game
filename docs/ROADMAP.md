@@ -460,6 +460,9 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Per-place time dilation (x3 for every dungeon except scouting, hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
 
+### M34 — Slimes that act on their own (26 November 2026)
+- [x] A "learn" goal; with autonomy on, idle slimes start the drill or study they want (gel only from 10 white gel per real hour, one hour banked at most); rivals ask for a sparring match (granting it cools the rivalry); post requests for any post a slime has a knack or trade for (chef, trainers ...); tired and sleeping slimes take a free Rest Area bed first.
+
 ### M33 — Community and relationships (26 November 2026)
 - [x] The People tab is Community; its first page keeps couples and family trees; each slime's card gets a Relationships tab (ties with the bond, growing close / friction, parents and children). The slime card is sorted with nothing shown twice: Overview (stats, condition, needs, care, orders), Fight (class, skills grouped with their AP and pool cost, star attributes, passives, growth), Train (proficiency, drills, sparring, elements and spells, trades), Mind (personality, sanity and feelings, on its mind, memories newest first, its life, outlook), Relationships, Gear.
 

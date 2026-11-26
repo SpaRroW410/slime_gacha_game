@@ -102,6 +102,8 @@ class Game:
         self.parties = PartyManager(party_size)        # raises ValueError unless multiple of 5
         self.best_floor = 0                            # deepest floor ever cleared by anyone
         self.descent_cleared = False                   # the heart of the Hollow (floor 50, the Parched King) has fallen
+        self.auto_gel = float(config.AUTO_GEL_PER_HOUR)    # autonomy: gel the slimes may still spend on training they start
+        self.auto_gel_at = time.time()                      # ... refilled by the REAL clock (config.AUTO_GEL_PER_HOUR an hour)
         self.playlog_on = False                         # the playtest recorder (playlog.py): off unless the player turns it on
         self.playlog: List[dict] = []
         self.deep_cleared = False                      # ... and the bottom of the Deep Hollow (floor 100, the Dry Mother)
@@ -605,6 +607,8 @@ class Game:
             self.tick_count += 1
             self.needs.tick(self.slimes(), events)
             self._reap(events)
+            if self.needs.auto_care:
+                self._to_free_beds(events)
             doc = jobs.holder(self, "doctor")
             bld.rest_tick(self.slimes(), self.buildings, events, set(self.ward), bool(doc and doc.state == "working"))
             self.ward = [i for i in self.ward if i in self.roster and self.roster[i].state == "resting"]
@@ -1644,6 +1648,17 @@ class Game:
         self.ward.append(s.id)
         doc = jobs.holder(self, "doctor")
         return f"🏥 {s.name} is admitted to the Hospital ({'a doctor is on duty: +30% healing' if doc and doc.state == 'working' else 'no doctor on duty: +5% healing'})."
+
+    def _to_free_beds(self, events: List[str]) -> None:
+        """Slimes asleep at home take a free bed in the Rest Area (it restores energy much faster than a nap)."""
+        moved = []
+        for s in self.slimes():
+            if s.state == "sleeping" and not s.in_dungeon and self.resting_count() < self.buildings.rest_capacity():
+                s.state = "resting"
+                moved.append(s.name)
+        if moved:
+            events.append(f"🛏️ {', '.join(moved[:4])}{' and others' if len(moved) > 4 else ''} move{'s' if len(moved) == 1 else ''} "
+                          "from a nap to a free bed in the Rest Area.")
 
     def _auto_rest(self, s) -> bool:
         if s.state == "idle" and not s.in_dungeon and self.resting_count() < self.buildings.rest_capacity():
@@ -3214,9 +3229,69 @@ class Game:
             self._auto_repair(s, log)
             self._auto_equip(s, log)
             self._auto_level_relics(s, log)
+        for s in self.slimes():
+            self._auto_train(s, log)
         if self.tick_count % 24 == config.AUTONOMY_BREW_HOUR:
             self._auto_brew(log)
             self._auto_merge_gear(log)
+
+    # ---- autonomy: training the slimes start on their own ----------------------------------------------------------
+    def gel_budget(self) -> float:
+        """Gel the slimes may still spend on training they start themselves: config.AUTO_GEL_PER_HOUR a real hour, never
+        more than one hour's worth banked (so a long absence cannot add up to a spree)."""
+        now = time.time()
+        if now > self.auto_gel_at:
+            self.auto_gel = min(float(config.AUTO_GEL_PER_HOUR),
+                                self.auto_gel + config.AUTO_GEL_PER_HOUR * (now - self.auto_gel_at) / 3600)
+        self.auto_gel_at = now
+        return self.auto_gel
+
+    def _auto_affords(self, cost: Dict[str, int]) -> bool:
+        gel = sum(v for k, v in cost.items() if k.endswith("_gel"))
+        return gel <= self.gel_budget() + 1e-9 and self._stock_free(cost)
+
+    def _auto_train(self, s: Slime, log: List[str]) -> None:
+        """An idle slime at home whose goal is to get stronger, master its style or learn an element goes and does it, if a
+        place in the yard or the Library is free: the same 66% rule as all autonomy, and gel only from the hourly budget."""
+        goal = (s.goal or {}).get("kind")
+        if goal not in ("stronger", "master", "learn") or s.state != "idle" or s.in_dungeon or s.job or s.grounded \
+                or s.hp < s.max_hp * 0.7 or s.needs.get("energy") < config.AUTO_TRAIN_ENERGY \
+                or s.needs.get("food") < config.AUTO_TRAIN_ENERGY or self.refusal(s, "job"):
+            return
+        party = self.parties.party_of(s.id)
+        if party and self.party_activity(party.id):
+            return
+        if random.Random((self.seed or 0) * 7919 + self.tick_count * 131 + s.id).random() > config.AUTO_TRAIN_CHANCE:
+            return
+        try:
+            if goal == "learn":
+                el = s.goal.get("el") or ""
+                if not el or not self._auto_affords(config.STUDY_COST):
+                    return
+                gel = config.STUDY_COST.get("white_gel", 0)
+                msg = self.study(s.id, el)
+            else:
+                disc = s.arch.discipline
+                yard = bld.DRILL_YARDS[disc]
+                if not self._has_room(yard):
+                    return
+                tiers = [i + 1 for i, t in enumerate(config.DRILL_TIERS) if self.buildings.level("training_grounds") >= t[1]]
+                tier = next((t for t in reversed(tiers) if self._auto_affords(config.DRILL_TIERS[t - 1][3])), 0)
+                if not tier:
+                    return
+                gel = config.DRILL_TIERS[tier - 1][3].get("white_gel", 0)
+                msg = self.drill(s.id, disc, tier)
+        except InvalidAction:
+            return
+        self.auto_gel = max(0.0, self.auto_gel - gel)
+        log.append(f"🎯 {s.name} {s.goal['text'].replace('wants to', 'wanted to', 1)} and goes by itself: {msg}")
+
+    def _has_room(self, facility: str) -> bool:
+        try:
+            self._check_room(facility, 1)
+            return True
+        except InvalidAction:
+            return False
 
     def _auto_repair(self, s: Slime, log: List[str]) -> None:
         for it in list(s.items.values()):
@@ -4636,7 +4711,7 @@ class Game:
                     intel={str(k): v for k, v in self.intel.items()}, dungeon_seed=self.dungeon_seed,
                     inventory=self.inventory.to_dict(), pit_lost=self.pit_lost,
                     vault=[i.to_dict() for i in self.vault.values()], time_mode=self.time_mode, time_scale=self.time_scale, wall_last=self.wall_last, wall_frac=self.wall_frac,
-                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, relic_progress=self.relic_progress, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, stock_peak=self.stock_peak, next_item_id=self.next_item_id, playlog_on=self.playlog_on, playlog=self.playlog,
+                    expeditions=self.expeditions, held=self.held, next_held=self.next_held, ward=self.ward, plans=self.plans, construction=self.construction, feathers=self.feathers, chapters=self.chapters, pending_battle=self.pending_battle, pantry=self.pantry, recipe_pref=self.recipe_pref, forge_progress=self.forge_progress, forge_next=self.forge_next, relic_progress=self.relic_progress, stranded=self.stranded, next_stranded=self.next_stranded, keeper=self.keeper.to_dict(), relations=self.relations.to_dict(), potions=self.potions, potion_peak=self.potion_peak, autonomy=self.autonomy, forage=self.forage, vice=self.vice, vice_challenge=self.vice_challenge, hunt_group=self.hunt_group, vault_peak=self.vault_peak, gear_peak=self.gear_peak, stock_peak=self.stock_peak, next_item_id=self.next_item_id, playlog_on=self.playlog_on, playlog=self.playlog, auto_gel=round(self.auto_gel, 3), auto_gel_at=self.auto_gel_at,
                     sacrifice_stress=round(self.sacrifice_stress, 3), shadow_tick=self.shadow_tick,
                     bonds=[[*sorted(k), round(v, 2)] for k, v in self.social.bonds.items()],
                     discovered=sorted(self.library.discovered),
@@ -4752,6 +4827,8 @@ class Game:
         g.gear_peak = dict(d.get("gear_peak", {}))
         g.stock_peak = dict(d.get("stock_peak", {}))
         g.playlog_on = bool(d.get("playlog_on", False))
+        g.auto_gel = float(d.get("auto_gel", config.AUTO_GEL_PER_HOUR))
+        g.auto_gel_at = float(d.get("auto_gel_at", time.time()))
         g.playlog = list(d.get("playlog", []))
         g.mood_rng = random.Random((((g.seed or 0) ^ 0xE70) + d.get("tick", 0)) & 0xFFFFFFFF)
         if g.wallet.get("herb"):                              # v10 saves had one kind of herb: share it out

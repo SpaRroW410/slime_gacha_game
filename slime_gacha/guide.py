@@ -388,6 +388,19 @@ def build() -> list:
             dict(name="Gear and relic upkeep", text="With autonomy on, slimes also take clearly better spare gear (15% better) for their own slots, "
                                            "level the relics they wear (one level an hour, paid with materials), and once a day merge three spare "
                                            "gear pieces of one kind into the next tier when those three are within 66% of the spares (gear in use is "
-                                           "never touched). They never spend a stock below 34% of the most you have ever held of it.")]),
+                                           "never touched). They never spend a stock below 34% of the most you have ever held of it."),
+            dict(name="Training on their own", text=f"With autonomy on, an idle slime at home whose goal is to get stronger, to master its "
+                 "fighting style or to learn an element goes and does it when a place is free: a drill in its own yard (the best tier the "
+                 "Training Grounds allow and it can afford) or a study session in the Library. It must be rested, fed, well and not "
+                 "needed by its party. Gel for this comes only from a small allowance: "
+                 f"{c.AUTO_GEL_PER_HOUR} white gel per real hour, never more than one hour's worth saved up, so a long absence cannot "
+                 "turn into a spree; other materials follow the 66% rule. Town > Alchemy Lab shows what is left this hour."),
+            dict(name="Asking for things", text="Slimes ask for what they want (Colony requests, or the slime's card): a rest day, a "
+                 "party, to be moved away from a grudge, a post they are made for (their class, a natural knack, or a trade they have "
+                 "learned: chef, trainer, blacksmith ...), and a rival may ask for a sparring match to settle things. Granting builds "
+                 "trust (a granted rival spar also cools the rivalry); turning it down is remembered."),
+            dict(name="A bed before a nap", text="With auto-care on, a tired slime takes a free bed in the Rest Area before it naps where "
+                 "it stands (the Rest Area restores energy much faster), and slimes already asleep at home move into a bed when one "
+                 "frees up. Feeling low and sleeping it off works the same way.")]),
     ]
     return sections
