@@ -68,15 +68,18 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Playtest and balance to floor 100", status="in progress",
          text="A real play-through of the whole Descent (the Hollow to 50, the Deep Hollow to 100), then fix what it finds. The harness and report exist."),
-    dict(id=48, group="Mobile", title="Mobile performance", status="planned",
+    dict(id=112, group="Web portals", title="Web-portal launch with gentle ads", status="planned",
+         text="Poki, CrazyGames, MSN Games and similar sites: a portal build with fast loading and saves that survive, opt-in rewarded ads, "
+              "ad breaks only at natural pauses and rarely, never in a fight or the tutorial, and the game unchanged if ads are blocked."),
+    dict(id=48, group="Later: mobile apps", title="Mobile performance", status="later",
          text="Faster turns, smaller replies, in-place updates, startup on low-end phones."),
-    dict(id=49, group="Mobile", title="Capacitor shell", status="planned",
+    dict(id=49, group="Later: mobile apps", title="Capacitor shell", status="later",
          text="Native saves with backups, app lifecycle, store builds."),
-    dict(id=50, group="Mobile", title="Store prep and compliance", status="planned",
+    dict(id=50, group="Later: mobile apps", title="Store prep and compliance", status="later",
          text="Odds screen, age ratings, privacy labels, listings."),
-    dict(id=51, group="Mobile", title="Monetization decision (optional)", status="planned",
+    dict(id=51, group="Later: mobile apps", title="Monetization decision (optional)", status="later",
          text="Whether real money buys gacha currency decides how much moves to a server."),
-    dict(id=52, group="Mobile", title="Beta and launch", status="planned",
+    dict(id=52, group="Later: mobile apps", title="Beta and launch", status="later",
          text="Device testing, long sessions, crash reporting, release."),
 ]
 

@@ -23,7 +23,8 @@ As of 27 October 2026:
   what GitHub Pages serves. The next pull request (troublemakers and the Keeper's shadow, task 66) is open.
 - **Checks:** the unit tests pass (`python3 -m unittest discover -s tests`); 20 of 20 behaviour targets on 3 seeds
   (`python3 tools/minds_sim.py --seeds 3 --check`); playtest smoothness 0.129 against a 0.22 limit; balance report unchanged.
-- **Next:** the real descent to floor 50 (task 1), then the mobile work (tasks 48-52).
+- **Next:** the real descent to floor 100 (task 1), then the web-portal launch with gentle ads (task 112). The Android / iOS
+  apps (tasks 48-52) come later.
 - **Keeping this file current:** tick tasks here when they ship (the About tab's roadmap must list exactly the open ones - a test
   checks it), add a milestone line, and run `python3 tools/changelog.py` to refresh § 8.
 
@@ -35,7 +36,21 @@ As of 27 October 2026:
   Re-run on the current code (equal star levels, formations, one-day sessions): floor 50 needs level 57 / 50 / 41 / 31 / 25 for common / uncommon / rare / epic / legendary, ~130-186 real hours at x3; smoothness 0.132 (limit 0.22).
   *Done when:* the real descent to floor 50 has been played through (with gear, elements, scouting) and the follow-ups below are closed. Left: extend the harness (or a hand playthrough) to gear, relics, elements and potions.
 
-### Mobile (phase 2) — Capacitor route, from the QA and mobile planning report
+### Web portals — launch on Poki, CrazyGames, MSN Games and similar sites, with gentle ads
+
+- [ ] **112. Web-portal edition with gentle ads** — publish the browser game on web-game portals (Poki, CrazyGames, MSN Games, GameDistribution and others like them) before any app store, earning from ads that never get in the way.
+  - **Portal build:** one build per portal from `tools/build_web.py`, with that portal's SDK, running inside its iframe. It must load fast enough for the portal's rules: Pyodide is heavy, so show a loading screen with progress, then cache the runtime. Pause the clock and sound when the tab is hidden; report loading, gameplay start and gameplay stop events to the portal.
+  - **Saves:** keep the on-device save inside the portal's iframe, use the portal's cloud save where one exists, and keep save export and import.
+  - **Gentle ads, rules first:**
+    - Rewarded ads are opt-in only: the player chooses to watch one for a small bonus (an extra free pull, a little gel, faster brewing) and can always ignore the button.
+    - Ad breaks come only at natural pauses (back home from a Descent trip or a long wave session, after a day ends in turn mode), at most one every several minutes, and never in the first minutes of play.
+    - Never an ad during a fight, the tutorial, a pull animation or a confirm dialog, and never a banner over the play area.
+    - If ads fail or are blocked, the game plays exactly the same; nothing is locked behind an ad.
+    - A frequency cap and the break points live in one config, so they can be tuned per portal.
+  - **Submission:** each portal's listing (thumbnails, short description, controls), age rating, the gacha odds screen and privacy wording, then submit and follow up on each portal's QA feedback.
+  - *Done when:* the game is live on at least two portals, the ad rules above hold in a play session (checked by hand and by a test of the ad-break scheduler), and offline play without ads still works.
+
+### Later: Android and iOS (phase 2) — Capacitor route, from the QA and mobile planning report
 
 - [ ] **48. Mobile M2: performance** — engine hot spots, smaller replies, in-place page updates, lazy rosters, startup measured on low-end phones.  *Done when:* Pyodide startup and big-colony turns are acceptable on a 2 GB Android phone and an iPhone SE.
 - [ ] **49. Mobile M3: Capacitor shell** — native storage with atomic writes and rotating checksummed backups, lifecycle (save on pause, stop timers), store builds.  *Done when:* builds run on iOS and Android with safe saves.
