@@ -133,6 +133,57 @@ class TestRequests(unittest.TestCase):
         self.assertIn(r["job"], ("chef", "librarian", "trainer_magic"))
 
 
+class TestHuntTogether(unittest.TestCase):
+    """A slime that wants to make friends asks the other to go hunting together: a yes becomes a request to the Keeper
+    (even across parties), a no hurts the asker and costs bond."""
+    def _pair(self, seed=8):
+        g = rich_game(seed)
+        a, b = scholar(g, "barbarian", 3), scholar(g, "medic", 3)
+        for s in (a, b):
+            ready(s)
+        pa, pb = g.create_party("A"), g.create_party("B")              # different parties: no matter
+        g.parties.add(pa.id, a.id)
+        g.parties.add(pb.id, b.id)
+        a.goal = dict(kind="befriend", target=b.id, day=g.day, text=f"wants to make friends with {b.name}")
+        return g, a, b
+
+    def test_a_yes_becomes_a_request_and_granting_it_sends_them_out_together(self):
+        g, a, b = self._pair()
+        events = []
+        with mock.patch.object(mind, "would_join", lambda g, x, y: 1.0):
+            r = mind.make_request(g, a, events)
+        self.assertEqual((r["kind"], r["target"]), ("hunt_with", b.id))
+        self.assertIn("said yes", r["text"])
+        a.request = r
+        bond = g.social.bond(a, b)
+        mind.answer(g, a.id, True)
+        self.assertEqual((a.state, b.state), ("hunting", "hunting"))
+        self.assertEqual(a.hunt.group, b.hunt.group)                    # one group: they bond when they come home
+        self.assertGreater(g.social.bond(a, b), bond)
+        self.assertIsNone(a.request)
+
+    def test_a_no_hurts_the_asker_and_costs_bond(self):
+        g, a, b = self._pair()
+        g.social.bonds[frozenset((a.id, b.id))] = 10
+        events = []
+        with mock.patch.object(mind, "would_join", lambda g, x, y: 0.0):
+            r = mind.make_request(g, a, events)
+        self.assertTrue(r is None or r["kind"] != "hunt_with")
+        self.assertEqual(g.social.bond(a, b), 10 - config.INVITE_REFUSED_BOND)
+        self.assertGreater(a.emotions.get("sadness", 0), 0)
+        self.assertTrue(any("turns down" in e for e in events))
+        with mock.patch.object(mind, "would_join", lambda g, x, y: 1.0):   # it waits a few days before asking again
+            r = mind.make_request(g, a, [])
+        self.assertTrue(r is None or r["kind"] != "hunt_with")
+
+    def test_kind_slimes_say_yes_more_than_grumpy_ones(self):
+        g, a, b = self._pair()
+        b.traits = ["kind", "chatty"]
+        warm = mind.would_join(g, b, a)
+        b.traits = ["grumpy", "timid"]
+        self.assertGreater(warm, mind.would_join(g, b, a))
+
+
 class TestRestAreaFirst(unittest.TestCase):
     def test_sleepers_at_home_take_a_free_bed(self):
         g = rich_game(6)

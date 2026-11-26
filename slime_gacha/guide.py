@@ -400,6 +400,13 @@ def build() -> list:
                  "party, to be moved away from a grudge, a post they are made for (their class, a natural knack, or a trade they have "
                  "learned: chef, trainer, blacksmith ...), and a rival may ask for a sparring match to settle things. Granting builds "
                  "trust (a granted rival spar also cools the rivalry); turning it down is remembered."),
+            dict(name="Hunting together to make a friend", text=f"A slime that wants to make friends with another first asks it to go "
+                 "hunting together. Whether it says yes depends on how it feels about the asker (bond, compatibility, thanks or "
+                 "grudges), its nature (kind and chatty slimes say yes more, timid and grumpy ones less) and its mood. A yes becomes a "
+                 "request to you: grant it and both set out at once for the richest zone they can both clear, even from different "
+                 f"parties; they grow closer now (+{c.INVITE_GRANTED_BOND} bond) and again when they come home. A no hurts: the asker "
+                 f"is sad and lonely for a while and the pair drifts apart (-{c.INVITE_REFUSED_BOND} bond); it waits "
+                 f"{c.INVITE_AGAIN_DAYS} days before asking again."),
             dict(name="A bed before a nap", text="With auto-care on, a tired slime takes a free bed in the Rest Area before it naps where "
                  "it stands (the Rest Area restores energy much faster), and slimes already asleep at home move into a bed when one "
                  "frees up. Feeling low and sleeping it off works the same way.")]),
