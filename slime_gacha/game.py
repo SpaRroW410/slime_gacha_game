@@ -14,7 +14,7 @@ from . import config
 from .ai import ConflictEngine, NeedsEngine, TRAITS
 from .archetypes import BEHAVIORS, get_archetype
 from .battle import BattleReport, BattleSystem
-from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, outlook, sparring, spells, specialization
+from . import bestiary, jobs, modifiers, awakening, emotions, keeper as keeper_mod, relationships, buildings as bld, dungeon, terrain as terrain_mod, elements, ascension, attributes, equipment, items as items_mod, potions, pools, outlook, sparring, spells, specialization
 from .academy import AcademySystem, Library
 from . import achievements, passives, places, story, sanity, memory, meaning, mind, grief, coping, voice, routine, rituals, appraisal
 from .buildings import BUILDINGS, BuildingManager
@@ -927,6 +927,7 @@ class Game:
         for s in self.slimes():
             lull = 1 + 0.2 * self.keeper.rank("lullaby") if s.state in ("sleeping", "resting") else 1.0
             s.stamina_frac = min(1.0, s.stamina_frac + attributes.hourly_regen(s) * lull * places.dilation(s.in_dungeon))   # away: dungeon hours
+            s.mana_frac = min(1.0, s.mana_frac + attributes.hourly_regen(s) * lull * places.dilation(s.in_dungeon))   # mana too
             if s.buffs:
                 for b in s.buffs:
                     b["hours"] -= 1
@@ -2329,6 +2330,14 @@ class Game:
             raise InvalidAction(str(e))
         return self._pump()
 
+    def battle_end_turn(self):
+        """The slime waiting for orders stops and saves its remaining action points."""
+        run = self.battle_run()
+        if run is None or run.waiting is None:
+            raise InvalidAction("No slime is waiting for orders.")
+        run.end_turn()
+        return self._pump()
+
     def battle_auto_turn(self):
         run = self.battle_run()
         if run is None or run.waiting is None:
@@ -2466,11 +2475,13 @@ class Game:
             return f"{r.emoji} {s.name} eats a {r.name} from the pack."
         kind, g = k[7:].split(":")
         msg = self._drink(s, kind, int(g))
-        if kind == "stamina":
-            run = self.battle_run()
-            for c in (run.everyone if run else []):
-                if c.source is s and c.stamina_max:
-                    c.stamina = c.stamina_max              # second wind in this very fight
+        run = self.battle_run()
+        for c in (run.everyone if run else []):         # in this very fight: stamina is a second wind, arcane refills mana,
+            if c.source is s:                            # renewal refills nature
+                run.refresh(s)
+                pool = {"stamina": "stamina", "arcane": "mana", "renewal": "nature"}.get(kind)
+                if pool and getattr(c, pool + "_max"):
+                    setattr(c, pool, getattr(c, pool + "_max"))
         return msg
 
     def _pack_auto(self, pack: Optional[Dict[str, int]], members, out: Optional[List[str]] = None) -> int:
@@ -2491,9 +2502,10 @@ class Game:
                     out.append(line)
                 n += 1
                 used += 1
-            if s.id in self.roster and s.needs.get("energy") < config.FIGHT_WARN_BELOW:
-                tonics = [k for k in pack if k.startswith("potion:stamina:")]
-                if tonics and not any(b["kind"] == "stamina" for b in s.buffs):
+            for kind, low in (("stamina", s.needs.get("energy") < config.FIGHT_WARN_BELOW),
+                              ("arcane", s.mana_frac < config.STAMINA_CAMP_AT)):     # the tired drink stamina, the drained arcane
+                tonics = [k for k in pack if k.startswith(f"potion:{kind}:")]
+                if s.id in self.roster and low and tonics and not any(b["kind"] == kind for b in s.buffs):
                     line = self._use_pack_item(pack, s, max(tonics, key=lambda k: int(k.split(":")[-1])))
                     if out is not None:
                         out.append(line)
@@ -3175,6 +3187,8 @@ class Game:
                 continue
             if s.stamina_frac < config.AUTONOMY_STAMINA_BELOW:
                 self._auto_drink(s, "stamina", log)
+            if s.mana_frac < config.AUTONOMY_STAMINA_BELOW and pools.MANA_BASE.get(s.archetype, 0) >= 100:
+                self._auto_drink(s, "arcane", log)                   # a drained caster drinks an arcane potion
             if s.hp < s.max_hp * config.AUTONOMY_HP_BELOW:
                 self._auto_drink(s, "vigor", log)
             self._auto_repair(s, log)
@@ -3281,6 +3295,8 @@ class Game:
         if kind == "stamina":
             s.stamina_frac = min(1.0, s.stamina_frac + 0.25)
             s.needs.add("energy", config.STAMINA_POTION_ENERGY * grade)      # it wakes a tired slime up too
+        elif kind == "arcane":
+            s.mana_frac = min(1.0, s.mana_frac + config.ARCANE_MANA * grade)  # it refills mana
         elif kind == "vigor":
             s.hp += int(s.max_hp * potions.bonus(grade) / (1 + potions.bonus(grade)))
         return (f"{pk.emoji} {s.name} drinks a grade {grade} {pk.name}: {pk.effect} "
@@ -4040,6 +4056,7 @@ class Game:
         for s in party:
             s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.STOP_REST_HEAL))
             s.stamina_frac = min(1.0, s.stamina_frac + 0.3)
+            s.mana_frac = min(1.0, s.mana_frac + 0.3)
         st["rested"] = True
         self._owed = 0.0
         self._spend(config.STOP_REST_HOURS, "main")
@@ -4491,7 +4508,7 @@ class Game:
 
     def _needs_camp(self, members) -> bool:
         """Does a session party have to stop and rest: someone hurt, winded, or too tired to carry on?"""
-        return any(s.hp < s.max_hp * config.GRIND_MIN_HP or s.stamina_frac < config.STAMINA_CAMP_AT
+        return any(s.hp < s.max_hp * config.GRIND_MIN_HP or min(s.stamina_frac, s.mana_frac) < config.STAMINA_CAMP_AT
                    or s.needs.get("energy") < config.AUTO_SLEEP_BELOW for s in members)
 
     def _field_unfit(self, members) -> str:
@@ -4515,6 +4532,7 @@ class Game:
                 if s.id in self.roster:
                     s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR))
                     s.stamina_frac = min(1.0, s.stamina_frac + 0.1 * config.STAMINA_SLEEP_MULT)
+                    s.mana_frac = min(1.0, s.mana_frac + 0.1 * config.STAMINA_SLEEP_MULT)
                     if s not in field:                           # a step-by-step party sleeps off its tiredness too (its food and
                         s.needs.add("energy", config.SLEEP_ENERGY_GAIN)    # energy decay is paid by the clock as time passes)
         else:                                                    # a session's party is skipped by the colony's tick: mend it here
@@ -4522,6 +4540,7 @@ class Game:
                 if s.id in self.roster:
                     s.hp = min(s.max_hp, s.hp + int(s.max_hp * config.CAMP_HEAL_PER_HOUR))
                     s.stamina_frac = min(1.0, s.stamina_frac + 0.1 * config.STAMINA_SLEEP_MULT)
+                    s.mana_frac = min(1.0, s.mana_frac + 0.1 * config.STAMINA_SLEEP_MULT)
         if passives.party_has(self, members, "hearth"):                 # Hearth (fire mastered): the party mends more at camp
             for s in members:
                 if s.id in self.roster:
@@ -4537,7 +4556,7 @@ class Game:
         tired = any(s.needs.get("energy") < config.AUTO_SLEEP_BELOW for s in members)
         while hours < max_hours:
             members = [s for s in members if s.id in self.roster]
-            if not members or all(s.hp >= s.max_hp * 0.85 and s.stamina_frac >= 0.7
+            if not members or all(s.hp >= s.max_hp * 0.85 and min(s.stamina_frac, s.mana_frac) >= 0.7
                                   and (not tired or s.needs.get("energy") >= config.FIELD_REST_ENERGY) for s in members):
                 break
             for s in members:

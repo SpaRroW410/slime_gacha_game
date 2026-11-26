@@ -691,6 +691,7 @@ function dOverview(s, { st, free, inDun }) {
     ${sect('Memories', 'What this slime remembers about the others. Grudges make quarrels likelier (and are their stated reason); thanks make them rarer. Memories fade over a few weeks.', s.memories.length ? `<div class="stack">${s.memories.map((m) => `<small class="${m.sign < 0 ? 'bad' : m.sign > 0 ? '' : 'mute'}">${m.sign < 0 ? '😠' : m.sign > 0 ? '💚' : '🕯'} ${esc(m.text)} <span class="mute">· day ${m.day + 1}</span></small>`).join('')}</div>` : '<small class="mute">Nothing on its mind yet.</small>')}
     ${bar(s.sanity, s.sanity_max, 'sanity', `Sanity ${s.sanity}/${s.sanity_max} — ${s.sanity_label}`, s.mood_cap < 1 ? `mood capped at ${Math.round(s.mood_cap * 100)}%` : 'no cap')} ${info('Sanity is how much a slime can take. Deaths of friends, knock-outs, lost battles, brawls and long miserable stretches wear it down; sleep, the Rest Area, the Hospital, a calm happy home, a won fight, the Keeper\'s Soothe and one talk a day build it back. Low sanity caps the mood, so food and pets alone cannot fix a worn-down slime; below 20% it refuses dungeons, below 10% work. Rarer slimes have a bigger reserve and lose less per blow.')}
     ${bar(s.stamina, s.max_stamina, 'know', `⚡ Stamina`, `${Math.round(s.stamina)}/${Math.round(s.max_stamina)}`)}
+    ${bar(s.mana, s.max_mana, 'mana', `🔷 Mana`, `${Math.round(s.mana)}/${Math.round(s.max_mana)}`)}
     ${s.buffs.length ? `<div class="row"><small class="mute">potion slots ${s.buffs.length}/${s.potion_slots}</small>${s.buffs.map((b) => chip(`${(st.potions.kinds.find((k) => k.key === b.kind) || {}).emoji || ''} ${b.kind} G${b.grade} · ${b.hours}h`, 'ok')).join('')}</div>` : ''}
     ${sect('Trades', 'What this slime has learned at the posts in town. Each shift worked earns a little experience in that trade; the level (up to 10) raises the post\'s output by 12% per level, and a natural talent adds 25%. A trade\'s level is kept when the slime moves to another post.', s.trades.length ? s.trades.map((t) => bar(t.next ? t.xp - t.floor : 1, t.next ? t.next - t.floor : 1, 'xp', `${t.emoji} ${esc(t.name)} · level ${t.level}${t.level >= t.max ? ' (max)' : ''}${t.current ? ' · at this post now' : ''}${t.talent ? ' · ⭐ talent' : ''}`, t.next ? `${t.xp - t.floor}/${t.next - t.floor} shifts` : 'max level')).join('') : '<small class="mute">No trade yet: appoint it to a post in Town.</small>')}
     ${sect(`Needs ${s.dominant ? badge(WISH[s.dominant], 'warn') : badge('content', 'ok')}`, 'Needs fall over time. Unmet needs lower mood and morale, stir bad feelings and, at zero, hurt the slime. See the Guide tab for details.', Object.entries(s.needs).map(([k, v]) => bar(v, 100, 'need', NEED_NAME[k], v)).join(''))}
@@ -2005,7 +2006,15 @@ const ARENA = {
       ${d ? `<span class="float ${d < 0 ? 'dmg' : 'heal'}">${d > 0 ? '+' : ''}${d}</span>` : ''}
       <div class="uhead">${fig}<span class="uname">${esc(u.name)}</span>${u.element ? `<small class="uel">${EL_EMOJI[u.element] || esc(u.element)}</small>` : ''}<small class="urow">${u.row === 'back' ? '⬅' : '▶'}</small></div>
       <div class="bar ${pct < 30 ? 'lvl-low' : pct < 60 ? 'lvl-mid' : 'lvl-ok'}"><i style="width:${pct}%"></i></div>
-      <div class="unum"><span>${u.hp}/${u.max_hp}</span>${u.stamina != null ? `<span>⚡${u.stamina}</span>` : ''}<span class="ustat">${(u.status || []).map((x) => `<span>${esc(x)}</span>`).join('')}${u.guard ? '<span>🛡</span>' : ''}${u.poison ? `<span>☠${u.poison}</span>` : ''}${!u.alive ? '<span>💀</span>' : ''}${u.minion ? '<span>👻</span>' : ''}${u.alive && u.hungry ? `<span class="warnb" title="Hungry: food ${u.food}%">🍖</span>` : ''}${u.alive && u.tired ? `<span class="warnb" title="Tired: energy ${u.energy}%">😴</span>` : ''}</span></div></div>`;
+      ${this.pools(u)}
+      <div class="unum"><span>${u.hp}/${u.max_hp}</span><span class="ustat">${(u.status || []).map((x) => `<span>${esc(x)}</span>`).join('')}${u.guard ? '<span>🛡</span>' : ''}${u.poison ? `<span>☠${u.poison}</span>` : ''}${!u.alive ? '<span>💀</span>' : ''}${u.minion ? '<span>👻</span>' : ''}${u.alive && u.hungry ? `<span class="warnb" title="Hungry: food ${u.food}%">🍖</span>` : ''}${u.alive && u.tired ? `<span class="warnb" title="Tired: energy ${u.energy}%">😴</span>` : ''}</span></div></div>`;
+  },
+  /* Three thin bars (stamina, mana, nature) and the action-point dots: what the fighter can still afford. */
+  pools(u) {
+    if (!u.alive || u.ap_max == null) return '';
+    const pb = (v, m, cls, label) => m ? `<span class="pool ${cls}" title="${label} ${v}/${m}"><i style="width:${Math.max(0, Math.min(100, 100 * v / m))}%"></i></span>` : '';
+    const dots = Array.from({ length: u.ap_max }, (_, k) => `<i class="${k < u.ap ? 'on' : ''}"></i>`).join('');
+    return `<div class="upools">${pb(u.stamina, u.stamina_max, 'sta', '⚡ Stamina')}${pb(u.mana, u.mana_max, 'mana', '🔷 Mana')}${pb(u.nature, u.nature_max, 'nat', '🍃 Nature')}<span class="apdots" title="Action points ${u.ap}/${u.ap_max}: +3 every turn, unspent ones are saved">${dots}</span></div>`;
   },
   render(b, finale = false) {
     const delta = this.track(b);
@@ -2017,10 +2026,11 @@ const ARENA = {
     const order = b.order.map((i) => { const u = b.units[i]; return `<span class="ord ${u.side} ${i === b.current ? 'now' : ''}" title="${esc(u.name)}">${esc(u.emoji)}</span>`; }).join('');
     const w = b.waiting != null ? b.units[b.waiting] : null;
     const btn = (a) => {
-      const tip = `${a.desc ? a.desc + ' · ' : ''}${a.kind}${a.element ? ' · ' + a.element : ''} · power ${a.power}${a.cooldown ? ` · cooldown ${a.cooldown}` : ''}${a.cost ? ` · stamina ${a.cost}` : ''}`;
+      const pool = { stamina: '⚡', mana: '🔷', nature: '🍃' }[a.pool] || '';
+      const tip = `${a.short ? '⛔ ' + a.short + ' · ' : ''}${a.desc ? a.desc + ' · ' : ''}${a.kind}${a.element ? ' · ' + a.element : ''} · power ${a.power} · ${a.ap} AP${a.pool ? ` · ${Math.round(a.cost)} ${a.pool}` : ' · free'}${a.cooldown ? ` · cooldown ${a.cooldown}` : ''}`;
       const eff = Object.values(a.eff || {});
       const hint = eff.length ? (eff.some((v) => v > 1) ? ' ▲' : eff.every((v) => v < 1) ? ' ▼' : '') : '';
-      return `<button class="btn small sk-${skillGroup(a)} ${S.ui.pick === a.key ? 'primary' : ''}" data-act="battle_pick" data-key="${esc(a.key)}" ${a.ready ? '' : 'disabled'} title="${esc(tip)}">${a.element ? (EL_EMOJI[a.element] || '') + ' ' : ''}${esc(a.name)}${hint}${a.cooldown ? ` (${a.cooldown})` : ''}${a.winded ? ' 😮‍💨' : ''}</button>`;
+      return `<button class="btn small sk-${skillGroup(a)} ${S.ui.pick === a.key ? 'primary' : ''}" data-act="battle_pick" data-key="${esc(a.key)}" ${a.ready ? '' : 'disabled'} title="${esc(tip)}">${a.element ? (EL_EMOJI[a.element] || '') + ' ' : ''}${esc(a.name)}${hint}<small class="skcost">${a.ap}●${pool ? ' ' + pool + Math.round(a.cost) : ''}</small>${a.cooldown ? ` (${a.cooldown})` : ''}</button>`;
     };
     const abil = w ? SKILL_GROUPS.map(([g, label]) => { const list = b.abilities.filter((a) => skillGroup(a) === g);
       return list.length ? `<div class="skgroup"><span class="sklabel sk-${g}">${label}</span>${list.map(btn).join('')}</div>` : ''; }).join('') : '';
@@ -2031,9 +2041,9 @@ const ARENA = {
       <div class="turns" title="Turn order this round">${order}</div>
       <div class="field"><div class="side party">${col('party')}</div><div class="vs">VS</div><div class="side foes">${col('foes')}</div></div>
       ${finale ? `<button class="finale ${b.victory ? 'won' : 'lost'}" data-act="finale_skip" title="Continue to the report">${b.victory ? '🏆 Victory!' : '💀 Defeat'}<small>tap to continue</small></button>` : ''}
-      <div class="cmd" ${finale ? 'style="display:none"' : ''}>${w ? `<div class="cmdline"><b>${esc(w.emoji)} ${esc(w.name)}</b> ${pick ? `→ tap a <b>${tside === 'foes' ? 'foe' : 'friend'}</b> for <b>${esc(pick.name)}</b> <button class="btn small" data-act="battle_cancel">cancel</button>` : '— choose an action'}</div>
+      <div class="cmd" ${finale ? 'style="display:none"' : ''}>${w ? `<div class="cmdline"><b>${esc(w.emoji)} ${esc(w.name)}</b> <span class="apnow" title="Action points: every turn brings 3, unspent ones are saved (up to ${w.ap_max})">${w.ap}/${w.ap_max} AP</span> ${pick ? `→ tap a <b>${tside === 'foes' ? 'foe' : 'friend'}</b> for <b>${esc(pick.name)}</b> <button class="btn small" data-act="battle_cancel">cancel</button>` : '— choose an action'}</div>
         <div class="abil">${abil}</div>` : '<div class="cmdline mute">The slimes are fighting on their own…</div>'}
-        <div class="row cmdmore">${w ? '<button class="btn small" data-act="battle_auto_turn" title="Let the slime decide this one turn">⏩ Auto this turn</button>' : ''}
+        <div class="row cmdmore">${w ? `<button class="btn small" data-act="battle_end_turn" title="Stop here and save the points left for a bigger skill next turn">⏭ End turn${w.ap ? ` (save ${w.ap} AP)` : ''}</button><button class="btn small" data-act="battle_auto_turn" title="Let the slime decide the rest of this turn">⏩ Auto this turn</button>` : ''}
           <button class="btn small" data-act="battle_manual" data-on="0" title="Let the slimes finish this fight (and later Pit runs) on their own">🤖 Hand over to auto</button>
           <button class="btn small" data-act="arena_log" title="Show more or less of the fight log">📜 ${logOpen ? 'Less' : 'More'} log</button></div>
         ${supplyRow(b)}
@@ -2289,6 +2299,7 @@ const A = {
   battle_target: (d) => { const key = S.ui.pick; S.ui.pick = null; if (key) act('battle_act', { ability: key, target: num(d.i) }, { title: kindTitle() }); },
   battle_cancel: () => { S.ui.pick = null; render(); },
   battle_auto_turn: () => { S.ui.pick = null; act('battle_auto_turn', {}, { title: kindTitle() }); },
+  battle_end_turn: () => { S.ui.pick = null; act('battle_end_turn', {}, { title: kindTitle() }); },
   battle_manual: (d) => { S.ui.pick = null; S.ui.manual = d.on === '1'; act('battle_manual', { manual: d.on === '1' }, { slow: d.on !== '1', title: kindTitle() }); },
   delve_camp: (d) => act('delve_camp', { pid: num(d.pid), hours: num(ui('camp_h', 6), 6) }),
   scout: () => { const ids = (S.ui.scout_ids || []).map(num); const h = num(ui('shours', ''), 0);

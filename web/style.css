@@ -77,7 +77,7 @@ label.f { display: flex; gap: 6px; align-items: center; font-size: .9rem; color:
 /* ---- bars */
 .bar { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
 .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .3s; }
-.bar.xp > i { background: var(--blue); } .bar.morale > i { background: var(--warn); } .bar.know > i { background: var(--purple); }
+.bar.xp > i { background: var(--blue); } .bar.morale > i { background: var(--warn); } .bar.know > i { background: var(--purple); } .bar.mana > i { background: var(--blue); }
 .bar.lvl-ok > i { background: var(--good); } .bar.lvl-mid > i { background: var(--warn); } .bar.lvl-low > i { background: var(--bad); }
 .scard .blob, .pull-card .blob { margin: 0 auto 2px; }
 .lab { display: flex; justify-content: space-between; font-size: .78rem; color: var(--mute); margin: 5px 0 2px; }
@@ -492,3 +492,13 @@ details.party[open] > summary.psum { padding-bottom: 8px; border-bottom: 1px sol
 .packf { display: inline-flex; align-items: center; gap: 4px; }
 .arena .supplies select { max-width: 46%; }
 @media (max-width: 640px) { .arena .supplies select { max-width: 100%; } }
+/* combat resources: pool bars and action-point dots on each fighter, costs on the skill buttons */
+.arena .upools { display: flex; align-items: center; gap: 2px; margin-top: 2px; }
+.arena .pool { flex: 1; height: 4px; border-radius: 2px; background: var(--line, #3334); overflow: hidden; min-width: 10px; }
+.arena .pool > i { display: block; height: 100%; }
+.arena .pool.sta > i { background: #e0b43a; } .arena .pool.mana > i { background: #4a8fe0; } .arena .pool.nat > i { background: #4cb86a; }
+.arena .apdots { display: inline-flex; gap: 1px; margin-left: 3px; }
+.arena .apdots > i { width: 5px; height: 5px; border-radius: 50%; border: 1px solid #c9a227; display: inline-block; }
+.arena .apdots > i.on { background: #f0c419; }
+.arena .skcost { opacity: .75; margin-left: 4px; font-size: .8em; white-space: nowrap; }
+.arena .apnow { font-weight: 600; color: #c99a00; margin: 0 4px; }

@@ -74,6 +74,7 @@ class TestRaritySkillsInAction(unittest.TestCase):
         bs.choose_ability = lambda *x: get_ability("void_rift")
         a.abilities = ["void_rift"]
         hp = ts[0].hp
+        a.ap = config.AP_MAX                           # a full bank of action points
         bs._turn(a, ev, log)
         self.assertEqual(ts[0].hp, hp)                      # nothing yet: the rift lands next round
         self.assertTrue(bs.delayed)

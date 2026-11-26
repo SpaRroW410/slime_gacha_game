@@ -94,7 +94,7 @@ def slime_view(g: Game, s) -> dict:
                    for r in g.relations.of(s.id)],
         parents=list(s.parents), parent_names=list(s.parent_names), generation=s.generation,
         merge_bonus=dict(s.merge_bonus), core=s.core_stats(),
-        stamina=s.stamina, max_stamina=s.max_stamina, buffs=[dict(b) for b in s.buffs], potion_slots=attributes.potion_slots(s),
+        stamina=s.stamina, max_stamina=s.max_stamina, mana=s.mana, max_mana=s.max_mana, buffs=[dict(b) for b in s.buffs], potion_slots=attributes.potion_slots(s),
         star_attrs=attributes.star_attributes(s),
         next_star_attr=next(({"star": i + 2, "label": attributes.ATTR_LABEL[k], "value": v}
                              for i, (k, v) in enumerate(attributes.STAR_ATTRS.get(s.archetype, []))
@@ -1164,6 +1164,12 @@ def _battle_auto_turn(g, a):
     return _flow_result(g, kind, g.battle_auto_turn())
 
 
+@command("battle_end_turn")
+def _battle_end_turn(g, a):
+    kind = g.flow["kind"] if g.flow else None
+    return _flow_result(g, kind, g.battle_end_turn())
+
+
 @command("battle_give")
 def _battle_give(g, a):
     sid = a.get("id")
@@ -1222,7 +1228,7 @@ SESSION_TITLES = dict(send_groups="Expeditions", grind="The Gloop Pit", adventur
 
 
 # ---- session -----------------------------------------------------------------------------------------------
-BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_manual", "commander_gift", "battle_camp_next", "battle_give"}
+BATTLE_CMDS = {"state", "battle_act", "battle_auto_turn", "battle_end_turn", "battle_manual", "commander_gift", "battle_camp_next", "battle_give"}
 
 
 class Session:

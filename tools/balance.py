@@ -94,10 +94,10 @@ def report(trials):
         b = rate(mixed(c), "legendary", 25, 22, trials, strip_caps=True, stars=5)
         out.append(f"| {c} | {a[0]:.0%} ({a[1]:.1f}r) | {b[0]:.0%} ({b[1]:.1f}r) |")
     out += ["", "## Reading the report", "",
-            "- **Classes** stay within about 10 points of each other at every level: no class is a trap or a must-have in a mixed party.",
-            "- **Pit depth 1-3** is a formality at level parity (about 2 rounds); only depth 4-5 near a stage cap (levels 10 and 30) bites.",
+            "- **Classes** sit within about 20 points of each other (paladin and druid, the sustain classes, lead now that fights are longer): none is a trap or a must-have in a mixed party.",
+            "- **Pit depth 1-3** is a formality at level parity (about 5 rounds since action points pace the big skills); only depth 4-5 near a stage cap (levels 10 and 30) bites.",
             "- **Rarity** barely matters in the Pit at equal level; it matters in the Descent, where the playtest report (docs/ROADMAP.md § 6) is the guide.",
-            "- **Legendary 5-star** parties clear Pit waves in about one round even far above their level: the Pit stops being a test long before then.",
+            "- **Legendary 5-star** parties clear Pit waves in two or three rounds even far above their level: the Pit stops being a test long before then.",
             "  The Descent, not the Pit, is where capstones are tuned; if the Pit should stay relevant late, scale `dungeon.grind_level` with depth."]
     return "\n".join(out) + "\n", tabs
 

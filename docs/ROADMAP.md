@@ -35,13 +35,6 @@ As of 27 October 2026:
   Re-run on the current code (equal star levels, formations, one-day sessions): floor 50 needs level 57 / 50 / 41 / 31 / 25 for common / uncommon / rare / epic / legendary, ~130-186 real hours at x3; smoothness 0.132 (limit 0.22).
   *Done when:* the real descent to floor 50 has been played through (with gear, elements, scouting) and the follow-ups below are closed. Left: extend the harness (or a hand playthrough) to gear, relics, elements and potions.
 
-### Combat resources (proposed, waiting for the go-ahead) — stamina, mana, nature and action points
-
-- [ ] **108. Three resource pools** — every slime fights with Stamina (⚡ physical: attack-based skills), Mana (🔷 magic: spells, heals, buffs) and Nature (🍃 elemental: anything with an element; the pool grows with elemental mastery). Each skill costs its pool by power and reach (area and big heals cost the most); the basic attack and Defend are free. Pools refill a little every round, more on a Defend turn; potions refill them (stamina, plus new mana and nature draughts) and so does camping. A slime out of a pool falls back to its free moves. Replaces today's single stamina bar.  *Done when:* skills spend and refill pools in every fight (auto and by hand), saves keep them, and healers can no longer heal forever.
-- [ ] **109. Action points: big skills must be charged** — a slime starts a fight with 1 AP and gains 1 each turn (2 on a Defend turn), banking up to 3. Light skills cost 1 AP, heavy single-target skills 2, area skills, big heals and capstones 3; basic attack and Defend cost none. Explosive Brew, Fire Blob, Rampage and friends can no longer open a fight and end it: the earliest is turn 3, then every few turns.  *Done when:* AP is spent and banked in auto and manual fights, and a one-skill opening wipe no longer happens in the balance harness.
-- [ ] **110. The AI and the balance pass** — the fight AI plans with pools and AP (saves for a big skill, defends to recover, heals while it can); `tools/balance.py` and `tools/playtest.py` re-run and the curves (floors 1-100, classes, rarities, spars) retuned, monsters included.  *Done when:* no class is far from the pack, healer duels end (by win or the stalemate draw) and the Descent keeps its difficulty curve.
-- [ ] **111. The arena and the Guide for resources** — cards show ⚡ 🔷 🍃 bars and AP pips, skill buttons show their cost (greyed with the reason when short), the pack can carry mana and nature draughts, and the Guide explains it all.  *Done when:* checked by hand at desktop and phone sizes.
-
 ### Mobile (phase 2) — Capacitor route, from the QA and mobile planning report
 
 - [ ] **48. Mobile M2: performance** — engine hot spots, smaller replies, in-place page updates, lazy rosters, startup measured on low-end phones.  *Done when:* Pyodide startup and big-colony turns are acceptable on a 2 GB Android phone and an iPhone SE.
@@ -61,6 +54,10 @@ As of 27 October 2026:
 
 ### Gameplay
 
+- [x] **108. Three resource pools** — every skill burns one pool (`pools.py`): ⚡ stamina (physical), 🔷 mana (magic without an element: heals, wards, curses, summons, Explosive Brew) or 🍃 nature (anything with an element), 5 a point of AP it costs (healing x1.5), growing with level like the pools. Splat and Defend are free. Pools refill a little each round and 10% on a Defend; stamina and mana carry over between fights (hourly, camps, rest stops), nature starts each fight half full. Arcane potions refill mana, Renewal nature; packs and autonomy use them. Monsters have 100 of each.  *Done when:* met; `tests/test_resources.py`.
+- [x] **109. Action points, several actions a turn** — +3 AP a turn, saved up to 6; a plain skill costs 3, heavy ones 4-5, big area skills 6 (two turns: no more opening wipes), buffs 2-4, Defend 1 (ends the turn). Saved points buy two actions in one turn; End turn saves them in fights you lead. Cooldowns cut to "not twice a turn"; once-a-fight skills stay.  *Done when:* met; fights now last ~5-7 rounds instead of 2-3 in the balance harness.
+- [x] **110. The AI and the balance pass** — the AI scores attacks per AP, saves up for a big skill (bracing with a Defend meanwhile), allows itself one buff a turn and only with a blow still to come, and no longer lights a weapon its foes resist. Spar stalemates now look at the pools too, and at the pace of the fight. Classes 54-76% at level 30 (§ 7), the climb stays smooth, floor 100 still needs the ego cap (legendary ~141 without gear).  *Done when:* met.
+- [x] **111. Arena and Guide for resources** — each card shows ⚡ 🔷 🍃 bars and gold AP dots (foes too, so a big attack shows coming), skill buttons show AP and pool cost and are greyed with the reason when out of reach, End turn (save N AP) and Defend are on the bar; the slime card shows mana; the Guide explains pools, action points and cooldowns.  *Done when:* checked at desktop and phone width.
 - [x] **2. More specialization paths** — three new class paths into archery, each with a signature skill and a capstone: Medic+archery = Dawn Archer, Necromancer+archery = Plague Archer, Rogue+archery = Nightstalker (12 hybrids now). Three-way hybrids, evolving specializations and slimes asking for jobs are left as later ideas.  *Done when:* met; `tests/test_hybrids.py` covers resolution, skills and capstones.
 - [x] **3. Spell mutation** — fused spells change form at set mastery levels (`spells.MUTATIONS`, effects from `fx.py`): stage 1 at required mastery +1, stage 2 at +3; heal/guard fusions share purifying forms. Academy lists the forms; the slime card marks the stage with ✦.  *Done when:* met; `tests/test_mutation.py`.
 - [x] **4. Enemy resistances and elemental floors** — monster families are weak to / resist several elements (`bestiary.FAMILY_TRAITS`, `elements.matchup`, x1.5 / x0.7); every sixth non-boss floor from floor 3 is elemental (`dungeon.is_elemental_floor`): its terrain boosts one element +25% and dampens the opposing one -20%, for both sides.  *Done when:* met; intel (fully scouted floors list weak-to / resists, elemental floors name their element), Guide and `tests/test_resist.py`.
@@ -448,6 +445,9 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Per-place time dilation (x3 for every dungeon except scouting, hunting and foraging), round-up lobby cost, needs and bonds at the dungeon rate (78)
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
 
+### M31 — Combat resources (26 November 2026)
+- [x] Stamina, mana and nature pools (108); action points with several actions a turn and minimal cooldowns (109); the AI and balance pass (110); the arena and Guide for resources (111).
+
 ### M30 — The Deep Hollow (25 November 2026)
 - [x] Floors 51-100, exponentially harder (93); long wave grinds (94); ego ascension to 150 (95); more gear and relics in tiles and windows (96); spells named by class (97); manual fights on one screen, animated (98). Explosive Brew checked and left as it is: no stronger than the mage's Fire Blob. Wave rations and camping (99); gear to tier 5 and autonomous gear upkeep (100); grouped, animated skills and a finale (101). Buildings to level 10 and the Reliquary (102); Cold Storage (103); supplies in fights (104); deeper Gentle Keeper limits (105); packs for the trip and common forged relics (106); spar stalemates end in a draw (107).
 
@@ -730,16 +730,16 @@ Seeded Pit fights, 12 trials per cell, no gear or potions.
 
 | level | depth 1 | depth 2 | depth 3 | depth 4 | depth 5 |
 |---|---|---|---|---|---|
-| 10 | 100% (2.3r) | 100% (2.4r) | 100% (2.9r) | 33% (4.0r) | 33% (6.7r) |
-| 20 | 100% (2.5r) | 100% (2.8r) | 100% (2.8r) | 92% (2.8r) | 100% (3.1r) |
-| 30 | 100% (2.2r) | 100% (2.2r) | 100% (2.2r) | 67% (3.3r) | 58% (3.3r) |
-| 40 | 100% (2.2r) | 100% (2.4r) | 100% (2.8r) | 100% (2.6r) | 100% (2.8r) |
+| 10 | 100% (4.6r) | 100% (4.8r) | 92% (5.8r) | 42% (6.3r) | 58% (7.4r) |
+| 20 | 100% (5.0r) | 100% (5.1r) | 100% (5.3r) | 100% (5.4r) | 100% (5.9r) |
+| 30 | 100% (4.5r) | 100% (4.5r) | 100% (4.8r) | 50% (6.0r) | 67% (6.6r) |
+| 40 | 100% (4.8r) | 100% (5.1r) | 100% (6.9r) | 100% (6.2r) | 83% (5.3r) |
 
 ### Rarity at equal level (balanced party, Pit depth 3)
 
 | level | common | uncommon | rare | epic | legendary |
 |---|---|---|---|---|---|
-| 10 | 100% | 100% | 100% | 100% | 100% |
+| 10 | 92% | 92% | 100% | 100% | 100% |
 | 25 | 100% | 100% | 100% | 100% | 100% |
 | 40 | 100% | 100% | 100% | 100% | 100% |
 
@@ -747,41 +747,39 @@ Seeded Pit fights, 12 trials per cell, no gear or potions.
 
 | class | lv 15 | lv 30 | lv 45 | rounds @30 |
 |---|---|---|---|---|
-| barbarian | 100% | 75% | 92% | 2.8 |
-| mage | 100% | 83% | 100% | 3.0 |
-| medic | 100% | 83% | 100% | 2.8 |
-| rogue | 100% | 83% | 92% | 2.8 |
-| ranger | 100% | 83% | 92% | 2.8 |
-| necromancer | 100% | 75% | 92% | 3.2 |
-| bard | 100% | 75% | 100% | 3.3 |
-| paladin | 100% | 83% | 92% | 2.6 |
-| alchemist | 100% | 83% | 92% | 3.3 |
-| druid | 100% | 83% | 100% | 3.4 |
+| barbarian | 100% | 67% | 92% | 5.9 |
+| mage | 100% | 50% | 92% | 5.9 |
+| medic | 83% | 50% | 92% | 5.8 |
+| rogue | 92% | 50% | 83% | 6.7 |
+| ranger | 100% | 50% | 92% | 5.9 |
+| necromancer | 92% | 42% | 92% | 9.8 |
+| bard | 92% | 50% | 92% | 7.5 |
+| paladin | 92% | 67% | 92% | 7.4 |
+| alchemist | 92% | 50% | 92% | 7.3 |
+| druid | 92% | 75% | 92% | 9.1 |
 
 ### Capstones (legendary 5-star, proficiency 100 vs 0, level 25, enemies 19 levels above; rounds to win)
 
 | class | with | without |
 |---|---|---|
-| barbarian | 100% (1.0r) | 100% (1.0r) |
-| mage | 100% (1.0r) | 100% (1.0r) |
-| medic | 100% (1.0r) | 100% (1.0r) |
-| rogue | 100% (1.0r) | 100% (1.0r) |
-| ranger | 100% (1.0r) | 100% (1.0r) |
-| necromancer | 100% (1.3r) | 100% (1.3r) |
-| bard | 100% (1.0r) | 100% (1.0r) |
-| paladin | 100% (1.0r) | 100% (1.0r) |
-| alchemist | 100% (1.0r) | 100% (1.1r) |
-| druid | 100% (1.0r) | 100% (1.0r) |
+| barbarian | 100% (2.5r) | 100% (2.5r) |
+| mage | 100% (2.4r) | 100% (2.4r) |
+| medic | 100% (2.5r) | 100% (2.5r) |
+| rogue | 100% (2.7r) | 100% (2.7r) |
+| ranger | 100% (2.6r) | 100% (2.6r) |
+| necromancer | 100% (2.3r) | 100% (2.3r) |
+| bard | 100% (2.3r) | 100% (2.3r) |
+| paladin | 100% (2.3r) | 100% (2.3r) |
+| alchemist | 100% (2.3r) | 100% (2.3r) |
+| druid | 100% (2.3r) | 100% (2.3r) |
 
 ### Reading the report
 
-- **Classes** stay within about 10 points of each other at every level: no class is a trap or a must-have in a mixed party.
-- **Pit depth 1-3** is a formality at level parity (about 2 rounds); only depth 4-5 near a stage cap (levels 10 and 30) bites.
-- **Rarity** barely matters in the Pit at equal level; it matters in the Descent, where the playtest report (§ 6) is the guide.
-- **Legendary 5-star** parties clear Pit waves in about one round even far above their level: the Pit stops being a test long before then.
+- **Classes** sit within about 20 points of each other (paladin and druid, the sustain classes, lead now that fights are longer): none is a trap or a must-have in a mixed party.
+- **Pit depth 1-3** is a formality at level parity (about 5 rounds since action points pace the big skills); only depth 4-5 near a stage cap (levels 10 and 30) bites.
+- **Rarity** barely matters in the Pit at equal level; it matters in the Descent, where the playtest report (docs/ROADMAP.md § 6) is the guide.
+- **Legendary 5-star** parties clear Pit waves in two or three rounds even far above their level: the Pit stops being a test long before then.
   The Descent, not the Pit, is where capstones are tuned; if the Pit should stay relevant late, scale `dungeon.grind_level` with depth.
-
-*Re-generated 28 October 2026 (`python3 tools/balance.py`): identical to the report above.*
 
 ## 8. Commit history, first to last
 

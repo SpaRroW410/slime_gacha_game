@@ -183,9 +183,26 @@ def build() -> list:
             dict(name="DEF", text="Armor: every hit is reduced by half of it. Anger lowers it, calm raises it."),
             dict(name="MAG", text="Magic: scales spells and healing. Wonder and dread raise it."),
             dict(name="SPD", text="Speed: who acts first. Sadness and loneliness lower it, anxiety and joy raise it."),
-            dict(name="Stamina", text=f"Every action costs stamina ({c.STAMINA_COSTS['attack']} + {c.STAMINA_COSTS['power']} x the move's power). "
-                                      f"A slime without enough acts winded (x{c.STAMINA_WINDED_MULT} damage). It refills between rounds, "
-                                      f"{c.STAMINA_HOUR_REGEN:.0%} per hour, x{c.STAMINA_SLEEP_MULT} asleep or resting. Stamina potions raise the maximum and the recovery."),
+            dict(name="Stamina, mana and nature", text="Every skill burns one of three pools. ⚡ Stamina: physical skills (attack, defense or "
+                 "speed based, no element). 🔷 Mana: magic without an element - heals, wards, curses, summons, Explosive Brew. 🍃 Nature: any "
+                 f"skill with an element. A skill costs {c.POOL_PER_AP} per action point it needs (healing {c.HEAL_POOL_MULT}x as much), growing with "
+                 "level like the pools do; the plain Splat and Defend are free, so a slime that runs dry still fights, just plainly. "
+                 f"Pools refill a little every round (mana {c.MANA_ROUND_REGEN:.0%}, nature {c.NATURE_ROUND_REGEN:.0%} of the maximum) and "
+                 f"{c.POOL_DEFEND:.0%} more on a Defend. Stamina and mana carry over between fights and come back by the hour "
+                 f"({c.STAMINA_HOUR_REGEN:.0%}, x{c.STAMINA_SLEEP_MULT} asleep), at camp and at rest stops; nature is drawn from the "
+                 f"surroundings and starts every fight {c.NATURE_START:.0%} full. Sword classes have the deepest stamina, casters the deepest "
+                 "mana, druids the widest nature (elemental mastery widens it too). Stamina potions refill stamina, Arcane potions mana, "
+                 f"Renewal potions nature. Under {c.WINDED_BELOW:.0%} stamina a slime is winded (x{c.STAMINA_WINDED_MULT} damage). Monsters "
+                 f"have {int(c.FOE_POOL)} of each."),
+            dict(name="Action points", text=f"Every turn brings {c.AP_PER_TURN} action points (AP); unspent ones are saved, up to {c.AP_MAX}. "
+                 f"A turn can hold several actions while points last: a plain skill costs {c.AP_PER_TURN}, a heavy one 4-5, a big area skill "
+                 f"(Explosive Brew, Rampage, Blorp Blast) {c.AP_MAX} - two turns' worth, so it can never open a fight. Buffs and "
+                 f"wards cost 2-3, Defend {c.AP_DEFEND} (it ends the turn and the rest is saved). In a fight you lead, End turn saves the points "
+                 "left; with saved points a slime can strike twice in one turn. The fight AI saves up for a big skill when that is worth more per "
+                 "point, and braces with a Defend while it waits. Monsters play by the same rules: watch the gold dots on a foe's card to see "
+                 "a big attack coming."),
+            dict(name="Cooldowns", text="Cooldowns are cut to the minimum now that action points pace the big skills: a strong skill can't be "
+                 "used twice in the same turn, and once-a-fight skills (Resurrection, Berserker's Oath) stay once a fight."),
             dict(name="Crit rate / damage", text=f"Base {c.CRIT_CHANCE:.0%} chance for x{c.CRIT_MULT} damage; raised by relics, star attributes, fury and some feelings."),
             dict(name="Other attributes", text="Evasion, guard (less damage taken), regeneration, spell power, resist and lifesteal come from "
                                                "stars, relics, potions and feelings."),
@@ -299,8 +316,9 @@ def build() -> list:
             dict(name="Retreat", text="Mid-segment there is one costed way out: a Retreat. It costs purple gel (2, plus 1 per 5 floors deep), 12 morale per slime and drains the party's stamina, and the flight can be ambushed (35% base, higher deeper, lower on well-scouted floors) - a hit can be fatal, and deaths are permanent. Floors already cleared stay cleared for each slime, but to go back down the party must enter again from a checkpoint. At a checkpoint the exit is free."),
             dict(name="Wayside stops", text="On floors 3, 8, 13, 18 ... a wayside stop waits between fights. The party can rest there once (3 hours, +50% HP, no ambush) and buy one of each supply with white gel: Healing Salve (+35% HP), Trail Ration (+5 food), Ward Charm (+15% defense next fight) and Whetstone (+15% attack next fight). Prices rise with depth."),
             dict(name="Spell mutation", text="A fused (tier 2 or 3) spell changes form as its caster's mastery of the spell's element grows. Stage 1 (✦) comes one mastery level above the level needed to cast it, stage 2 (✦✦) three levels above: tier 2 spells at mastery 4 and 6, tier 3 at 6 and 8. Each form adds effects and about 10% / 25% more power: lava burns, lightning pierces armor and stuns, ice freezes, storm strikes several times, obsidian shields the caster, and healing fusions cleanse and turn overhealing into a shield. The weakest component of a compound element sets the mastery. The Academy shows each spell's forms."),
-            dict(name="Draws in sparring", text=f"A spar ends when someone yields (1 HP). If over {c.SPAR_STALL_ROUNDS} rounds nobody's health has moved by "
-                 f"more than {c.SPAR_STALL_SHARE:.0%} of its maximum (two healers, two walls), it is a draw: both get the loser's share of style XP, and a drawn "
+            dict(name="Draws in sparring", text=f"A spar ends when someone yields (1 HP). Spars use the pools too, so a healer that out-heals "
+                 f"the damage burns its mana and runs dry. If over {c.SPAR_STALL_ROUNDS} rounds no pool has moved by more than "
+                 f"{c.SPAR_STALL_SHARE:.0%} and at that pace nobody would fall before round {c.DUEL_ROUND_CAP} (two healers, two walls), it is a draw: both get the loser's share of style XP, and a drawn "
                  f"Vice Keeper challenge leaves the post where it is. A spar that is still moving goes on to round {c.DUEL_ROUND_CAP} and is decided on points."),
             dict(name="Party sparring", text="Academy > Facilities & trainers: pick two full parties at home and they fight each other as teams (non-lethal, loser left low on health) for a flat 3 white gel and 3 hours. Every member gains fighting-style XP and class proficiency in the chosen arena, and every pair inside each party grows closer, which raises that party's synergy (shown in the result). A single duel between two slimes costs 2."),
             dict(name="Waking, training and mood", text="Waking a sleeping slime costs mood (6 morale and a flash of anger) - unless it has already slept past half its energy, then it wakes for free; a confirm warns you before you wake a tired one. Sparring, drilling or hunting with a sleeper wakes it first (and is refused if it is too tired); a slime at a job leaves the job (the current shift is lost); a slime below half health is too hurt to spar and drills for 60%. The pickers tag sleeping, working and hurt slimes. A brawl now also costs both fighters 15 morale and stirs their anger. A duel costs 2 white gel; a party-vs-party spar (two full parties fight as teams) a flat 3."),

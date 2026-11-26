@@ -6,7 +6,7 @@ from . import config
 from .abilities import get_ability
 from .archetypes import STAT_KEYS, Archetype, get_archetype
 from .equipment import gear_bonus
-from . import attributes, awakening, meaning, potions, sanity
+from . import attributes, awakening, meaning, pools, potions, sanity
 from .items import Item, item_bonus
 from .specialization import SPECS, apply_shifts
 
@@ -110,6 +110,7 @@ class Slime:
         self.parent_names: List[str] = []
         self.generation = 0
         self.stamina_frac = 1.0                   # stamina as a fraction of max (see attributes.py)
+        self.mana_frac = 1.0                      # mana as a fraction of max (see pools.py)
         self.buffs: List[dict] = []               # potion effects: {kind, grade, bonus, hours}
         self.proficiency: Dict[str, int] = {}     # weapon family -> uses (see items.FAMILIES)
         self.weapon_memory: List[str] = []        # up to config.WEAPON_MEMORY families kept in mind
@@ -193,6 +194,14 @@ class Slime:
     def stamina(self) -> float:
         return round(self.stamina_frac * self.max_stamina, 1)
 
+    @property
+    def max_mana(self) -> float:
+        return pools.max_mana(self)
+
+    @property
+    def mana(self) -> float:
+        return round(self.mana_frac * self.max_mana, 1)
+
     def needs_mood(self) -> float:
         act = self.needs.active()
         wsum = sum(config.MOOD_WEIGHTS[k] for k in act)
@@ -262,7 +271,7 @@ class Slime:
                     state=self.state, hunt=self.hunt.to_dict() if self.hunt else None,
                     needs=self.needs.to_dict(), hp=self.hp, wins=self.wins,
                     merged=self.merged, grounded=self.grounded, brawls=self.brawls, fights={str(k): v for k, v in self.fights.items()}, row=self.row, style_xp=self.style_xp, morale=self.morale, sanity=round(self.sanity, 2), cared=self.cared, memories=self.memories, goal=self.goal, request=self.request, trust=round(self.trust, 1), drift=self.drift,
-                    gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, buffs=self.buffs, parents=self.parents, parent_names=self.parent_names,
+                    gear=self.gear, items={k: v.to_dict() for k, v in self.items.items()}, merge_bonus=self.merge_bonus, stamina_frac=self.stamina_frac, mana_frac=self.mana_frac, buffs=self.buffs, parents=self.parents, parent_names=self.parent_names,
                     generation=self.generation, emotions=self.emotions,
                     emotion_floor=self.emotion_floor, causes=self.causes, content=self.content, awareness=self.awareness, temperament=self.temperament, life=meaning.pack(self.life), low_days=self.low_days, grief=self.grief, born=self.born,
                     proficiency=self.proficiency, weapon_memory=self.weapon_memory, in_dungeon=self.in_dungeon, progress=self.progress, exp=self.exp, spec=self.spec, spec_disc=self.spec_disc,
@@ -275,7 +284,7 @@ class Slime:
         s = cls(d["id"], d["name"], d["archetype"], d["rarity"], d.get("variance"), d.get("traits"),
                 d.get("stars", 1))
         for k in ("level", "xp", "total_xp", "stage", "behavior", "state", "hp", "wins",
-                  "merged", "grounded", "brawls", "row", "style_xp", "morale", "sanity", "cared", "memories", "goal", "request", "trust", "drift", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "causes", "content", "awareness", "temperament", "life", "low_days", "grief", "born", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
+                  "merged", "grounded", "brawls", "row", "style_xp", "morale", "sanity", "cared", "memories", "goal", "request", "trust", "drift", "gear", "in_dungeon", "merge_bonus", "stamina_frac", "mana_frac", "buffs", "parents", "parent_names", "generation", "emotions", "emotion_floor", "causes", "content", "awareness", "temperament", "life", "low_days", "grief", "born", "proficiency", "weapon_memory", "progress", "exp", "spec", "spec_disc", "attuned", "mastery_xp", "spells", "task", "class_prof", "prof_idle", "pure_earned", "spec_prof", "spec_idle", "color", "star_peak", "job", "job_xp", "job_clock"):
             if k in d:
                 setattr(s, k, d[k])
         s.life = meaning.unpack(s.life)

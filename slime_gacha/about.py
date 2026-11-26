@@ -68,14 +68,6 @@ SECTIONS: List[Dict[str, object]] = [
 ROADMAP: List[Dict[str, object]] = [
     dict(id=1, group="Milestone", title="Playtest and balance to floor 100", status="in progress",
          text="A real play-through of the whole Descent (the Hollow to 50, the Deep Hollow to 100), then fix what it finds. The harness and report exist."),
-    dict(id=108, group="Combat resources", title="Stamina, mana and nature pools", status="proposed",
-         text="Physical skills spend stamina, spells and heals mana, elemental skills nature; pools refill a little each round, more when defending, and from potions and camps."),
-    dict(id=109, group="Combat resources", title="Action points for big skills", status="proposed",
-         text="Big area skills and heals need 3 banked action points, so they cannot open a fight and end it."),
-    dict(id=110, group="Combat resources", title="Fight AI and balance pass", status="proposed",
-         text="The AI plans with pools and action points; classes, floors and spars are retuned with the harnesses."),
-    dict(id=111, group="Combat resources", title="Arena and Guide for resources", status="proposed",
-         text="Bars and action-point pips on the cards, costs on the skill buttons, mana and nature draughts in the pack."),
     dict(id=48, group="Mobile", title="Mobile performance", status="planned",
          text="Faster turns, smaller replies, in-place updates, startup on low-end phones."),
     dict(id=49, group="Mobile", title="Capacitor shell", status="planned",
@@ -90,8 +82,8 @@ ROADMAP: List[Dict[str, object]] = [
 
 
 # The one-line note shown once after an update (the page remembers the id it has shown). Change id and text with each release.
-WHATS_NEW = dict(id="2026-11-26-buildings-ten",
-                 text="Buildings now climb to level 10. A new Reliquary governs relic stars and rarity (rare at level 5, legendary at 10), with a Relicsmith who mends and forges relics; the Blacksmith forges gear. A Cold Storage keeps cooked dishes for trips and unlocks finer dishes. Parties now pack for the trip (food, cooked dishes, potions) before entering the Descent or a wave trip; inside nothing comes from the colony, and in fights you lead you hand the pack out yourself. Forged relics are always common. Gentle Keeper medals below floor 50 now allow for ego fusions.")
+WHATS_NEW = dict(id="2026-11-26-combat-resources",
+                 text="Fights now run on three pools and action points. Physical skills burn stamina, magic burns mana (it carries over between fights like stamina; Arcane potions refill it), elemental skills burn nature (half full at the start of every fight). Every turn brings 3 action points, saved up to 6: a plain skill costs 3, big area skills like Explosive Brew or Rampage cost 6, so they can no longer open a fight and end it, and saved points let a slime act twice in a turn. In fights you lead, End turn saves your points. Cooldowns are down to 'not twice a turn'. Monsters play by the same rules, and healers can no longer heal forever in a spar.")
 
 
 def build() -> Dict[str, object]:
