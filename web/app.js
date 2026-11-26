@@ -957,7 +957,6 @@ function mini(id, removeBtn = false) {
 function parties() {
   const st = S.state;
   const freeSlimes = st.slimes.filter((s) => !s.party && !s.busy);
-  const zone = ui('pzone', st.zones[0].key);
   return `<div class="panel flat row"><input type="text" data-ui="pname" placeholder="Party name" maxlength="24" value="${esc(ui('pname', ''))}">
       <button class="btn primary" data-act="party_create">➕ New party</button>
       <small class="mute">Parties are fixed at <b>${st.party_size}</b> slimes. Only full parties can battle, hunt together or scout. A slime belongs to one party.</small></div>
@@ -975,7 +974,7 @@ function parties() {
       </div>
       ${!(p.in_delve || p.away) ? `<div class="row" style="margin-top:8px">
         <button class="btn small" data-act="party_rest" data-pid="${p.id}" ${p.members.length ? '' : 'disabled'}>🛏️ Rest</button>
-        <select data-ui="pzone">${st.zones.map((z) => `<option value="${z.key}" ${z.key === zone ? 'selected' : ''}>${esc(z.name)}</option>`).join('')}</select>
+        <select data-ui="pzone_${p.id}">${st.zones.map((z) => `<option value="${z.key}" ${z.key === ui('pzone_' + p.id, st.zones[0].key) ? 'selected' : ''}>${esc(z.name)} (${z.duration}h)</option>`).join('')}</select>
         <button class="btn small" data-act="party_hunt" data-pid="${p.id}" ${p.full ? '' : 'disabled'}>🏞 Hunt together</button>
         </div>` : ''}
       <div class="row" style="margin-top:8px"><button class="btn small danger" data-act="party_disband" data-pid="${p.id}" ${p.activity ? 'disabled' : ''} title="${p.activity ? esc(`Away ${p.activity}: disband it when it is back`) : 'Break the party up (the slimes stay)'}">Disband${p.activity ? ` (away ${esc(p.activity)})` : ''}</button></div>
@@ -2301,7 +2300,7 @@ const A = {
   party_remove: (d) => act('party_remove', { id: num(d.id) }),
   party_fill: (d) => act('party_fill', { pid: num(d.pid) }),
   party_rest: (d) => act('party_rest', { pid: num(d.pid) }),
-  party_hunt: (d) => act('party_hunt', { pid: num(d.pid), zone: ui('pzone', S.state.zones[0].key) }),
+  party_hunt: (d) => act('party_hunt', { pid: num(d.pid), zone: ui('pzone_' + d.pid, S.state.zones[0].key) }),   // each party its own zone pick
   party_disband: (d) => confirmThen('Disband this party?', () => act('party_disband', { pid: num(d.pid) })),
   enter_dungeon: () => { const pid = num(ui('dpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     const p = partyById(pid); const start = num(ui('dstart'), p.entry[p.entry.length - 1]);
