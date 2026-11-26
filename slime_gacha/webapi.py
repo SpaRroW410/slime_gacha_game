@@ -12,7 +12,7 @@ import json
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import passives as passives_mod, rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, playlog as playlog_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
+from . import passives as passives_mod, rituals as rituals_mod, routine as routine_mod, coping as coping_mod, meaning as meaning_mod, memory as memory_mod, sanity as sanity_mod, story as story_mod, places as places_mod, achievements as achievements_mod, buildings as bld_mod, about as about_mod, playlog as playlog_mod, pools as pools_mod, power as power_mod, modifiers as modifiers_mod, jobs as jobs_mod, ascension, attributes, guide as guide_mod, awakening, emotions, keeper as keeper_mod, relationships, config, potions as potions_mod, dungeon, elements, equipment, items as items_mod, outlook, sparring, spells, specialization
 from .abilities import get_ability
 from .academy import Library
 from .archetypes import BEHAVIORS, all_archetypes
@@ -68,6 +68,15 @@ def _ties_view(g: Game, s, idx: Optional[dict]) -> dict:
                 children=list((idx or {}).get("kids", {}).get(s.id, [])))
 
 
+def _ability_card(s, k: str) -> dict:
+    """One skill on the slime card: what it is (for grouping), its cost in action points and pool, and where it comes from."""
+    ab = get_ability(k)
+    return dict(key=k, name=spells.class_name(ab, s.archetype), element=ab.element, kind=ab.kind, target=ab.target,
+                fx=sorted({f[0] for f in ab.fx}), power=ab.power, desc=ab.description, ap=pools_mod.ap_cost(ab),
+                pool=pools_mod.pool_of(ab), cost=round(pools_mod.pool_cost(ab) * pools_mod.level_scale(s)),
+                spell=k in s.spells, rarity=k in attributes.rarity_skills(s))
+
+
 def slime_view(g: Game, s, idx: Optional[dict] = None) -> dict:
     st = s.max_stats()
     a = s.arch
@@ -98,8 +107,7 @@ def slime_view(g: Game, s, idx: Optional[dict] = None) -> dict:
         hobby=routine_mod.hobby(s)[1], hatch_in=rituals_mod.next_hatch_in(g, s), coping=coping_mod.STYLE_TEXT[coping_mod.style(s)], coping_healthy=coping_mod.style(s) not in ("vent", "dwell"), burnt=meaning_mod.burned_out(s),
         meaning=({k: round(v, 2) for k, v in meaning_mod.scores(s).items()} if s.life and s.life.get("days") else None),
         morale_factor=round(SocialEngine.morale_factor(s.morale), 2),
-        abilities=[dict(key=k, name=spells.class_name(get_ability(k), s.archetype), element=get_ability(k).element,
-                        kind=get_ability(k).kind) for k in s.known_abilities()],
+        abilities=[_ability_card(s, k) for k in s.known_abilities()],
         spells=list(s.spells), spell_names=spells.names_for(s), spell_style=spells.name_style(s.archetype), spell_stage={k: spells.mutation_stage(get_ability(k), elements.slime_mastery(s, get_ability(k).element)) for k in s.spells if get_ability(k).element},
         attuned=list(s.attuned),
         mastery={b: elements.basic_level(s, b) for b in s.attuned},

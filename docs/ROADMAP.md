@@ -461,7 +461,7 @@ evolving specializations, and whether job skill decays like proficiency.
 - [x] Gear and relics told apart: sell back vs break down, distinct names, a Guide section (83); eight more elements to fuse (84)
 
 ### M33 — Community and relationships (26 November 2026)
-- [x] The People tab is Community; its first page keeps couples and family trees; each slime's card gets a Relationships tab (ties with the bond, growing close / friction, parents and children).
+- [x] The People tab is Community; its first page keeps couples and family trees; each slime's card gets a Relationships tab (ties with the bond, growing close / friction, parents and children). The slime card is sorted with nothing shown twice: Overview (stats, condition, needs, care, orders), Fight (class, skills grouped with their AP and pool cost, star attributes, passives, growth), Train (proficiency, drills, sparring, elements and spells, trades), Mind (personality, sanity and feelings, on its mind, memories newest first, its life, outlook), Relationships, Gear.
 
 ### M32 — Playtest recorder (26 November 2026)
 - [x] An opt-in recorder (`playlog.py`): every fight and Descent trip event in the save, capped at 1.5 MB, exported as .json from the menu, with a warning before it is switched on (for task 1).
