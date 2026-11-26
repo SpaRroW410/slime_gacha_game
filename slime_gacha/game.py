@@ -75,6 +75,7 @@ class Game:
         self.hunts = HuntSystem(self.wallet, self.rng)
         self.hunts.on_finish = lambda s, ok, group: self._hunt_done(s, ok, group)
         self.battles = BattleSystem(self.rng, self.wallet)
+        self.battles.style_cap = lambda: self.buildings.style_cap()   # fights train a little of the fighting style
         self.flow = None                       # the manual-capable battle in progress (memory only, never saved)
         self.buildings = BuildingManager(self.wallet)
         self.library = Library(self.wallet, self.buildings)

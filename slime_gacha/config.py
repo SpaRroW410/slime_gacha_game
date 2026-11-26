@@ -140,6 +140,7 @@ PROF_START, PROF_FLOOR = 50.0, 20.0
 PROF_IDLE_DAYS = 3             # days without practice before proficiency starts to fade
 PROF_DECAY = 1.0               # lost per further idle day (never below PROF_FLOOR)
 PROF_BATTLE_GAIN, PROF_BATTLE_CAP = 0.3, 4.0     # per action taken in a fight, at most per fight
+BATTLE_STYLE_GAIN, BATTLE_STYLE_CAP = 0.5, 3.0   # style XP in its own fighting style per class action in a fight, at most per fight
 PROF_SPAR_OWN, PROF_SPAR_OTHER, PROF_STUDY = 3.0, 1.0, 3.0
 PROF_BOTH_CAPSTONES, PROF_ONE_CAPSTONE = 70.0, 30.0   # proficiency needed for both / for the first pure capstone
 # Hybrid (specialized) classes: a second proficiency in the secondary discipline scales the hybrid capstone

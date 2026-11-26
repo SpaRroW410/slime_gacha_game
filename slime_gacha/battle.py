@@ -219,6 +219,7 @@ class BattleSystem:
         self.last_hits: Dict[int, int] = {}    # damage dealt by the latest ability, per target (for bleed)
         self.delayed: List[dict] = []          # abilities that land in a later round
         self.round = 0
+        self.style_cap: Optional[Callable[[], int]] = None   # Game sets it: the Training Grounds' style ceiling (fights train style)
 
     # -- setup ---------------------------------------------------------------
     def generate_enemies(self, tier: int, count: int = 3) -> List[Enemy]:
@@ -772,6 +773,9 @@ class BattleSystem:
             if c.uses:
                 s.class_prof = min(100.0, s.class_prof + min(config.PROF_BATTLE_CAP, c.uses * config.PROF_BATTLE_GAIN))
                 s.prof_idle = 0
+                if self.style_cap:                              # real fights train its own style a little too
+                    sparring.gain_style_xp(s, s.arch.discipline, min(config.BATTLE_STYLE_CAP, c.uses * config.BATTLE_STYLE_GAIN),
+                                           self.style_cap())
             if c.spec_uses:
                 s.spec_prof = min(100.0, s.spec_prof + min(config.PROF_BATTLE_CAP, c.spec_uses * config.PROF_SPEC_BATTLE_GAIN))
                 s.spec_idle = 0

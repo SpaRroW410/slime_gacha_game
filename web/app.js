@@ -777,30 +777,31 @@ function dTrain(s, { st }) {
   const tier = Math.min(num(ui('dtier', 1), 1), tiers.filter((t) => t.unlocked).length) || 1;
   S.ui.dtier = tier;
   const tr = tiers[tier - 1];
-  let dk = ui('my_disc', s.discipline);
+  const dkey = `my_disc_${s.id}`, skey = `my_style_${s.id}`;          // each slime its own picks (its own discipline first)
+  let dk = ui(dkey, s.discipline);
   if (!discs.some((d) => d.key === dk)) dk = discs[0].key;
-  S.ui.my_disc = dk;
+  S.ui[dkey] = dk;
   const yard = st.facility_yards[dk], gain = s.prof?.drill?.[dk]?.[tier - 1] || 0;
   const discOpts = (key, cur) => discs.map((d) => `<option value="${d.key}" ${d.key === cur ? 'selected' : ''}>${d.emoji} ${esc(key === 'yard' ? fac(st.facility_yards[d.key]).name : d.style)}${d.key === s.discipline ? ' (its class)' : ''}</option>`).join('');
-  const drill = `<div class="row"><select data-ui="my_disc" data-rerender="1">${discOpts('yard', dk)}</select>
+  const drill = `<div class="row"><select data-ui="${dkey}" data-rerender="1">${discOpts('yard', dk)}</select>
       <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select>
       <button class="btn small primary" data-act="drill_me" ${ok && room(yard) ? '' : 'disabled'}>🥋 Drill · ${tr.ticks}h · ${esc(cost(tr.cost))}</button></div>
     <small class="mute">${gain > 0 ? `Worth about <b>+${gain}</b> proficiency` : 'Not its discipline: only a little general practice'} and <b>+${tr.style_xp}</b> ${esc(discs.find((d) => d.key === dk).style.toLowerCase())} XP · ${fac(yard).users.length}/${fac(yard).capacity} places taken · trainer ${st.jobs.trainer[dk] ? `+${st.jobs.trainer[dk]}% gains` : 'none appointed'}${!room(yard) ? ' · <b>the yard is full</b>' : ''}</small>`;
-  let sk = ui('my_style', s.discipline);
+  let sk = ui(skey, s.discipline);
   if (!discs.some((d) => d.key === sk)) sk = discs[0].key;
-  S.ui.my_style = sk;
+  S.ui[skey] = sk;
   const arena = st.facility_arenas[sk];
   const opps = st.slimes.filter((o) => o.id !== s.id && canTrain(o)).sort((a, b) => (b.discipline === sk) - (a.discipline === sk) || Math.abs(a.level - s.level) - Math.abs(b.level - s.level));
   let opp = num(ui('my_opp', opps[0]?.id));
   if (!opps.some((o) => o.id === opp)) opp = opps[0]?.id;
   S.ui.my_opp = opp;
-  const spar = `<div class="row"><select data-ui="my_style" data-rerender="1">${discOpts('style', sk)}</select>
+  const spar = `<div class="row"><select data-ui="${skey}" data-rerender="1">${discOpts('style', sk)}</select>
       ${opps.length ? `<label class="f">vs <select data-ui="my_opp">${opps.map((o) => `<option value="${o.id}" ${o.id === opp ? 'selected' : ''}>${esc(o.name)} (${esc(o.class_name)} Lv${o.level})${trainTags(o)}</option>`).join('')}</select></label>` : '<small class="mute">nobody else is free to spar</small>'}
       <button class="btn small primary" data-act="spar_me" ${ok && opps.length && room(arena, 2) ? '' : 'disabled'}>⚔ Spar · ${esc(cost(st.mercy.spar_cost))} · ${st.mercy.train_ticks}h</button></div>
     <small class="mute">${esc(discs.find((d) => d.key === sk).perk)} · ${fac(arena).name}: ${fac(arena).users.length}/${fac(arena).capacity} places${!room(arena, 2) ? ' · <b>no room for a duel</b>' : ''}. Non-lethal: the loser is left at 1 HP.</small>
     ${discs.map((d) => { const p = (s.style_xp || {})[d.key] || {}, lv = s.style[d.key], capped = lv >= s.style_cap && p.next != null;
       return bar(p.next ? p.xp : 1, p.next || 1, '', `${d.emoji} ${d.style}${s.discipline === d.key ? ' (class)' : ''} · L${lv}`, p.next == null ? 'top level' : capped ? `L${lv} is the Training Grounds' ceiling` : `${Math.round(p.xp)}/${p.next} XP to L${lv + 1}`); }).join('')}
-    <small class="mute">Sparring gives the most style XP; drills give a little (${st.drill.tiers.map((t) => `${esc(t.name.toLowerCase())} +${t.style_xp}`).join(', ')} before bonuses).</small>`;
+    <small class="mute">Sparring gives the most style XP; real fights give a little in its own style (up to +${st.drill.battle_style} a fight); drills give a little too (${st.drill.tiers.map((t) => `${esc(t.name.toLowerCase())} +${t.style_xp}`).join(', ')} before bonuses).</small>`;
   const el = (b) => {
     const e = st.elements.list.find((x) => x.key === b), lv = s.mastery[b];
     return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${Math.max(s.mastery_cap, lv)}</b>` : '<span class="mute">not attuned</span>'}</span>
@@ -2383,8 +2384,8 @@ const A = {
     const busy = busyMembers(pid), go = () => act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(ws.wave_max, num(ui('waves', 1), 1))), stop_hp: num(ui('wstop', ws.wave_stop), ws.wave_stop), manual: manualOn(), recall: busy.length > 0, pack: packChoice('wave') }, { title: 'Wave simulation' });
     return busy.length ? confirmThen(`${pullNote(busy)}Run the wave simulation?`, go) : go(); },
   party_train: () => { const pid = num(S.ui.ptpid); if (!pid) return toast('You need a full party at home.', true); act('party_train', { pid, tier: num(ui('dtier', 1), 1) }, { slow: true }); },
-  drill_me: () => act('drill', { id: S.sel, discipline: ui('my_disc'), tier: num(ui('dtier', 1), 1) }),
-  spar_me: () => { const b = num(ui('my_opp')); if (!b) return toast('Choose a sparring partner.', true); act('spar', { a: S.sel, b, discipline: ui('my_style') }, { title: 'Sparring match' }); },
+  drill_me: () => act('drill', { id: S.sel, discipline: ui(`my_disc_${S.sel}`), tier: num(ui('dtier', 1), 1) }),
+  spar_me: () => { const b = num(ui('my_opp')); if (!b) return toast('Choose a sparring partner.', true); act('spar', { a: S.sel, b, discipline: ui(`my_style_${S.sel}`) }, { title: 'Sparring match' }); },
   learn_me: () => { const spell = ui('my_learn'); return spell ? act('learn', { id: S.sel, spell }) : toast('No spell is ready to learn yet.', true); },
   drawer_relic: (d) => { const uid = num(ui('dr_' + d.slot, S.state.gear.vault.find((x) => x.slot === d.slot && !x.ego)?.uid)); return uid ? act('equip_item', { id: S.sel, uid }) : toast('No relic for that slot in the vault.', true); },
   relic_feed: (d) => { const donor = num(ui('rd_' + d.uid, S.state.gear.vault.find((x) => x.uid != d.uid && x.slot === S.state.gear.vault.find((y) => y.uid == d.uid)?.slot)?.uid));

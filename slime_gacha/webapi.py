@@ -468,7 +468,7 @@ def snapshot(g: Game) -> dict:
                             capacity=g.facility_capacity(k), users=[dict(id=s.id, name=s.name, party=(lambda p: p.name if p else None)(g.parties.party_of(s.id))) for s in g.facility_users(k)])
                     for k in bld_mod.FACILITIES},
         facility_yards=bld_mod.DRILL_YARDS, party_yard=bld_mod.PARTY_YARD, facility_arenas=bld_mod.SPAR_ARENAS, party_arena=bld_mod.PARTY_ARENA,
-        drill=dict(base=config.PROF_DRILL, grounds=g.buildings.level("training_grounds"),
+        drill=dict(base=config.PROF_DRILL, battle_style=config.BATTLE_STYLE_CAP, grounds=g.buildings.level("training_grounds"),
                    tiers=[dict(tier=i + 1, name=t[0], needs=t[1], ticks=t[2], cost=t[3], mult=t[4], style_xp=round(config.DRILL_STYLE_XP * t[5], 1), unlocked=g.buildings.level("training_grounds") >= t[1])
                           for i, t in enumerate(config.DRILL_TIERS)]),
         elements=dict(basics=list(elements.BASICS),
