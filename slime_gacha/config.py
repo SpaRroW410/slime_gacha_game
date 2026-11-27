@@ -140,6 +140,7 @@ PROF_START, PROF_FLOOR = 50.0, 20.0
 PROF_IDLE_DAYS = 3             # days without practice before proficiency starts to fade
 PROF_DECAY = 1.0               # lost per further idle day (never below PROF_FLOOR)
 PROF_BATTLE_GAIN, PROF_BATTLE_CAP = 0.3, 4.0     # per action taken in a fight, at most per fight
+BATTLE_STYLE_GAIN, BATTLE_STYLE_CAP = 0.5, 3.0   # style XP in its own fighting style per class action in a fight, at most per fight
 PROF_SPAR_OWN, PROF_SPAR_OTHER, PROF_STUDY = 3.0, 1.0, 3.0
 PROF_BOTH_CAPSTONES, PROF_ONE_CAPSTONE = 70.0, 30.0   # proficiency needed for both / for the first pure capstone
 # Hybrid (specialized) classes: a second proficiency in the secondary discipline scales the hybrid capstone
@@ -430,7 +431,8 @@ ADV_TICKS = 2
 SESSION_MAX_HOURS = 24            # no farming session (Pit, Rift, Quarry) lasts longer than one game day, camping included
 FIELD_REST_ENERGY = 80            # a session party that has to sleep (anyone under AUTO_SLEEP_BELOW energy) rests until everyone has this much
 ADV_MAX_RUNS = SESSION_MAX_HOURS // ADV_TICKS     # = 12 runs of 2 hours
-GRIND_MAX_RUNS = SESSION_MAX_HOURS // GRIND_TICKS
+PIT_SESSION_HOURS = 72           # ... but a Gloop Pit session may run a whole day AT HOME: 72h inside at its x3 dungeon time
+GRIND_MAX_RUNS = PIT_SESSION_HOURS // GRIND_TICKS     # = 36 runs of 2 hours
 ADV_DROP_PER_FOE = 0.45          # chance per defeated foe to drop a relic
 ADV_LURE_COST = 1                # purple gel per run for a lure ...
 ADV_LURE_BOOST = 4.0             # ... which multiplies the non-common relic weights

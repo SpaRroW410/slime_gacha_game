@@ -114,6 +114,8 @@ def slime_view(g: Game, s, idx: Optional[dict] = None) -> dict:
         mastery_cap=elements.mastery_cap(s), element_slots=elements.slot_count(s),
         mastery_paused=(elements.stars_to_resume(s) if elements.mastery_paused(s) else None),
         can_master=elements.can_master(s), style=lv, style_label=sparring.style_label(s),
+        style_xp={d.key: dict(zip(("xp", "next"), sparring.style_progress(s, d.key))) for d in sparring.DISCIPLINES},
+        style_cap=g.buildings.style_cap(),
         content=round(s.content), content_label=emotions.content_label(s),
         feelings=[dict(key=k, name=emotions.EMOTIONS[k].name, emoji=emotions.EMOTIONS[k].emoji,
                        value=round(v), kind=emotions.EMOTIONS[k].kind, why=emotions.causes(s, k)) for k, v in
@@ -423,7 +425,7 @@ def snapshot(g: Game) -> dict:
                                    next_hours=dungeon.clear_hours(d["floor"], sum(s.level for s in g._members_in("main", pid)) / max(1, len(g._members_in("main", pid))), g._knowledge(d["floor"]), max(1, len(g._members_in("main", pid)))),
                                    members=[m.id for m in g._members_in("main", pid)])
                     for pid, d in g.delves.items()},
-            session=dict(max_hours=config.SESSION_MAX_HOURS, grind_ticks=config.GRIND_TICKS, grind_runs=config.GRIND_MAX_RUNS,
+            session=dict(max_hours=config.SESSION_MAX_HOURS, pit_hours=config.PIT_SESSION_HOURS, grind_ticks=config.GRIND_TICKS, grind_runs=config.GRIND_MAX_RUNS,
                          adv_ticks=config.ADV_TICKS, adv_runs=config.ADV_MAX_RUNS, wave_ticks=config.WAVE_TICKS, wave_max=config.WAVE_MAX_WAVES, wave_level=config.WAVE_MAX_LEVEL, wave_stop=config.WAVE_STOP_HP),
             grind_depths=config.GRIND_DEPTHS, scout_hours=[config.SCOUT_MIN_HOURS, config.SCOUT_MAX_HOURS],
             scout_max_floors=config.SCOUT_MAX_FLOORS, scout_food=config.SCOUT_FOOD_PER_HOUR,
@@ -466,8 +468,8 @@ def snapshot(g: Game) -> dict:
                             capacity=g.facility_capacity(k), users=[dict(id=s.id, name=s.name, party=(lambda p: p.name if p else None)(g.parties.party_of(s.id))) for s in g.facility_users(k)])
                     for k in bld_mod.FACILITIES},
         facility_yards=bld_mod.DRILL_YARDS, party_yard=bld_mod.PARTY_YARD, facility_arenas=bld_mod.SPAR_ARENAS, party_arena=bld_mod.PARTY_ARENA,
-        drill=dict(base=config.PROF_DRILL, grounds=g.buildings.level("training_grounds"),
-                   tiers=[dict(tier=i + 1, name=t[0], needs=t[1], ticks=t[2], cost=t[3], mult=t[4], unlocked=g.buildings.level("training_grounds") >= t[1])
+        drill=dict(base=config.PROF_DRILL, battle_style=config.BATTLE_STYLE_CAP, grounds=g.buildings.level("training_grounds"),
+                   tiers=[dict(tier=i + 1, name=t[0], needs=t[1], ticks=t[2], cost=t[3], mult=t[4], style_xp=round(config.DRILL_STYLE_XP * t[5], 1), unlocked=g.buildings.level("training_grounds") >= t[1])
                           for i, t in enumerate(config.DRILL_TIERS)]),
         elements=dict(basics=list(elements.BASICS),
                       list=[dict(key=e.key, name=e.name, emoji=e.emoji, tier=e.tier,

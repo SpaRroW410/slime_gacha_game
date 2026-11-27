@@ -169,5 +169,20 @@ class TestManual(unittest.TestCase):
             self.assertTrue(any("uses Rampage" in str(l) for l in run.log))
 
 
+class TestStyleFromFights(unittest.TestCase):
+    def test_a_real_fight_trains_its_own_style_a_little(self):
+        from tests.test_delves import members, party, rich
+        g = rich(5)
+        pid = party(g, archetype="alchemist")
+        for s in members(g, pid):
+            s.stage, s.level = 1, 20
+            s.hp = s.max_hp
+        g.grind(pid, 1, 1)
+        xp = [s.style_xp.get("magic", 0) for s in members(g, pid)]
+        self.assertTrue(any(x > 0 for x in xp))
+        self.assertTrue(all(x <= config.BATTLE_STYLE_CAP for x in xp))           # a little: at most this much a fight
+        self.assertTrue(all(not s.style_xp.get("sword") for s in members(g, pid)))  # only in its own style
+
+
 if __name__ == "__main__":
     unittest.main()

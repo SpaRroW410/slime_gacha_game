@@ -236,13 +236,15 @@ class AcademySystem:
         gain = self.drill_gain(s, d.key, tier) * s.task.get("wound", 1.0)
         self.lesson_hook(d.key, s)
         which = attributes.practise(s, d.key, gain, 0.5)
-        sparring.gain_style_xp(s, d.key, config.DRILL_STYLE_XP * config.DRILL_TIERS[tier - 1][5] * self.buildings.style_mult() * self.trainer_mult(d.key, s),
-                               self.buildings.style_cap())
+        before = s.style_xp.get(d.key, 0)
+        lv = sparring.gain_style_xp(s, d.key, config.DRILL_STYLE_XP * config.DRILL_TIERS[tier - 1][5] * self.buildings.style_mult() * self.trainer_mult(d.key, s),
+                                    self.buildings.style_cap())
+        style_note = sparring.style_note(s, d.key, s.style_xp.get(d.key, 0) - before, lv, self.buildings.style_cap())
         s.needs.add("energy", -8)
         s.needs.add("esteem", 4)
         note = {"class": f"class proficiency now {s.class_prof:.0f}", "spec": f"second proficiency now {s.spec_prof:.0f}",
                 "other": "a little general practice (not their discipline)"}[which]
-        events.append(f"🥋 {s.name} finishes drilling at the {d.name}: {note}.")
+        events.append(f"🥋 {s.name} finishes drilling at the {d.name}: {note}; {style_note}.")
 
     # -- time ---------------------------------------------------------------------------------
     def tick(self, slimes: List, events: List[str]) -> None:

@@ -777,28 +777,31 @@ function dTrain(s, { st }) {
   const tier = Math.min(num(ui('dtier', 1), 1), tiers.filter((t) => t.unlocked).length) || 1;
   S.ui.dtier = tier;
   const tr = tiers[tier - 1];
-  let dk = ui('my_disc', s.discipline);
+  const dkey = `my_disc_${s.id}`, skey = `my_style_${s.id}`;          // each slime its own picks (its own discipline first)
+  let dk = ui(dkey, s.discipline);
   if (!discs.some((d) => d.key === dk)) dk = discs[0].key;
-  S.ui.my_disc = dk;
+  S.ui[dkey] = dk;
   const yard = st.facility_yards[dk], gain = s.prof?.drill?.[dk]?.[tier - 1] || 0;
   const discOpts = (key, cur) => discs.map((d) => `<option value="${d.key}" ${d.key === cur ? 'selected' : ''}>${d.emoji} ${esc(key === 'yard' ? fac(st.facility_yards[d.key]).name : d.style)}${d.key === s.discipline ? ' (its class)' : ''}</option>`).join('');
-  const drill = `<div class="row"><select data-ui="my_disc" data-rerender="1">${discOpts('yard', dk)}</select>
+  const drill = `<div class="row"><select data-ui="${dkey}" data-rerender="1">${discOpts('yard', dk)}</select>
       <select data-ui="dtier" data-rerender="1">${tiers.map((t) => `<option value="${t.tier}" ${t.tier === tier ? 'selected' : ''} ${t.unlocked ? '' : 'disabled'}>${esc(t.name)}${t.unlocked ? '' : ` (Training Grounds ${t.needs})`}</option>`).join('')}</select>
       <button class="btn small primary" data-act="drill_me" ${ok && room(yard) ? '' : 'disabled'}>🥋 Drill · ${tr.ticks}h · ${esc(cost(tr.cost))}</button></div>
-    <small class="mute">${gain > 0 ? `Worth about <b>+${gain}</b> proficiency` : 'Not its discipline: only a little general practice'} · ${fac(yard).users.length}/${fac(yard).capacity} places taken · trainer ${st.jobs.trainer[dk] ? `+${st.jobs.trainer[dk]}% gains` : 'none appointed'}${!room(yard) ? ' · <b>the yard is full</b>' : ''}</small>`;
-  let sk = ui('my_style', s.discipline);
+    <small class="mute">${gain > 0 ? `Worth about <b>+${gain}</b> proficiency` : 'Not its discipline: only a little general practice'} and <b>+${tr.style_xp}</b> ${esc(discs.find((d) => d.key === dk).style.toLowerCase())} XP · ${fac(yard).users.length}/${fac(yard).capacity} places taken · trainer ${st.jobs.trainer[dk] ? `+${st.jobs.trainer[dk]}% gains` : 'none appointed'}${!room(yard) ? ' · <b>the yard is full</b>' : ''}</small>`;
+  let sk = ui(skey, s.discipline);
   if (!discs.some((d) => d.key === sk)) sk = discs[0].key;
-  S.ui.my_style = sk;
+  S.ui[skey] = sk;
   const arena = st.facility_arenas[sk];
   const opps = st.slimes.filter((o) => o.id !== s.id && canTrain(o)).sort((a, b) => (b.discipline === sk) - (a.discipline === sk) || Math.abs(a.level - s.level) - Math.abs(b.level - s.level));
   let opp = num(ui('my_opp', opps[0]?.id));
   if (!opps.some((o) => o.id === opp)) opp = opps[0]?.id;
   S.ui.my_opp = opp;
-  const spar = `<div class="row"><select data-ui="my_style" data-rerender="1">${discOpts('style', sk)}</select>
+  const spar = `<div class="row"><select data-ui="${skey}" data-rerender="1">${discOpts('style', sk)}</select>
       ${opps.length ? `<label class="f">vs <select data-ui="my_opp">${opps.map((o) => `<option value="${o.id}" ${o.id === opp ? 'selected' : ''}>${esc(o.name)} (${esc(o.class_name)} Lv${o.level})${trainTags(o)}</option>`).join('')}</select></label>` : '<small class="mute">nobody else is free to spar</small>'}
       <button class="btn small primary" data-act="spar_me" ${ok && opps.length && room(arena, 2) ? '' : 'disabled'}>⚔ Spar · ${esc(cost(st.mercy.spar_cost))} · ${st.mercy.train_ticks}h</button></div>
     <small class="mute">${esc(discs.find((d) => d.key === sk).perk)} · ${fac(arena).name}: ${fac(arena).users.length}/${fac(arena).capacity} places${!room(arena, 2) ? ' · <b>no room for a duel</b>' : ''}. Non-lethal: the loser is left at 1 HP.</small>
-    ${discs.map((d) => bar(s.style[d.key], 10, '', `${d.emoji} ${d.style}${s.discipline === d.key ? ' (class)' : ''}`, `L${s.style[d.key]}`)).join('')}`;
+    ${discs.map((d) => { const p = (s.style_xp || {})[d.key] || {}, lv = s.style[d.key], capped = lv >= s.style_cap && p.next != null;
+      return bar(p.next ? p.xp : 1, p.next || 1, '', `${d.emoji} ${d.style}${s.discipline === d.key ? ' (class)' : ''} · L${lv}`, p.next == null ? 'top level' : capped ? `L${lv} is the Training Grounds' ceiling` : `${Math.round(p.xp)}/${p.next} XP to L${lv + 1}`); }).join('')}
+    <small class="mute">Sparring gives the most style XP; real fights give a little in its own style (up to +${st.drill.battle_style} a fight); drills give a little too (${st.drill.tiers.map((t) => `${esc(t.name.toLowerCase())} +${t.style_xp}`).join(', ')} before bonuses).</small>`;
   const el = (b) => {
     const e = st.elements.list.find((x) => x.key === b), lv = s.mastery[b];
     return `<div class="row between"><span>${e.emoji} ${e.name} ${lv !== undefined ? `<b>L${lv}/${Math.max(s.mastery_cap, lv)}</b>` : '<span class="mute">not attuned</span>'}</span>
@@ -957,7 +960,6 @@ function mini(id, removeBtn = false) {
 function parties() {
   const st = S.state;
   const freeSlimes = st.slimes.filter((s) => !s.party && !s.busy);
-  const zone = ui('pzone', st.zones[0].key);
   return `<div class="panel flat row"><input type="text" data-ui="pname" placeholder="Party name" maxlength="24" value="${esc(ui('pname', ''))}">
       <button class="btn primary" data-act="party_create">➕ New party</button>
       <small class="mute">Parties are fixed at <b>${st.party_size}</b> slimes. Only full parties can battle, hunt together or scout. A slime belongs to one party.</small></div>
@@ -975,7 +977,7 @@ function parties() {
       </div>
       ${!(p.in_delve || p.away) ? `<div class="row" style="margin-top:8px">
         <button class="btn small" data-act="party_rest" data-pid="${p.id}" ${p.members.length ? '' : 'disabled'}>🛏️ Rest</button>
-        <select data-ui="pzone">${st.zones.map((z) => `<option value="${z.key}" ${z.key === zone ? 'selected' : ''}>${esc(z.name)}</option>`).join('')}</select>
+        <select data-ui="pzone_${p.id}">${st.zones.map((z) => `<option value="${z.key}" ${z.key === ui('pzone_' + p.id, st.zones[0].key) ? 'selected' : ''}>${esc(z.name)} (${z.duration}h)</option>`).join('')}</select>
         <button class="btn small" data-act="party_hunt" data-pid="${p.id}" ${p.full ? '' : 'disabled'}>🏞 Hunt together</button>
         </div>` : ''}
       <div class="row" style="margin-top:8px"><button class="btn small danger" data-act="party_disband" data-pid="${p.id}" ${p.activity ? 'disabled' : ''} title="${p.activity ? esc(`Away ${p.activity}: disband it when it is back`) : 'Break the party up (the slimes stay)'}">Disband${p.activity ? ` (away ${esc(p.activity)})` : ''}</button></div>
@@ -1178,9 +1180,9 @@ function sessionNote(runs, ticks, maxRuns, what = 'run', kind = 'adventure') {
   const ss = S.state.dungeon.session, n = Math.max(1, Math.min(num(runs, 1), maxRuns)), hours = n * ticks;
   const lobby = Math.max(1, Math.ceil(hours / (S.state.clock.dilation?.[kind] || 1) - 1e-9));
   const live = S.state.clock.mode === 'live' ? ` (about ${Math.max(1, Math.round(lobby / (S.state.clock.rate_now || S.state.clock.lobby_rate) * 60))} real minutes at the current speed)` : '';
-  const cut = num(runs, 1) > maxRuns ? ` <b>Limited to ${maxRuns} ${what}s: a session is one day at most.</b>` : '';
+  const cut = num(runs, 1) > maxRuns ? ` <b>Limited to ${maxRuns} ${what}s: a session is ${kind === 'grind' ? 'about one day at home' : 'one day inside'} at most.</b>` : '';
   if (kind === 'wave') return `<small class="mute" style="display:block">⏱ ${n} wave${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here${lobby >= 24 ? `, ${(lobby / 24).toFixed(1)} days` : ''})${live}, at most, plus camping: they come home early when a wave is lost, someone drops below the health line, or the rations run out. They pack up to 66% of the food (🍖 ${Math.floor(S.state.wallet.food * 0.66)} now) and camp when tired. Waves you lead yourself cost no time. The report arrives when they are back.</small>`;
-  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here)${live}. Camping to heal counts too: the party always comes home within ${ss.max_hours}h inside (earlier if the whole party is knocked out). The report and the haul arrive when it is back.${cut}</small>`;
+  return `<small class="mute" style="display:block">⏱ ${n} ${what}${n > 1 ? 's' : ''} × ${ticks}h = <b>${hours}h inside</b> (≈ <b>${lobby}h</b> here)${live}. Camping to heal counts too: the party always comes home within ${kind === 'grind' ? ss.pit_hours : ss.max_hours}h inside (earlier if the whole party is knocked out). The report and the haul arrive when it is back.${cut}</small>`;
 }
 /* Which party (or group of slimes) is away and how long it has left. */
 const partyNameOf = (ids) => { const p = (S.state.parties || []).find((q) => ids.every((i) => q.members.includes(i))) || (S.state.parties || []).find((q) => ids.some((i) => q.members.includes(i))); return p ? p.name : null; };
@@ -2301,7 +2303,7 @@ const A = {
   party_remove: (d) => act('party_remove', { id: num(d.id) }),
   party_fill: (d) => act('party_fill', { pid: num(d.pid) }),
   party_rest: (d) => act('party_rest', { pid: num(d.pid) }),
-  party_hunt: (d) => act('party_hunt', { pid: num(d.pid), zone: ui('pzone', S.state.zones[0].key) }),
+  party_hunt: (d) => act('party_hunt', { pid: num(d.pid), zone: ui('pzone_' + d.pid, S.state.zones[0].key) }),   // each party its own zone pick
   party_disband: (d) => confirmThen('Disband this party?', () => act('party_disband', { pid: num(d.pid) })),
   enter_dungeon: () => { const pid = num(ui('dpid', S.state.parties.find((p) => p.full && !p.in_delve)?.id)); if (!pid) return toast('You need a full party.', true);
     const p = partyById(pid); const start = num(ui('dstart'), p.entry[p.entry.length - 1]);
@@ -2382,8 +2384,8 @@ const A = {
     const busy = busyMembers(pid), go = () => act('skirmish', { pid, lo, hi, waves: Math.max(1, Math.min(ws.wave_max, num(ui('waves', 1), 1))), stop_hp: num(ui('wstop', ws.wave_stop), ws.wave_stop), manual: manualOn(), recall: busy.length > 0, pack: packChoice('wave') }, { title: 'Wave simulation' });
     return busy.length ? confirmThen(`${pullNote(busy)}Run the wave simulation?`, go) : go(); },
   party_train: () => { const pid = num(S.ui.ptpid); if (!pid) return toast('You need a full party at home.', true); act('party_train', { pid, tier: num(ui('dtier', 1), 1) }, { slow: true }); },
-  drill_me: () => act('drill', { id: S.sel, discipline: ui('my_disc'), tier: num(ui('dtier', 1), 1) }),
-  spar_me: () => { const b = num(ui('my_opp')); if (!b) return toast('Choose a sparring partner.', true); act('spar', { a: S.sel, b, discipline: ui('my_style') }, { title: 'Sparring match' }); },
+  drill_me: () => act('drill', { id: S.sel, discipline: ui(`my_disc_${S.sel}`), tier: num(ui('dtier', 1), 1) }),
+  spar_me: () => { const b = num(ui('my_opp')); if (!b) return toast('Choose a sparring partner.', true); act('spar', { a: S.sel, b, discipline: ui(`my_style_${S.sel}`) }, { title: 'Sparring match' }); },
   learn_me: () => { const spell = ui('my_learn'); return spell ? act('learn', { id: S.sel, spell }) : toast('No spell is ready to learn yet.', true); },
   drawer_relic: (d) => { const uid = num(ui('dr_' + d.slot, S.state.gear.vault.find((x) => x.slot === d.slot && !x.ego)?.uid)); return uid ? act('equip_item', { id: S.sel, uid }) : toast('No relic for that slot in the vault.', true); },
   relic_feed: (d) => { const donor = num(ui('rd_' + d.uid, S.state.gear.vault.find((x) => x.uid != d.uid && x.slot === S.state.gear.vault.find((y) => y.uid == d.uid)?.slot)?.uid));
